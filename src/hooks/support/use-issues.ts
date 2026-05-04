@@ -11,6 +11,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getIssues,
@@ -19,6 +20,7 @@ import {
   createIssue,
   updateIssue,
   deleteIssue,
+  previewIssueIntake,
 } from '@/server/functions/support/issues';
 import { escalateIssue } from '@/server/functions/support/escalation';
 import type {
@@ -27,6 +29,9 @@ import type {
   IssueStatus,
   IssuePriority,
   IssueType,
+  IssueNextActionType,
+  IssueLineageState,
+  IssueRmaState,
 } from '@/lib/schemas/support/issues';
 
 type IssueListResult = Awaited<ReturnType<typeof getIssues>>;
@@ -46,6 +51,12 @@ export interface IssueListFilters {
   search?: string;
   slaStatus?: 'breached' | 'at_risk';
   escalated?: boolean;
+  nextActionType?: IssueNextActionType;
+  rmaState?: IssueRmaState;
+  serialState?: IssueLineageState;
+  warrantyState?: IssueLineageState;
+  orderState?: IssueLineageState;
+  serviceSystemState?: IssueLineageState;
   limit?: number;
   offset?: number;
 }
@@ -66,9 +77,14 @@ export function useIssues(options: UseIssuesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.support.issuesListFiltered(filters),
     queryFn: async () => {
-      const result = await getIssues({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssues({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issues are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
@@ -88,9 +104,14 @@ export function useIssuesWithSlaMetrics(options: UseIssuesOptions = {}) {
       includeSlaMetrics: true,
     }),
     queryFn: async () => {
-      const result = await getIssuesWithSlaMetrics({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssuesWithSlaMetrics({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issue queue metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - issues change frequently
@@ -110,14 +131,55 @@ export function useIssue({ issueId, enabled = true }: UseIssueOptions) {
   return useQuery({
     queryKey: queryKeys.support.issueDetail(issueId),
     queryFn: async () => {
-      const result = await getIssueById({
-        data: { issueId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssueById({
+          data: { issueId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Issue details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested issue could not be found.',
+        });
+      }
     },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useIssueIntakePreview(
+  data: Partial<
+    Pick<
+      CreateIssueInput,
+      | 'customerId'
+      | 'warrantyId'
+      | 'warrantyEntitlementId'
+      | 'productId'
+      | 'orderId'
+      | 'shipmentId'
+      | 'serializedItemId'
+      | 'serviceSystemId'
+      | 'serialNumber'
+      | 'metadata'
+    >
+  >,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: queryKeys.support.issueIntakePreview(data),
+    queryFn: async () => {
+      try {
+        return await previewIssueIntake({ data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Issue intake preview is temporarily unavailable. Please refresh and try again.',
+        });
+      }
+    },
+    enabled,
+    staleTime: 15 * 1000,
   });
 }
 

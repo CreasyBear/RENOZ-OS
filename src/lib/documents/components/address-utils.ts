@@ -2,7 +2,7 @@
  * Address formatting utilities for PDF documents
  *
  * Ensures addresses render without "undefined" and handle partial/international formats.
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md - Edge cases
+ * @see docs/reference/document-design-system.md - Edge cases
  */
 
 export interface AddressInput {

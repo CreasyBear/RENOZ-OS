@@ -8,6 +8,7 @@
  */
 
 import { Plus, Image, BarChart3 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -36,6 +37,8 @@ export interface ProductImagesTabViewProps {
   onUploadOpenChange: (open: boolean) => void;
   onEditingImageChange: (image: EditableImage | null) => void;
   onRefresh: () => void;
+  imagesUnavailableMessage?: string | null;
+  imagesWarningMessage?: string | null;
 }
 
 // ============================================================================
@@ -51,6 +54,8 @@ export function ProductImagesTabView({
   onUploadOpenChange,
   onEditingImageChange,
   onRefresh,
+  imagesUnavailableMessage,
+  imagesWarningMessage,
 }: ProductImagesTabViewProps) {
   // Format file size
   const formatSize = (bytes: number): string => {
@@ -84,7 +89,12 @@ export function ProductImagesTabView({
           </Button>
         </CardHeader>
         <CardContent>
-          {images.length === 0 ? (
+          {imagesUnavailableMessage ? (
+            <Alert>
+              <AlertTitle>Product images unavailable</AlertTitle>
+              <AlertDescription>{imagesUnavailableMessage}</AlertDescription>
+            </Alert>
+          ) : images.length === 0 ? (
             <EmptyState
               title="No images"
               message="Add product images to showcase your product"
@@ -94,24 +104,32 @@ export function ProductImagesTabView({
               }}
             />
           ) : (
-            <ImageGallery
-              productId={productId}
-              images={images}
-              onImagesChange={onRefresh}
-              onEditImage={(img) =>
-                onEditingImageChange(
-                  img
-                    ? {
-                        ...img,
-                        altText: img.altText ?? null,
-                        caption: img.caption ?? null,
-                        fileSize: img.fileSize ?? null,
-                        dimensions: img.dimensions ?? null,
-                      }
-                    : null
-                )
-              }
-            />
+            <div className="space-y-4">
+              {imagesWarningMessage ? (
+                <Alert>
+                  <AlertTitle>Product images unavailable</AlertTitle>
+                  <AlertDescription>{imagesWarningMessage}</AlertDescription>
+                </Alert>
+              ) : null}
+              <ImageGallery
+                productId={productId}
+                images={images}
+                onImagesChange={onRefresh}
+                onEditImage={(img) =>
+                  onEditingImageChange(
+                    img
+                      ? {
+                          ...img,
+                          altText: img.altText ?? null,
+                          caption: img.caption ?? null,
+                          fileSize: img.fileSize ?? null,
+                          dimensions: img.dimensions ?? null,
+                        }
+                      : null
+                  )
+                }
+              />
+            </div>
           )}
         </CardContent>
       </Card>

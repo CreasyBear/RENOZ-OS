@@ -10,6 +10,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listAlerts,
@@ -54,9 +55,15 @@ export function useAlerts(options: UseAlertsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.inventory.alerts(filters),
     queryFn: async () => {
-      const result = await listAlerts({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listAlerts({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory alert rules are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -70,11 +77,18 @@ export function useAlert(alertId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.alert(alertId),
     queryFn: async () => {
-      const result = await getAlert({
-        data: { id: alertId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getAlert({
+          data: { id: alertId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Inventory alert details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested inventory alert could not be found.',
+        });
+      }
     },
     enabled: enabled && !!alertId,
     staleTime: 60 * 1000,
@@ -88,9 +102,15 @@ export function useTriggeredAlerts(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.triggeredAlerts(),
     queryFn: async () => {
-      const result = await getTriggeredAlerts();
-      if (result == null) throw new Error('Triggered alerts returned no data');
-      return result;
+      try {
+        return await getTriggeredAlerts();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Triggered inventory alerts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -105,11 +125,17 @@ export function useAlertAnalytics(enabled = true) {
   return useQuery({
     queryKey: queryKeys.inventory.alertAnalytics(),
     queryFn: async () => {
-      const result = await getAlertAnalytics({
-        data: {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getAlertAnalytics({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory alert analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes

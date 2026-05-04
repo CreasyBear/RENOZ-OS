@@ -201,6 +201,8 @@ interface KbSuggestedArticlesProps {
   isLoading?: boolean;
   /** From route container (useKbArticles). */
   error?: unknown;
+  /** Localized degraded-state copy when stale data remains visible. */
+  warningMessage?: string;
   /** Maximum number of articles to show */
   limit?: number;
   /** Callback when an article is selected to link */
@@ -225,6 +227,7 @@ export function KbSuggestedArticles({
   articles,
   isLoading,
   error,
+  warningMessage,
   limit = 5,
   onLinkArticle,
   previewArticleById,
@@ -250,6 +253,9 @@ export function KbSuggestedArticles({
           <CardDescription>{description ?? 'Recommended knowledge base articles'}</CardDescription>
         </CardHeader>
         <CardContent>
+          {warningMessage ? (
+            <p className="text-muted-foreground mb-3 text-xs">{warningMessage}</p>
+          ) : null}
           {loading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
@@ -287,6 +293,9 @@ export function KbSuggestedArticles({
         <BookOpen className="h-4 w-4" />
         {title}
       </h4>
+      {warningMessage ? (
+        <p className="text-muted-foreground text-xs">{warningMessage}</p>
+      ) : null}
       {loading ? (
         <div className="space-y-2">
           {[...Array(3)].map((_, i) => (

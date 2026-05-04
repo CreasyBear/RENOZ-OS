@@ -12,6 +12,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listJobTasks,
   createTask,
   updateTask,
@@ -59,9 +64,20 @@ export function useJobTasks({ jobId, status, enabled = true }: UseJobTasksOption
   return useQuery({
     queryKey: queryKeys.jobTasks.list(jobId),
     queryFn: async () => {
-      const result = await listJobTasks({ data: { jobId, status } });
-      if (result == null) throw new Error('Job tasks returned no data');
-      return result;
+      try {
+        const result = await listJobTasks({ data: { jobId, status } });
+        return requireReadResult(result, {
+          message: 'Job tasks returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!jobId,
     staleTime: 30 * 1000, // 30 seconds
@@ -85,9 +101,22 @@ export function useJobTask({ taskId, enabled = true }: UseJobTaskOptions) {
   return useQuery({
     queryKey: queryKeys.jobTasks.detail(taskId),
     queryFn: async () => {
-      const result = await getTask({ data: { taskId } });
-      if (result == null) throw new Error('Task not found');
-      return result;
+      try {
+        const result = await getTask({ data: { taskId } });
+        return requireReadResult(result, {
+          message: 'Task not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Task details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested task could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Task details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested task could not be found.',
+        });
+      }
     },
     enabled: enabled && !!taskId,
     staleTime: 60 * 1000, // 1 minute
@@ -356,9 +385,22 @@ export function useJobTasksKanban(options: UseJobTasksKanbanOptions = {}) {
   return useQuery({
     queryKey: queryKeys.jobTasks.kanban.list(filters),
     queryFn: async () => {
-      const result = await listFn({ data: filters });
-      if (result == null) throw new Error('Job tasks kanban returned no data');
-      return result;
+      try {
+        const result = await listFn({ data: filters });
+        return requireReadResult(result, {
+          message: 'Job tasks kanban returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Task board data is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Task board data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     refetchInterval: 30000, // Poll every 30 seconds for live updates
@@ -563,9 +605,20 @@ export function useMyTasksKanban(options: UseMyTasksKanbanOptions = {}) {
   return useQuery({
     queryKey: queryKeys.jobTasks.myTasks.list(filters),
     queryFn: async () => {
-      const result = await listFn({ data: filters });
-      if (result == null) throw new Error('My tasks kanban returned no data');
-      return result;
+      try {
+        const result = await listFn({ data: filters });
+        return requireReadResult(result, {
+          message: 'My tasks kanban returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Your tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Your tasks are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     refetchInterval: (_query) => {

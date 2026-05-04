@@ -118,6 +118,9 @@ export type GetInvoiceXeroStatusInput = z.infer<typeof getInvoiceXeroStatusSchem
 export const listInvoicesBySyncStatusSchema = normalizeObjectInput(
   z.object({
     status: xeroSyncStatusSchema.optional(),
+    issue: z.string().trim().min(1).optional(),
+    customerId: idSchema.optional(),
+    orderId: idSchema.optional(),
     // Only include invoices with errors
     errorsOnly: z.boolean().default(false),
     // Pagination

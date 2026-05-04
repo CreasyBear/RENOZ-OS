@@ -11,7 +11,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
-import { eq, and, desc, asc, sql, ilike, count, isNull, inArray, isNotNull } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, ilike, count, isNull, inArray, isNotNull, type SQL } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -23,7 +23,6 @@ import {
   generateRmaNumber,
   isValidRmaTransition,
 } from 'drizzle/schema/support/return-authorizations';
-import { customers } from 'drizzle/schema/customers';
 import { issues } from 'drizzle/schema/support/issues';
 import { orderLineItems, orders } from 'drizzle/schema/orders';
 import { shipmentItems, orderShipments } from 'drizzle/schema/orders/order-shipments';
@@ -51,6 +50,15 @@ import {
   upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
 import {
+  extractIssueAnchorValues,
+  resolveIssueAnchors,
+} from '@/server/functions/support/_shared/issue-anchor-resolution';
+import {
+  ACTIVE_RMA_STATUSES,
+  getIssueRemedyContext,
+  SHIPPED_RMA_ELIGIBLE_SHIPMENT_STATUSES,
+} from '@/server/functions/support/_shared/issue-remedy-context';
+import {
   createReceiptLayersWithCostComponents,
   recomputeInventoryValueFromLayers,
 } from '@/server/functions/_shared/inventory-finance';
@@ -58,6 +66,7 @@ import {
   createRmaSchema,
   updateRmaSchema,
   getRmaSchema,
+  getRmaLookupSchema,
   listRmasSchema,
   listRmasCursorSchema,
   approveRmaSchema,
@@ -72,30 +81,31 @@ import {
   type BulkRmaResult,
   type RmaProcessResult,
 } from '@/lib/schemas/support/rma';
+import {
+  executeRmaRemedy,
+} from './_shared/rma-remedy-execution';
+import {
+  buildBlockedRmaExecutionState,
+  buildCompletedRmaExecutionState,
+  buildPendingRmaExecutionState,
+} from './_shared/rma-execution-state';
+import {
+  createRmaReadModel,
+  rmaLineItemsProjection,
+  type RmaRow,
+} from './_shared/rma-read-model';
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
-/** Explicit column projection for rma_line_items (Drizzle best practice) */
-const rmaLineItemsProjection = {
-  id: rmaLineItems.id,
-  rmaId: rmaLineItems.rmaId,
-  orderLineItemId: rmaLineItems.orderLineItemId,
-  quantityReturned: rmaLineItems.quantityReturned,
-  itemReason: rmaLineItems.itemReason,
-  itemCondition: rmaLineItems.itemCondition,
-  serialNumber: rmaLineItems.serialNumber,
-  createdAt: rmaLineItems.createdAt,
-  updatedAt: rmaLineItems.updatedAt,
-};
+const rmaReadModel = createRmaReadModel();
 
-const ACTIVE_RMA_STATUSES = ['requested', 'approved', 'received'] as const;
-const SHIPPED_RMA_ELIGIBLE_SHIPMENT_STATUSES = [
-  'in_transit',
-  'out_for_delivery',
-  'delivered',
-] as const;
+type RmaListFilterInput = Pick<
+  z.infer<typeof listRmasSchema>,
+  'status' | 'reason' | 'customerId' | 'orderId' | 'issueId' | 'resolution' | 'executionStatus' | 'search'
+> &
+  Pick<z.infer<typeof listRmasCursorSchema>, 'linkedIssueOpenState'>;
 
 /**
  * Get next sequence number for RMA generation.
@@ -114,6 +124,91 @@ async function getNextRmaSequence(
     .where(eq(returnAuthorizations.organizationId, organizationId));
 
   return (result?.maxSequence ?? 0) + 1;
+}
+
+async function getIssueExecutionLink(
+  organizationId: string,
+  issueId: string | null
+): Promise<{ id: string; status: string } | null> {
+  if (!issueId) return null;
+
+  const [issue] = await db
+    .select({ id: issues.id, status: issues.status })
+    .from(issues)
+    .where(and(eq(issues.id, issueId), eq(issues.organizationId, organizationId)))
+    .limit(1);
+
+  return issue ?? null;
+}
+
+function buildLinkedIssueStateCondition(
+  organizationId: string,
+  linkedIssueOpenState?: 'any' | 'open' | 'closed'
+): SQL<unknown> | null {
+  if (linkedIssueOpenState === 'open') {
+    return sql`EXISTS (
+      SELECT 1 FROM issues i
+      WHERE i.id = ${returnAuthorizations.issueId}
+        AND i.organization_id = ${organizationId}
+        AND i.status NOT IN ('resolved', 'closed')
+    )`;
+  }
+
+  if (linkedIssueOpenState === 'closed') {
+    return sql`EXISTS (
+      SELECT 1 FROM issues i
+      WHERE i.id = ${returnAuthorizations.issueId}
+        AND i.organization_id = ${organizationId}
+        AND i.status IN ('resolved', 'closed')
+    )`;
+  }
+
+  return null;
+}
+
+function buildRmaListConditions(
+  organizationId: string,
+  filters: RmaListFilterInput
+): SQL<unknown>[] {
+  const conditions: SQL<unknown>[] = [
+    eq(returnAuthorizations.organizationId, organizationId),
+  ];
+
+  if (filters.status) {
+    conditions.push(eq(returnAuthorizations.status, filters.status));
+  }
+  if (filters.reason) {
+    conditions.push(eq(returnAuthorizations.reason, filters.reason));
+  }
+  if (filters.customerId) {
+    conditions.push(eq(returnAuthorizations.customerId, filters.customerId));
+  }
+  if (filters.orderId) {
+    conditions.push(eq(returnAuthorizations.orderId, filters.orderId));
+  }
+  if (filters.issueId) {
+    conditions.push(eq(returnAuthorizations.issueId, filters.issueId));
+  }
+  if (filters.resolution) {
+    conditions.push(eq(returnAuthorizations.resolution, filters.resolution));
+  }
+  if (filters.executionStatus) {
+    conditions.push(eq(returnAuthorizations.executionStatus, filters.executionStatus));
+  }
+
+  const linkedIssueStateCondition = buildLinkedIssueStateCondition(
+    organizationId,
+    filters.linkedIssueOpenState
+  );
+  if (linkedIssueStateCondition) {
+    conditions.push(linkedIssueStateCondition);
+  }
+
+  if (filters.search) {
+    conditions.push(ilike(returnAuthorizations.rmaNumber, containsPattern(filters.search)));
+  }
+
+  return conditions;
 }
 
 // ============================================================================
@@ -153,6 +248,48 @@ export const createRma = createServerFn({ method: 'POST' })
 
       if (!issue) {
         throw new NotFoundError('Issue not found', 'issue');
+      }
+
+      const anchorResolution = await resolveIssueAnchors(
+        ctx.organizationId,
+        extractIssueAnchorValues(issue)
+      );
+      const remedyContext = await getIssueRemedyContext({
+        organizationId: ctx.organizationId,
+        issue: {
+          id: issue.id,
+          status: issue.status,
+          orderId: anchorResolution.anchors.orderId,
+          serializedItemId: anchorResolution.anchors.serializedItemId,
+          serialNumber: anchorResolution.anchors.serialNumber,
+          resolutionCategory: issue.resolutionCategory,
+          resolutionNotes: issue.resolutionNotes,
+          diagnosisNotes: issue.diagnosisNotes,
+          nextActionType: issue.nextActionType,
+          resolvedAt: issue.resolvedAt,
+          resolvedByUserId: issue.resolvedByUserId,
+        },
+        supportContext: anchorResolution.supportContext,
+      });
+
+      if (!remedyContext.rmaReadiness.sourceOrder?.id) {
+        throw new ValidationError(
+          remedyContext.rmaReadiness.blockedReason ??
+            'Source order could not be resolved from the issue context.'
+        );
+      }
+
+      if (remedyContext.rmaReadiness.sourceOrder.id !== data.orderId) {
+        throw new ValidationError(
+          'The selected order does not match the source order resolved from the issue.'
+        );
+      }
+
+      if (remedyContext.rmaReadiness.state !== 'ready') {
+        throw new ValidationError(
+          remedyContext.rmaReadiness.blockedReason ??
+            'This issue is not currently ready for RMA creation.'
+        );
       }
     }
 
@@ -408,22 +545,20 @@ export const createRma = createServerFn({ method: 'POST' })
         }
       }
 
-      // Fetch complete RMA with line items
       const lineItems = await tx
         .select(rmaLineItemsProjection)
         .from(rmaLineItems)
         .where(eq(rmaLineItems.rmaId, rma.id));
 
-      return { rma, lineItems };
+      return { rma, lineItems: lineItems as RmaLineItemResponse[] };
     });
 
-    const response = {
-      ...result.rma,
-      lineItems: result.lineItems.map((li) => ({
-        ...li,
-        itemCondition: li.itemCondition,
-      })),
-    } as RmaResponse;
+    const response = await rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma: result.rma,
+      profile: 'summary',
+      preloadedLineItems: result.lineItems,
+    });
 
     return serializedMutationSuccess(response, `RMA ${response.rmaNumber} created.`, {
       affectedIds: [response.id],
@@ -494,40 +629,12 @@ export const getRma = createServerFn({ method: 'GET' })
       },
     }));
 
-    // Get customer if exists — include orgId for multi-tenant isolation
-    let customer = null;
-    if (rma.customerId) {
-      const [c] = await db
-        .select({ id: customers.id, name: customers.name })
-        .from(customers)
-        .where(and(
-          eq(customers.id, rma.customerId),
-          eq(customers.organizationId, ctx.organizationId)
-        ))
-        .limit(1);
-      customer = c ?? null;
-    }
-
-    // Get issue if exists — include orgId for multi-tenant isolation
-    let issue = null;
-    if (rma.issueId) {
-      const [i] = await db
-        .select({ id: issues.id, title: issues.title })
-        .from(issues)
-        .where(and(
-          eq(issues.id, rma.issueId),
-          eq(issues.organizationId, ctx.organizationId)
-        ))
-        .limit(1);
-      issue = i ?? null;
-    }
-
-    return {
-      ...rma,
-      lineItems,
-      customer,
-      issue,
-    } as RmaResponse;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma,
+      profile: 'detail',
+      preloadedLineItems: lineItems,
+    });
   });
 
 // ============================================================================
@@ -542,27 +649,7 @@ export const listRmas = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<ListRmasResponse> => {
     const ctx = await withAuth();
 
-    // Build where conditions
-    const conditions = [eq(returnAuthorizations.organizationId, ctx.organizationId)];
-
-    if (data.status) {
-      conditions.push(eq(returnAuthorizations.status, data.status));
-    }
-    if (data.reason) {
-      conditions.push(eq(returnAuthorizations.reason, data.reason));
-    }
-    if (data.customerId) {
-      conditions.push(eq(returnAuthorizations.customerId, data.customerId));
-    }
-    if (data.orderId) {
-      conditions.push(eq(returnAuthorizations.orderId, data.orderId));
-    }
-    if (data.issueId) {
-      conditions.push(eq(returnAuthorizations.issueId, data.issueId));
-    }
-    if (data.search) {
-      conditions.push(ilike(returnAuthorizations.rmaNumber, containsPattern(data.search)));
-    }
+    const conditions = buildRmaListConditions(ctx.organizationId, data);
 
     // Get total count
     const [countResult] = await db
@@ -592,29 +679,12 @@ export const listRmas = createServerFn({ method: 'GET' })
       .limit(data.pageSize)
       .offset(offset);
 
-    // Fetch line items for all RMAs using inArray instead of raw SQL ANY()
-    const rmaIds = rmas.map((r) => r.id);
-    const allLineItems =
-      rmaIds.length > 0
-        ? await db
-            .select(rmaLineItemsProjection)
-            .from(rmaLineItems)
-            .where(inArray(rmaLineItems.rmaId, rmaIds))
-        : [];
-
-    // Group line items by RMA
-    const lineItemsByRma = new Map<string, typeof allLineItems>();
-    for (const li of allLineItems) {
-      const existing = lineItemsByRma.get(li.rmaId) ?? [];
-      existing.push(li);
-      lineItemsByRma.set(li.rmaId, existing);
-    }
-
     return {
-      data: rmas.map((rma) => ({
-        ...rma,
-        lineItems: (lineItemsByRma.get(rma.id) ?? []) as RmaLineItemResponse[],
-      })) as RmaResponse[],
+      data: await rmaReadModel.loadMany({
+        organizationId: ctx.organizationId,
+        rmas,
+        profile: 'summary',
+      }),
       pagination: {
         page: data.page,
         pageSize: data.pageSize,
@@ -631,15 +701,32 @@ export const listRmasCursor = createServerFn({ method: 'GET' })
   .inputValidator(listRmasCursorSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-    const { cursor, pageSize = 20, sortOrder = 'desc', status, reason, customerId, orderId, issueId, search } = data;
+    const {
+      cursor,
+      pageSize = 20,
+      sortOrder = 'desc',
+      status,
+      reason,
+      customerId,
+      orderId,
+      issueId,
+      resolution,
+      executionStatus,
+      linkedIssueOpenState,
+      search,
+    } = data;
 
-    const conditions = [eq(returnAuthorizations.organizationId, ctx.organizationId)];
-    if (status) conditions.push(eq(returnAuthorizations.status, status));
-    if (reason) conditions.push(eq(returnAuthorizations.reason, reason));
-    if (customerId) conditions.push(eq(returnAuthorizations.customerId, customerId));
-    if (orderId) conditions.push(eq(returnAuthorizations.orderId, orderId));
-    if (issueId) conditions.push(eq(returnAuthorizations.issueId, issueId));
-    if (search) conditions.push(ilike(returnAuthorizations.rmaNumber, containsPattern(search)));
+    const conditions = buildRmaListConditions(ctx.organizationId, {
+      status,
+      reason,
+      customerId,
+      orderId,
+      issueId,
+      resolution,
+      executionStatus,
+      linkedIssueOpenState,
+      search,
+    });
 
     if (cursor) {
       const cursorPosition = decodeCursor(cursor);
@@ -661,26 +748,11 @@ export const listRmasCursor = createServerFn({ method: 'GET' })
 
     const { items: rmaRows, nextCursor, hasNextPage } = buildStandardCursorResponse(rmas, pageSize);
 
-    const rmaIds = rmaRows.map((r) => r.id);
-    const allLineItems =
-      rmaIds.length > 0
-        ? await db
-            .select(rmaLineItemsProjection)
-            .from(rmaLineItems)
-            .where(inArray(rmaLineItems.rmaId, rmaIds))
-        : [];
-
-    const lineItemsByRma = new Map<string, typeof allLineItems>();
-    for (const li of allLineItems) {
-      const existing = lineItemsByRma.get(li.rmaId) ?? [];
-      existing.push(li);
-      lineItemsByRma.set(li.rmaId, existing);
-    }
-
-    const items = rmaRows.map((rma) => ({
-      ...rma,
-      lineItems: (lineItemsByRma.get(rma.id) ?? []) as RmaLineItemResponse[],
-    })) as RmaResponse[];
+    const items = await rmaReadModel.loadMany({
+      organizationId: ctx.organizationId,
+      rmas: rmaRows,
+      profile: 'summary',
+    });
 
     return { items, nextCursor, hasNextPage };
   });
@@ -730,50 +802,11 @@ export const updateRma = createServerFn({ method: 'POST' })
       .returning();
 
     // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, rmaId));
-
-    const followUpMessage =
-      data.resolution === 'refund'
-        ? 'Refund decision recorded. Financial refund still requires follow-up action.'
-        : data.resolution === 'credit'
-          ? 'Credit decision recorded. Credit note issuance still requires follow-up action.'
-          : data.resolution === 'replacement'
-            ? 'Replacement decision recorded. Replacement order still requires follow-up action.'
-            : null;
-
-    return {
-      ...updated,
-      lineItems: lineItems as RmaLineItemResponse[],
-      stages: {
-        resolutionRecorded: {
-          status: 'completed',
-          message: 'RMA resolution was recorded successfully.',
-        },
-        financialAction: {
-          status:
-            data.resolution === 'refund' || data.resolution === 'credit'
-              ? 'pending'
-              : 'not_required',
-          message:
-            data.resolution === 'refund'
-              ? 'Refund execution is still required.'
-              : data.resolution === 'credit'
-                ? 'Credit note execution is still required.'
-                : 'No financial follow-up is required.',
-        },
-        replacementAction: {
-          status: data.resolution === 'replacement' ? 'pending' : 'not_required',
-          message:
-            data.resolution === 'replacement'
-              ? 'Replacement order execution is still required.'
-              : 'No replacement follow-up is required.',
-        },
-      },
-      followUpMessage,
-    } as RmaProcessResult;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma: updated as RmaRow,
+      profile: 'summary',
+    });
   });
 
 // ============================================================================
@@ -785,14 +818,7 @@ export const updateRma = createServerFn({ method: 'POST' })
  */
 export const getRmaByNumber = createServerFn({ method: 'GET' })
   .inputValidator(
-    normalizeObjectInput(
-      getRmaSchema
-        .extend({
-          rmaId: getRmaSchema.shape.rmaId.optional(),
-          rmaNumber: createRmaSchema.shape.orderId.optional(), // Just reusing UUID pattern
-        })
-        .refine((data) => data.rmaId || data.rmaNumber, 'Either rmaId or rmaNumber is required')
-    )
+    normalizeObjectInput(getRmaLookupSchema)
   )
   .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth();
@@ -814,15 +840,11 @@ export const getRmaByNumber = createServerFn({ method: 'GET' })
     }
 
     // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, rma.id));
-
-    return {
-      ...rma,
-      lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma,
+      profile: 'summary',
+    });
   });
 
 // ============================================================================
@@ -860,28 +882,11 @@ export const getRmasForIssue = createServerFn({ method: 'GET' })
       .orderBy(desc(returnAuthorizations.createdAt))
       .limit(GET_RMAS_FOR_ISSUE_LIMIT);
 
-    // Fetch line items for all RMAs using inArray instead of raw SQL ANY()
-    const rmaIds = rmas.map((r) => r.id);
-    const allLineItems =
-      rmaIds.length > 0
-        ? await db
-            .select(rmaLineItemsProjection)
-            .from(rmaLineItems)
-            .where(inArray(rmaLineItems.rmaId, rmaIds))
-        : [];
-
-    // Group line items by RMA
-    const lineItemsByRma = new Map<string, typeof allLineItems>();
-    for (const li of allLineItems) {
-      const existing = lineItemsByRma.get(li.rmaId) ?? [];
-      existing.push(li);
-      lineItemsByRma.set(li.rmaId, existing);
-    }
-
-    return rmas.map((rma) => ({
-      ...rma,
-      lineItems: (lineItemsByRma.get(rma.id) ?? []) as RmaLineItemResponse[],
-    })) as RmaResponse[];
+    return rmaReadModel.loadMany({
+      organizationId: ctx.organizationId,
+      rmas,
+      profile: 'summary',
+    });
   });
 
 // ============================================================================
@@ -936,15 +941,11 @@ export const approveRma = createServerFn({ method: 'POST' })
       .returning();
 
     // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, data.rmaId));
-
-    return {
-      ...updated,
-      lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma: updated as RmaRow,
+      profile: 'summary',
+    });
   });
 
 // ============================================================================
@@ -997,15 +998,11 @@ export const rejectRma = createServerFn({ method: 'POST' })
       .returning();
 
     // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, data.rmaId));
-
-    return {
-      ...updated,
-      lineItems: lineItems as RmaLineItemResponse[],
-    } as RmaResponse;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma: updated as RmaRow,
+      profile: 'summary',
+    });
   });
 
 // ============================================================================
@@ -1139,6 +1136,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
           status: 'received',
           receivedAt: now,
           receivedBy: ctx.user.id,
+          ...buildPendingRmaExecutionState(),
           inspectionNotes,
           updatedBy: ctx.user.id,
         })
@@ -1514,16 +1512,14 @@ export const receiveRma = createServerFn({ method: 'POST' })
         }
       }
 
-      const lineItems = await tx
-        .select(rmaLineItemsProjection)
-        .from(rmaLineItems)
-        .where(eq(rmaLineItems.rmaId, data.rmaId));
-
-      return {
-        ...updated,
-        lineItems: lineItems as RmaLineItemResponse[],
-        unitsRestored,
-      } as RmaResponse;
+      const response = await rmaReadModel.loadOne({
+        executor: tx as unknown as TransactionExecutor,
+        organizationId: ctx.organizationId,
+        rma: updated as RmaRow,
+        profile: 'summary',
+      });
+      response.unitsRestored = unitsRestored;
+      return response;
     });
 
     return serializedMutationSuccess(response, `RMA ${response.rmaNumber} received.`, {
@@ -1573,13 +1569,12 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
 // ============================================================================
 
 /**
- * Process/complete an RMA (received → processed)
+ * Execute the selected remedy for an RMA (received → processed).
  */
 export const processRma = createServerFn({ method: 'POST' })
   .inputValidator(processRmaSchema)
   .handler(async ({ data }): Promise<RmaProcessResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.support.update });
-    const now = new Date().toISOString();
 
     // Get existing RMA
     const [existing] = await db
@@ -1597,84 +1592,119 @@ export const processRma = createServerFn({ method: 'POST' })
       throw new NotFoundError('RMA not found', 'rma');
     }
 
+    if (existing.status === 'processed') {
+      if (existing.resolution && existing.resolution !== data.resolution) {
+        throw new ValidationError(
+          `This RMA was already completed as ${existing.resolution}.`
+        );
+      }
+
+      return rmaReadModel.loadOne({
+        organizationId: ctx.organizationId,
+        rma: existing,
+        profile: 'summary',
+      });
+    }
+
     // Validate transition
     if (!isValidRmaTransition(existing.status, 'processed')) {
       throw new ValidationError(
-        `Cannot process RMA in ${existing.status} status. Must be in 'received' status.`
+        `Cannot execute remedy for an RMA in ${existing.status} status. Must be in 'received' status.`
       );
     }
 
-    // Build resolution details
-    const resolutionDetails = data.resolutionDetails
-      ? {
-          ...data.resolutionDetails,
-          resolvedAt: now,
-          resolvedBy: ctx.user.id,
-        }
-      : {
-          resolvedAt: now,
-          resolvedBy: ctx.user.id,
-        };
+    if (!existing.orderId) {
+      throw new ValidationError('Source order is missing from this RMA.');
+    }
 
-    // Update RMA
-    const [updated] = await db
-      .update(returnAuthorizations)
-      .set({
-        status: 'processed',
-        processedAt: now,
-        processedBy: ctx.user.id,
-        resolution: data.resolution,
-        resolutionDetails,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(returnAuthorizations.id, data.rmaId))
-      .returning();
+    const [sourceOrder, issue] = await Promise.all([
+      db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, existing.orderId),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+      getIssueExecutionLink(ctx.organizationId, existing.issueId),
+    ]);
 
-    // Get line items
-    const lineItems = await db
-      .select(rmaLineItemsProjection)
-      .from(rmaLineItems)
-      .where(eq(rmaLineItems.rmaId, data.rmaId));
+    if (!sourceOrder) {
+      throw new ValidationError('Source order could not be loaded for remedy execution.');
+    }
 
-    const followUpMessage =
-      data.resolution === 'refund'
-        ? 'Refund decision recorded. Financial refund still requires follow-up action.'
-        : data.resolution === 'credit'
-          ? 'Credit decision recorded. Credit note issuance still requires follow-up action.'
-          : data.resolution === 'replacement'
-            ? 'Replacement decision recorded. Replacement order still requires follow-up action.'
-            : null;
+    try {
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+        );
 
-    return {
-      ...updated,
-      lineItems: lineItems as RmaLineItemResponse[],
-      stages: {
-        resolutionRecorded: {
-          status: 'completed',
-          message: 'RMA resolution was recorded successfully.',
-        },
-        financialAction: {
-          status:
-            data.resolution === 'refund' || data.resolution === 'credit'
-              ? 'pending'
-              : 'not_required',
-          message:
-            data.resolution === 'refund'
-              ? 'Refund execution is still required.'
-              : data.resolution === 'credit'
-                ? 'Credit note execution is still required.'
-                : 'No financial follow-up is required.',
-        },
-        replacementAction: {
-          status: data.resolution === 'replacement' ? 'pending' : 'not_required',
-          message:
-            data.resolution === 'replacement'
-              ? 'Replacement order execution is still required.'
-              : 'No replacement follow-up is required.',
-        },
-      },
-      followUpMessage,
-    } as RmaProcessResult;
+        const execution = await executeRmaRemedy({
+          tx: tx as unknown as TransactionExecutor,
+          ctx,
+          rma: existing,
+          sourceOrder,
+          sourceCustomerId: existing.customerId ?? sourceOrder.customerId,
+          issue: issue ? { id: issue.id, status: issue.status } : null,
+          input: data,
+        });
+
+        const [updated] = await tx
+          .update(returnAuthorizations)
+          .set({
+            ...buildCompletedRmaExecutionState({
+              resolution: data.resolution,
+              execution,
+            }),
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(returnAuthorizations.id, data.rmaId))
+          .returning();
+
+        return rmaReadModel.loadOne({
+          executor: tx as unknown as TransactionExecutor,
+          organizationId: ctx.organizationId,
+          rma: updated as RmaRow,
+          profile: 'summary',
+        });
+      });
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to execute the selected remedy.';
+      const [blocked] = await db
+        .update(returnAuthorizations)
+        .set({
+          ...buildBlockedRmaExecutionState({
+            resolution: data.resolution,
+            input: data,
+            userId: ctx.user.id,
+            message,
+          }),
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            eq(returnAuthorizations.id, data.rmaId),
+            eq(returnAuthorizations.organizationId, ctx.organizationId)
+          )
+        )
+        .returning();
+
+      if (!blocked) {
+        throw error;
+      }
+
+      return rmaReadModel.loadOne({
+        organizationId: ctx.organizationId,
+        rma: blocked as RmaRow,
+        profile: 'summary',
+      });
+    }
   });
 
 // ============================================================================
@@ -1689,7 +1719,7 @@ export const cancelRma = createServerFn({ method: 'POST' })
     id: z.string().uuid(),
     reason: z.string().optional(),
   }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<RmaResponse> => {
     const ctx = await withAuth({ permission: PERMISSIONS.support?.delete ?? 'support:delete' });
     const logger = createActivityLoggerWithContext(ctx);
     const { id, reason } = data;
@@ -1738,5 +1768,9 @@ export const cancelRma = createServerFn({ method: 'POST' })
       },
     });
 
-    return updated;
+    return rmaReadModel.loadOne({
+      organizationId: ctx.organizationId,
+      rma: updated as RmaRow,
+      profile: 'summary',
+    });
   });

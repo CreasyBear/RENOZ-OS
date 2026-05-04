@@ -9,6 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listMySessions,
   terminateSession,
@@ -30,11 +31,16 @@ export function useMySessions() {
   return useQuery({
     queryKey: queryKeys.users.sessions.list(),
     queryFn: async () => {
-      const result = await listMySessions({
-        data: {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listMySessions({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Your active sessions are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
   });

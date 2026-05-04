@@ -1,14 +1,12 @@
 /**
- * PDF Document Theme - Apple/Linear Inspired Design
+ * PDF Document Theme
  *
- * Ultra-minimal, premium aesthetic with:
- * - Generous white space
- * - Rounded corners (8-12px)
- * - Subtle borders instead of harsh lines
- * - Pill-style badges
- * - Soft grey palette
- *
- * @see https://linear.app/design for inspiration
+ * A restrained document-first system with:
+ * - quiet typography
+ * - disciplined spacing
+ * - light but explicit rules
+ * - square-ish geometry
+ * - minimal color use reserved for status and accents
  */
 import { StyleSheet } from "@react-pdf/renderer";
 import { FONT_FAMILY, FONT_WEIGHTS } from "../fonts";
@@ -92,7 +90,7 @@ export const pageMargins = {
 /**
  * Clearance for fixed header on document pages.
  * Use as marginTop on main content to avoid overlap with fixed header.
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 export const fixedHeaderClearance = 56;
 
@@ -141,10 +139,10 @@ export const tabularNums = {
 // ============================================================================
 
 export const borderRadius = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  sm: 1,
+  md: 1,
+  lg: 2,
+  xl: 4,
   full: 9999,
 } as const;
 

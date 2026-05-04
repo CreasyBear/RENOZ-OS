@@ -14,6 +14,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IssueTemplateList } from '@/components/domain/support/issues/issue-template-list';
 import { IssueTemplateFormDialog } from '@/components/domain/support/issues/issue-template-form-dialog';
 import {
@@ -73,6 +74,8 @@ function IssueTemplatesSettingsPage() {
 
   const templates = data?.data ?? [];
   const totalCount = data?.pagination?.totalCount ?? 0;
+  const templatesError = error && !data ? error : null;
+  const templatesWarning = error && data ? error : null;
 
   const handleCreateTemplate = () => {
     setEditingTemplate(null);
@@ -158,11 +161,20 @@ function IssueTemplatesSettingsPage() {
       />
 
       <PageLayout.Content>
+        {templatesWarning ? (
+          <Alert className="mb-4">
+            <AlertTitle>Templates unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent issue templates while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <IssueTemplateList
           templates={templates}
           totalCount={totalCount}
           isLoading={isLoading}
-          error={error ?? null}
+          error={templatesError}
           onRetry={refetch}
           typeFilter={typeFilter}
           searchQuery={searchQuery}

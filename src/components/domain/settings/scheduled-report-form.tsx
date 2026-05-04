@@ -12,7 +12,7 @@
  * - Recipients (email array)
  * - Metrics configuration (multi-select + options)
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see DASH-REPORTS-UI acceptance criteria
  * @see src/lib/schemas/reports/scheduled-reports.ts for validation
  */

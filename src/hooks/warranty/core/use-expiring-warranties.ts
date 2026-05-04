@@ -10,6 +10,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getExpiringWarranties,
   getExpiringWarrantiesReport,
@@ -59,11 +60,16 @@ export function useExpiringWarranties(options?: UseExpiringWarrantiesOptions) {
   return useQuery<GetExpiringWarrantiesResult>({
     queryKey: queryKeys.expiringWarranties.list({ days, limit, sortOrder }),
     queryFn: async () => {
-      const result = await getExpiringWarranties({
-        data: { days, limit, sortOrder } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getExpiringWarranties({
+          data: { days, limit, sortOrder }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Expiring warranties are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     // Stale after 5 minutes since warranty expiry changes slowly
@@ -114,12 +120,16 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
       limit,
     }),
     queryFn: async () => {
-      const result = await getExpiringWarrantiesReport({
-        data: { days, customerId, productId, status, sortBy, page, limit },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getExpiringWarrantiesReport({
+          data: { days, customerId, productId, status, sortBy, page, limit },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Expiring warranty reporting is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 2 * 60 * 1000, // 2 minutes for report data
@@ -133,9 +143,14 @@ export function useExpiringWarrantiesFilterOptions() {
   return useQuery({
     queryKey: queryKeys.expiringWarrantiesReport.filterOptions,
     queryFn: async () => {
-      const result = await getExpiringWarrantiesFilterOptions();
-      if (result == null) throw new Error('Expiring warranties filter options returned no data');
-      return result;
+      try {
+        return await getExpiringWarrantiesFilterOptions();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Expiring warranty filter options are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 10 * 60 * 1000, // 10 minutes for filter options
   });

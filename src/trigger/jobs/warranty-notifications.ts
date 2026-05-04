@@ -6,18 +6,27 @@
  * Background jobs for warranty-related notifications:
  * - Registration confirmation emails
  * - Expiry reminder emails
+ * - Claim submitted / resolved notifications
  *
  * @see src/trigger/client.ts for event definitions
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-002
  */
+import { eventTrigger } from '@trigger.dev/sdk';
 import { task, logger } from '@trigger.dev/sdk/v3';
 import { Resend } from 'resend';
 import { db } from '@/lib/db';
 import { notifications, type NotificationData } from 'drizzle/schema';
-import { type WarrantyRegisteredPayload, type WarrantyExpiringSoonPayload } from '../client';
-import { isEmailSuppressedDirect } from '@/server/functions/communications/email-suppression';
+import {
+  client,
+  warrantyEvents,
+  type WarrantyRegisteredPayload,
+  type WarrantyExpiringSoonPayload,
+  type WarrantyClaimSubmittedPayload,
+  type WarrantyClaimResolvedPayload,
+} from '../client';
+import { isEmailSuppressedDirect } from '@/server/functions/communications/_shared/suppression-read';
 import { renderEmail, WarrantyExpiring } from '@/lib/email';
-import { buildDocumentViewUrl } from '@/lib/documents/urls';
+import { buildDocumentViewUrl, getAppUrl } from '@/lib/documents/urls';
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -243,6 +252,247 @@ ${certificateUrl ? `\nView your certificate: ${certificateUrl}` : ''}
 ---
 This email was sent by Renoz. If you have any questions, please contact support.
   `.trim();
+}
+
+function getClaimantRoleLabel(role: string | undefined): string {
+  switch (role) {
+    case 'owner':
+      return 'Owner';
+    case 'internal':
+      return 'Internal Team';
+    case 'other':
+      return 'Other';
+    default:
+      return 'Channel Partner';
+  }
+}
+
+function buildClaimDetailsUrl(claimId: string): string {
+  return `${getAppUrl()}/support/claims/${claimId}`;
+}
+
+function resolveClaimNotificationRecipient(args: {
+  customerId: string;
+  customerName: string;
+  customerEmail?: string;
+  claimantRole?: 'channel_partner' | 'owner' | 'internal' | 'other';
+  claimantCustomerId?: string;
+  claimantName?: string;
+  claimantEmail?: string;
+}) {
+  const role = args.claimantRole ?? 'channel_partner';
+  const isDirectClaim = role !== 'channel_partner';
+
+  return {
+    role,
+    recipientEmail: isDirectClaim ? args.claimantEmail : args.customerEmail,
+    recipientName: isDirectClaim ? args.claimantName ?? 'there' : args.customerName,
+    notificationUserId: isDirectClaim ? args.claimantCustomerId ?? null : args.customerId,
+    recipientKind: isDirectClaim ? 'claimant' : 'commercial_customer',
+  };
+}
+
+function generateClaimSubmittedHtml(params: {
+  recipientName: string;
+  claimNumber: string;
+  warrantyNumber: string;
+  productName: string;
+  claimType: string;
+  claimantRoleLabel: string;
+  description: string;
+  submittedAt: string;
+  channelBypassReason?: string;
+  claimUrl: string;
+}): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warranty Claim Submitted</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 8px; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 32px; border-bottom: 1px solid #e4e4e7;">
+              <h1 style="margin: 0; font-size: 24px; color: #18181b;">Warranty Claim Submitted</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px;">
+              <p style="margin: 0 0 20px; color: #3f3f46; line-height: 1.5;">Hi ${params.recipientName}, your warranty claim has been recorded and is now awaiting review.</p>
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Claim</strong><br>${params.claimNumber}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Warranty</strong><br>${params.warrantyNumber}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Product</strong><br>${params.productName}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Claim Type</strong><br>${params.claimType}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Claim Path</strong><br>${params.claimantRoleLabel}</td></tr>
+                <tr><td style="padding: 10px 0;"><strong>Submitted</strong><br>${new Date(params.submittedAt).toLocaleString('en-AU')}</td></tr>
+              </table>
+              <p style="margin: 0 0 16px; color: #3f3f46; line-height: 1.5;"><strong>Description</strong><br>${params.description}</p>
+              ${params.channelBypassReason ? `<p style="margin: 0 0 16px; color: #3f3f46; line-height: 1.5;"><strong>Channel Bypass Reason</strong><br>${params.channelBypassReason}</p>` : ''}
+              <p style="margin: 24px 0 0;">
+                <a href="${params.claimUrl}" style="display: inline-block; padding: 12px 24px; background-color: #18181b; color: #ffffff; text-decoration: none; border-radius: 8px;">View Claim</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+function generateClaimSubmittedText(params: {
+  recipientName: string;
+  claimNumber: string;
+  warrantyNumber: string;
+  productName: string;
+  claimType: string;
+  claimantRoleLabel: string;
+  description: string;
+  submittedAt: string;
+  channelBypassReason?: string;
+  claimUrl: string;
+}): string {
+  return `
+WARRANTY CLAIM SUBMITTED
+
+Hi ${params.recipientName},
+
+Your warranty claim has been recorded and is now awaiting review.
+
+Claim: ${params.claimNumber}
+Warranty: ${params.warrantyNumber}
+Product: ${params.productName}
+Claim Type: ${params.claimType}
+Claim Path: ${params.claimantRoleLabel}
+Submitted: ${new Date(params.submittedAt).toLocaleString('en-AU')}
+
+Description:
+${params.description}
+${params.channelBypassReason ? `\nChannel Bypass Reason:\n${params.channelBypassReason}\n` : ''}
+View Claim: ${params.claimUrl}
+  `.trim();
+}
+
+function generateClaimResolvedHtml(params: {
+  recipientName: string;
+  claimNumber: string;
+  warrantyNumber: string;
+  claimantRoleLabel: string;
+  resolutionType: string;
+  resolution: string;
+  resolvedAt: string;
+  resolutionNotes?: string;
+  claimUrl: string;
+}): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warranty Claim Resolved</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background-color: #f4f4f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 8px; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 32px; border-bottom: 1px solid #e4e4e7;">
+              <h1 style="margin: 0; font-size: 24px; color: #18181b;">Warranty Claim Resolved</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px;">
+              <p style="margin: 0 0 20px; color: #3f3f46; line-height: 1.5;">Hi ${params.recipientName}, your warranty claim has been resolved.</p>
+              <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Claim</strong><br>${params.claimNumber}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Warranty</strong><br>${params.warrantyNumber}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Claim Path</strong><br>${params.claimantRoleLabel}</td></tr>
+                <tr><td style="padding: 10px 0; border-bottom: 1px solid #e4e4e7;"><strong>Resolution Type</strong><br>${params.resolutionType}</td></tr>
+                <tr><td style="padding: 10px 0;"><strong>Resolved</strong><br>${new Date(params.resolvedAt).toLocaleString('en-AU')}</td></tr>
+              </table>
+              <p style="margin: 0 0 16px; color: #3f3f46; line-height: 1.5;"><strong>Outcome</strong><br>${params.resolution}</p>
+              ${params.resolutionNotes ? `<p style="margin: 0 0 16px; color: #3f3f46; line-height: 1.5;"><strong>Resolution Notes</strong><br>${params.resolutionNotes}</p>` : ''}
+              <p style="margin: 24px 0 0;">
+                <a href="${params.claimUrl}" style="display: inline-block; padding: 12px 24px; background-color: #18181b; color: #ffffff; text-decoration: none; border-radius: 8px;">View Claim</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+function generateClaimResolvedText(params: {
+  recipientName: string;
+  claimNumber: string;
+  warrantyNumber: string;
+  claimantRoleLabel: string;
+  resolutionType: string;
+  resolution: string;
+  resolvedAt: string;
+  resolutionNotes?: string;
+  claimUrl: string;
+}): string {
+  return `
+WARRANTY CLAIM RESOLVED
+
+Hi ${params.recipientName},
+
+Your warranty claim has been resolved.
+
+Claim: ${params.claimNumber}
+Warranty: ${params.warrantyNumber}
+Claim Path: ${params.claimantRoleLabel}
+Resolution Type: ${params.resolutionType}
+Resolved: ${new Date(params.resolvedAt).toLocaleString('en-AU')}
+
+Outcome:
+${params.resolution}
+${params.resolutionNotes ? `\nResolution Notes:\n${params.resolutionNotes}\n` : ''}
+View Claim: ${params.claimUrl}
+  `.trim();
+}
+
+async function createClaimNotificationRecord(args: {
+  organizationId: string;
+  userId: string | null;
+  title: string;
+  message: string;
+  metadata: NotificationData;
+}) {
+  if (!args.userId) {
+    return { created: false, reason: 'no_notification_user' as const };
+  }
+
+  const [record] = await db
+    .insert(notifications)
+    .values({
+      organizationId: args.organizationId,
+      userId: args.userId,
+      type: 'warranty',
+      title: args.title,
+      message: args.message,
+      data: args.metadata,
+      status: 'pending',
+    })
+    .returning();
+
+  return { created: true, notificationId: record?.id };
 }
 
 // ============================================================================
@@ -636,6 +886,293 @@ export const sendWarrantyExpiryReminder = task({
       messageId: emailResult.messageId,
       notificationId,
       recipient: customerEmail,
+    };
+  },
+});
+
+// ============================================================================
+// WARRANTY CLAIM SUBMITTED EMAIL
+// ============================================================================
+
+export const sendWarrantyClaimSubmittedNotification = client.defineJob({
+  id: 'send-warranty-claim-submitted-notification',
+  name: 'Send Warranty Claim Submitted Notification',
+  version: '1.0.0',
+  trigger: eventTrigger({
+    name: warrantyEvents.claimSubmitted,
+  }),
+  run: async (payload: WarrantyClaimSubmittedPayload, io) => {
+    const recipient = resolveClaimNotificationRecipient(payload);
+    const claimUrl = buildClaimDetailsUrl(payload.claimId);
+    const claimantRoleLabel = getClaimantRoleLabel(payload.claimantRole);
+    const metadata: NotificationData = {
+      entityId: payload.claimId,
+      entityType: 'warranty_claim',
+      subType: 'claim_submitted',
+      actionUrl: claimUrl,
+      claimId: payload.claimId,
+      claimNumber: payload.claimNumber,
+      warrantyId: payload.warrantyId,
+      warrantyNumber: payload.warrantyNumber,
+      commercialCustomerId: payload.customerId,
+      commercialCustomerName: payload.customerName,
+      claimantRole: payload.claimantRole ?? 'channel_partner',
+      claimantCustomerId: payload.claimantCustomerId ?? null,
+      claimantName: payload.claimantName ?? null,
+      channelBypassReason: payload.channelBypassReason ?? null,
+      recipientKind: recipient.recipientKind,
+    };
+
+    if (!recipient.recipientEmail) {
+      await io.logger.warn('Skipping warranty claim submitted email - no recipient email', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientKind: recipient.recipientKind,
+        claimantRole: payload.claimantRole ?? 'channel_partner',
+      });
+
+      const notificationResult = await createClaimNotificationRecord({
+        organizationId: payload.organizationId,
+        userId: recipient.notificationUserId,
+        title: `Warranty Claim Submitted: ${payload.claimNumber}`,
+        message: `${payload.productName} claim submitted via ${claimantRoleLabel}.`,
+        metadata,
+      });
+
+      return {
+        success: false,
+        reason: 'no_recipient_email',
+        claimId: payload.claimId,
+        notificationId:
+          notificationResult.created ? notificationResult.notificationId : undefined,
+      };
+    }
+
+    const suppression = await isEmailSuppressedDirect(
+      payload.organizationId,
+      recipient.recipientEmail
+    );
+    if (suppression.suppressed) {
+      await io.logger.info('Skipping warranty claim submitted email - email suppressed', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientEmail: recipient.recipientEmail,
+        reason: suppression.reason,
+      });
+
+      return {
+        success: false,
+        reason: 'suppressed',
+        suppressionReason: suppression.reason,
+        claimId: payload.claimId,
+      };
+    }
+
+    const { data: sendResult, error: sendError } = await resend.emails.send({
+      from: `${process.env.EMAIL_FROM_NAME || 'Renoz'} <${process.env.EMAIL_FROM || 'warranties@renoz.energy'}>`,
+      to: recipient.recipientEmail,
+      subject: `Warranty Claim Submitted - ${payload.claimNumber}`,
+      html: generateClaimSubmittedHtml({
+        recipientName: recipient.recipientName,
+        claimNumber: payload.claimNumber,
+        warrantyNumber: payload.warrantyNumber,
+        productName: payload.productName,
+        claimType: payload.claimType,
+        claimantRoleLabel,
+        description: payload.description,
+        submittedAt: payload.submittedAt,
+        channelBypassReason: payload.channelBypassReason,
+        claimUrl,
+      }),
+      text: generateClaimSubmittedText({
+        recipientName: recipient.recipientName,
+        claimNumber: payload.claimNumber,
+        warrantyNumber: payload.warrantyNumber,
+        productName: payload.productName,
+        claimType: payload.claimType,
+        claimantRoleLabel,
+        description: payload.description,
+        submittedAt: payload.submittedAt,
+        channelBypassReason: payload.channelBypassReason,
+        claimUrl,
+      }),
+    });
+
+    if (sendError) {
+      await io.logger.error('Failed to send warranty claim submitted email', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientEmail: recipient.recipientEmail,
+        error: sendError.message,
+      });
+      return {
+        success: false,
+        reason: 'send_failed',
+        error: sendError.message,
+        claimId: payload.claimId,
+      };
+    }
+
+    const notificationResult = await createClaimNotificationRecord({
+      organizationId: payload.organizationId,
+      userId: recipient.notificationUserId,
+      title: `Warranty Claim Submitted: ${payload.claimNumber}`,
+      message: `${payload.productName} claim submitted via ${claimantRoleLabel}.`,
+      metadata,
+    });
+
+    return {
+      success: true,
+      claimId: payload.claimId,
+      messageId: sendResult?.id,
+      recipient: recipient.recipientEmail,
+      notificationId:
+        notificationResult.created ? notificationResult.notificationId : undefined,
+      notificationSkipped:
+        notificationResult.created === false ? 'no_notification_user' : undefined,
+    };
+  },
+});
+
+// ============================================================================
+// WARRANTY CLAIM RESOLVED EMAIL
+// ============================================================================
+
+export const sendWarrantyClaimResolvedNotification = client.defineJob({
+  id: 'send-warranty-claim-resolved-notification',
+  name: 'Send Warranty Claim Resolved Notification',
+  version: '1.0.0',
+  trigger: eventTrigger({
+    name: warrantyEvents.claimResolved,
+  }),
+  run: async (payload: WarrantyClaimResolvedPayload, io) => {
+    const recipient = resolveClaimNotificationRecipient(payload);
+    const claimUrl = buildClaimDetailsUrl(payload.claimId);
+    const claimantRoleLabel = getClaimantRoleLabel(payload.claimantRole);
+    const metadata: NotificationData = {
+      entityId: payload.claimId,
+      entityType: 'warranty_claim',
+      subType: 'claim_resolved',
+      actionUrl: claimUrl,
+      claimId: payload.claimId,
+      claimNumber: payload.claimNumber,
+      warrantyId: payload.warrantyId,
+      warrantyNumber: payload.warrantyNumber,
+      commercialCustomerId: payload.customerId,
+      commercialCustomerName: payload.customerName,
+      claimantRole: payload.claimantRole ?? 'channel_partner',
+      claimantCustomerId: payload.claimantCustomerId ?? null,
+      claimantName: payload.claimantName ?? null,
+      channelBypassReason: payload.channelBypassReason ?? null,
+      recipientKind: recipient.recipientKind,
+      resolutionType: payload.resolutionType,
+    };
+
+    if (!recipient.recipientEmail) {
+      await io.logger.warn('Skipping warranty claim resolved email - no recipient email', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientKind: recipient.recipientKind,
+        claimantRole: payload.claimantRole ?? 'channel_partner',
+      });
+
+      const notificationResult = await createClaimNotificationRecord({
+        organizationId: payload.organizationId,
+        userId: recipient.notificationUserId,
+        title: `Warranty Claim Resolved: ${payload.claimNumber}`,
+        message: `${payload.claimNumber} was resolved with ${payload.resolutionType}.`,
+        metadata,
+      });
+
+      return {
+        success: false,
+        reason: 'no_recipient_email',
+        claimId: payload.claimId,
+        notificationId:
+          notificationResult.created ? notificationResult.notificationId : undefined,
+      };
+    }
+
+    const suppression = await isEmailSuppressedDirect(
+      payload.organizationId,
+      recipient.recipientEmail
+    );
+    if (suppression.suppressed) {
+      await io.logger.info('Skipping warranty claim resolved email - email suppressed', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientEmail: recipient.recipientEmail,
+        reason: suppression.reason,
+      });
+
+      return {
+        success: false,
+        reason: 'suppressed',
+        suppressionReason: suppression.reason,
+        claimId: payload.claimId,
+      };
+    }
+
+    const { data: sendResult, error: sendError } = await resend.emails.send({
+      from: `${process.env.EMAIL_FROM_NAME || 'Renoz'} <${process.env.EMAIL_FROM || 'warranties@renoz.energy'}>`,
+      to: recipient.recipientEmail,
+      subject: `Warranty Claim Resolved - ${payload.claimNumber}`,
+      html: generateClaimResolvedHtml({
+        recipientName: recipient.recipientName,
+        claimNumber: payload.claimNumber,
+        warrantyNumber: payload.warrantyNumber,
+        claimantRoleLabel,
+        resolutionType: payload.resolutionType,
+        resolution: payload.resolution,
+        resolvedAt: payload.resolvedAt,
+        resolutionNotes: payload.resolutionNotes,
+        claimUrl,
+      }),
+      text: generateClaimResolvedText({
+        recipientName: recipient.recipientName,
+        claimNumber: payload.claimNumber,
+        warrantyNumber: payload.warrantyNumber,
+        claimantRoleLabel,
+        resolutionType: payload.resolutionType,
+        resolution: payload.resolution,
+        resolvedAt: payload.resolvedAt,
+        resolutionNotes: payload.resolutionNotes,
+        claimUrl,
+      }),
+    });
+
+    if (sendError) {
+      await io.logger.error('Failed to send warranty claim resolved email', {
+        claimId: payload.claimId,
+        claimNumber: payload.claimNumber,
+        recipientEmail: recipient.recipientEmail,
+        error: sendError.message,
+      });
+      return {
+        success: false,
+        reason: 'send_failed',
+        error: sendError.message,
+        claimId: payload.claimId,
+      };
+    }
+
+    const notificationResult = await createClaimNotificationRecord({
+      organizationId: payload.organizationId,
+      userId: recipient.notificationUserId,
+      title: `Warranty Claim Resolved: ${payload.claimNumber}`,
+      message: `${payload.claimNumber} was resolved with ${payload.resolutionType}.`,
+      metadata,
+    });
+
+    return {
+      success: true,
+      claimId: payload.claimId,
+      messageId: sendResult?.id,
+      recipient: recipient.recipientEmail,
+      notificationId:
+        notificationResult.created ? notificationResult.notificationId : undefined,
+      notificationSkipped:
+        notificationResult.created === false ? 'no_notification_user' : undefined,
     };
   },
 });

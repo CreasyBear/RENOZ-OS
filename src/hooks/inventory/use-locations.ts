@@ -14,6 +14,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listLocations,
@@ -66,6 +67,9 @@ interface UseLocationsResult {
   isLoading: boolean;
   isLoadingContents: boolean;
   isSubmitting: boolean;
+  locationsError: Error | null;
+  currentLocationError: Error | null;
+  contentsError: Error | null;
 
   // Actions
   fetchLocations: (filters?: HookLocationFilters) => Promise<void>;
@@ -105,25 +109,30 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const locationsQuery = useQuery({
     queryKey: queryKeys.locations.list(filters),
     queryFn: async () => {
-      const data = await listLocations({
-        data: {
-          page: 1,
-          pageSize: 200,
-          ...(filters.parentId && { parentId: filters.parentId }),
-          ...(filters.type && { locationType: filters.type }),
-          ...(filters.active !== undefined && { isActive: filters.active }),
-          ...(filters.search && { search: filters.search }),
-        },
-      });
+      try {
+        const data = await listLocations({
+          data: {
+            page: 1,
+            pageSize: 200,
+            ...(filters.parentId && { parentId: filters.parentId }),
+            ...(filters.type && { locationType: filters.type }),
+            ...(filters.active !== undefined && { isActive: filters.active }),
+            ...(filters.search && { search: filters.search }),
+          },
+        });
 
-      if (data?.locations) {
-        const mappedLocations = data.locations.map(mapLocationFromApi);
+        const mappedLocations = (data.locations ?? []).map(mapLocationFromApi);
         return {
           locations: mappedLocations,
           hierarchy: includeHierarchy ? buildHierarchy(mappedLocations) : [],
         };
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warehouse locations are temporarily unavailable. Please refresh and try again.',
+        });
       }
-      return { locations: [], hierarchy: [] };
     },
     enabled: autoFetch,
     staleTime: 30 * 1000, // 30 seconds
@@ -139,10 +148,19 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
     queryKey: queryKeys.locations.detail(currentLocationId || ''),
     queryFn: async () => {
       if (!currentLocationId) return null;
-      const data = await getLocation({
-        data: { id: currentLocationId },
-      });
-      return data?.location ? mapLocationDetailFromApi(data.location) : null;
+      try {
+        const data = await getLocation({
+          data: { id: currentLocationId },
+        });
+        return mapLocationDetailFromApi(data.location);
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Warehouse location details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warehouse location could not be found.',
+        });
+      }
     },
     enabled: !!currentLocationId,
     staleTime: 30 * 1000,
@@ -156,42 +174,19 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
     queryKey: queryKeys.locations.contents(currentContentsId || ''),
     queryFn: async (): Promise<HookLocationContents | null> => {
       if (!currentContentsId) return null;
-      const data = await listInventory({
-        data: { locationId: currentContentsId, page: 1, pageSize: 100 },
-      });
+      try {
+        const data = await listInventory({
+          data: { locationId: currentContentsId, page: 1, pageSize: 100 },
+        });
 
-      if (data?.items) {
-        // ListInventoryResult.items contains inventory items with product/location relations
-        // The items match the Inventory type from schema which includes all needed fields
-        const items = data.items;
-        const totalValue = items.reduce(
-          (sum, item) => sum + (item.totalValue || 0),
-          0
-        );
-        const quantities = items.map(item => item.quantityOnHand ?? 0);
-        const capacities = items.map(item => item.location?.capacity ?? 1);
-        const utilization =
-          items.length > 0
-            ? (quantities.reduce((sum, q) => sum + q, 0) /
-                Math.max(...capacities)) *
-              100
-            : 0;
-
-        return {
-          items: items.map((item) => ({
-            inventoryId: item.id,
-            productId: item.productId,
-            productName: item.product?.name ?? '',
-            productSku: item.product?.sku ?? '',
-            quantity: item.quantityOnHand ?? 0,
-            totalValue: item.totalValue ?? 0,
-          })),
-          totalItems: items.length,
-          totalValue,
-          utilization,
-        };
+        return mapLocationContentsFromApi(data);
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory location contents are temporarily unavailable. Please refresh and try again.',
+        });
       }
-      return null;
     },
     enabled: !!currentContentsId,
     staleTime: 30 * 1000,
@@ -262,7 +257,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const createNewLocation = useCallback(
     async (data: CreateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await createLocationMutation.mutateAsync(data);
-      if (result == null) throw new Error('Query returned no data');
+      if (result == null) {
+        throw new Error('Location could not be created.');
+      }
 
       return result;
     },
@@ -298,7 +295,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const updateExistingLocation = useCallback(
     async (locationId: string, data: UpdateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await updateLocationMutation.mutateAsync({ locationId, data });
-      if (result == null) throw new Error('Query returned no data');
+      if (result == null) {
+        throw new Error('Location could not be updated.');
+      }
 
       return result;
     },
@@ -415,6 +414,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       isLoading,
       isLoadingContents: contentsQuery.isLoading,
       isSubmitting,
+      locationsError: asQueryError(locationsQuery.error),
+      currentLocationError: asQueryError(currentLocationQuery.error),
+      contentsError: asQueryError(contentsQuery.error),
       fetchLocations,
       fetchLocation,
       fetchContents,
@@ -436,6 +438,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       isLoading,
       contentsQuery.isLoading,
       isSubmitting,
+      locationsQuery.error,
+      currentLocationQuery.error,
+      contentsQuery.error,
       fetchLocations,
       fetchLocation,
       fetchContents,
@@ -462,6 +467,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
 type ListLocationsResponse = Awaited<ReturnType<typeof listLocations>>;
 type GetLocationResponse = Awaited<ReturnType<typeof getLocation>>;
 type UpdateLocationResponse = Awaited<ReturnType<typeof updateLocation>>;
+type ListInventoryResponse = Awaited<ReturnType<typeof listInventory>>;
 
 // Location record from list response
 type ServerLocationRecord = ListLocationsResponse['locations'][number];
@@ -516,6 +522,37 @@ function mapLocationDetailFromApi(data: ServerLocationDetail): HookWarehouseLoca
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
+}
+
+function mapLocationContentsFromApi(data: ListInventoryResponse): HookLocationContents {
+  const items = data.items ?? [];
+  const totalValue = items.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+  const quantities = items.map((item) => item.quantityOnHand ?? 0);
+  const capacities = items.map((item) => item.location?.capacity ?? 1);
+  const utilization =
+    items.length > 0
+      ? (quantities.reduce((sum, quantity) => sum + quantity, 0) /
+          Math.max(...capacities)) *
+        100
+      : 0;
+
+  return {
+    items: items.map((item) => ({
+      inventoryId: item.id,
+      productId: item.productId,
+      productName: item.product?.name ?? '',
+      productSku: item.product?.sku ?? '',
+      quantity: item.quantityOnHand ?? 0,
+      totalValue: item.totalValue ?? 0,
+    })),
+    totalItems: items.length,
+    totalValue,
+    utilization,
+  };
+}
+
+function asQueryError(error: unknown): Error | null {
+  return error instanceof Error ? error : null;
 }
 
 /**

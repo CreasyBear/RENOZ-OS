@@ -94,6 +94,8 @@ export interface InventoryDetailViewProps {
   isLoadingMovements?: boolean;
   isLoadingCostLayers?: boolean;
   isLoadingQuality?: boolean;
+  qualityError?: Error | null;
+  onRetryQuality?: () => void;
   /** Tab counts from composite hook */
   counts?: {
     movements: number;
@@ -851,9 +853,21 @@ function CostLayersTabContent({ costLayers = [], isLoading }: CostLayersTabConte
 interface QualityTabContentProps {
   qualityRecords?: QualityRecord[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
 }
 
-function QualityTabContent({ qualityRecords = [], isLoading }: QualityTabContentProps) {
+function QualityTabContent({
+  qualityRecords = [],
+  isLoading,
+  isError,
+  errorMessage,
+  onRetry,
+}: QualityTabContentProps) {
+  const showUnavailableState = !!isError && qualityRecords.length === 0;
+  const showDegradedWarning = !!isError && qualityRecords.length > 0;
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -871,6 +885,31 @@ function QualityTabContent({ qualityRecords = [], isLoading }: QualityTabContent
     );
   }
 
+  if (showUnavailableState) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" aria-hidden="true" />
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">
+                Quality inspection history is temporarily unavailable.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Please refresh and try again.'}
+              </p>
+            </div>
+            {onRetry ? (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                Retry Quality History
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (qualityRecords.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -882,6 +921,29 @@ function QualityTabContent({ qualityRecords = [], isLoading }: QualityTabContent
 
   return (
     <div className="space-y-2">
+      {showDegradedWarning ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" aria-hidden="true" />
+            <div className="space-y-3">
+              <div>
+                <p className="font-medium text-foreground">
+                  Showing the most recent quality history while refresh is unavailable.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {errorMessage ?? 'Refresh failed. The inspection history below may be stale until the next successful reload.'}
+                </p>
+              </div>
+              {onRetry ? (
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                  Retry Quality History
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {qualityRecords.map((record) => (
         <div key={record.id} className="flex items-start gap-4 p-3 border rounded-lg">
           <div
@@ -952,6 +1014,8 @@ export const InventoryDetailView = memo(function InventoryDetailView({
   isLoadingMovements,
   isLoadingCostLayers,
   isLoadingQuality,
+  qualityError,
+  onRetryQuality,
   counts,
   className,
 }: InventoryDetailViewProps) {
@@ -1137,6 +1201,9 @@ export const InventoryDetailView = memo(function InventoryDetailView({
               <QualityTabContent
                 qualityRecords={qualityRecords}
                 isLoading={isLoadingQuality}
+                isError={!!qualityError}
+                errorMessage={qualityError?.message ?? null}
+                onRetry={onRetryQuality}
               />
             </TabsContent>
 

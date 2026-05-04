@@ -100,7 +100,7 @@ export function ScheduleCalendarContainer({ Layout }: ScheduleCalendarContainerP
   const dateTo = format(weekEnd, 'yyyy-MM-dd');
 
   const projectIdFromSearch = search.projectId ?? undefined;
-  const { data, isLoading } = useSchedule(dateFrom, dateTo, { projectId: projectIdFromSearch });
+  const { data, isLoading, error, refetch } = useSchedule(dateFrom, dateTo, { projectId: projectIdFromSearch });
   const visits = useMemo(() => (data?.items ?? []) as SiteVisitItem[], [data?.items]);
 
   const { data: usersData } = useUsers({
@@ -504,6 +504,19 @@ export function ScheduleCalendarContainer({ Layout }: ScheduleCalendarContainerP
       />
 
       <Layout.Content>
+        {error ? (
+          <Alert variant={data === undefined ? 'destructive' : 'default'} className="mb-4">
+            <AlertTitle>{data === undefined ? 'Schedule unavailable' : 'Showing cached schedule'}</AlertTitle>
+            <AlertDescription className="flex items-center gap-2">
+              <span>
+                {error.message || 'Schedule data is temporarily unavailable. Please refresh and try again.'}
+              </span>
+              <Button variant="link" className="p-0 h-auto underline" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {isProjectInvalid && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Project not found</AlertTitle>

@@ -19,7 +19,7 @@
 import { useState, useCallback, useEffect, startTransition } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CustomerStatements } from '@/components/domain/financial/customer-statements';
 import { CustomerSelectorContainer } from '@/components/domain/orders/creation/customer-selector-container';
@@ -52,17 +52,7 @@ export const Route = createFileRoute('/_authenticated/financial/statements')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Customer Statements"
-        description="Generate and view customer account statements"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -172,8 +162,12 @@ function CustomerStatementsPage() {
 
   const handleEmail = useCallback((statementId: string) => {
     if (!customerId) return;
-    emailMutation.mutate({ statementId, sentToEmail: '', customerId });
-  }, [customerId, emailMutation]);
+    emailMutation.mutate({
+      statementId,
+      sentToEmail: selectedCustomer?.email ?? undefined,
+      customerId,
+    });
+  }, [customerId, emailMutation, selectedCustomer?.email]);
 
   const handleSelectStatement = useCallback((id: string | null) => {
     setSelectedStatementId(id);
@@ -183,35 +177,31 @@ function CustomerStatementsPage() {
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Customer Statements"
-        description="Generate and view customer account statements"
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Customer Statements</h2>
+        <p className="text-sm text-muted-foreground">
+          Generate and view customer account statements.
+        </p>
+      </div>
+      <CustomerSelectorContainer
+        selectedCustomerId={customerId}
+        onSelect={handleSelectCustomer}
       />
-      <PageLayout.Content>
-        {/* Customer Selector */}
-        <div className="mb-6">
-          <CustomerSelectorContainer
-            selectedCustomerId={customerId}
-            onSelect={handleSelectCustomer}
-          />
-        </div>
 
-        {/* Statements List */}
-        <CustomerStatements
-          customerId={customerId ?? ''}
-          customerName={customerName}
-          statements={statements}
-          selectedStatement={selectedStatement}
-          isLoading={isLoading}
-          error={error}
-          onGenerate={handleGenerate}
-          isGenerating={generateMutation.isPending}
-          onEmail={handleEmail}
-          isEmailing={emailMutation.isPending}
-          onSelectStatement={handleSelectStatement}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+      <CustomerStatements
+        customerId={customerId ?? ''}
+        customerName={customerName}
+        statements={statements}
+        selectedStatement={selectedStatement}
+        isLoading={isLoading}
+        error={error}
+        onGenerate={handleGenerate}
+        isGenerating={generateMutation.isPending}
+        onEmail={handleEmail}
+        isEmailing={emailMutation.isPending}
+        onSelectStatement={handleSelectStatement}
+      />
+    </div>
   );
 }

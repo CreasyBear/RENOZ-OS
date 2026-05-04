@@ -10,6 +10,7 @@
 
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getWarrantyAnalyticsSummary,
   getClaimsByProduct,
@@ -35,6 +36,7 @@ import type {
   GetClaimsTrendInput,
   ExportWarrantyAnalyticsInput,
 } from '@/lib/schemas/warranty/analytics';
+import type { WarrantyAnalyticsDashboard } from '@/lib/schemas/reports/warranty-analytics';
 
 // ============================================================================
 // QUERY KEYS
@@ -94,9 +96,15 @@ export function useWarrantyAnalyticsSummary(options: UseWarrantyAnalyticsSummary
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.summary(filters),
     queryFn: async () => {
-      const result = await getWarrantyAnalyticsSummary({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarrantyAnalyticsSummary({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty analytics summary is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -131,9 +139,15 @@ export function useClaimsByProduct(options: UseClaimsByProductOptions = {}) {
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByProduct(filters),
     queryFn: async () => {
-      const result = await getClaimsByProduct({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getClaimsByProduct({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty claims by product are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -166,9 +180,15 @@ export function useClaimsTrend(options: UseClaimsTrendOptions = {}) {
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsTrend(input),
     queryFn: async () => {
-      const result = await getClaimsTrend({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getClaimsTrend({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty claims trend is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -202,9 +222,15 @@ export function useClaimsByType(options: UseClaimsByTypeOptions = {}) {
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByType(filters),
     queryFn: async () => {
-      const result = await getClaimsByType({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getClaimsByType({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty claims by type are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -239,9 +265,15 @@ export function useSlaComplianceMetrics(options: UseSlaComplianceMetricsOptions 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.slaCompliance(filters),
     queryFn: async () => {
-      const result = await getSlaComplianceMetrics({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaComplianceMetrics({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty SLA compliance metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -276,9 +308,15 @@ export function useCycleCountAtClaim(options: UseCycleCountAtClaimOptions = {}) 
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.cycleCount(filters),
     queryFn: async () => {
-      const result = await getCycleCountAtClaim({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCycleCountAtClaim({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty cycle-count analysis is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -311,9 +349,15 @@ export function useExtensionVsResolution(options: UseExtensionVsResolutionOption
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.extensionVsResolution(filters),
     queryFn: async () => {
-      const result = await getExtensionVsResolution({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getExtensionVsResolution({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty extension and resolution analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
@@ -331,9 +375,15 @@ export function useWarrantyAnalyticsFilterOptions() {
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.filterOptions(),
     queryFn: async () => {
-      const result = await getWarrantyAnalyticsFilterOptions();
-      if (result == null) throw new Error('Warranty analytics filter options returned no data');
-      return result;
+      try {
+        return await getWarrantyAnalyticsFilterOptions();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Warranty analytics filter options are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: FILTER_OPTIONS_STALE_TIME,
   });
@@ -388,8 +438,6 @@ export interface UseWarrantyAnalyticsDashboardOptions {
   trendMonths?: number;
   enabled?: boolean;
 }
-
-import type { WarrantyAnalyticsDashboard } from '@/lib/schemas/reports/warranty-analytics';
 
 /**
  * Combined hook for warranty analytics dashboard.

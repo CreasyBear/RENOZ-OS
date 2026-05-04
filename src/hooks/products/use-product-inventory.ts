@@ -9,6 +9,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
 import {
@@ -118,11 +119,17 @@ export function useProductInventory(options: UseProductInventorySummaryOptions) 
   return useQuery({
     queryKey: queryKeys.products.inventory(productId),
     queryFn: async () => {
-      const result = await getProductInventory({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProductInventory({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Product inventory is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000, // 30 seconds
@@ -146,11 +153,16 @@ export function useProductInventoryStats(options: UseProductInventorySummaryOpti
   return useQuery({
     queryKey: queryKeys.products.inventoryStats(productId),
     queryFn: async () => {
-      const result = await getInventoryStats({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInventoryStats({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Inventory statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000, // 30 seconds
@@ -224,11 +236,16 @@ export function useLowStockAlerts(options: {
   return useQuery({
     queryKey: queryKeys.products.stockAlerts(locationId ?? 'all'),
     queryFn: async () => {
-      const result = await getLowStockAlerts({
-        data: { reorderPoint, criticalThreshold, locationId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getLowStockAlerts({
+          data: { reorderPoint, criticalThreshold, locationId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Low stock alerts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -251,12 +268,16 @@ export function useProductMovements(options: {
   return useQuery({
     queryKey: queryKeys.products.movements(productId, { movementType, limit, page }),
     queryFn: async () => {
-      const result = await getProductMovements({
-        data: { productId, movementType, limit, page, locationId },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProductMovements({
+          data: { productId, movementType, limit, page, locationId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Product movement history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000,
@@ -272,11 +293,16 @@ export function useInventoryLocations(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.products.locations(),
     queryFn: async () => {
-      const result = await listLocations({
-        data: {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listLocations({
+          data: {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Inventory locations are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - locations don't change often
@@ -299,12 +325,16 @@ export function useAggregatedProductMovements(options: {
   return useQuery({
     queryKey: queryKeys.products.movementsAggregated(productId, { movementType, limit, page }),
     queryFn: async () => {
-      const result = await getAggregatedProductMovements({
-        data: { productId, movementType, limit, page },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getAggregatedProductMovements({
+          data: { productId, movementType, limit, page },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Aggregated inventory movements are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000,
@@ -369,11 +399,17 @@ export function useProductCostLayers(options: UseProductInventorySummaryOptions)
   return useQuery({
     queryKey: queryKeys.inventory.costLayersDetail(productId),
     queryFn: async () => {
-      const result = await getProductCostLayers({
-        data: { productId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProductCostLayers({
+          data: { productId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Cost layers are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 30 * 1000,

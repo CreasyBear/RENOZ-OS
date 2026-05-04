@@ -32,10 +32,12 @@ import {
   Clock,
   CheckCircle2,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -565,7 +567,7 @@ function EmptyNotesState({ onAdd }: { onAdd: () => void }) {
 // ============================================================================
 
 export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
-  const { data: notesData, isLoading, refetch } = useNotes(projectId);
+  const { data: notesData, isLoading, error, refetch } = useNotes(projectId);
   const deleteNote = useDeleteNote(projectId);
   const { getUser } = useUserLookup();
 
@@ -625,6 +627,21 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
     );
   }
 
+  const notesWarning = error ? (
+    <Alert variant={notes.length === 0 ? 'destructive' : 'default'}>
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>{notes.length === 0 ? 'Notes unavailable' : 'Showing cached notes'}</AlertTitle>
+      <AlertDescription className="flex items-center justify-between gap-3">
+        <span>
+          {error.message || 'Project notes are temporarily unavailable. Please refresh and try again.'}
+        </span>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
   if (notes.length === 0) {
     return (
       <div className="space-y-4">
@@ -636,7 +653,8 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
             </p>
           </div>
         </div>
-        <EmptyNotesState onAdd={() => setCreateDialogOpen(true)} />
+        {notesWarning}
+        {error ? null : <EmptyNotesState onAdd={() => setCreateDialogOpen(true)} />}
         <NoteCreateDialog
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
@@ -649,6 +667,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
 
   return (
     <div className="space-y-6">
+      {notesWarning}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

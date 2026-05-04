@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { NotificationListItem } from './notification-list-item';
 import type { NotificationItem } from '@/lib/schemas/notifications';
 
@@ -71,6 +72,7 @@ export interface NotificationCenterPopoverProps {
   notifications: NotificationItem[];
   unreadCount: number;
   isLoading: boolean;
+  error?: Error | null;
   onMarkRead: (id: string) => void;
   /** ID of notification currently being marked read (for double-click protection) */
   markingReadId?: string;
@@ -86,6 +88,7 @@ export function NotificationCenterPopover({
   notifications,
   unreadCount,
   isLoading,
+  error,
   onMarkRead,
   markingReadId,
   isOpen,
@@ -132,10 +135,36 @@ export function NotificationCenterPopover({
           <h3 className="text-sm font-semibold">Notifications</h3>
         </div>
         <ScrollArea className="max-h-[400px]">
+          {error ? (
+            <div className="px-4 pt-3">
+              <Alert>
+                <AlertDescription>
+                  {notifications.length > 0
+                    ? error.message || 'Notifications are temporarily unavailable. Showing the most recent notifications.'
+                    : error.message || 'Notifications are temporarily unavailable. Please refresh and try again.'}
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
           {isLoading ? (
             <NotificationListSkeleton />
-          ) : notifications.length === 0 ? (
+          ) : notifications.length === 0 && !error ? (
             <NotificationEmptyState />
+          ) : notifications.length === 0 ? (
+            <div
+              className="flex flex-col items-center justify-center px-6 py-12 text-center"
+              role="status"
+              aria-label="Notifications unavailable"
+            >
+              <Inbox
+                className="mb-4 h-12 w-12 text-muted-foreground/40"
+                aria-hidden="true"
+              />
+              <h3 className="text-base font-medium text-foreground">Notifications unavailable</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Please refresh and try again.
+              </p>
+            </div>
           ) : (
             <ul className="py-2" role="list">
               {notifications.map((item) => (

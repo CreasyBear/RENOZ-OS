@@ -8,6 +8,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import type {
   ApiTokenListItem,
@@ -53,9 +54,14 @@ export function useApiTokens({ enabled = true }: UseApiTokensOptions = {}) {
   return useQuery({
     queryKey: queryKeys.apiTokens.list(),
     queryFn: async () => {
-      const result = await listTokensFn();
-      if (result == null) throw new Error('API tokens list returned no data');
-      return result;
+      try {
+        return await listTokensFn();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'API tokens are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds

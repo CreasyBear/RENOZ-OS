@@ -11,6 +11,11 @@
  */
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys, type OpportunityFilters } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import { listOpportunities, getOpportunity } from '@/server/functions/pipeline/pipeline';
 import { type Opportunity } from '@/lib/schemas/pipeline';
 import { isValidOpportunitySortField } from '@/components/domain/pipeline/opportunities/opportunity-sorting';
@@ -81,24 +86,35 @@ export function useOpportunities(options: UseOpportunitiesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.opportunities.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listOpportunities({
-        data: {
-          ...normalizedFilters,
-          search: normalizedFilters.search,
-          stage: normalizedFilters.stage as
-            | 'new'
-            | 'qualified'
-            | 'proposal'
-            | 'negotiation'
-            | 'won'
-            | 'lost'
-            | undefined,
-          assignedTo: normalizedFilters.assignedTo,
-          customerId: normalizedFilters.customerId,
-        },
-      });
-      if (result == null) throw new Error('Opportunities list returned no data');
-      return result;
+      try {
+        const result = await listOpportunities({
+          data: {
+            ...normalizedFilters,
+            search: normalizedFilters.search,
+            stage: normalizedFilters.stage as
+              | 'new'
+              | 'qualified'
+              | 'proposal'
+              | 'negotiation'
+              | 'won'
+              | 'lost'
+              | undefined,
+            assignedTo: normalizedFilters.assignedTo,
+            customerId: normalizedFilters.customerId,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Opportunities list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -124,24 +140,35 @@ export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = 
   return useQuery({
     queryKey: queryKeys.opportunities.list(filters),
     queryFn: async () => {
-      const result = await listOpportunities({
-        data: {
-          page: 1,
-          pageSize: 100, // Max allowed by schema, loads most kanban boards
-          sortBy: 'createdAt',
-          sortOrder: 'desc',
-          search: filters.search || undefined,
-          stages: filters.stages && filters.stages.length > 0 ? filters.stages : undefined,
-          assignedTo: filters.assignedTo || undefined,
-          minValue: filters.minValue ?? undefined,
-          maxValue: filters.maxValue ?? undefined,
-          expectedCloseDateFrom: filters.expectedCloseDateFrom,
-          expectedCloseDateTo: filters.expectedCloseDateTo,
-          includeWonLost: filters.includeWonLost,
-        },
-      });
-      if (result == null) throw new Error('Opportunities list returned no data');
-      return result;
+      try {
+        const result = await listOpportunities({
+          data: {
+            page: 1,
+            pageSize: 100,
+            sortBy: 'createdAt',
+            sortOrder: 'desc',
+            search: filters.search || undefined,
+            stages: filters.stages && filters.stages.length > 0 ? filters.stages : undefined,
+            assignedTo: filters.assignedTo || undefined,
+            minValue: filters.minValue ?? undefined,
+            maxValue: filters.maxValue ?? undefined,
+            expectedCloseDateFrom: filters.expectedCloseDateFrom,
+            expectedCloseDateTo: filters.expectedCloseDateTo,
+            includeWonLost: filters.includeWonLost,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Opportunities list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -157,25 +184,36 @@ export function useOpportunitiesInfinite(filters: Partial<OpportunityFilters> = 
   return useInfiniteQuery({
     queryKey: queryKeys.opportunities.infiniteList(normalizedFilters),
     queryFn: async ({ pageParam }) => {
-      const result = await listOpportunities({
-        data: {
-          ...normalizedFilters,
-          page: pageParam,
-          search: normalizedFilters.search,
-          stage: normalizedFilters.stage as
-            | 'new'
-            | 'qualified'
-            | 'proposal'
-            | 'negotiation'
-            | 'won'
-            | 'lost'
-            | undefined,
-          assignedTo: normalizedFilters.assignedTo,
-          customerId: normalizedFilters.customerId,
-        },
-      });
-      if (result == null) throw new Error('Opportunities list returned no data');
-      return result;
+      try {
+        const result = await listOpportunities({
+          data: {
+            ...normalizedFilters,
+            page: pageParam,
+            search: normalizedFilters.search,
+            stage: normalizedFilters.stage as
+              | 'new'
+              | 'qualified'
+              | 'proposal'
+              | 'negotiation'
+              | 'won'
+              | 'lost'
+              | undefined,
+            assignedTo: normalizedFilters.assignedTo,
+            customerId: normalizedFilters.customerId,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Opportunities list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -202,9 +240,24 @@ export function useOpportunity({ id, enabled = true }: UseOpportunityOptions) {
   return useQuery({
     queryKey: queryKeys.pipeline.opportunity(id),
     queryFn: async () => {
-      const result = await getOpportunity({ data: { id } });
-      if (result == null) throw new Error('Opportunity not found');
-      return result;
+      try {
+        const result = await getOpportunity({ data: { id } });
+        return requireReadResult(result, {
+          message: 'Opportunity not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Opportunity details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested opportunity could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Opportunity details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested opportunity could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id && id !== 'new',
     staleTime: 60 * 1000, // 1 minute
@@ -240,11 +293,24 @@ export function useOpportunitySearch({ query, limit = 10, enabled = true }: UseO
   return useQuery({
     queryKey: queryKeys.opportunities.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listOpportunities({
-        data: normalizedFilters,
-      });
-      if (result == null) throw new Error('Opportunity search returned no data');
-      return result;
+      try {
+        const result = await listOpportunities({
+          data: normalizedFilters,
+        });
+        return requireReadResult(result, {
+          message: 'Opportunity search returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity search is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity search is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && query.length >= 2,
     staleTime: 10 * 1000, // 10 seconds

@@ -22,10 +22,12 @@ import { FormatAmount } from '@/components/shared/format';
 
 export default function InventoryPage() {
   // Fetch totals for header display (cached by TanStack Query, so no duplicate network request)
-  const { data } = useWMSDashboard();
+  const { data, error } = useWMSDashboard();
 
   const totalValue = data?.totals?.totalValue ?? 0;
   const totalUnits = data?.totals?.totalUnits ?? 0;
+  const showHeaderUnavailable = error instanceof Error && !data;
+  const showHeaderDegraded = error instanceof Error && !!data;
 
   return (
     <PageLayout variant="container">
@@ -34,12 +36,24 @@ export default function InventoryPage() {
         description="Warehouse management and stock control"
         actions={
           <div className="text-right">
-            <p className="text-2xl font-bold tabular-nums">
-              <FormatAmount amount={totalValue} />
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {totalUnits.toLocaleString()} units in stock
-            </p>
+            {showHeaderUnavailable ? (
+              <>
+                <p className="text-2xl font-bold tabular-nums text-muted-foreground">—</p>
+                <p className="text-sm text-muted-foreground">Inventory totals unavailable</p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold tabular-nums">
+                  <FormatAmount amount={totalValue} />
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {totalUnits.toLocaleString()} units in stock
+                </p>
+                {showHeaderDegraded ? (
+                  <p className="text-xs text-muted-foreground">Showing cached totals</p>
+                ) : null}
+              </>
+            )}
           </div>
         }
       />

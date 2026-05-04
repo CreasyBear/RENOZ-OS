@@ -10,7 +10,7 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { PaymentReminders } from '@/components/domain/financial/payment-reminders';
 import {
@@ -30,17 +30,7 @@ export const Route = createFileRoute('/_authenticated/financial/reminders')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Payment Reminders"
-        description="Manage reminder templates and view sending history"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -74,23 +64,23 @@ function PaymentRemindersPage() {
   const error = templatesError || historyError;
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Payment Reminders"
-        description="Manage reminder templates and view sending history"
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Payment Reminders</h2>
+        <p className="text-sm text-muted-foreground">
+          Manage reminder templates and view sending history.
+        </p>
+      </div>
+      <PaymentReminders
+        templates={templates}
+        history={history}
+        isLoading={isLoading}
+        error={error ? String(error) : undefined}
+        onCreateTemplate={(data) => createMutation.mutate(data)}
+        onUpdateTemplate={(data) => updateMutation.mutate(data)}
+        onDeleteTemplate={(id) => deleteMutation.mutate(id)}
+        isSaving={isSaving}
       />
-      <PageLayout.Content>
-        <PaymentReminders
-          templates={templates}
-          history={history}
-          isLoading={isLoading}
-          error={error ? String(error) : undefined}
-          onCreateTemplate={(data) => createMutation.mutate(data)}
-          onUpdateTemplate={(data) => updateMutation.mutate(data)}
-          onDeleteTemplate={(id) => deleteMutation.mutate(id)}
-          isSaving={isSaving}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    </div>
   );
 }

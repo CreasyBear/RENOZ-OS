@@ -10,6 +10,7 @@ export interface ShipmentWithItems extends OrderShipment {
   canGenerateDispatchNote?: boolean;
   dispatchNoteBlockedReason?: string | null;
   canGenerateDeliveryNote?: boolean;
+  deliveryNoteBlockedReason?: string | null;
 }
 
 export interface ListShipmentsResult {

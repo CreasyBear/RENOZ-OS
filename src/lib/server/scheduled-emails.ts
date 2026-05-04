@@ -1,10 +1,5 @@
 export {
-  scheduleEmail,
-  getScheduledEmails,
-  getScheduledEmailById,
-  updateScheduledEmail,
-  cancelScheduledEmail,
-  getEmailsToSend,
   getDueScheduledEmails,
-  markScheduledEmailAsSent,
-} from '@/server/functions/communications/scheduled-emails'
+  getEmailsToSend,
+} from '@/server/functions/communications/_shared/scheduled-email-read';
+export { markScheduledEmailAsSent } from '@/server/functions/communications/_shared/scheduled-email-mutations';

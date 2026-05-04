@@ -11,6 +11,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getOpportunityAlerts,
   getOpportunityActiveItems,
 } from '@/server/functions/pipeline/opportunity-detail-extended';
@@ -50,16 +55,29 @@ export function useOpportunityAlerts({
   return useQuery({
     queryKey: queryKeys.opportunities.alerts(opportunityId),
     queryFn: async () => {
-      const result = await getOpportunityAlerts({
-        data: {
-          opportunityId,
-          quoteExpiryWarningDays,
-          stalenessDays,
-          closeWarningDays,
-        },
-      });
-      if (result == null) throw new Error('Opportunity alerts returned no data');
-      return result as OpportunityAlertsResponse;
+      try {
+        const result = await getOpportunityAlerts({
+          data: {
+            opportunityId,
+            quoteExpiryWarningDays,
+            stalenessDays,
+            closeWarningDays,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Opportunity alerts returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity alerts are temporarily unavailable. Please refresh and try again.',
+        }) as OpportunityAlertsResponse;
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity alerts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 60 * 1000, // 1 minute - alerts don't change frequently
@@ -96,15 +114,28 @@ export function useOpportunityActiveItems({
   return useQuery<OpportunityActiveItems>({
     queryKey: queryKeys.opportunities.activeItems(opportunityId),
     queryFn: async () => {
-      const result = await getOpportunityActiveItems({
-        data: {
-          opportunityId,
-          pendingActivitiesLimit,
-          quoteVersionsLimit,
-        },
-      });
-      if (result == null) throw new Error('Opportunity active items returned no data');
-      return result;
+      try {
+        const result = await getOpportunityActiveItems({
+          data: {
+            opportunityId,
+            pendingActivitiesLimit,
+            quoteVersionsLimit,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Opportunity active items returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity active items are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity active items are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds - more dynamic than alerts

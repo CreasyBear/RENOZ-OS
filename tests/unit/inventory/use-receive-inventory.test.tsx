@@ -88,10 +88,10 @@ describe('useReceiveInventory', () => {
       queryKey: queryKeys.products.stockAlerts('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['products', 'movements', 'product-1'],
+      queryKey: queryKeys.products.movementsForProduct('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['products', 'movements', 'aggregated', 'product-1'],
+      queryKey: queryKeys.products.movementsAggregatedForProduct('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),

@@ -15,8 +15,8 @@
 
 import { useState } from 'react';
 import { subMonths, startOfYear } from 'date-fns';
-import { PageLayout } from '@/components/layout';
 import { FinancialDashboard } from '@/components/domain/financial/financial-dashboard';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   useFinancialDashboardMetrics,
   useRevenueByPeriod,
@@ -79,29 +79,40 @@ export default function FinancialAnalyticsPage() {
   const isLoading =
     metricsLoading || revenueLoading || customersLoading || outstandingLoading;
   const error = metricsError || revenueError || customersError || outstandingError;
+  const hasUsableDashboardData = Boolean(
+    metrics || revenueByPeriod || topCustomers || outstanding
+  );
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Financial Analytics"
-        description="Revenue trends, KPIs, and financial insights"
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Financial Analytics</h2>
+        <p className="text-sm text-muted-foreground">
+          Revenue trends, KPIs, and financial insights.
+        </p>
+      </div>
+      {error && hasUsableDashboardData ? (
+        <Alert>
+          <AlertTitle>Showing your latest financial snapshot</AlertTitle>
+          <AlertDescription>
+            Some financial panels could not be refreshed just now. Existing data is still available below.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <FinancialDashboard
+        dashboardData={{
+          metrics,
+          revenueByPeriod,
+          topCustomers,
+          outstanding,
+        }}
+        isLoading={isLoading}
+        error={!hasUsableDashboardData ? error ?? undefined : undefined}
+        periodType={periodType}
+        onPeriodTypeChange={setPeriodType}
+        topCustomersBasis={topCustomersBasis}
+        onTopCustomersBasisChange={setTopCustomersBasis}
       />
-      <PageLayout.Content>
-        <FinancialDashboard
-          dashboardData={{
-            metrics,
-            revenueByPeriod,
-            topCustomers,
-            outstanding,
-          }}
-          isLoading={isLoading}
-          error={error ?? undefined}
-          periodType={periodType}
-          onPeriodTypeChange={setPeriodType}
-          topCustomersBasis={topCustomersBasis}
-          onTopCustomersBasisChange={setTopCustomersBasis}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    </div>
   );
 }

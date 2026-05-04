@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
   CardContent,
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ErrorState } from "@/components/shared/error-state";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
@@ -92,7 +94,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
   const confirmation = useConfirmation();
 
   // Fetch reasons using hook
-  const { data, isLoading } = useWinLossReasons();
+  const { data, isLoading, error } = useWinLossReasons();
 
   // Mutations using hooks
   const createMutation = useCreateWinLossReason();
@@ -270,26 +272,44 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={(v) => isWinLossReasonType(v) && setActiveTab(v)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="win" className="flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-green-600" />
-              Win Reasons ({winReasons.length})
-            </TabsTrigger>
-            <TabsTrigger value="loss" className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-600" />
-              Loss Reasons ({lossReasons.length})
-            </TabsTrigger>
-          </TabsList>
+        {error && !data ? (
+          <ErrorState
+            title="Failed to load reasons"
+            message={error.message}
+          />
+        ) : null}
 
-          <TabsContent value="win" className="mt-4">
-            {renderReasonList(winReasons, "win")}
-          </TabsContent>
+        {error && data ? (
+          <Alert className="mb-4">
+            <AlertTitle>Reasons unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent reasons while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
-          <TabsContent value="loss" className="mt-4">
-            {renderReasonList(lossReasons, "loss")}
-          </TabsContent>
-        </Tabs>
+        {error && !data ? null : (
+          <Tabs value={activeTab} onValueChange={(v) => isWinLossReasonType(v) && setActiveTab(v)}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="win" className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-green-600" />
+                Win Reasons ({winReasons.length})
+              </TabsTrigger>
+              <TabsTrigger value="loss" className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-red-600" />
+                Loss Reasons ({lossReasons.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="win" className="mt-4">
+              {renderReasonList(winReasons, "win")}
+            </TabsContent>
+
+            <TabsContent value="loss" className="mt-4">
+              {renderReasonList(lossReasons, "loss")}
+            </TabsContent>
+          </Tabs>
+        )}
       </CardContent>
 
       {/* Create/Edit Dialog */}

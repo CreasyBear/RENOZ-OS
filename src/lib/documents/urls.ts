@@ -4,7 +4,7 @@
  * Centralized URL construction for PDF documents (QR codes, view-online links).
  * Avoids duplicated logic and ensures consistent fallback domain.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 const DEFAULT_APP_URL = "https://app.renoz.com.au";

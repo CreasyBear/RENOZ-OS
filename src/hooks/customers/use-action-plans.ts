@@ -7,6 +7,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import type { CreateActionPlanInput, UpdateActionPlanInput } from '@/lib/schemas/customers/action-plans';
 import {
   createActionPlan,
@@ -39,17 +44,30 @@ export function useCustomerActionPlans(
   return useQuery({
     queryKey: queryKeys.customers.actionPlans.list(customerId, filters),
     queryFn: async () => {
-      if (!customerId) return { items: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
-      const result = await listActionPlans({
-        data: {
-          customerId,
-          isCompleted: filters?.isCompleted,
-          priority: filters?.priority,
-          category: filters?.category,
-        },
-      });
-      if (result == null) throw new Error('Action plans returned no data');
-      return result;
+      try {
+        if (!customerId) {
+          return { items: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
+        }
+        const result = await listActionPlans({
+          data: {
+            customerId,
+            isCompleted: filters?.isCompleted,
+            priority: filters?.priority,
+            category: filters?.category,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Action plans returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Action plans are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Action plans are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!customerId,
     staleTime: 30 * 1000, // 30 seconds
@@ -63,9 +81,24 @@ export function useActionPlan(id: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.customers.actionPlans.detail(id),
     queryFn: async () => {
-      const result = await getActionPlan({ data: { id } });
-      if (result == null) throw new Error('Action plan not found');
-      return result;
+      try {
+        const result = await getActionPlan({ data: { id } });
+        return requireReadResult(result, {
+          message: 'Action plan not found',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Action plan details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested action plan could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Action plan details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested action plan could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 30 * 1000,

@@ -81,6 +81,9 @@ type SortDirection = 'asc' | 'desc';
 interface StockCountListProps {
   counts: StockCount[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
   onView?: (count: StockCount) => void;
   onEdit?: (count: StockCount) => void;
   onDelete?: (count: StockCount) => void;
@@ -170,6 +173,9 @@ function SortHeader({
 export const StockCountList = memo(function StockCountList({
   counts,
   isLoading,
+  isError,
+  errorMessage,
+  onRetry,
   onView,
   onEdit,
   onDelete,
@@ -220,6 +226,9 @@ export const StockCountList = memo(function StockCountList({
     return sorted;
   }, [counts, sort]);
 
+  const showUnavailableState = !!isError && counts.length === 0;
+  const showDegradedWarning = !!isError && counts.length > 0;
+
   // Loading state
   if (isLoading) {
     return (
@@ -268,6 +277,29 @@ export const StockCountList = memo(function StockCountList({
     );
   }
 
+  if (showUnavailableState) {
+    return (
+      <div className={cn("rounded-lg border border-destructive/30 bg-destructive/5 p-6", className)}>
+        <div className="flex items-start gap-3">
+          <XCircle className="mt-0.5 h-5 w-5 text-destructive" aria-hidden="true" />
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-foreground">Stock counts are temporarily unavailable.</p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Please refresh and try again.'}
+              </p>
+            </div>
+            {onRetry ? (
+              <Button variant="outline" onClick={onRetry}>
+                Retry Stock Counts
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Empty state
   if (counts.length === 0) {
     return (
@@ -283,7 +315,24 @@ export const StockCountList = memo(function StockCountList({
   }
 
   return (
-    <div className={cn("border rounded-lg overflow-hidden", className)}>
+    <div className={cn("space-y-4", className)}>
+      {showDegradedWarning ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <Clock className="mt-0.5 h-5 w-5 text-amber-600" aria-hidden="true" />
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">
+                Showing the most recent stock counts while refresh is unavailable.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {errorMessage ?? 'Refresh failed. The list below may be stale until the next successful reload.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -443,6 +492,7 @@ export const StockCountList = memo(function StockCountList({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 });

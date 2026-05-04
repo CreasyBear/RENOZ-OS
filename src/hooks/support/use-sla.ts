@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys, type SlaConfigurationFilters } from '@/lib/query-keys';
 import {
   getSlaConfigurations,
@@ -39,11 +40,16 @@ export function useSlaConfigurations(filters?: SlaConfigurationFilters) {
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationsList(filters),
     queryFn: async () => {
-      const result = await getSlaConfigurations({
-        data: filters ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaConfigurations({
+          data: filters ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'SLA configurations are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -56,11 +62,17 @@ export function useSlaConfiguration(configurationId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationDetail(configurationId),
     queryFn: async () => {
-      const result = await getSlaConfiguration({
-        data: { configurationId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaConfiguration({
+          data: { configurationId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'SLA configuration details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested SLA configuration could not be found.',
+        });
+      }
     },
     enabled: !!configurationId,
     staleTime: 5 * 60 * 1000,
@@ -74,11 +86,16 @@ export function useDefaultSlaConfiguration(domain: 'support' | 'warranty' | 'job
   return useQuery({
     queryKey: queryKeys.support.slaConfigurationDefault(domain),
     queryFn: async () => {
-      const result = await getDefaultSlaConfiguration({
-        data: { domain } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getDefaultSlaConfiguration({
+          data: { domain }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage: 'Default SLA configuration is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -91,11 +108,16 @@ export function useHasSlaConfigurations(domain?: 'support' | 'warranty' | 'jobs'
   return useQuery({
     queryKey: queryKeys.support.slaHasConfigurations(domain),
     queryFn: async () => {
-      const result = await hasSlsConfigurations({
-        data: { domain } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await hasSlsConfigurations({
+          data: { domain }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'SLA availability is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -175,11 +197,16 @@ export function useSlaMetrics(filters?: {
   return useQuery({
     queryKey: queryKeys.support.slaMetrics(filters),
     queryFn: async () => {
-      const result = await getSlaMetrics({
-        data: filters ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaMetrics({
+          data: filters ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'SLA metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 60 * 1000, // 1 minute
   });
@@ -195,11 +222,16 @@ export function useSlaReportByIssueType(filters?: {
   return useQuery({
     queryKey: queryKeys.support.slaReportByIssueType(filters),
     queryFn: async () => {
-      const result = await getSlaReportByIssueType({
-        data: filters ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaReportByIssueType({
+          data: filters ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'SLA issue-type reporting is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 60 * 1000,
   });
@@ -216,11 +248,17 @@ export function useSlaState(trackingId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaTrackingState(trackingId),
     queryFn: async () => {
-      const result = await getSlaState({
-        data: { trackingId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaState({
+          data: { trackingId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'SLA tracking state is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested SLA tracking record could not be found.',
+        });
+      }
     },
     enabled: !!trackingId,
     staleTime: 30 * 1000, // 30 seconds
@@ -234,11 +272,16 @@ export function useSlaEvents(trackingId: string) {
   return useQuery({
     queryKey: queryKeys.support.slaTrackingEvents(trackingId),
     queryFn: async () => {
-      const result = await getSlaEvents({
-        data: { trackingId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSlaEvents({
+          data: { trackingId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'SLA event history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!trackingId,
     staleTime: 30 * 1000,

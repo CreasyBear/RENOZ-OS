@@ -12,8 +12,23 @@ import type { ReactNode } from 'react';
 import type { SummaryState } from '@/lib/metrics/summary-health';
 import { z } from 'zod';
 import { normalizeObjectInput } from '../_shared/patterns';
+import type {
+  ServiceOwner,
+  ServiceSystem,
+  ServiceSystemOwnershipHistoryItem,
+} from '../service';
 import { warrantyPolicyTypeSchema } from './policies';
-import type { WarrantyClaimListItem } from './claims';
+import type {
+  WarrantyEntitlementEvidenceType,
+  WarrantyEntitlementProvisioningIssueCode,
+  WarrantyEntitlementStatus,
+} from './entitlements';
+import type { WarrantyOwnerAddress } from './owner-records';
+import type {
+  WarrantyClaimListItem,
+  WarrantyClaimantRoleValue,
+  WarrantyClaimantSnapshot,
+} from './claims';
 import type { WarrantyExtensionItem } from './extensions';
 import type { WarrantyClaimTypeValue } from './claims';
 import type { WarrantyExtensionTypeValue } from './extensions';
@@ -88,6 +103,29 @@ export const updateWarrantySchema = z.object({
 });
 
 export type UpdateWarrantyInput = z.infer<typeof updateWarrantySchema>;
+
+export const transferWarrantySchema = z.object({
+  id: z.string().uuid(),
+  newOwner: z.object({
+    fullName: z.string().min(1).max(255),
+    email: z.string().email().optional().nullable(),
+    phone: z.string().max(50).optional().nullable(),
+    address: z
+      .object({
+        street1: z.string(),
+        street2: z.string().optional(),
+        city: z.string(),
+        state: z.string(),
+        postalCode: z.string(),
+        country: z.string(),
+      })
+      .optional(),
+    notes: z.string().max(2000).optional().nullable(),
+  }),
+  reason: z.string().min(1).max(2000),
+});
+
+export type TransferWarrantyInput = z.infer<typeof transferWarrantySchema>;
 
 // ============================================================================
 // WARRANTY FILTERS
@@ -312,6 +350,27 @@ export interface ListWarrantiesResult {
   nextOffset?: number;
 }
 
+export type WarrantyServiceLinkageStatus =
+  | 'linked'
+  | 'pending_review'
+  | 'unlinked'
+  | 'owner_missing';
+
+export interface WarrantyPendingServiceReview {
+  id: string;
+  status: 'pending';
+  reasonCode: 'multiple_system_matches' | 'conflicting_owner_match' | 'backfill_manual_review';
+  candidateCount: number;
+  createdAt: string;
+}
+
+export interface WarrantySystemHistoryPreviewItem {
+  id: string;
+  action: string;
+  description: string | null;
+  createdAt: string;
+}
+
 /**
  * Warranty detail response type (for detail views).
  * Matches the structure returned by getWarranty server function.
@@ -322,6 +381,20 @@ export interface WarrantyDetail {
   organizationId: string;
   customerId: string;
   customerName: string | null;
+  serviceSystem: ServiceSystem | null;
+  currentOwner: ServiceOwner | null;
+  ownershipHistorySummary: ServiceSystemOwnershipHistoryItem[];
+  serviceLinkageStatus: WarrantyServiceLinkageStatus;
+  pendingServiceReview: WarrantyPendingServiceReview | null;
+  systemHistoryPreview: WarrantySystemHistoryPreviewItem[];
+  ownerRecord: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+    address: WarrantyOwnerAddress | null;
+    notes: string | null;
+  } | null;
   productId: string;
   productName: string | null;
   productSerial: string | null;
@@ -338,6 +411,20 @@ export interface WarrantyDetail {
   lastExpiryAlertSent: string | null;
   certificateUrl: string | null;
   notes: string | null;
+  activatedAt: string | null;
+  sourceEntitlement: {
+    id: string;
+    status: WarrantyEntitlementStatus;
+    evidenceType: WarrantyEntitlementEvidenceType;
+    provisioningIssueCode: WarrantyEntitlementProvisioningIssueCode | null;
+    deliveredAt: string;
+    orderId: string;
+    orderNumber: string | null;
+    shipmentId: string;
+    shipmentNumber: string | null;
+    productSerial: string | null;
+    unitSequence: number | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
   items: Array<{
@@ -403,6 +490,7 @@ export interface WarrantyDetailViewProps {
   extensions: WarrantyExtensionItem[];
   certificateStatus: WarrantyCertificateStatus | null | undefined;
   isClaimsLoading: boolean;
+  isClaimsError?: boolean;
   isClaimSummaryLoading?: boolean;
   isExtensionsLoading: boolean;
   isExtensionsError: boolean;
@@ -426,12 +514,17 @@ export interface WarrantyDetailViewProps {
   onApprovalDialogOpenChange: (open: boolean) => void;
   onExtendDialogOpenChange: (open: boolean) => void;
   onRetryExtensions: () => void;
+  onRetryClaims?: () => void;
   onClaimsSuccess: () => void;
   onExtensionsSuccess: () => void;
   onSubmitClaim: (payload: {
     warrantyId: string;
     claimType: WarrantyClaimTypeValue;
     description: string;
+    claimantRole?: WarrantyClaimantRoleValue;
+    claimantCustomerId?: string;
+    claimantSnapshot?: WarrantyClaimantSnapshot;
+    channelBypassReason?: string;
     cycleCountAtClaim?: number;
     notes?: string;
   }) => Promise<void>;
@@ -453,9 +546,14 @@ export interface WarrantyDetailViewProps {
   onRegenerateCertificate?: () => void;
   isCertificateGenerating?: boolean;
   isCertificateRegenerating?: boolean;
+  onOpenTransferOwnership?: () => void;
+  isTransferringOwnership?: boolean;
   activities?: UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  systemActivities?: UnifiedActivity[];
+  systemActivitiesLoading?: boolean;
+  systemActivitiesError?: Error | null;
   onLogActivity?: () => void;
   onScheduleFollowUp?: () => void;
 }

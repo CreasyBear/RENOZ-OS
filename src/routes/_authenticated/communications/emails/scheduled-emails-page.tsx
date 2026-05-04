@@ -10,11 +10,13 @@
  */
 import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ScheduledEmailsList } from "@/components/domain/communications";
 import { ScheduleEmailDialog } from "@/components/domain/communications";
 import { DomainFilterBar } from "@/components/shared/filters";
 import { useFilterUrlState } from "@/hooks/filters/use-filter-url-state";
-import { useScheduledEmails, useCancelScheduledEmail } from "@/hooks/communications";
+import { useScheduledEmails, useScheduledEmail, useCancelScheduledEmail } from "@/hooks/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import {
   SCHEDULED_EMAILS_FILTER_CONFIG,
@@ -63,6 +65,14 @@ export default function ScheduledEmailsPage({ search }: ScheduledEmailsPageProps
   });
 
   const cancelMutation = useCancelScheduledEmail();
+  const {
+    data: editingEmail,
+    isLoading: isEditingEmailLoading,
+    error: editingEmailError,
+  } = useScheduledEmail({
+    emailId: editingEmailId ?? "",
+    enabled: Boolean(editingEmailId),
+  });
 
   // Server handles all filtering (status, customerId, search)
   const emails = data?.items ?? [];
@@ -113,12 +123,28 @@ export default function ScheduledEmailsPage({ search }: ScheduledEmailsPageProps
         className="mb-6"
       />
 
+      {error && data ? (
+        <Alert className="mb-6">
+          <AlertTitle>Showing cached scheduled emails</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Scheduled emails are temporarily unavailable. Please refresh and try again."}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ScheduledEmailsList
         items={emails}
         total={emails.length}
         totalAll={totalCount}
         isLoading={isLoading}
-        error={error}
+        error={data ? undefined : error}
         onRefresh={refetch}
         isRefreshing={isFetching}
         onCancel={handleCancel}
@@ -130,6 +156,18 @@ export default function ScheduledEmailsPage({ search }: ScheduledEmailsPageProps
       {/* Schedule Email Dialog handled by parent */}
       <ScheduleEmailDialog
         open={composeOpen || !!editingEmailId}
+        initialData={editingEmail ? {
+          id: editingEmail.id,
+          recipientEmail: editingEmail.recipientEmail,
+          recipientName: editingEmail.recipientName,
+          subject: editingEmail.subject,
+          templateType: editingEmail.templateType,
+          templateData: editingEmail.templateData ?? undefined,
+          scheduledAt: editingEmail.scheduledAt,
+          timezone: editingEmail.timezone,
+        } : undefined}
+        isLoadingInitialData={Boolean(editingEmailId) && isEditingEmailLoading}
+        initialDataError={editingEmailError instanceof Error ? editingEmailError : null}
         onOpenChange={(open) => {
           if (!open) {
             setComposeOpen(false);

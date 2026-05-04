@@ -5,7 +5,7 @@
  * Handles all data fetching, mutations, and navigation.
  *
  * @source campaigns from useCampaigns hook
- * @source mutations from useCancelCampaign, useDeleteCampaign hooks
+ * @source mutations from usePauseCampaign, useDeleteCampaign hooks
  *
  * @see src/routes/_authenticated/communications/campaigns/index.tsx - Route definition
  * @see docs/plans/2026-01-24-refactor-communications-full-container-presenter-plan.md
@@ -15,10 +15,11 @@ import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCampaigns,
-  useCancelCampaign,
   useDeleteCampaign,
   useDuplicateCampaign,
   useTestSendCampaign,
+  useCancelCampaign,
+  usePauseCampaign,
   useResumeCampaign,
 } from "@/hooks/communications";
 import { CampaignsList, type CampaignListItem } from "@/components/domain/communications";
@@ -113,6 +114,7 @@ export default function CampaignsPage() {
   // ============================================================================
   // MUTATIONS
   // ============================================================================
+  const pauseMutation = usePauseCampaign();
   const cancelMutation = useCancelCampaign();
   const deleteMutation = useDeleteCampaign();
   const duplicateMutation = useDuplicateCampaign();
@@ -141,14 +143,14 @@ export default function CampaignsPage() {
         await cancelMutation.mutateAsync({ id });
         setBulkFailures([]);
         setBulkFailedIds(undefined);
-        toastSuccess("Campaign paused", {
+        toastSuccess("Campaign cancelled", {
           action: {
             label: "View campaign",
             onClick: () => handleView(id),
           },
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to pause campaign");
+        toastError(error instanceof Error ? error.message : "Failed to cancel campaign");
       }
     },
     [cancelMutation, handleView]
@@ -264,7 +266,7 @@ export default function CampaignsPage() {
         items: ids,
         getId: (id) => id,
         getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
-        run: (id) => cancelMutation.mutateAsync({ id }),
+        run: (id) => pauseMutation.mutateAsync({ id }),
       });
 
       queryClient.invalidateQueries({
@@ -289,7 +291,7 @@ export default function CampaignsPage() {
       setBulkFailures([]);
       setBulkFailedIds(undefined);
     },
-    [campaigns, cancelMutation, queryClient]
+    [campaigns, pauseMutation, queryClient]
   );
 
   const resumeMutation = useResumeCampaign();
@@ -331,7 +333,7 @@ export default function CampaignsPage() {
   // ============================================================================
   // ERROR STATE
   // ============================================================================
-  if (error) {
+  if (error && !campaignsData) {
     return (
       <ErrorState
         title="Failed to load campaigns"
@@ -346,6 +348,21 @@ export default function CampaignsPage() {
   // ============================================================================
   return (
     <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached campaigns</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <button
+              type="button"
+              className="text-sm font-medium underline underline-offset-4"
+              onClick={() => void refetch()}
+            >
+              Retry
+            </button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {bulkFailures.length > 0 && (
         <Alert variant="destructive">
           <AlertTitle>
@@ -388,7 +405,7 @@ export default function CampaignsPage() {
         isDuplicating={duplicateMutation.isPending}
         isTestSending={testSendMutation.isPending}
         isBulkDeleting={deleteMutation.isPending}
-        isBulkPausing={cancelMutation.isPending}
+        isBulkPausing={pauseMutation.isPending}
         isBulkResuming={resumeMutation.isPending}
         selectedIdsOverride={bulkFailedIds}
       />

@@ -13,6 +13,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  resolveReadResult,
+} from '@/lib/read-path-policy';
+import {
   listPurchaseOrders,
   getReceivingDashboardSummary,
   getPurchaseOrderStatusCounts,
@@ -65,11 +68,12 @@ export function usePurchaseOrders(options: UsePurchaseOrdersOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersList(filters),
-    queryFn: async () => {
-      const result = await listPurchaseOrders({ data: filters as PurchaseOrderFilters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(() => listPurchaseOrders({ data: filters as PurchaseOrderFilters }), {
+        message: 'Purchase order list returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage: 'Purchase orders are temporarily unavailable. Please refresh and try again.',
+      }),
     enabled,
     staleTime: 30 * 1000,
     refetchInterval,
@@ -79,14 +83,19 @@ export function usePurchaseOrders(options: UsePurchaseOrdersOptions = {}) {
 export function usePendingApprovals() {
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersPendingApprovals(),
-    queryFn: async () => {
-      const result = await listPurchaseOrders({
-        data: { status: ['pending_approval'], page: 1, pageSize: 100 },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          listPurchaseOrders({
+            data: { status: ['pending_approval'], page: 1, pageSize: 100 },
+          }),
+        {
+          message: 'Pending approvals returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Pending approval purchase orders are temporarily unavailable. Please refresh and try again.',
+        }
+      ),
     staleTime: 30 * 1000,
   });
 }
@@ -94,13 +103,19 @@ export function usePendingApprovals() {
 export function useReceivingDashboardSummary() {
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersReceivingSummary(),
-    queryFn: async () => {
-      const result = await getReceivingDashboardSummary({
-        data: { status: ['ordered'] },
-      });
-      if (result == null) throw new Error('Receiving dashboard summary returned no data');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getReceivingDashboardSummary({
+            data: { status: ['ordered'] },
+          }),
+        {
+          message: 'Receiving dashboard summary returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Receiving summary metrics are temporarily unavailable. Please refresh and try again.',
+        }
+      ),
     staleTime: 30 * 1000,
   });
 }
@@ -109,11 +124,13 @@ export function useReceivingDashboardSummary() {
 export function usePurchaseOrderStatusCounts() {
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderStatusCounts(),
-    queryFn: async () => {
-      const result = await getPurchaseOrderStatusCounts();
-      if (result == null) throw new Error('Purchase order status counts returned no data');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(() => getPurchaseOrderStatusCounts(), {
+        message: 'Purchase order status counts returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage:
+          'Purchase order status counts are temporarily unavailable. Please refresh and try again.',
+      }),
     staleTime: 30 * 1000,
   });
 }
@@ -127,13 +144,20 @@ export function usePurchaseOrder(id: string, options: { enabled?: boolean } = {}
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderDetail(id),
-    queryFn: async () => {
-      const result = await getPurchaseOrder({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getPurchaseOrder({
+            data: { id },
+          }),
+        {
+          message: 'Purchase order detail returned no data',
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Purchase order details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested purchase order could not be found.',
+        }
+      ),
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });

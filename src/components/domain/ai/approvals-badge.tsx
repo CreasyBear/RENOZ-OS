@@ -10,6 +10,7 @@
  */
 
 import { memo } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,6 +38,7 @@ export interface ApprovalsBadgeProps {
 interface ApprovalsBadgePresenterProps {
   count: number;
   isLoading: boolean;
+  error?: Error | null;
   showLoading: boolean;
   maxCount: number;
   variant: 'default' | 'dot' | 'count';
@@ -46,6 +48,7 @@ interface ApprovalsBadgePresenterProps {
 const ApprovalsBadgePresenter = memo(function ApprovalsBadgePresenter({
   count,
   isLoading,
+  error,
   showLoading,
   maxCount,
   variant,
@@ -54,6 +57,26 @@ const ApprovalsBadgePresenter = memo(function ApprovalsBadgePresenter({
   // Loading state
   if (isLoading && showLoading) {
     return <Skeleton className={cn('h-5 w-5 rounded-full', className)} />;
+  }
+
+  if (error) {
+    if (variant === 'count') {
+      return (
+        <span
+          className={cn('text-xs font-medium text-amber-600', className)}
+          aria-label="AI approvals unavailable"
+        >
+          (!)
+        </span>
+      );
+    }
+
+    return (
+      <AlertCircle
+        className={cn('h-4 w-4 text-amber-600', className)}
+        aria-label="AI approvals unavailable"
+      />
+    );
   }
 
   // No pending approvals
@@ -127,12 +150,13 @@ export const ApprovalsBadge = memo(function ApprovalsBadge({
   variant = 'default',
   className,
 }: ApprovalsBadgeProps) {
-  const { data: count = 0, isLoading } = useAIPendingApprovalsCount();
+  const { data: count = 0, isLoading, error } = useAIPendingApprovalsCount();
 
   return (
     <ApprovalsBadgePresenter
       count={count}
       isLoading={isLoading}
+      error={error ?? null}
       showLoading={showLoading}
       maxCount={maxCount}
       variant={variant}

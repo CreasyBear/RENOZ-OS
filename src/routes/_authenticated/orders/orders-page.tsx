@@ -309,8 +309,10 @@ export default function OrdersPage({ search }: OrdersPageProps) {
             <Package className="h-4 w-4" />
             <AlertDescription>
               {fromIssue?.issueNumber
-                ? `Creating RMA from issue ${fromIssue.issueNumber} — select an order below.`
-                : 'Creating RMA from issue — select an order below.'}
+                ? `Creating RMA from issue ${fromIssue.issueNumber}${
+                    fromIssue.resolution?.summary ? ` — ${fromIssue.resolution.summary}` : ''
+                  }. Select the matching source order below.`
+                : 'Creating RMA from issue — select the matching source order below.'}
             </AlertDescription>
           </Alert>
         )}

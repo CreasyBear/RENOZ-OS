@@ -22,6 +22,7 @@ import {
   NumberField,
   TextareaField,
 } from "@/components/shared/forms";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -48,7 +49,11 @@ export function CreatePOFromAlertDialog({
 }: CreatePOFromAlertDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const { data: suppliersData, isLoading: loadingSuppliers } = useSuppliers({
+  const {
+    data: suppliersData,
+    isLoading: loadingSuppliers,
+    error: suppliersError,
+  } = useSuppliers({
     enabled: open,
   });
   const suppliers = suppliersData?.items ?? [];
@@ -150,6 +155,13 @@ export function CreatePOFromAlertDialog({
       className="sm:max-w-md"
       resetOnClose={false}
     >
+      {suppliersError instanceof Error ? (
+        <Alert>
+          <AlertDescription>
+            Supplier options are temporarily unavailable. Refresh and try again if you need to select a supplier.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
         <Package className="h-8 w-8 text-muted-foreground" />
         <div className="min-w-0 flex-1">

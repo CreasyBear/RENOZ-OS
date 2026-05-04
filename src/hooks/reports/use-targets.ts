@@ -14,6 +14,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listTargets,
   getTarget,
   createTarget,
@@ -64,9 +69,20 @@ export function useTargets(options: UseTargetsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.targets.list(filters),
     queryFn: async () => {
-      const result = await listTargets({ data: filters as ListTargetsInput });
-      if (result == null) throw new Error('Targets list returned no data');
-      return result;
+      try {
+        const result = await listTargets({ data: filters as ListTargetsInput });
+        return requireReadResult(result, {
+          message: 'Targets list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Targets are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Targets are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -84,9 +100,22 @@ export function useTarget({ id, enabled = true }: UseTargetOptions) {
   return useQuery({
     queryKey: queryKeys.reports.targets.detail(id),
     queryFn: async () => {
-      const result = await getTarget({ data: { id } });
-      if (result == null) throw new Error('Target not found');
-      return result;
+      try {
+        const result = await getTarget({ data: { id } });
+        return requireReadResult(result, {
+          message: 'Target not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Target details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested target could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Target details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested target could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
@@ -106,12 +135,25 @@ export function useTargetProgress(options: UseTargetProgressOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.targets.progress(filters),
     queryFn: async () => {
-      const result = await getTargetProgressFn({ data: filters });
-      if (import.meta.env.DEV) {
-        console.debug('[useTargetProgress] raw-result', result);
+      try {
+        const result = await getTargetProgressFn({ data: filters });
+        if (import.meta.env.DEV) {
+          console.debug('[useTargetProgress] raw-result', result);
+        }
+        return requireReadResult(result, {
+          message: 'Target progress returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Target progress is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Target progress is temporarily unavailable. Please refresh and try again.',
+        });
       }
-      if (result == null) throw new Error('Target progress returned no data');
-      return result;
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - progress data updates frequently

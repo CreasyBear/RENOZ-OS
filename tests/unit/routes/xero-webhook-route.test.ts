@@ -11,7 +11,7 @@ vi.mock('@/server/functions/financial/xero-webhook-signature', () => ({
   verifyXeroWebhookSignature: (...args: unknown[]) => mockVerifySignature(...args),
 }));
 
-vi.mock('@/server/functions/financial/xero-invoice-sync', () => ({
+vi.mock('@/server/functions/financial/_shared/xero-payment-reconciliation', () => ({
   processXeroPaymentWebhookEvents: (...args: unknown[]) => mockProcessXeroPaymentWebhookEvents(...args),
 }));
 

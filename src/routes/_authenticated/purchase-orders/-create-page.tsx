@@ -32,11 +32,19 @@ interface PurchaseOrderCreatePageProps {
 
 export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreatePageProps) {
   const navigate = useNavigate();
-  const { data: suppliersData, isLoading: isLoadingSuppliers } = useSuppliers({
+  const {
+    data: suppliersData,
+    isLoading: isLoadingSuppliers,
+    error: suppliersError,
+  } = useSuppliers({
     page: 1,
     pageSize: 100,
   });
-  const { data: productsData, isLoading: isLoadingProducts } = useProducts({
+  const {
+    data: productsData,
+    isLoading: isLoadingProducts,
+    error: productsError,
+  } = useProducts({
     page: 1,
     pageSize: 100,
     isActive: true,
@@ -48,6 +56,7 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
   } = useProduct(search.productId ?? "", !!search.productId);
   const {
     data: preferredPriceLists,
+    error: preferredPriceListsError,
     isLoading: isLoadingPreferredPriceLists,
   } = usePriceLists({
     productId: search.productId,
@@ -185,7 +194,8 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
   const hasInvalidContext =
     hasProductContext &&
     !isLoadingSelectedProduct &&
-    (!!selectedProductError || !selectedProductItem || !selectedProductItem.isActive);
+    (!selectedProductItem || !selectedProductItem.isActive);
+  const hasDegradedProductContext = !!selectedProductError && !!selectedProductItem;
   const headerTitle = selectedProductItem && search.source === "product_detail"
     ? `Order Stock for ${selectedProductItem.name}`
     : "Create Purchase Order";
@@ -259,6 +269,46 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
             <AlertTitle>Ordering stock for {selectedProductItem.name}</AlertTitle>
             <AlertDescription>
               This purchase order starts with {selectedProductItem.sku ? `${selectedProductItem.name} (${selectedProductItem.sku})` : selectedProductItem.name} already seeded as the first line item.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {hasDegradedProductContext ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product details unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent product context while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {suppliersError instanceof Error ? (
+          <Alert className="mb-6" variant="destructive">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Supplier list unavailable</AlertTitle>
+            <AlertDescription>
+              Supplier options could not be loaded. You can stay on this page, but you may need to refresh before you can submit a purchase order.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {productsError instanceof Error ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product catalog unavailable</AlertTitle>
+            <AlertDescription>
+              Product options could not be refreshed. Any products already loaded remain usable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {preferredPriceListsError instanceof Error ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Preferred supplier pricing unavailable</AlertTitle>
+            <AlertDescription>
+              Preferred supplier pricing could not be loaded for this product. You can still create the purchase order manually.
             </AlertDescription>
           </Alert>
         ) : null}

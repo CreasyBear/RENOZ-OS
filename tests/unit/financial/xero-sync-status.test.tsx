@@ -32,6 +32,7 @@ vi.mock('@/components/ui/button', () => ({
 
     return <button {...props}>{children}</button>;
   },
+  buttonVariants: () => '',
 }));
 
 describe('XeroSyncStatus', () => {

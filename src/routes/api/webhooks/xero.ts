@@ -3,7 +3,7 @@ import { xeroWebhookPayloadSchema } from '@/lib/schemas/settings/xero-sync';
 import { verifyXeroWebhookSignature } from '@/server/functions/financial/xero-webhook-signature';
 import {
   processXeroPaymentWebhookEvents,
-} from '@/server/functions/financial/xero-invoice-sync';
+} from '@/server/functions/financial/_shared/xero-payment-reconciliation';
 
 function parseWebhookPayload(payload: unknown) {
   const parsed = xeroWebhookPayloadSchema.safeParse(payload);

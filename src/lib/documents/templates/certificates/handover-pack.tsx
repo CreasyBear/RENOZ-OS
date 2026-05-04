@@ -8,13 +8,20 @@
  * @see drizzle/schema/jobs/projects.ts for project data
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   CertificateBorder,
   CertificateDivider,
   CertificateSeal,
 } from "../../components/certificate-border";
 import { PageNumber } from "../../components/footer";
+import {
+  DocumentBodyText,
+  DocumentBulletList,
+  DocumentDetailStrip,
+  DocumentMasthead,
+  DocumentSectionCard,
+} from "../../components";
 import {
   colors,
   fontSize,
@@ -43,8 +50,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: "center",
-    paddingVertical: spacing["2xl"],
+    alignItems: "stretch",
+    paddingVertical: spacing.lg,
   },
   logoContainer: {
     marginBottom: spacing.lg,
@@ -88,8 +95,8 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     width: "100%",
-    paddingHorizontal: spacing["2xl"],
-    marginVertical: spacing.lg,
+    paddingHorizontal: 0,
+    marginVertical: spacing.md,
   },
   section: {
     marginBottom: spacing.lg,
@@ -283,120 +290,74 @@ function HandoverPackContent({ data }: HandoverPackPdfTemplateProps) {
           .replace(/_/g, " ")
           .replace(/\b\w/g, (c) => c.toUpperCase())
       : "Project";
+  const logoUrl = organization.branding?.logoDataUrl ?? null;
+  const detailItems = [
+    { label: "Project Type", value: formatProjectType(data.projectType) },
+    { label: "Start Date", value: formatDateForPdf(data.startDate, locale) },
+    { label: "Completion", value: formatDateForPdf(data.completionDate, locale) },
+  ];
 
   return (
     <Page size="A4" style={styles.page}>
       <CertificateBorder primaryColor={primaryColor} variant="classic">
         <View style={styles.content}>
-          <View style={styles.logoContainer}>
-            {organization.branding?.logoDataUrl ? (
-              <Image
-                src={organization.branding.logoDataUrl}
-                style={styles.logo}
-              />
-            ) : (
-              <Text style={[styles.orgName, { color: primaryColor }]}>
-                {organization.name}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: primaryColor }]}>
-              PROJECT HANDOVER PACK
-            </Text>
-            <Text style={styles.subtitle}>
-              {formatProjectType(data.projectType)}
-            </Text>
-            <Text style={styles.projectNumber}>
-              Project Reference: {data.projectNumber}
-            </Text>
-          </View>
+          <DocumentMasthead
+            title="Project Handover Pack"
+            subtitle={data.title}
+            variant="certificate"
+            meta={[
+              { label: "Project Reference", value: data.projectNumber },
+              { label: "Customer", value: data.customerName },
+              { label: "Issued By", value: organization.name },
+            ]}
+            callout={{
+              eyebrow: "Project Complete",
+              title: formatDateForPdf(data.completionDate, locale),
+              detail: formatProjectType(data.projectType),
+              tone: "success",
+            }}
+            logoUrl={logoUrl}
+          />
 
           <CertificateDivider primaryColor={primaryColor} />
 
           <View style={styles.mainContent}>
-            <Text style={styles.sectionText}>
-              This handover pack confirms completion of the following project for
-            </Text>
-            <Text style={[styles.projectTitle, { textAlign: "center", marginVertical: spacing.sm }]}>
-              {data.customerName}
-            </Text>
+            <DocumentSectionCard title="Project Handover" variant="formal">
+              <>
+                <DocumentBodyText>{data.customerName}</DocumentBodyText>
+                <DocumentBodyText>{data.title}</DocumentBodyText>
+                {data.description ? <DocumentBodyText>{data.description}</DocumentBodyText> : null}
+                {data.siteAddress ? (
+                  <DocumentBodyText>{`Site Address: ${data.siteAddress}`}</DocumentBodyText>
+                ) : null}
+              </>
+            </DocumentSectionCard>
 
-            <View style={styles.projectSection}>
-              <Text style={styles.projectTitle}>{data.title}</Text>
-              <Text style={styles.projectNumberLabel}>
-                Project No: {data.projectNumber}
-              </Text>
-              {data.description && (
-                <Text style={styles.sectionText}>{data.description}</Text>
-              )}
-            </View>
+            <DocumentDetailStrip items={detailItems} variant="formal" />
 
-            {data.siteAddress && (
-              <View style={styles.addressSection}>
-                <Text style={styles.addressLabel}>Site Address</Text>
-                <Text style={styles.addressText}>{data.siteAddress}</Text>
-              </View>
-            )}
+            {data.outcomes && data.outcomes.length > 0 ? (
+              <DocumentSectionCard title="Project Outcomes" variant="formal">
+                <DocumentBulletList items={data.outcomes} />
+              </DocumentSectionCard>
+            ) : null}
 
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Start Date</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateForPdf(data.startDate, locale)}
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Completion Date</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateForPdf(data.completionDate, locale)}
-                </Text>
-              </View>
-            </View>
+            {data.keyFeatures && data.keyFeatures.length > 0 ? (
+              <DocumentSectionCard title="Key Features Delivered" variant="formal">
+                <DocumentBulletList items={data.keyFeatures} />
+              </DocumentSectionCard>
+            ) : null}
 
-            {data.outcomes && data.outcomes.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Project Outcomes</Text>
-                {data.outcomes.map((item, i) => (
-                  <View key={i} style={styles.listItem}>
-                    <Text style={styles.listBullet}>•</Text>
-                    <Text style={styles.listText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            {data.systemSpecs && data.systemSpecs.length > 0 ? (
+              <DocumentSectionCard title="System Specifications" variant="formal">
+                <DocumentBulletList items={data.systemSpecs} />
+              </DocumentSectionCard>
+            ) : null}
 
-            {data.keyFeatures && data.keyFeatures.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Key Features Delivered</Text>
-                {data.keyFeatures.map((item, i) => (
-                  <View key={i} style={styles.listItem}>
-                    <Text style={styles.listBullet}>•</Text>
-                    <Text style={styles.listText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {data.systemSpecs && data.systemSpecs.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>System Specifications</Text>
-                {data.systemSpecs.map((item, i) => (
-                  <View key={i} style={styles.listItem}>
-                    <Text style={styles.listBullet}>•</Text>
-                    <Text style={styles.listText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {data.warrantyInfo && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Warranty Information</Text>
-                <Text style={styles.sectionText}>{data.warrantyInfo}</Text>
-              </View>
-            )}
+            {data.warrantyInfo ? (
+              <DocumentSectionCard title="Warranty Information" variant="formal">
+                <DocumentBodyText>{data.warrantyInfo}</DocumentBodyText>
+              </DocumentSectionCard>
+            ) : null}
           </View>
 
           <CertificateDivider primaryColor={primaryColor} />

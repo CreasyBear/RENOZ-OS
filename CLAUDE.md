@@ -15,29 +15,38 @@ Renoz v3 is a multi-tenant CRM application for renovation/construction businesse
 
 ```bash
 # Development
-npm run dev              # Start dev server on port 3000
+bun run dev              # Start dev server on port 3000
 
 # Type checking & linting
-npm run typecheck        # TypeScript check (tsc --noEmit)
-npm run lint             # ESLint on src/
-npm run format           # Prettier format
+bun run typecheck        # TypeScript check (tsc --noEmit)
+bun run lint             # ESLint on src/
 
 # Database (Drizzle)
-npm run db:generate      # Generate migrations from schema changes
-npm run db:push          # Push schema to dev database (no migration file)
-npm run db:migrate       # Run migrations (production)
-npm run db:studio        # Open Drizzle Studio GUI
+bun run db:generate      # Generate migrations from schema changes
+bun run db:push          # Push schema to dev database (no migration file)
+bun run db:migrate       # Run migrations (production)
+bun run db:studio        # Open Drizzle Studio GUI
 
 # Testing
 bun test                 # Run all tests
 bun test tests/unit      # Unit tests only
-npm run test:vitest      # Vitest run mode
+bun run test:vitest      # Vitest run mode
 
 # Pre-deploy (typecheck + lint + test + build)
-npm run predeploy
+bun run predeploy
+bun run release:verify
 ```
 
-**Deployment**: Run `npm run predeploy` before pushing to catch typecheck/lint/test/build failures locally and avoid wasted CI build time.
+**Deployment**: Run `bun run predeploy` before pushing and `bun run release:verify` before a production deploy candidate.
+
+## Deploy Configuration
+
+- **Platform**: Vercel
+- **Base branch**: `master`
+- **Build command**: `bun run build:vercel`
+- **Pre-merge local gate**: `bun run predeploy`
+- **Release verification**: `bun run release:verify`
+- **Production URL source**: `APP_URL` in deployment/runtime environment; do not hardcode a second source in repo docs or scripts
 
 ## React Grab (UI to Code)
 
@@ -57,7 +66,7 @@ If you just installed it, restart the dev server and refresh the browser.
 - **UI**: React 19, shadcn/ui (Radix), Tailwind CSS 4
 - **State**: TanStack Query (server), Zustand (UI)
 - **Database**: PostgreSQL via Supabase, Drizzle ORM
-- **Auth**: Supabase Auth with SSR. **Required**: `@supabase/ssr@0.9.0-rc.6` + `@supabase/supabase-js@^2.97.0` (older versions have an SSR race condition that breaks session loading). See `docs/AUTH-LIFECYCLE.md`.
+- **Auth**: Supabase Auth with SSR. **Required**: `@supabase/ssr@0.9.0-rc.6` + `@supabase/supabase-js@^2.97.0` (older versions have an SSR race condition that breaks session loading). See `docs/operations/auth-lifecycle.md`.
 - **Background Jobs**: Trigger.dev
 - **Validation**: Zod
 
@@ -303,27 +312,19 @@ export const Route = createFileRoute('/_authenticated/domain/')({
 });
 ```
 
-See [docs/ui-patterns.md](./docs/ui-patterns.md) for:
-- Layout variant selection (full-width, container, narrow, with-panel)
-- Detail view patterns (Sheet vs full page)
-- Bulk actions with `BulkActionsBar` and `useSelection`
-- Navigation patterns (never use window.location.href)
-
-Use [docs/templates/route-template.tsx](./docs/templates/route-template.tsx) as a starting point for new routes.
+Use the shared route and layout patterns documented in [docs/reference/repo-standards.md](./docs/reference/repo-standards.md) and the existing route files under `src/routes/` as the starting point for new route work.
 
 ## Standards Reference
 
-See [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) for schema boundary patterns and [STANDARDS.md](./STANDARDS.md) for authoritative patterns on:
+See [docs/reference/schema-trace.md](./docs/reference/schema-trace.md) for schema boundary patterns and [docs/reference/repo-standards.md](./docs/reference/repo-standards.md) for authoritative patterns on:
 - Barrel exports (index.ts structure)
 - Component architecture (container/presenter pattern)
 - Hook patterns (TanStack Query conventions)
 - File/folder structure (domain organization)
 
-The STANDARDS.md document includes a compliance checklist and audit commands for verifying domain adherence.
+The repo standards document includes a compliance checklist and audit commands for verifying domain adherence.
 
 ## Workflow
-
-See [.claude/WORKFLOW.md](./.claude/WORKFLOW.md) for the development workflow using everything-claude-code.
 
 Key commands:
 - `/plan` - Before starting non-trivial features
@@ -333,11 +334,11 @@ Key commands:
 
 ## Corrections Log
 
-- **Predeploy before push**: To minimize build time, run `npm run predeploy` before committing/pushing. This catches typecheck, lint, test, and build failures locally so CI does not waste time on broken builds.
+- **Predeploy before push**: To minimize build time, run `bun run predeploy` before committing/pushing. This catches typecheck, lint, test, and build failures locally so CI does not waste time on broken builds.
 - When a user selection list is empty, provide an "Invite user" action that links to `/admin/users/invite`.
 - Financial amounts are stored in AUD dollars (numeric 12,2); do not treat them as cents or scale payment/Xero values.
 - **No temporary shortcuts**: Always implement the proper solution. Eliminate technical debt immediately rather than deferring it. Never create TODO comments or temporary workarounds that will need to be fixed later.
-- **Typecheck fixes must follow SCHEMA-TRACE.md and STANDARDS.md**: When fixing TypeScript errors, do NOT use type assertions (`as X`, `as unknown as X`), `params: {} as never`, or ad-hoc `?? null`/`?? undefined` scattered in views. Fix at boundaries: (1) schema types in `lib/schemas/`, (2) server fn return types, (3) normalize at a single boundary per SCHEMA-TRACE §8. Use proper route types instead of `as never`. See [docs/remediation/typecheck-phase3-debt.md](./docs/remediation/typecheck-phase3-debt.md) for remediation patterns.
+- **Typecheck fixes must follow schema-trace and repo standards**: When fixing TypeScript errors, do NOT use type assertions (`as X`, `as unknown as X`), `params: {} as never`, or ad-hoc `?? null`/`?? undefined` scattered in views. Fix at boundaries: (1) schema types in `lib/schemas/`, (2) server fn return types, (3) normalize at a single boundary per the schema-trace guide. Use proper route types instead of `as never`.
 - **No unused props**: When adding props to a component, ensure they are used. Do not add props "for future use" or as placeholders. Remove dead props during implementation.
 - **Do not name files after external products**: Use generic, descriptive names (e.g. `document-constants.ts`, `document-fixed-header.tsx`) rather than product names (e.g. `midday-constants.ts`). Same for exported identifiers: prefer `DOCUMENT_*`, `DocumentFixedHeader` over `MIDDAY_*`, `MiddayFixedHeader`.
 - **For manual production DB patching in this project, prefer Supabase MCP `execute_sql`** when the user explicitly wants a quick direct fix instead of migration bookkeeping.

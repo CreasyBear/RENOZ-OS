@@ -21,6 +21,7 @@ import { renderPdfToBuffer } from '@/lib/documents';
 import { fetchOrganizationForDocument } from './organization-for-pdf';
 import { buildDocumentOrderFromPreviewData } from '@/lib/documents/builders';
 import { renderPreviewDocument } from '@/lib/documents/preview-renderers';
+import type { PreviewDocumentData } from '@/lib/documents/builders';
 
 // ============================================================================
 // DOCUMENT TYPES
@@ -81,6 +82,20 @@ const previewDocumentSchema = z.discriminatedUnion('useSampleData', [
 
 export type PreviewDocumentInput = z.infer<typeof previewDocumentSchema>;
 
+interface PreviewDocumentResult {
+  success: true;
+  documentType: DocumentType;
+  useSampleData: boolean;
+  base64: string;
+  mimeType: 'application/pdf';
+  previewData: {
+    organization: PreviewDocumentData['organization'];
+    documentType: DocumentType;
+    hasLineItems: boolean;
+    total: number;
+  };
+}
+
 // ============================================================================
 // SAMPLE DATA
 // ============================================================================
@@ -89,7 +104,25 @@ export type PreviewDocumentInput = z.infer<typeof previewDocumentSchema>;
  * Sample data for document preview
  * Used when previewing template customization
  */
-const SAMPLE_DOCUMENT_DATA = {
+const SAMPLE_DOCUMENT_DATA: PreviewDocumentData & {
+  warranty: {
+    certificateNumber: string;
+    productName: string;
+    serialNumber: string;
+    coverageYears: number;
+    startDate: string;
+    endDate: string;
+    terms: string;
+  };
+  job: {
+    jobNumber: string;
+    title: string;
+    description: string;
+    scheduledDate: string;
+    tasks: Array<{ name: string; completed: boolean }>;
+    materials: Array<{ name: string; quantity: number; unit?: string }>;
+  };
+} = {
   organization: {
     name: 'Acme Renovations Ltd',
     email: 'info@acmerenovations.com',
@@ -111,12 +144,17 @@ const SAMPLE_DOCUMENT_DATA = {
     state: 'VIC',
     postalCode: '3000',
     country: 'Australia',
+    billingAddress: undefined,
+    shippingAddress: undefined,
+    primaryAddress: undefined,
   },
   order: {
     orderNumber: 'QUO-2026-0001',
     createdAt: new Date().toISOString(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    billingAddress: undefined,
+    shippingAddress: undefined,
     lineItems: [
       {
         description: 'Kitchen Cabinet Installation',
@@ -127,7 +165,6 @@ const SAMPLE_DOCUMENT_DATA = {
       {
         description: 'Benchtop - Stone 20mm',
         quantity: 3.5,
-        unit: 'sqm',
         unitPrice: 450.0,
         total: 1575.0,
       },
@@ -148,6 +185,9 @@ const SAMPLE_DOCUMENT_DATA = {
     taxRate: 0.1,
     taxAmount: 476.5,
     discount: 0,
+    shippingAmount: 0,
+    paidAmount: 0,
+    balanceDue: 5241.5,
     total: 5241.5,
     notes: 'Installation scheduled for Monday 9am. Please ensure site access.',
     terms:
@@ -210,7 +250,7 @@ const SAMPLE_DOCUMENT_DATA = {
  */
 export const previewDocument = createServerFn({ method: 'POST' })
   .inputValidator(previewDocumentSchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<PreviewDocumentResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
 
     const { documentType } = data;
@@ -253,7 +293,12 @@ export const previewDocument = createServerFn({ method: 'POST' })
             customerId: orders.customerId,
             createdAt: orders.createdAt,
             dueDate: orders.dueDate,
+            billingAddress: orders.billingAddress,
+            shippingAddress: orders.shippingAddress,
             subtotal: orders.subtotal,
+            shippingAmount: orders.shippingAmount,
+            paidAmount: orders.paidAmount,
+            balanceDue: orders.balanceDue,
             taxAmount: orders.taxAmount,
             discountAmount: orders.discountAmount,
             total: orders.total,
@@ -273,8 +318,8 @@ export const previewDocument = createServerFn({ method: 'POST' })
           throw new NotFoundError('Order not found', 'order');
         }
 
-        // Fetch customer, line items, and billing address in parallel
-        const [customerResult, lineItemsResult, billingAddressResult] = await Promise.all([
+        // Fetch customer, line items, and customer addresses in parallel
+        const [customerResult, lineItemsResult, billingAddressResult, shippingAddressResult, primaryAddressResult] = await Promise.all([
           db
             .select({
               id: customers.id,
@@ -326,15 +371,26 @@ export const previewDocument = createServerFn({ method: 'POST' })
               )
             )
             .limit(1),
-        ]);
-
-        const customer = customerResult[0];
-        const billingAddress = billingAddressResult[0];
-
-        // Fallback to any primary address if no billing address
-        let customerAddress = billingAddress;
-        if (!billingAddress) {
-          const [anyPrimary] = await db
+          db
+            .select({
+              street1: addresses.street1,
+              street2: addresses.street2,
+              city: addresses.city,
+              state: addresses.state,
+              postcode: addresses.postcode,
+              country: addresses.country,
+            })
+            .from(addresses)
+            .where(
+              and(
+                eq(addresses.customerId, order.customerId),
+                eq(addresses.organizationId, ctx.organizationId),
+                eq(addresses.type, 'shipping'),
+                eq(addresses.isPrimary, true)
+              )
+            )
+            .limit(1),
+          db
             .select({
               street1: addresses.street1,
               street2: addresses.street2,
@@ -351,9 +407,13 @@ export const previewDocument = createServerFn({ method: 'POST' })
                 eq(addresses.isPrimary, true)
               )
             )
-            .limit(1);
-          customerAddress = anyPrimary;
-        }
+            .limit(1),
+        ]);
+
+        const customer = customerResult[0];
+        const billingAddress = billingAddressResult[0];
+        const shippingAddress = shippingAddressResult[0];
+        const primaryAddress = primaryAddressResult[0];
 
         const orderLineItemsFormatted = lineItemsResult.map((item) => ({
           description: item.description || '',
@@ -361,6 +421,10 @@ export const previewDocument = createServerFn({ method: 'POST' })
           unitPrice: Number(item.unitPrice) || 0,
           total: Number(item.lineTotal) || Number(item.unitPrice) * (Number(item.quantity) || 1),
           sku: item.sku ?? undefined,
+          discountPercent: Number(item.discountPercent) || 0,
+          discountAmount: Number(item.discountAmount) || 0,
+          taxAmount: Number(item.taxAmount) || 0,
+          notes: item.notes ?? undefined,
         }));
 
         // Build document data from real order
@@ -381,22 +445,79 @@ export const previewDocument = createServerFn({ method: 'POST' })
             name: customer?.name || 'Unknown Customer',
             email: customer?.email || '',
             phone: customer?.phone || '',
-            address: [customerAddress?.street1, customerAddress?.street2].filter(Boolean).join(', ') || '',
-            city: customerAddress?.city || '',
-            state: customerAddress?.state || '',
-            postalCode: customerAddress?.postcode || '',
-            country: customerAddress?.country || '',
+            address: [primaryAddress?.street1, primaryAddress?.street2].filter(Boolean).join(', ') || '',
+            city: primaryAddress?.city || '',
+            state: primaryAddress?.state || '',
+            postalCode: primaryAddress?.postcode || '',
+            country: primaryAddress?.country || '',
+            billingAddress: billingAddress
+              ? {
+                  addressLine1: billingAddress.street1,
+                  addressLine2: billingAddress.street2,
+                  city: billingAddress.city,
+                  state: billingAddress.state,
+                  postalCode: billingAddress.postcode,
+                  country: billingAddress.country,
+                }
+              : undefined,
+            shippingAddress: shippingAddress
+              ? {
+                  addressLine1: shippingAddress.street1,
+                  addressLine2: shippingAddress.street2,
+                  city: shippingAddress.city,
+                  state: shippingAddress.state,
+                  postalCode: shippingAddress.postcode,
+                  country: shippingAddress.country,
+                }
+              : undefined,
+            primaryAddress: primaryAddress
+              ? {
+                  addressLine1: primaryAddress.street1,
+                  addressLine2: primaryAddress.street2,
+                  city: primaryAddress.city,
+                  state: primaryAddress.state,
+                  postalCode: primaryAddress.postcode,
+                  country: primaryAddress.country,
+                }
+              : undefined,
           },
           order: {
             orderNumber: order.orderNumber,
             createdAt: new Date(order.createdAt).toISOString(),
             dueDate: order.dueDate ? new Date(order.dueDate).toISOString() : '',
             validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            billingAddress: order.billingAddress
+              ? {
+                  addressLine1: order.billingAddress.street1,
+                  addressLine2: order.billingAddress.street2,
+                  city: order.billingAddress.city,
+                  state: order.billingAddress.state,
+                  postalCode: order.billingAddress.postalCode,
+                  country: order.billingAddress.country,
+                  contactName: order.billingAddress.contactName,
+                  contactPhone: order.billingAddress.contactPhone,
+                }
+              : undefined,
+            shippingAddress: order.shippingAddress
+              ? {
+                  addressLine1: order.shippingAddress.street1,
+                  addressLine2: order.shippingAddress.street2,
+                  city: order.shippingAddress.city,
+                  state: order.shippingAddress.state,
+                  postalCode: order.shippingAddress.postalCode,
+                  country: order.shippingAddress.country,
+                  contactName: order.shippingAddress.contactName,
+                  contactPhone: order.shippingAddress.contactPhone,
+                }
+              : undefined,
             lineItems: orderLineItemsFormatted,
             subtotal: Number(order.subtotal) || 0,
             taxRate: 0.1,
             taxAmount: Number(order.taxAmount) || 0,
             discount: Number(order.discountAmount) || 0,
+            shippingAmount: Number(order.shippingAmount) || 0,
+            paidAmount: Number(order.paidAmount) || 0,
+            balanceDue: Number(order.balanceDue) || 0,
             total: Number(order.total) || 0,
             notes: order.customerNotes || '',
             terms: '',

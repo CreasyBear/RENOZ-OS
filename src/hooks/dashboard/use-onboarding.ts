@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getOrganizationOnboardingProgress,
@@ -37,9 +38,14 @@ export function useOnboardingProgress({
   return useQuery({
     queryKey: queryKeys.dashboard.onboarding.progress(),
     queryFn: async () => {
-      const result = await getProgressFn();
-      if (result == null) throw new Error('Onboarding progress returned no data');
-      return result;
+      try {
+        return await getProgressFn();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Welcome checklist progress is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 1000 * 60 * 5, // 5 minutes

@@ -31,6 +31,9 @@ import { useDashboardDateRange } from '@/components/domain/dashboard/dashboard-c
 import { serializeDateForUrl } from '@/hooks/filters/use-filter-url-state';
 import { getRevenueAttribution } from '@/server/functions/pipeline/pipeline';
 import { getSummaryState } from '@/lib/metrics/summary-health';
+import {
+  resolveReadResult,
+} from '@/lib/read-path-policy';
 
 // Presenter
 import { OverviewDashboard } from './overview-dashboard';
@@ -79,6 +82,8 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
     setProducts: setTrackedProducts,
     isLoading: trackedProductsLoading,
     maxProducts,
+    trackedProductsWarning,
+    trackedProductsUnavailable,
   } = useTrackedProducts();
 
   // Active projects for projects table
@@ -129,20 +134,25 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
       currentMonthStartParam,
       currentMonthEndParam,
     ],
-    queryFn: async () => {
-      const result = await getRevenueAttributionFn({
-        data: {
-          dateFrom: currentMonthStartParam,
-          dateTo: currentMonthEndParam,
-          groupBy: 'month',
-        },
-      });
-      if (result == null) throw new Error('Won this month metrics are unavailable.');
-      return result;
-    },
+    queryFn: () =>
+      resolveReadResult(
+        () =>
+          getRevenueAttributionFn({
+            data: {
+              dateFrom: currentMonthStartParam,
+              dateTo: currentMonthEndParam,
+              groupBy: 'month',
+            },
+          }),
+        {
+          message: 'Won this month metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Won this month metrics are temporarily unavailable. Please refresh and try again.',
+        }
+      ),
     staleTime: 60 * 1000,
   });
-
 
   // -------------------------------------------------------------------------
   // DATA TRANSFORMATION
@@ -390,6 +400,7 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
       stats={statsData}
       statsSummaryWarning={statsSummaryWarning}
       trackedProducts={trackedProducts}
+      trackedProductsWarning={trackedProductsWarning ?? trackedProductsUnavailable}
       onTrackedProductsChange={setTrackedProducts}
       maxTrackedProducts={maxProducts}
       cashFlow={cashFlowData}

@@ -68,6 +68,10 @@ interface RmaCreateDialogProps {
   issueId?: string;
   /** Optional customer ID */
   customerId?: string;
+  /** Optional prefilled reason from issue resolution context */
+  defaultReason?: RmaReason;
+  /** Optional prefilled details from issue resolution context */
+  defaultReasonDetails?: string | null;
   /** Callback when RMA is created successfully */
   onSuccess?: (rmaId: string) => void;
   /** From route container (mutation). */
@@ -102,6 +106,8 @@ export function RmaCreateDialog({
   orderLineItems,
   issueId,
   customerId,
+  defaultReason,
+  defaultReasonDetails,
   onSuccess,
   onSubmit,
   isSubmitting,
@@ -120,8 +126,8 @@ export function RmaCreateDialog({
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen) {
       // Reset form state when opening
-      setReason('defective');
-      setReasonDetails('');
+      setReason(defaultReason ?? 'defective');
+      setReasonDetails(defaultReasonDetails ?? '');
       setCustomerNotes('');
       setSelectedItems(new Map());
     }

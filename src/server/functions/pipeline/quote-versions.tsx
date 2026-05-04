@@ -558,7 +558,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     const cust = customer[0];
 
-    // Step 4: Fetch primary billing address (depends on customer.id)
+    // Step 4: Fetch customer addresses (depends on customer.id)
     const [billingAddress] = await db
       .select({
         street1: addresses.street1,
@@ -579,29 +579,44 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    // Fallback to any primary address
-    let customerAddress = billingAddress;
-    if (!customerAddress) {
-      const [anyPrimary] = await db
-        .select({
-          street1: addresses.street1,
-          street2: addresses.street2,
-          city: addresses.city,
-          state: addresses.state,
-          postcode: addresses.postcode,
-          country: addresses.country,
-        })
-        .from(addresses)
-        .where(
-          and(
-            eq(addresses.customerId, cust.id),
-            eq(addresses.organizationId, ctx.organizationId),
-            eq(addresses.isPrimary, true)
-          )
+    const [shippingAddress] = await db
+      .select({
+        street1: addresses.street1,
+        street2: addresses.street2,
+        city: addresses.city,
+        state: addresses.state,
+        postcode: addresses.postcode,
+        country: addresses.country,
+      })
+      .from(addresses)
+      .where(
+        and(
+          eq(addresses.customerId, cust.id),
+          eq(addresses.organizationId, ctx.organizationId),
+          eq(addresses.type, 'shipping'),
+          eq(addresses.isPrimary, true)
         )
-        .limit(1);
-      customerAddress = anyPrimary;
-    }
+      )
+      .limit(1);
+
+    const [primaryAddress] = await db
+      .select({
+        street1: addresses.street1,
+        street2: addresses.street2,
+        city: addresses.city,
+        state: addresses.state,
+        postcode: addresses.postcode,
+        country: addresses.country,
+      })
+      .from(addresses)
+      .where(
+        and(
+          eq(addresses.customerId, cust.id),
+          eq(addresses.organizationId, ctx.organizationId),
+          eq(addresses.isPrimary, true)
+        )
+      )
+      .limit(1);
 
     // Calculate dates
     const issueDate = new Date(quoteVersion.createdAt);
@@ -617,34 +632,53 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       validUntil,
       notes: quoteVersion.notes || undefined,
       generatedAt: new Date(),
-      order: {
-        id: quoteVersion.id,
-        orderNumber: `V${quoteVersion.versionNumber}`,
-        orderDate: issueDate,
-        customer: {
-          id: cust.id,
-          name: cust.name,
-          email: cust.email,
-          phone: cust.phone,
-          address: customerAddress
-            ? {
-                addressLine1: customerAddress.street1,
-                addressLine2: customerAddress.street2,
-                city: customerAddress.city,
-                state: customerAddress.state,
-                postalCode: customerAddress.postcode,
-                country: customerAddress.country,
+        order: {
+          id: quoteVersion.id,
+          orderNumber: `V${quoteVersion.versionNumber}`,
+          orderDate: issueDate,
+          customer: {
+            id: cust.id,
+            name: cust.name,
+            email: cust.email,
+            phone: cust.phone,
+            address: primaryAddress
+              ? {
+                addressLine1: primaryAddress.street1,
+                addressLine2: primaryAddress.street2,
+                city: primaryAddress.city,
+                state: primaryAddress.state,
+                postalCode: primaryAddress.postcode,
+                country: primaryAddress.country,
               }
             : undefined,
         },
-        billingAddress: customerAddress
+        billingAddress: billingAddress
           ? {
-              addressLine1: customerAddress.street1,
-              addressLine2: customerAddress.street2,
-              city: customerAddress.city,
-              state: customerAddress.state,
-              postalCode: customerAddress.postcode,
-              country: customerAddress.country,
+              addressLine1: billingAddress.street1,
+              addressLine2: billingAddress.street2,
+              city: billingAddress.city,
+              state: billingAddress.state,
+              postalCode: billingAddress.postcode,
+              country: billingAddress.country,
+            }
+          : primaryAddress
+            ? {
+                addressLine1: primaryAddress.street1,
+                addressLine2: primaryAddress.street2,
+                city: primaryAddress.city,
+                state: primaryAddress.state,
+                postalCode: primaryAddress.postcode,
+                country: primaryAddress.country,
+              }
+            : undefined,
+        shippingAddress: shippingAddress
+          ? {
+              addressLine1: shippingAddress.street1,
+              addressLine2: shippingAddress.street2,
+              city: shippingAddress.city,
+              state: shippingAddress.state,
+              postalCode: shippingAddress.postcode,
+              country: shippingAddress.country,
             }
           : undefined,
         lineItems: (quoteVersion.items || []).map((item: QuoteVersionItemRaw, index: number) => {

@@ -48,19 +48,27 @@ export default function ForecastingPage() {
   const {
     data: recsData,
     isLoading: isLoadingRecs,
+    isError: isRecsError,
+    error: recsError,
     refetch: refetchRecommendations,
   } = useReorderRecommendations({ urgencyFilter: "all", limit: 50 });
 
   const {
     data: productForecastData,
     isLoading: isLoadingForecast,
+    isError: isForecastError,
+    error: forecastError,
+    refetch: refetchForecast,
   } = useProductForecast(
     selectedProductId ?? "",
     { period: forecastPeriod, days: 90 },
     !!selectedProductId
   );
 
-  const { data: accuracyData } = useForecastAccuracy(
+  const {
+    data: accuracyData,
+    isError: isAccuracyError,
+  } = useForecastAccuracy(
     { productId: selectedProductId ?? undefined },
     !!selectedProductId
   );
@@ -70,7 +78,7 @@ export default function ForecastingPage() {
     () => (recsData?.recommendations ?? []) as ReorderRecommendation[],
     [recsData]
   );
-  const summary = recsData?.summary ?? { criticalCount: 0, highCount: 0, totalRecommendations: 0 };
+  const summary = recsData?.summary;
 
   type ProductForecastItem = Awaited<ReturnType<typeof getProductForecast>>['forecasts'][number];
   const forecastData: ForecastDataPoint[] = (productForecastData?.forecasts ?? []).map((f: ProductForecastItem) => ({
@@ -185,7 +193,7 @@ export default function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 text-red-600 tabular-nums">
-                {summary.criticalCount}
+                {isRecsError ? "—" : (summary?.criticalCount ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Products at or below safety stock
@@ -202,7 +210,7 @@ export default function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 text-orange-600 tabular-nums">
-                {summary.highCount}
+                {isRecsError ? "—" : (summary?.highCount ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Below reorder point
@@ -219,7 +227,7 @@ export default function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 tabular-nums">
-                {summary.totalRecommendations}
+                {isRecsError ? "—" : (summary?.totalRecommendations ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Products need attention
@@ -236,7 +244,9 @@ export default function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 text-green-600 tabular-nums">
-                {forecastAccuracy ? `${forecastAccuracy.accuracy.toFixed(1)}%` : "—"}
+                {!selectedProductId || isAccuracyError || !forecastAccuracy
+                  ? "—"
+                  : `${forecastAccuracy.accuracy.toFixed(1)}%`}
               </div>
               <p className="text-xs text-muted-foreground">
                 Overall accuracy rate
@@ -261,8 +271,11 @@ export default function ForecastingPage() {
             <ReorderRecommendations
               recommendations={recommendations}
               isLoading={isLoadingRecs}
+              isError={isRecsError}
+              errorMessage={recsError instanceof Error ? recsError.message : undefined}
               onReorder={handleReorder}
               onReorderAll={handleReorderAll}
+              onRetry={() => refetchRecommendations()}
             />
           </TabsContent>
 
@@ -278,6 +291,11 @@ export default function ForecastingPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-[400px] overflow-auto">
+                    {isRecsError ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        Reorder recommendations are temporarily unavailable.
+                      </p>
+                    ) : null}
                     {recommendations.map((rec) => (
                       <button
                         key={rec.productId}
@@ -314,7 +332,7 @@ export default function ForecastingPage() {
                         </div>
                       </button>
                     ))}
-                    {recommendations.length === 0 && !isLoadingRecs && (
+                    {recommendations.length === 0 && !isLoadingRecs && !isRecsError && (
                       <p className="text-center text-muted-foreground py-8">
                         No products found
                       </p>
@@ -332,6 +350,9 @@ export default function ForecastingPage() {
                   period={forecastPeriod}
                   onPeriodChange={setForecastPeriod}
                   isLoading={isLoadingForecast}
+                  isError={isForecastError}
+                  errorMessage={forecastError instanceof Error ? forecastError.message : undefined}
+                  onRetry={() => refetchForecast()}
                 />
               ) : (
                 <Card>

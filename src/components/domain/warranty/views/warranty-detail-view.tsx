@@ -79,6 +79,7 @@ import { getSummaryMetricSubtitle } from '@/lib/metrics/metric-display';
 import type {
   WarrantyDetail,
   WarrantyClaimListItem,
+  WarrantyPendingServiceReview,
   WarrantyDetailViewProps,
 } from '@/lib/schemas/warranty';
 
@@ -110,6 +111,51 @@ function getExpiryBadge(daysUntilExpiry: number) {
   return <StatusBadge status={`${daysUntilExpiry} days left`} variant="neutral" />;
 }
 
+function getServiceLinkagePresentation(
+  status: WarrantyDetail['serviceLinkageStatus']
+): {
+  label: string;
+  description: string;
+  badgeClassName: string;
+} {
+  switch (status) {
+    case 'linked':
+      return {
+        label: 'Linked',
+        description: 'This warranty is linked to a live service-system record.',
+        badgeClassName:
+          'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+      };
+    case 'pending_review':
+      return {
+        label: 'Pending Review',
+        description: 'A linkage review is blocking automatic system assignment.',
+        badgeClassName:
+          'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+      };
+    case 'unlinked':
+      return {
+        label: 'Unlinked',
+        description: 'This warranty is not linked to a service-system record yet.',
+        badgeClassName:
+          'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300',
+      };
+    case 'owner_missing':
+      return {
+        label: 'Owner Missing',
+        description: 'A service system exists, but there is no current owner assigned yet.',
+        badgeClassName:
+          'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
+      };
+  }
+}
+
+function formatServiceReviewReason(
+  reasonCode: WarrantyPendingServiceReview['reasonCode']
+): string {
+  return reasonCode.replaceAll('_', ' ');
+}
+
 // ============================================================================
 // VIEW
 // ============================================================================
@@ -123,6 +169,7 @@ export function WarrantyDetailView({
   extensions,
   certificateStatus,
   isClaimsLoading,
+  isClaimsError = false,
   isClaimSummaryLoading = false,
   isExtensionsLoading,
   isExtensionsError,
@@ -142,6 +189,7 @@ export function WarrantyDetailView({
   onClaimDialogOpenChange,
   onApprovalDialogOpenChange,
   onExtendDialogOpenChange,
+  onRetryClaims,
   onRetryExtensions,
   onClaimsSuccess,
   onExtensionsSuccess,
@@ -156,6 +204,9 @@ export function WarrantyDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError,
+  systemActivities = [],
+  systemActivitiesLoading = false,
+  systemActivitiesError,
   onLogActivity,
   onScheduleFollowUp,
   onDelete,
@@ -164,11 +215,14 @@ export function WarrantyDetailView({
   onRegenerateCertificate,
   isCertificateGenerating = false,
   isCertificateRegenerating = false,
+  onOpenTransferOwnership,
+  isTransferringOwnership = false,
 }: WarrantyDetailViewProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now] = useState(() => Date.now());
   const daysUntilExpiry = getDaysUntilExpiry(warranty.expiryDate);
+  const serviceLinkage = getServiceLinkagePresentation(warranty.serviceLinkageStatus);
   const canFileClaim = warranty.status === 'active' || warranty.status === 'expiring_soon';
   const approvalClaim = selectedClaimForApproval ?? null;
   const { dismiss, isAlertDismissed } = useAlertDismissals();
@@ -248,7 +302,7 @@ export function WarrantyDetailView({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Customer</CardTitle>
+          <CardTitle className="text-sm">Purchased Via</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <Link
@@ -260,6 +314,144 @@ export function WarrantyDetailView({
             {warranty.customerName ?? 'Unknown Customer'}
           </Link>
           <div className="text-muted-foreground">Warranty #{warranty.warrantyNumber}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Owner Snapshot</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="font-medium">
+            {warranty.ownerRecord?.fullName ?? 'Not captured yet'}
+          </div>
+          {warranty.ownerRecord?.email ? (
+            <div className="text-muted-foreground">{warranty.ownerRecord.email}</div>
+          ) : null}
+          {warranty.ownerRecord?.phone ? (
+            <div className="text-muted-foreground">{warranty.ownerRecord.phone}</div>
+          ) : null}
+          {warranty.ownerRecord?.address ? (
+            <div className="text-muted-foreground">
+              {[
+                warranty.ownerRecord.address.street1,
+                warranty.ownerRecord.address.city,
+                warranty.ownerRecord.address.state,
+                warranty.ownerRecord.address.postalCode,
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Service System</CardTitle>
+          <CardDescription>
+            Canonical installed-system record used for ownership and support context.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={cn('rounded-full', serviceLinkage.badgeClassName)}>
+              {serviceLinkage.label}
+            </Badge>
+          </div>
+          <div className="text-muted-foreground">{serviceLinkage.description}</div>
+          {warranty.serviceSystem ? (
+            <>
+              <div className="space-y-1">
+                <Link
+                  to="/support/service-systems/$serviceSystemId"
+                  params={{ serviceSystemId: warranty.serviceSystem.id }}
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  {warranty.serviceSystem.displayName}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+                {warranty.serviceSystem.siteAddressLabel ? (
+                  <div className="text-muted-foreground">
+                    {warranty.serviceSystem.siteAddressLabel}
+                  </div>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <div className="text-muted-foreground">Current owner</div>
+                <div className="font-medium">
+                  {warranty.currentOwner?.fullName ?? warranty.ownerRecord?.fullName ?? 'Not assigned'}
+                </div>
+                {warranty.currentOwner?.email ? (
+                  <div className="text-muted-foreground">{warranty.currentOwner.email}</div>
+                ) : null}
+              </div>
+              {warranty.systemHistoryPreview.length > 0 ? (
+                <div className="rounded-md border border-dashed p-3">
+                  <div className="text-muted-foreground mb-2 text-xs uppercase">
+                    Recent system history
+                  </div>
+                  <div className="space-y-2">
+                    {warranty.systemHistoryPreview.slice(0, 2).map((entry) => (
+                      <div key={entry.id}>
+                        <div className="font-medium">
+                          {entry.description ?? entry.action.replaceAll('_', ' ')}
+                        </div>
+                        <div className="text-muted-foreground text-xs">
+                          {formatDate(entry.createdAt)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {onOpenTransferOwnership ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center"
+                  onClick={onOpenTransferOwnership}
+                  disabled={isTransferringOwnership}
+                >
+                  {isTransferringOwnership ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Transferring...
+                    </>
+                  ) : (
+                    'Transfer Ownership'
+                  )}
+                </Button>
+              ) : null}
+              <Button asChild variant="ghost" size="sm" className="w-full justify-center">
+                <Link
+                  to="/support/service-systems/$serviceSystemId"
+                  params={{ serviceSystemId: warranty.serviceSystem.id }}
+                >
+                  Open System Detail
+                </Link>
+              </Button>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="font-medium">No service system linked yet</div>
+                <div className="text-muted-foreground">
+                  Resolve the linkage review queue or complete the external migration workflow before relying on system ownership here.
+                </div>
+              </div>
+              {warranty.pendingServiceReview ? (
+                <Button asChild variant="outline" size="sm" className="w-full justify-center">
+                  <Link
+                    to="/support/service-linkage-reviews/$reviewId"
+                    params={{ reviewId: warranty.pendingServiceReview.id }}
+                  >
+                    Open Pending Review
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -294,21 +486,44 @@ export function WarrantyDetailView({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Warranty Info</CardTitle>
+          <CardTitle className="text-sm">Coverage Source</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Policy</span>
-            <span>{warranty.policyName}</span>
+            <span className="text-muted-foreground">Source</span>
+            <span>{warranty.sourceEntitlement ? 'Delivery entitlement' : 'Legacy/manual'}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Registered</span>
-            <span>{formatDate(warranty.registrationDate)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Expires</span>
-            <span>{formatDate(warranty.expiryDate)}</span>
-          </div>
+          {warranty.sourceEntitlement ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Order</span>
+                <span>{warranty.sourceEntitlement.orderNumber ?? 'Unknown'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Shipment</span>
+                <span>{warranty.sourceEntitlement.shipmentNumber ?? 'Unknown'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Delivered</span>
+                <span>{formatDate(warranty.sourceEntitlement.deliveredAt)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Policy</span>
+                <span>{warranty.policyName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Registered</span>
+                <span>{formatDate(warranty.registrationDate)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Expires</span>
+                <span>{formatDate(warranty.expiryDate)}</span>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -398,7 +613,9 @@ export function WarrantyDetailView({
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p className="text-muted-foreground">
-            {isCertificateLoading
+            {certificateError
+              ? 'Certificate status is temporarily unavailable.'
+              : isCertificateLoading
               ? 'Checking certificate status...'
               : certificateStatus?.exists
                 ? 'Certificate available in the Actions menu.'
@@ -465,7 +682,11 @@ export function WarrantyDetailView({
             name={`Warranty ${warranty.warrantyNumber}`}
             subtitle={
               <>
-                {warranty.productName ?? 'Unknown Product'} · {warranty.customerName ?? 'Unknown Customer'}
+                {warranty.productName ?? 'Unknown Product'} ·{' '}
+                {warranty.currentOwner?.fullName ??
+                  warranty.ownerRecord?.fullName ??
+                  warranty.customerName ??
+                  'Unknown Owner'}
               </>
             }
             avatarFallback="W"
@@ -576,11 +797,14 @@ export function WarrantyDetailView({
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="claims" className="gap-2">
               Claims
-              <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
-                {claims.length}
-              </Badge>
+              {!isClaimsError ? (
+                <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                  {claims.length}
+                </Badge>
+              ) : null}
             </TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="warranty-activity">Warranty Activity</TabsTrigger>
+            <TabsTrigger value="system-history">System History</TabsTrigger>
           </TabsList>
 
           {activeTab === 'overview' && (
@@ -590,6 +814,12 @@ export function WarrantyDetailView({
                 <div className="rounded-lg border border-dashed bg-muted/30 p-4">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     {getExpiryBadge(daysUntilExpiry)}
+                    <Badge
+                      variant="outline"
+                      className={cn('rounded-full', serviceLinkage.badgeClassName)}
+                    >
+                      {serviceLinkage.label}
+                    </Badge>
                     <span className="text-muted-foreground">
                       Policy: {warranty.policyName}
                     </span>
@@ -599,13 +829,148 @@ export function WarrantyDetailView({
                   </div>
                 </div>
 
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Service Mission Control</CardTitle>
+                    <CardDescription>
+                      See commercial lineage, current ownership, service linkage health, and what
+                      to do next without leaving the warranty workflow.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-md border p-3">
+                        <div className="text-muted-foreground mb-1 text-xs uppercase">
+                          Linkage Status
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn('rounded-full', serviceLinkage.badgeClassName)}
+                        >
+                          {serviceLinkage.label}
+                        </Badge>
+                        <div className="text-muted-foreground mt-2 text-sm">
+                          {serviceLinkage.description}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-muted-foreground mb-1 text-xs uppercase">
+                          Current Owner
+                        </div>
+                        <div className="font-medium">
+                          {warranty.currentOwner?.fullName ?? 'No current owner assigned'}
+                        </div>
+                        <div className="text-muted-foreground mt-2 text-sm">
+                          {warranty.currentOwner?.email ??
+                            warranty.currentOwner?.phone ??
+                            'Use transfer or review flows to update ownership.'}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-muted-foreground mb-1 text-xs uppercase">
+                          Service System
+                        </div>
+                        {warranty.serviceSystem ? (
+                          <>
+                            <Link
+                              to="/support/service-systems/$serviceSystemId"
+                              params={{ serviceSystemId: warranty.serviceSystem.id }}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              {warranty.serviceSystem.displayName}
+                            </Link>
+                            <div className="text-muted-foreground mt-2 text-sm">
+                              {warranty.serviceSystem.siteAddressLabel ?? 'No site address captured'}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium">No system linked</div>
+                            <div className="text-muted-foreground mt-2 text-sm">
+                              This warranty is still outside the canonical installed-system graph.
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-muted-foreground mb-1 text-xs uppercase">
+                          Next Step
+                        </div>
+                        {warranty.pendingServiceReview ? (
+                          <>
+                            <div className="font-medium">
+                              Review {formatServiceReviewReason(warranty.pendingServiceReview.reasonCode)}
+                            </div>
+                            <Button asChild variant="ghost" size="sm" className="mt-2 h-auto px-0">
+                              <Link
+                                to="/support/service-linkage-reviews/$reviewId"
+                                params={{ reviewId: warranty.pendingServiceReview.id }}
+                              >
+                                Open linkage review
+                              </Link>
+                            </Button>
+                          </>
+                        ) : warranty.serviceSystem ? (
+                          <>
+                            <div className="font-medium">Inspect system history</div>
+                            <Button asChild variant="ghost" size="sm" className="mt-2 h-auto px-0">
+                              <Link
+                                to="/support/service-systems/$serviceSystemId"
+                                params={{ serviceSystemId: warranty.serviceSystem.id }}
+                              >
+                                Open system detail
+                              </Link>
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium">Finish service linkage</div>
+                            <div className="text-muted-foreground mt-2 text-sm">
+                              Use the linkage review queue or your external migration process to attach this warranty to a service system.
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {warranty.systemHistoryPreview.length > 0 ? (
+                      <div className="grid gap-3">
+                        <div className="rounded-md border p-3">
+                          <div className="text-muted-foreground mb-2 text-xs uppercase">
+                            System History Preview
+                          </div>
+                          {warranty.systemHistoryPreview.length > 0 ? (
+                            <div className="space-y-2">
+                              {warranty.systemHistoryPreview.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="flex items-start justify-between gap-3 text-sm"
+                                >
+                                  <div>{entry.description ?? entry.action.replaceAll('_', ' ')}</div>
+                                  <div className="text-muted-foreground whitespace-nowrap">
+                                    {formatDate(entry.createdAt)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-muted-foreground text-sm">
+                              System history will appear here once service-system events are logged.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {/* Warranty Details Section */}
                   <DetailSection id="warranty-details" title="Warranty Details" className="lg:col-span-2">
                     <DetailGrid
                       fields={[
                         {
-                          label: 'Customer',
+                          label: 'Purchased Via',
                           value: (
                             <div className="flex items-center gap-2">
                               <User className="text-muted-foreground h-4 w-4" />
@@ -618,6 +983,21 @@ export function WarrantyDetailView({
                                 {warranty.customerName ?? 'Unknown Customer'}
                               </Link>
                             </div>
+                          ),
+                        },
+                        {
+                          label: 'Owner of Record',
+                          value: warranty.ownerRecord ? (
+                            <div className="space-y-1">
+                              <div>{warranty.ownerRecord.fullName}</div>
+                              <div className="text-muted-foreground text-sm">
+                                {[warranty.ownerRecord.email, warranty.ownerRecord.phone]
+                                  .filter(Boolean)
+                                  .join(' · ') || 'Contact details not recorded'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">Not captured yet</span>
                           ),
                         },
                         {
@@ -652,6 +1032,22 @@ export function WarrantyDetailView({
                         {
                           label: 'Policy',
                           value: warranty.policyName,
+                        },
+                        {
+                          label: 'Source Entitlement',
+                          value: warranty.sourceEntitlement ? (
+                            <div className="space-y-1">
+                              <div>
+                                {warranty.sourceEntitlement.orderNumber ?? 'Unknown order'} ·{' '}
+                                {warranty.sourceEntitlement.shipmentNumber ?? 'Unknown shipment'}
+                              </div>
+                              <div className="text-muted-foreground text-sm">
+                                Delivered {formatDate(warranty.sourceEntitlement.deliveredAt)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">Legacy/manual warranty</span>
+                          ),
                         },
                         {
                           label: 'Registration Date',
@@ -706,7 +1102,10 @@ export function WarrantyDetailView({
                           search={{
                             customerId: warranty.customerId,
                             warrantyId: warranty.id,
+                            warrantyEntitlementId: warranty.sourceEntitlement?.id ?? undefined,
                             productId: warranty.productId,
+                            orderId: warranty.sourceEntitlement?.orderId ?? undefined,
+                            shipmentId: warranty.sourceEntitlement?.shipmentId ?? undefined,
                             serialNumber: warranty.productSerial ?? undefined,
                           }}
                           className={cn(
@@ -794,7 +1193,9 @@ export function WarrantyDetailView({
                         Claims History
                       </CardTitle>
                       <CardDescription>
-                        {claims.length} claim{claims.length !== 1 ? 's' : ''} filed for this warranty
+                        {isClaimsError
+                          ? 'Claim history is temporarily unavailable for this warranty.'
+                          : `${claims.length} claim${claims.length !== 1 ? 's' : ''} filed for this warranty`}
                       </CardDescription>
                     </div>
                     {canFileClaim && (
@@ -808,6 +1209,19 @@ export function WarrantyDetailView({
                 <CardContent>
                   {isClaimsLoading ? (
                     <ClaimsTableSkeleton />
+                  ) : isClaimsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription className="flex items-center justify-between gap-4">
+                        <span>
+                          Warranty claims are temporarily unavailable. Please refresh and try again.
+                        </span>
+                        {onRetryClaims ? (
+                          <Button variant="outline" size="sm" onClick={onRetryClaims}>
+                            Retry
+                          </Button>
+                        ) : null}
+                      </AlertDescription>
+                    </Alert>
                   ) : claims.length === 0 ? (
                     <div className="py-8 text-center">
                       <FileWarning className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
@@ -934,8 +1348,8 @@ export function WarrantyDetailView({
             </TabsContent>
           )}
 
-          {activeTab === 'activity' && (
-            <TabsContent value="activity" className="mt-4">
+          {activeTab === 'warranty-activity' && (
+            <TabsContent value="warranty-activity" className="mt-4">
               <div className="space-y-4">
                 {/* Action buttons */}
                 {(onLogActivity || onScheduleFollowUp) && (
@@ -960,14 +1374,39 @@ export function WarrantyDetailView({
                   isLoading={activitiesLoading}
                   hasError={!!activitiesError}
                   error={activitiesError || undefined}
-                  title="Activity Timeline"
-                  description="Complete history of warranty interactions and system events"
+                  title="Warranty Activity"
+                  description="Warranty-specific actions, notes, claims, and operator activity."
                   showFilters={true}
                   viewAllSearch={getActivitiesFeedSearch('warranty')}
                   emptyMessage="No activity recorded yet"
                   emptyDescription="Warranty activities will appear here when interactions occur."
                 />
               </div>
+            </TabsContent>
+          )}
+
+          {activeTab === 'system-history' && (
+            <TabsContent value="system-history" className="mt-4">
+              {warranty.serviceSystem ? (
+                <UnifiedActivityTimeline
+                  activities={systemActivities}
+                  isLoading={systemActivitiesLoading}
+                  hasError={!!systemActivitiesError}
+                  error={systemActivitiesError || undefined}
+                  title="System History"
+                  description="Canonical service-system events such as linkage, ownership transfer, and backfill outcomes."
+                  showFilters={true}
+                  viewAllSearch={getActivitiesFeedSearch('service_system')}
+                  emptyMessage="No system history recorded yet"
+                  emptyDescription="System events will appear here as the installed-system record changes."
+                />
+              ) : (
+                <Card>
+                  <CardContent className="p-6 text-sm text-muted-foreground">
+                    No service system is linked yet, so there is no canonical system history to show.
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           )}
         </Tabs>
@@ -984,7 +1423,15 @@ export function WarrantyDetailView({
           id: warranty.id,
           warrantyNumber: warranty.warrantyNumber,
           productName: warranty.productName ?? undefined,
-          customerName: warranty.customerName ?? undefined,
+          commercialCustomerId: warranty.customerId,
+          commercialCustomerName: warranty.customerName ?? undefined,
+          ownerRecord: warranty.ownerRecord
+            ? {
+                fullName: warranty.ownerRecord.fullName,
+                email: warranty.ownerRecord.email,
+                phone: warranty.ownerRecord.phone,
+              }
+            : null,
           status: warranty.status,
           policyType: warranty.policyType ?? undefined,
           currentCycleCount: warranty.currentCycleCount ?? undefined,

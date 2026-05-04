@@ -166,7 +166,12 @@ export function createOrderColumns(
       accessorKey: "dueDate",
       header: "Due",
       cell: ({ row }) => {
-        const { text, isOverdue } = formatDueDateRelative(row.original.dueDate);
+        const { text, isOverdue } = formatDueDateRelative({
+          dueDate: row.original.dueDate,
+          status: row.original.status,
+          paymentStatus: row.original.paymentStatus,
+          balanceDue: row.original.balanceDue,
+        });
         return (
           <div
             className={cn(

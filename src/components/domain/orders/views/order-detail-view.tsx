@@ -33,6 +33,7 @@ import {
   ArrowRight,
   Shield,
   User,
+  Truck,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -74,8 +75,16 @@ const OrderPaymentsTab = lazy(() => import('../tabs/order-payments-tab'));
 export interface DocumentActions {
   onGenerateQuote: () => Promise<void>;
   onGenerateInvoice: () => Promise<void>;
+  onGenerateProForma: () => Promise<void>;
+  onGeneratePackingSlip: () => Promise<void>;
+  onGenerateDeliveryNote: () => Promise<void>;
+  onGenerateDispatchNote: () => Promise<void>;
   isGeneratingQuote: boolean;
   isGeneratingInvoice: boolean;
+  isGeneratingProForma: boolean;
+  isGeneratingPackingSlip: boolean;
+  isGeneratingDeliveryNote: boolean;
+  isGeneratingDispatchNote: boolean;
 }
 
 export interface OrderDetailViewProps {
@@ -614,7 +623,11 @@ export const OrderDetailView = memo(function OrderDetailView({
                   <TabsContent value="documents" className="mt-0">
                     {activeTab === 'documents' && (
                       <Suspense fallback={<TabSkeleton />}>
-                        <OrderDocumentsTab orderId={order.id} />
+                        <OrderDocumentsTab
+                          orderId={order.id}
+                          documentActions={documentActions}
+                          onOpenFulfillment={() => onTabChange('fulfillment')}
+                        />
                       </Suspense>
                     )}
                   </TabsContent>
@@ -692,56 +705,172 @@ export const OrderDetailView = memo(function OrderDetailView({
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
                         Documents
                       </h4>
-                      <div className="space-y-2">
-                        {/* Quote */}
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-2 text-sm">
-                            <FileText className="h-4 w-4 text-muted-foreground" />
-                            Quote
-                          </span>
-                          {order.quotePdfUrl ? (
-                            <a
-                              href={order.quotePdfUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline flex items-center gap-1"
-                            >
-                              <Download className="h-3 w-3" />
-                              Download
-                            </a>
-                          ) : documentActions ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={documentActions.onGenerateQuote}
-                              disabled={documentActions.isGeneratingQuote}
-                            >
-                              {documentActions.isGeneratingQuote ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                  Generating...
-                                </>
-                              ) : 'Generate'}
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        Commercial docs come from the order. Fulfillment paperwork follows the shipment record and may route you into Fulfillment first.
+                      </p>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Commercial
+                          </p>
+                          <div className="space-y-2">
+                            {/* Quote */}
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                Quote
+                              </span>
+                              {order.quotePdfUrl ? (
+                                <a
+                                  href={order.quotePdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </a>
+                              ) : documentActions ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={documentActions.onGenerateQuote}
+                                  disabled={documentActions.isGeneratingQuote}
+                                >
+                                  {documentActions.isGeneratingQuote ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : 'Generate'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <Receipt className="h-4 w-4 text-muted-foreground" />
+                                Invoice
+                              </span>
+                              <InvoiceLink
+                                orderId={order.id}
+                                invoiceNumber={order.invoiceNumber}
+                                invoicePdfUrl={order.invoicePdfUrl}
+                                onGenerateInvoice={documentActions?.onGenerateInvoice}
+                                isGenerating={documentActions?.isGeneratingInvoice}
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <Receipt className="h-4 w-4 text-muted-foreground" />
+                                Pro Forma
+                              </span>
+                              {documentActions ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={documentActions.onGenerateProForma}
+                                  disabled={documentActions.isGeneratingProForma}
+                                >
+                                  {documentActions.isGeneratingProForma ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : 'Generate'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Invoice */}
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-2 text-sm">
-                            <Receipt className="h-4 w-4 text-muted-foreground" />
-                            Invoice
-                          </span>
-                          <InvoiceLink
-                            orderId={order.id}
-                            invoiceNumber={order.invoiceNumber}
-                            invoicePdfUrl={order.invoicePdfUrl}
-                            onGenerateInvoice={documentActions?.onGenerateInvoice}
-                            isGenerating={documentActions?.isGeneratingInvoice}
-                          />
+                        <div>
+                          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Fulfillment
+                          </p>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                                Packing Slip
+                              </span>
+                              {documentActions ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={documentActions.onGeneratePackingSlip}
+                                  disabled={documentActions.isGeneratingPackingSlip}
+                                >
+                                  {documentActions.isGeneratingPackingSlip ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : 'Generate'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <Truck className="h-4 w-4 text-muted-foreground" />
+                                Delivery Note
+                              </span>
+                              {documentActions ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={documentActions.onGenerateDeliveryNote}
+                                  disabled={documentActions.isGeneratingDeliveryNote}
+                                >
+                                  {documentActions.isGeneratingDeliveryNote ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : 'Generate'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm">
+                                <Truck className="h-4 w-4 text-muted-foreground" />
+                                Dispatch Note
+                              </span>
+                              {documentActions ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={documentActions.onGenerateDispatchNote}
+                                  disabled={documentActions.isGeneratingDispatchNote}
+                                >
+                                  {documentActions.isGeneratingDispatchNote ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Working...
+                                    </>
+                                  ) : 'Generate'}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Xero Link */}
@@ -841,6 +970,83 @@ export const OrderDetailView = memo(function OrderDetailView({
               </div>
             )}
             <Separator />
+            {documentActions && (
+              <>
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                    Documents
+                  </h4>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Commercial docs come from the order. Packing, dispatch, and delivery notes use the shipment record.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Commercial
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGenerateQuote}
+                          disabled={documentActions.isGeneratingQuote}
+                        >
+                          {documentActions.isGeneratingQuote ? 'Working...' : 'Quote'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGenerateInvoice}
+                          disabled={documentActions.isGeneratingInvoice}
+                        >
+                          {documentActions.isGeneratingInvoice ? 'Working...' : 'Invoice'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGenerateProForma}
+                          disabled={documentActions.isGeneratingProForma}
+                        >
+                          {documentActions.isGeneratingProForma ? 'Working...' : 'Pro Forma'}
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Fulfillment
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGeneratePackingSlip}
+                          disabled={documentActions.isGeneratingPackingSlip}
+                        >
+                          {documentActions.isGeneratingPackingSlip ? 'Working...' : 'Packing Slip'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGenerateDeliveryNote}
+                          disabled={documentActions.isGeneratingDeliveryNote}
+                        >
+                          {documentActions.isGeneratingDeliveryNote ? 'Working...' : 'Delivery Note'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={documentActions.onGenerateDispatchNote}
+                          disabled={documentActions.isGeneratingDispatchNote}
+                        >
+                          {documentActions.isGeneratingDispatchNote ? 'Working...' : 'Dispatch Note'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
             <div>
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
                 Key Dates

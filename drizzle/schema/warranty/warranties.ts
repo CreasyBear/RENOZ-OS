@@ -35,6 +35,9 @@ import { warrantyPolicies } from "./warranty-policies";
 import { orders } from "../orders/orders";
 import { projects } from "../jobs/projects";
 import { warrantyItems } from "./warranty-items";
+import { warrantyEntitlements } from "./warranty-entitlements";
+import { warrantyOwnerRecords } from "./warranty-owner-records";
+import { serviceSystems } from "../service/service-systems";
 
 // ============================================================================
 // WARRANTY STATUS ENUM
@@ -77,6 +80,19 @@ export const warranties = pgTable(
 
     // Order this warranty was registered from (if auto-registered from delivery)
     orderId: uuid("order_id"),
+
+    // Source entitlement and activated owner details for phase 1 entitlement flow
+    sourceEntitlementId: uuid("source_entitlement_id").references(
+      () => warrantyEntitlements.id,
+      { onDelete: "set null" }
+    ),
+    ownerRecordId: uuid("owner_record_id").references(() => warrantyOwnerRecords.id, {
+      onDelete: "set null",
+    }),
+    serviceSystemId: uuid("service_system_id").references(() => serviceSystems.id, {
+      onDelete: "set null",
+    }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
 
     // Optional project link (job-based warranties)
     projectId: uuid("project_id").references(() => projects.id, {
@@ -143,6 +159,14 @@ export const warranties = pgTable(
 
     // Order lookup
     orderIdx: index("idx_warranties_order").on(table.orderId),
+    sourceEntitlementIdx: index("idx_warranties_source_entitlement").on(
+      table.sourceEntitlementId
+    ),
+    sourceEntitlementUnique: uniqueIndex("idx_warranties_source_entitlement_unique")
+      .on(table.sourceEntitlementId)
+      .where(sql`${table.sourceEntitlementId} IS NOT NULL`),
+    ownerRecordIdx: index("idx_warranties_owner_record").on(table.ownerRecordId),
+    serviceSystemIdx: index("idx_warranties_service_system").on(table.serviceSystemId),
 
     // Status lookup for active warranties
     statusIdx: index("idx_warranties_status").on(table.organizationId, table.status),
@@ -186,6 +210,19 @@ export const warrantiesRelations = relations(warranties, ({ one, many }) => ({
   order: one(orders, {
     fields: [warranties.orderId],
     references: [orders.id],
+  }),
+  sourceEntitlement: one(warrantyEntitlements, {
+    fields: [warranties.sourceEntitlementId],
+    references: [warrantyEntitlements.id],
+    relationName: "warrantySourceEntitlement",
+  }),
+  ownerRecord: one(warrantyOwnerRecords, {
+    fields: [warranties.ownerRecordId],
+    references: [warrantyOwnerRecords.id],
+  }),
+  serviceSystem: one(serviceSystems, {
+    fields: [warranties.serviceSystemId],
+    references: [serviceSystems.id],
   }),
   project: one(projects, {
     fields: [warranties.projectId],

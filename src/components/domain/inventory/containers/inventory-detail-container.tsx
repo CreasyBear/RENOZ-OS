@@ -361,6 +361,8 @@ export function InventoryDetailContainer({
         isLoadingMovements={detail.movementsLoading}
         isLoadingCostLayers={detail.costLayersLoading}
         isLoadingQuality={detail.qualityLoading}
+        qualityError={detail.qualityError}
+        onRetryQuality={detail.refetchQuality}
         counts={detail.counts}
         className={className}
       />

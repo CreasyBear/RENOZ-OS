@@ -854,6 +854,7 @@ export const getWarrantyAnalyticsFilterOptions = createServerFn({ method: 'GET' 
 
     return {
       products: productOptions.map((p) => ({ id: p.id, name: p.name ?? 'Unknown' })),
+      commercialCustomers: customerOptions.map((c) => ({ id: c.id, name: c.name ?? 'Unknown' })),
       customers: customerOptions.map((c) => ({ id: c.id, name: c.name ?? 'Unknown' })),
       dateRanges: [
         { value: '7', label: 'Last 7 days' },

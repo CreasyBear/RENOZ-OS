@@ -42,6 +42,7 @@ export interface OverviewStatsProps {
   data?: OverviewStatsData | null;
   trackedProductsLoading?: boolean;
   summaryWarning?: string | null;
+  trackedProductsWarning?: string | null;
   // Tracked products from hook
   trackedProducts?: TrackedProductWithInventory[];
   onTrackedProductsChange?: (products: TrackedProduct[]) => void;
@@ -56,6 +57,7 @@ export function OverviewStats({
   data,
   trackedProductsLoading = false,
   summaryWarning,
+  trackedProductsWarning,
   trackedProducts = [],
   onTrackedProductsChange,
   maxTrackedProducts = 5,
@@ -115,6 +117,12 @@ export function OverviewStats({
           <Alert className="border-amber-300 bg-amber-50 text-amber-950">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{summaryWarning}</AlertDescription>
+          </Alert>
+        ) : null}
+        {trackedProductsWarning ? (
+          <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+            <Boxes className="h-4 w-4" />
+            <AlertDescription>{trackedProductsWarning}</AlertDescription>
           </Alert>
         ) : null}
 

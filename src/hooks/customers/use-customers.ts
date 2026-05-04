@@ -15,6 +15,11 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys, type CustomerFilters } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import { normalizeCustomerDetail } from '@/lib/schemas/customers/normalize';
 import { isValidCustomerSortField } from '@/components/domain/customers/customer-sorting';
 import {
@@ -83,9 +88,20 @@ export function useCustomers(options: UseCustomersOptions = {}) {
   return useQuery({
     queryKey: queryKeys.customers.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listCustomersFn({ data: normalizedFilters as CustomerListQuery });
-      if (result == null) throw new Error('Customers list returned no data');
-      return result;
+      try {
+        const result = await listCustomersFn({ data: normalizedFilters as CustomerListQuery });
+        return requireReadResult(result, {
+          message: 'Customers list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customers are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customers are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -102,15 +118,26 @@ export function useCustomersInfinite(filters: Partial<CustomerListQuery> = {}) {
   return useInfiniteQuery({
     queryKey: queryKeys.customers.infiniteList(normalizedFilters),
     queryFn: async ({ pageParam }) => {
-      const result = await listCustomersFn({
-        data: {
-          ...normalizedFilters,
-          page: pageParam,
-          pageSize: normalizedFilters.pageSize ?? 50,
-        } as CustomerListQuery,
-      });
-      if (result == null) throw new Error('Customers list returned no data');
-      return result;
+      try {
+        const result = await listCustomersFn({
+          data: {
+            ...normalizedFilters,
+            page: pageParam,
+            pageSize: normalizedFilters.pageSize ?? 50,
+          } as CustomerListQuery,
+        });
+        return requireReadResult(result, {
+          message: 'Customers list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customers are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customers are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -136,9 +163,25 @@ export function useCustomer({ id, enabled = true }: UseCustomerOptions) {
   return useQuery({
     queryKey: queryKeys.customers.detail(id),
     queryFn: async () => {
-      const result = await getCustomerFn({ data: { id } });
-      if (result == null) throw new Error('Customer not found');
-      return normalizeCustomerDetail(result) as CustomerDetail;
+      try {
+        const result = await getCustomerFn({ data: { id } });
+        return normalizeCustomerDetail(
+          requireReadResult(result, {
+            message: 'Customer not found',
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Customer details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested customer could not be found.',
+          })
+        ) as CustomerDetail;
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Customer details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested customer could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute
@@ -162,9 +205,20 @@ export function useCustomerTags({ enabled = true }: UseCustomerTagsOptions = {})
   return useQuery({
     queryKey: queryKeys.customers.tags.list(),
     queryFn: async () => {
-      const result = await getCustomerTagsFn();
-      if (result == null) throw new Error('Customer tags returned no data');
-      return result;
+      try {
+        const result = await getCustomerTagsFn();
+        return requireReadResult(result, {
+          message: 'Customer tags returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer tags are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer tags are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - tags don't change often
@@ -196,11 +250,22 @@ export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCust
   return useQuery({
     queryKey: queryKeys.customers.list(normalizedFilters),
     queryFn: async () => {
-      const result = await listCustomersFn({
-        data: normalizedFilters as CustomerListQuery,
-      });
-      if (result == null) throw new Error('Customer search returned no data');
-      return result;
+      try {
+        const result = await listCustomersFn({
+          data: normalizedFilters as CustomerListQuery,
+        });
+        return requireReadResult(result, {
+          message: 'Customer search returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer search is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer search is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && query.length >= 2,
     staleTime: 10 * 1000, // 10 seconds
@@ -212,16 +277,27 @@ export function useCustomerLookup() {
   const listCustomersFn = useServerFn(getCustomers);
 
   return async (params: Partial<CustomerListQuery>) => {
-    const result = await listCustomersFn({
-      data: {
-        page: 1,
-        pageSize: 20,
-        sortOrder: 'desc',
-        ...params,
-      } as CustomerListQuery,
-    });
-    if (result == null) throw new Error('Customer lookup returned no data');
-    return result;
+    try {
+      const result = await listCustomersFn({
+        data: {
+          page: 1,
+          pageSize: 20,
+          sortOrder: 'desc',
+          ...params,
+        } as CustomerListQuery,
+      });
+      return requireReadResult(result, {
+        message: 'Customer lookup returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage: 'Customer lookup is temporarily unavailable. Please refresh and try again.',
+      });
+    } catch (error) {
+      if (isReadQueryError(error)) throw error;
+      throw normalizeReadQueryError(error, {
+        contractType: 'always-shaped',
+        fallbackMessage: 'Customer lookup is temporarily unavailable. Please refresh and try again.',
+      });
+    }
   };
 }
 
@@ -341,9 +417,22 @@ export function useCustomerXeroMapping(customerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.financial.xeroCustomerMapping(customerId),
     queryFn: async () => {
-      const result = await fn({ data: { customerId } });
-      if (result == null) throw new Error('Customer Xero mapping returned no data');
-      return result;
+      try {
+        const result = await fn({ data: { customerId } });
+        return requireReadResult(result, {
+          message: 'Customer Xero mapping returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer accounting mapping is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer accounting mapping is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 30 * 1000,
@@ -356,8 +445,22 @@ export function useSearchCustomerXeroContacts(customerId: string, query: string,
   return useQuery({
     queryKey: queryKeys.financial.xeroContactSearch(customerId, query),
     queryFn: async () => {
-      const result = await fn({ data: { customerId, query } });
-      return result ?? [];
+      try {
+        const result = await fn({ data: { customerId, query } });
+        return requireReadResult(result, {
+          message: 'Customer lookup returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer accounting contacts are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer accounting contacts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId && query.trim().length >= 2,
     staleTime: 15 * 1000,
@@ -545,9 +648,26 @@ export function usePrefetchCustomer() {
     queryClient.prefetchQuery({
       queryKey: queryKeys.customers.detail(id),
       queryFn: async () => {
-        const result = await getCustomerById({ data: { id } });
-        if (result == null) throw new Error('Customer not found');
-        return normalizeCustomerDetail(result) as CustomerDetail;
+        try {
+          const result = await getCustomerById({ data: { id } });
+          return normalizeCustomerDetail(
+            requireReadResult(result, {
+              message: 'Customer not found',
+              contractType: 'detail-not-found',
+              fallbackMessage:
+                'Customer details are temporarily unavailable. Please refresh and try again.',
+              notFoundMessage: 'The requested customer could not be found.',
+            })
+          ) as CustomerDetail;
+        } catch (error) {
+          if (isReadQueryError(error)) throw error;
+          throw normalizeReadQueryError(error, {
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Customer details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested customer could not be found.',
+          });
+        }
       },
       staleTime: 60 * 1000,
     });

@@ -15,6 +15,7 @@ import {
   jsonb,
   index,
   timestamp,
+  integer,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { scheduledEmailStatusEnum } from "../_shared/enums";
@@ -115,6 +116,9 @@ export const scheduledEmails = pgTable(
 
     // Status tracking
     status: scheduledEmailStatusEnum("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    lastError: text("last_error"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: text("cancel_reason"),

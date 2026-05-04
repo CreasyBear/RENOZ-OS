@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { toast } from "../_shared/use-toast";
 import {
   listQualityInspections,
@@ -28,12 +29,17 @@ export function useQualityInspections(
   return useQuery({
     queryKey: queryKeys.inventory.qualityInspections(inventoryId),
     queryFn: async () => {
-      const result = await listQualityInspections({
-        data: { inventoryId, page: 1, pageSize: 50 },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listQualityInspections({
+          data: { inventoryId, page: 1, pageSize: 50 },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Quality inspection history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!inventoryId,
     staleTime: 60 * 1000,

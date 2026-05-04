@@ -8,8 +8,8 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   isWarrantyClaimStatusValue,
   type ListWarrantyClaimsInput,
@@ -19,6 +19,8 @@ import {
   type DenyClaimInput,
   type ResolveClaimInput,
   type AssignClaimInput,
+  type WarrantyClaimantModeValue,
+  type WarrantyClaimantRoleValue,
   type WarrantyClaimStatusValue,
   type WarrantyClaimTypeValue,
   type WarrantyClaimResolutionTypeValue,
@@ -62,7 +64,13 @@ const DETAIL_STALE_TIME = 60 * 1000; // 60 seconds for details
 // TYPE EXPORTS
 // ============================================================================
 
-export type { WarrantyClaimStatusValue, WarrantyClaimTypeValue, WarrantyClaimResolutionTypeValue };
+export type {
+  WarrantyClaimantModeValue,
+  WarrantyClaimantRoleValue,
+  WarrantyClaimStatusValue,
+  WarrantyClaimTypeValue,
+  WarrantyClaimResolutionTypeValue,
+};
 
 // ============================================================================
 // CLAIM STATUS HELPERS
@@ -96,7 +104,7 @@ function showClaimMutationOutcome(
   }
   if (result?.notificationQueued === false) {
     toast.warning(
-      `${claimLabel} ${operation}, but customer notification email failed. Operation succeeded.`
+      `${claimLabel} ${operation}, but claimant notification delivery did not complete. Operation succeeded.`
     );
     return;
   }
@@ -115,7 +123,7 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
     queryKey: queryKeys.warrantyClaims.list(options),
     queryFn: async () => {
       try {
-        const result = await listWarrantyClaims({
+        return await listWarrantyClaims({
           data: {
             ...options,
             page: options?.page ?? 1,
@@ -124,13 +132,11 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
             sortOrder: options?.sortOrder ?? 'desc',
           },
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty claims are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty claims are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     staleTime: LIST_STALE_TIME,
@@ -145,7 +151,7 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
     queryKey: queryKeys.warrantyClaims.byWarranty(warrantyId ?? ''),
     queryFn: async () => {
       try {
-        const result = await listWarrantyClaims({
+        return await listWarrantyClaims({
           data: {
             warrantyId: warrantyId!,
             page: 1,
@@ -154,13 +160,11 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
             sortOrder: 'desc',
           },
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty claims are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty claims are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: !!warrantyId,
@@ -173,16 +177,14 @@ export function useWarrantyClaimSummary(warrantyId: string | undefined) {
     queryKey: queryKeys.warrantyClaims.summary(warrantyId ?? ''),
     queryFn: async () => {
       try {
-        const result = await getWarrantyClaimSummary({
+        return await getWarrantyClaimSummary({
           data: { warrantyId: warrantyId! },
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty claim metrics are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty claim metrics are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: !!warrantyId,
@@ -191,14 +193,15 @@ export function useWarrantyClaimSummary(warrantyId: string | undefined) {
 }
 
 /**
- * Hook for fetching claims for a specific customer.
+ * Hook for fetching claims for a specific commercial customer.
+ * Compatibility note: this remains commercial-account based in phase 2C.
  */
 export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
   return useQuery({
-    queryKey: queryKeys.warrantyClaims.byCustomer(customerId ?? ''),
+    queryKey: queryKeys.warrantyClaims.byCommercialCustomer(customerId ?? ''),
     queryFn: async () => {
       try {
-        const result = await listWarrantyClaims({
+        return await listWarrantyClaims({
           data: {
             customerId: customerId!,
             page: 1,
@@ -207,13 +210,11 @@ export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
             sortOrder: 'desc',
           },
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty claims are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty claims are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled: !!customerId,
@@ -233,16 +234,15 @@ export function useWarrantyClaim(claimId: string | undefined) {
     queryKey: queryKeys.warrantyClaims.detail(claimId ?? ''),
     queryFn: async () => {
       try {
-        const result = await getWarrantyClaim({
+        return await getWarrantyClaim({
           data: { claimId: claimId! }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Warranty claim details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty claim details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty claim could not be found.',
+        });
       }
     },
     enabled: !!claimId,

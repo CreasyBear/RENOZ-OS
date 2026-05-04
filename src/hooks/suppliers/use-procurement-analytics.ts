@@ -13,6 +13,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getSpendMetrics,
   getOrderMetrics,
@@ -69,9 +70,15 @@ export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.procurement.spend(params),
     queryFn: async () => {
-      const result = await getSpendMetrics({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSpendMetrics({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Spend metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -94,9 +101,15 @@ export function useOrderMetrics(options: UseOrderMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.procurement.orders(params),
     queryFn: async () => {
-      const result = await getOrderMetrics({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getOrderMetrics({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Order metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -123,9 +136,15 @@ export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.procurement.suppliers(params),
     queryFn: async () => {
-      const result = await getSupplierMetrics({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSupplierMetrics({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Supplier metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -146,9 +165,15 @@ export function useProcurementAlerts(options: UseProcurementAlertsOptions = {}) 
   return useQuery({
     queryKey: queryKeys.procurement.alerts(),
     queryFn: async () => {
-      const result = await getProcurementAlerts({});
-      if (result == null) throw new Error('Procurement alerts returned no data');
-      return result;
+      try {
+        return await getProcurementAlerts({});
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Procurement alerts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -176,9 +201,15 @@ export function useProcurementDashboard(options: UseProcurementDashboardOptions 
   return useQuery({
     queryKey: queryKeys.procurement.dashboard(params),
     queryFn: async () => {
-      const result = await getProcurementDashboard({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProcurementDashboard({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Procurement analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

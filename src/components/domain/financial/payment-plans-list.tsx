@@ -350,14 +350,12 @@ function CreatePaymentPlanDialog({
                     <SelectItem value="fifty_fifty">50/50 Split (Commercial)</SelectItem>
                     <SelectItem value="thirds">Three Installments (33/33/34)</SelectItem>
                     <SelectItem value="monthly">Monthly Payments</SelectItem>
-                    <SelectItem value="custom">Custom Schedule</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">
                   {planType === 'fifty_fifty' && 'Split payment into two equal installments'}
                   {planType === 'thirds' && 'Split payment into three installments (33%, 33%, 34%)'}
                   {planType === 'monthly' && 'Split payment into equal monthly installments'}
-                  {planType === 'custom' && 'Create a custom payment schedule'}
                 </p>
               </div>
 
@@ -435,7 +433,7 @@ function CreatePaymentPlanDialog({
                 </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No additional schedule configuration needed for {planType === 'fifty_fifty' ? '50/50 split' : planType === 'thirds' ? 'three installments' : 'custom'} plan.</p>
+                  <p>No additional schedule configuration needed for {planType === 'fifty_fifty' ? '50/50 split' : 'three installments'} plan.</p>
                   <p className="text-sm mt-2">Review the plan details in the next step.</p>
                 </div>
               )}
@@ -465,7 +463,6 @@ function CreatePaymentPlanDialog({
                     {planType === 'fifty_fifty' && '50/50 Split (Commercial)'}
                     {planType === 'thirds' && 'Three Installments (33/33/34)'}
                     {planType === 'monthly' && `Monthly Payments (${monthlyCount} months)`}
-                    {planType === 'custom' && 'Custom Schedule'}
                   </p>
                 </div>
 

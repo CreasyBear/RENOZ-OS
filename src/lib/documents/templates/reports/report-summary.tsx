@@ -5,7 +5,14 @@
  */
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
-import { FixedDocumentHeader, PageNumber } from "../../components";
+import {
+  DocumentBodyText,
+  DocumentDetailStrip,
+  DocumentMasthead,
+  DocumentSectionCard,
+  FixedDocumentHeader,
+  PageNumber,
+} from "../../components";
 import {
   colors,
   pageMargins,
@@ -103,6 +110,66 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.lg,
     backgroundColor: colors.background.white,
+  },
+  heroMetricCard: {
+    borderWidth: 0.75,
+    borderColor: colors.border.medium,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    backgroundColor: colors.background.card,
+    marginBottom: spacing.md,
+  },
+  heroMetricLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+  },
+  heroMetricValue: {
+    fontSize: fontSize["4xl"],
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    ...tabularNums,
+  },
+  heroMetricCaption: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    color: colors.text.secondary,
+    marginTop: spacing.sm,
+  },
+  supportingMetricsRow: {
+    flexDirection: "row",
+    marginBottom: spacing.lg,
+  },
+  supportingMetricCard: {
+    flex: 1,
+    borderWidth: 0.75,
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    backgroundColor: colors.background.white,
+    marginRight: spacing.sm,
+  },
+  supportingMetricCardLast: {
+    marginRight: 0,
+  },
+  supportingMetricLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+  },
+  supportingMetricValue: {
+    fontSize: fontSize.xl,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    ...tabularNums,
   },
   tableHeader: {
     flexDirection: "row",
@@ -206,6 +273,12 @@ const styles = StyleSheet.create({
 function ReportSummaryContent({ data }: { data: ReportSummaryDocumentData }) {
   const { organization, locale } = useOrgDocument();
   const generatedAt = data.generatedAt ?? new Date();
+  const [primaryMetric, ...secondaryMetrics] = data.metrics;
+  const detailItems = [
+    { label: "From", value: formatDateForPdf(data.dateFrom, locale) },
+    { label: "To", value: formatDateForPdf(data.dateTo, locale) },
+    { label: "Generated", value: formatDateForPdf(generatedAt, locale) },
+  ];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -215,33 +288,73 @@ function ReportSummaryContent({ data }: { data: ReportSummaryDocumentData }) {
         documentNumber={data.reportName}
       />
       <View style={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{data.reportName}</Text>
-        <Text style={styles.subtitle}>
-          {organization.name} • {formatDateForPdf(data.dateFrom, locale)} -{" "}
-          {formatDateForPdf(data.dateTo, locale)}
-        </Text>
-        <Text style={styles.subtitle}>
-          Generated: {formatDateForPdf(generatedAt, locale)}
-        </Text>
-      </View>
+        <DocumentMasthead
+          title={data.reportName}
+          meta={[
+            { label: "Organization", value: organization.name },
+            { label: "Metrics", value: String(data.metrics.length) },
+          ]}
+          callout={{
+            eyebrow: "Reporting Window",
+            title: `${formatDateForPdf(data.dateFrom, locale)} - ${formatDateForPdf(data.dateTo, locale)}`,
+            detail: "Key metrics are summarized below.",
+            tone: "info",
+          }}
+        />
 
-      <View style={styles.card}>
-        <View style={styles.tableHeader}>
-          <Text style={styles.cellLabel}>Metric</Text>
-          <Text style={styles.cellValue}>Value</Text>
-        </View>
-        {data.metrics.map((metric) => (
-          <View key={metric.label} style={styles.tableRow}>
-            <Text style={styles.cellLabel}>{metric.label}</Text>
-            <Text style={styles.cellValue}>{metric.value}</Text>
+        <DocumentDetailStrip items={detailItems} />
+
+        {primaryMetric ? (
+          <>
+            <View style={styles.heroMetricCard}>
+              <Text style={styles.heroMetricLabel}>{primaryMetric.label}</Text>
+              <Text style={styles.heroMetricValue}>{primaryMetric.value}</Text>
+              <Text style={styles.heroMetricCaption}>
+                Primary headline metric for this reporting window.
+              </Text>
+            </View>
+
+            {secondaryMetrics.length > 0 ? (
+              <View style={styles.supportingMetricsRow}>
+                {secondaryMetrics.slice(0, 3).map((metric, index, metrics) => (
+                  <View
+                    key={metric.label}
+                    style={index === metrics.length - 1 ? [styles.supportingMetricCard, styles.supportingMetricCardLast] : styles.supportingMetricCard}
+                  >
+                    <Text style={styles.supportingMetricLabel}>{metric.label}</Text>
+                    <Text style={styles.supportingMetricValue}>{metric.value}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {secondaryMetrics.slice(3).length > 0 ? (
+              <DocumentSectionCard title="Metric Breakdown">
+                <View style={styles.tableHeader}>
+                  <Text style={styles.cellLabel}>Metric</Text>
+                  <Text style={styles.cellValue}>Value</Text>
+                </View>
+                {secondaryMetrics.slice(3).map((metric) => (
+                  <View key={metric.label} style={styles.tableRow}>
+                    <Text style={styles.cellLabel}>{metric.label}</Text>
+                    <Text style={styles.cellValue}>{metric.value}</Text>
+                  </View>
+                ))}
+              </DocumentSectionCard>
+            ) : null}
+          </>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.tableHeader}>
+              <Text style={styles.cellLabel}>Metric</Text>
+              <Text style={styles.cellValue}>Value</Text>
+            </View>
           </View>
-        ))}
-      </View>
+        )}
 
-      <Text style={styles.footer}>
-        This report was generated by Renoz CRM.
-      </Text>
+        <Text style={styles.footer}>
+          This report was generated by Renoz CRM.
+        </Text>
       </View>
 
       <PageNumber documentNumber={data.reportName} />
@@ -275,6 +388,11 @@ export function ReportSummaryPdfDocument({
 
 function ActivityExportContent({ data }: { data: ActivityExportDocumentData }) {
   const { organization, locale } = useOrgDocument();
+  const detailItems = [
+    { label: "Generated", value: formatDateForPdf(data.generatedAt, locale), weight: 1 },
+    { label: "Total Records", value: String(data.totalCount), weight: 1.2, emphasis: "strong" as const },
+    { label: "Filters", value: String(data.filterSummary.length), weight: 0.8, emphasis: "subtle" as const },
+  ];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -284,25 +402,26 @@ function ActivityExportContent({ data }: { data: ActivityExportDocumentData }) {
         documentNumber={data.reportName}
       />
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{data.reportName}</Text>
-          <Text style={styles.subtitle}>{organization.name}</Text>
-          <Text style={styles.subtitle}>
-            Generated: {formatDateForPdf(data.generatedAt, locale)}
-          </Text>
-          <Text style={styles.subtitle}>Total records: {data.totalCount}</Text>
-        </View>
+        <DocumentMasthead
+          title={data.reportName}
+          meta={[{ label: "Organization", value: organization.name }]}
+          callout={{
+            eyebrow: "Activity Export",
+            title: `${data.totalCount} records`,
+            detail: "Filters and exported activities are listed below.",
+            tone: "info",
+          }}
+        />
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Filters</Text>
-          <View style={styles.filterList}>
+        <DocumentDetailStrip items={detailItems} />
+
+        <DocumentSectionCard title="Filters">
+          <>
             {data.filterSummary.map((filter) => (
-              <Text key={filter} style={styles.filterItem}>
-                • {filter}
-              </Text>
+              <DocumentBodyText key={filter}>{filter}</DocumentBodyText>
             ))}
-          </View>
-        </View>
+          </>
+        </DocumentSectionCard>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Activities</Text>

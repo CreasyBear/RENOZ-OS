@@ -36,13 +36,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Search,
   Trash2,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  AlertTriangle,
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
@@ -212,7 +212,7 @@ export const SuppressionListTable = memo(function SuppressionListTable({
   }, []);
 
   // Query suppression list
-  const { data, isLoading, error } = useSuppressionList({
+  const { data, isLoading, error, refetch } = useSuppressionList({
     search: debouncedSearch || undefined,
     reason: reason === "all" ? undefined : reason,
     page,
@@ -277,12 +277,17 @@ export const SuppressionListTable = memo(function SuppressionListTable({
     return <SuppressionListTableSkeleton />;
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <div className="text-center py-8 text-red-600">
-        <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
-        <p>Failed to load suppression list</p>
-      </div>
+      <Alert variant="destructive">
+        <AlertTitle>Suppression list unavailable</AlertTitle>
+        <AlertDescription className="flex items-center justify-between gap-3">
+          <span>{error.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -293,6 +298,17 @@ export const SuppressionListTable = memo(function SuppressionListTable({
 
   return (
     <div className={className}>
+      {error ? (
+        <Alert className="mb-4">
+          <AlertTitle>Showing cached suppression entries</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
         <div className="relative flex-1 max-w-sm">

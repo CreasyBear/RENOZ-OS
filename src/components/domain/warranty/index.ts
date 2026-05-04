@@ -18,10 +18,21 @@ export type { CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
 
 // --- List components ---
 export { WarrantyListTable, type WarrantyListItem } from './tables/warranty-list-table';
-export { WarrantyListContainer, type WarrantyListContainerProps } from './containers/warranty-list-container';
+export {
+  WarrantyListContainer,
+  type WarrantyListContainerProps,
+} from './containers/warranty-list-container';
 export { WarrantyStatusChips } from './warranty-status-chips';
-export { WarrantyDetailContainer, type WarrantyDetailContainerProps } from './containers/warranty-detail-container';
+export {
+  WarrantyDetailContainer,
+  type WarrantyDetailContainerProps,
+} from './containers/warranty-detail-container';
+export { WarrantyEntitlementsListContainer } from './containers/warranty-entitlements-list-container';
 export { WarrantyDetailView, type WarrantyDetailViewProps } from './views/warranty-detail-view';
+export {
+  WarrantyEntitlementsListView,
+  type WarrantyEntitlementsListViewProps,
+} from './views/warranty-entitlements-list-view';
 export { WarrantyClaimsListContainer } from './containers/warranty-claims-list-container';
 export type { WarrantyClaimsListContainerProps } from '@/lib/schemas/warranty';
 export {
@@ -42,7 +53,20 @@ export {
   WarrantyPolicySettingsContainer,
 } from './containers/warranty-policy-settings-container';
 export { WarrantyPolicySettingsView } from './views/warranty-policy-settings-view';
-export type { WarrantyPolicySettingsViewProps, WarrantyPolicyFormPayload } from '@/lib/schemas/warranty';
+export type {
+  WarrantyPolicySettingsViewProps,
+  WarrantyPolicyFormPayload,
+} from '@/lib/schemas/warranty';
+
+// --- Entitlement Actions ---
+export {
+  ActivateWarrantyDialog,
+  type ActivateWarrantyDialogProps,
+} from './dialogs/activate-warranty-dialog';
+export {
+  WarrantyEntitlementReviewDialog,
+  type WarrantyEntitlementReviewDialogProps,
+} from './dialogs/warranty-entitlement-review-dialog';
 
 // --- Claims ---
 export {
@@ -74,8 +98,14 @@ export {
 } from './views/warranty-extension-history';
 // Re-export schema types for convenience
 export type { WarrantyExtensionItem } from '@/lib/schemas/warranty/extensions';
-export { ExtendWarrantyDialog, type ExtendWarrantyDialogProps } from './dialogs/extend-warranty-dialog';
-export { TransferWarrantyDialog, type TransferWarrantyDialogProps } from './dialogs/transfer-warranty-dialog';
+export {
+  ExtendWarrantyDialog,
+  type ExtendWarrantyDialogProps,
+} from './dialogs/extend-warranty-dialog';
+export {
+  TransferWarrantyDialog,
+  type TransferWarrantyDialogProps,
+} from './dialogs/transfer-warranty-dialog';
 
 // --- Bulk import ---
 export { BulkWarrantyImportDialog } from './dialogs/bulk-warranty-import-dialog';
@@ -98,4 +128,3 @@ export {
   type WarrantyFiltersState,
   type WarrantyStatus,
 } from './warranty-filter-config';
-

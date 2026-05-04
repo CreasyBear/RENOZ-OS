@@ -49,7 +49,7 @@ import type {
   DeliveryNoteDocumentData,
   DeliveryNoteLineItem,
 } from '@/lib/documents/templates/operational';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { fetchOrganizationForDocument } from './organization-for-pdf';
 import {
   fetchAllocatedSerialsByOrderLineItem,
@@ -63,6 +63,7 @@ import { getPendingShipmentReservations } from '@/server/functions/orders/order-
 
 const STORAGE_BUCKET = 'documents';
 const QUOTE_VALIDITY_DAYS = 30;
+const ORDER_SCOPED_DOCUMENT_TYPES = new Set(['quote', 'invoice', 'pro-forma']);
 
 // ============================================================================
 // SCHEMAS
@@ -88,6 +89,9 @@ const generateShipmentDocumentSchema = z.object({
   regenerate: z.boolean().optional().default(false),
 });
 
+type GenerateOrderDocumentInput = z.infer<typeof generateOrderDocumentSchema>;
+type GenerateShipmentDocumentInput = z.infer<typeof generateShipmentDocumentSchema>;
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -104,11 +108,15 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       customerId: orders.customerId,
       orderDate: orders.orderDate,
       dueDate: orders.dueDate,
+      billingAddress: orders.billingAddress,
       subtotal: orders.subtotal,
       discountAmount: orders.discountAmount,
       discountPercent: orders.discountPercent,
       taxAmount: orders.taxAmount,
+      shippingAmount: orders.shippingAmount,
       total: orders.total,
+      paidAmount: orders.paidAmount,
+      balanceDue: orders.balanceDue,
       customerNotes: orders.customerNotes,
       internalNotes: orders.internalNotes,
       status: orders.status,
@@ -165,7 +173,10 @@ async function fetchOrderData(orderId: string, organizationId: string) {
     discountAmount: Number(order.discountAmount) || 0,
     discountPercent: Number(order.discountPercent) || 0,
     taxAmount: Number(order.taxAmount) || 0,
+    shippingAmount: Number(order.shippingAmount) || 0,
     total: Number(order.total) || 0,
+    paidAmount: Number(order.paidAmount) || 0,
+    balanceDue: Number(order.balanceDue) || 0,
   };
 }
 
@@ -248,9 +259,9 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
 
   return {
     ...customer,
-    address: toDocumentAddress(shippingAddress ?? billingAddress ?? primaryAddress),
+    address: toDocumentAddress(primaryAddress ?? billingAddress ?? shippingAddress),
     shippingAddress: toDocumentAddress(shippingAddress),
-    billingAddress: toDocumentAddress(billingAddress ?? primaryAddress),
+    billingAddress: toDocumentAddress(billingAddress),
     primaryAddress: toDocumentAddress(primaryAddress),
   };
 }
@@ -341,6 +352,7 @@ async function fetchShipmentDocumentData(
       carrier: orderShipments.carrier,
       carrierService: orderShipments.carrierService,
       trackingNumber: orderShipments.trackingNumber,
+      operationalDocumentRevision: orderShipments.operationalDocumentRevision,
       createdAt: orderShipments.createdAt,
       shippedAt: orderShipments.shippedAt,
       deliveredAt: orderShipments.deliveredAt,
@@ -503,11 +515,53 @@ async function uploadPdf(
 /**
  * Generate any order document synchronously
  */
-export const generateOrderDocument = createServerFn({ method: 'POST' })
-  .inputValidator(generateOrderDocumentSchema)
-  .handler(async ({ data }) => {
+async function generateOrderDocumentHandler({
+  data,
+}: {
+  data: GenerateOrderDocumentInput;
+}) {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
     const { orderId, documentType, regenerate } = data;
+
+    if (!ORDER_SCOPED_DOCUMENT_TYPES.has(documentType)) {
+      const shipments = await db
+        .select({
+          id: orderShipments.id,
+        })
+        .from(orderShipments)
+        .where(
+          and(
+            eq(orderShipments.organizationId, ctx.organizationId),
+            eq(orderShipments.orderId, orderId)
+          )
+        );
+
+      if (shipments.length === 0) {
+        throw new ValidationError(
+          'Create a shipment before generating shipment-backed operational documents.',
+          {
+            shipmentId: ['Shipment context is required for packing slips and delivery notes.'],
+          }
+        );
+      }
+
+      if (shipments.length > 1) {
+        throw new ValidationError(
+          'Multiple shipments exist for this order. Generate the document from a specific shipment.',
+          {
+            shipmentId: ['Choose the shipment that owns this operational document.'],
+          }
+        );
+      }
+
+      return generateShipmentDocumentHandler({
+        data: {
+          shipmentId: shipments[0].id,
+          documentType: documentType as 'packing-slip' | 'delivery-note',
+          regenerate,
+        },
+      });
+    }
 
     // Fetch all required data
     const [orderData, orgData] = await Promise.all([
@@ -631,6 +685,12 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
 
       case 'packing-slip': {
+        const shippingAddress = resolveOperationalShippingAddress({
+          orderShippingAddress: orderData.shippingAddress,
+          customerShippingAddress: customerData.shippingAddress,
+          customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
+          customerName: customerData.name,
+        });
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
           orderData.lineItems.map((item) => item.id)
@@ -666,17 +726,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
             email: customerData.email,
             phone: customerData.phone,
           },
-          shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.contactName || customerData.name,
-            addressLine1: orderData.shippingAddress.street1,
-            addressLine2: orderData.shippingAddress.street2,
-            city: orderData.shippingAddress.city,
-            state: orderData.shippingAddress.state,
-            postalCode: orderData.shippingAddress.postalCode,
-            country: orderData.shippingAddress.country,
-            contactName: orderData.shippingAddress.contactName,
-            contactPhone: orderData.shippingAddress.contactPhone,
-          } : null,
+          shippingAddress,
           lineItems: packingSlipLineItems,
           carrier: data.carrier,
           shippingMethod: data.shippingMethod,
@@ -695,6 +745,12 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       }
 
       case 'delivery-note': {
+        const shippingAddress = resolveOperationalShippingAddress({
+          orderShippingAddress: orderData.shippingAddress,
+          customerShippingAddress: customerData.shippingAddress,
+          customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
+          customerName: customerData.name,
+        });
         const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
           orderData.lineItems.map((item) => item.id)
@@ -731,17 +787,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
             email: customerData.email,
             phone: customerData.phone,
           },
-          shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.contactName || customerData.name,
-            addressLine1: orderData.shippingAddress.street1,
-            addressLine2: orderData.shippingAddress.street2,
-            city: orderData.shippingAddress.city,
-            state: orderData.shippingAddress.state,
-            postalCode: orderData.shippingAddress.postalCode,
-            country: orderData.shippingAddress.country,
-            contactName: orderData.shippingAddress.contactName,
-            contactPhone: orderData.shippingAddress.contactPhone,
-          } : null,
+          shippingAddress,
           lineItems: deliveryNoteLineItems,
           carrier: data.carrier,
           trackingNumber: undefined, // trackingNumber not in input schema
@@ -780,6 +826,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
         fileSize,
         generatedById: ctx.user.id,
         regenerationCount: 0,
+        sourceRevision: null,
       })
       .onConflictDoUpdate({
         target: [
@@ -796,6 +843,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           generatedAt: new Date(),
           updatedAt: new Date(),
           regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+          sourceRevision: null,
         },
       })
       .returning({ regenerationCount: generatedDocuments.regenerationCount });
@@ -858,11 +906,17 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
       fileSize,
       checksum,
     };
-  });
+}
 
-export const generateShipmentDocument = createServerFn({ method: 'POST' })
-  .inputValidator(generateShipmentDocumentSchema)
-  .handler(async ({ data }) => {
+export const generateOrderDocument = createServerFn({ method: 'POST' })
+  .inputValidator(generateOrderDocumentSchema)
+  .handler(generateOrderDocumentHandler);
+
+async function generateShipmentDocumentHandler({
+  data,
+}: {
+  data: GenerateShipmentDocumentInput;
+}) {
     const ctx = await withAuth({ permission: PERMISSIONS.order.read });
     const { shipmentId, documentType, regenerate } = data;
 
@@ -886,6 +940,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
           storageUrl: generatedDocuments.storageUrl,
           filename: generatedDocuments.filename,
           fileSize: generatedDocuments.fileSize,
+          sourceRevision: generatedDocuments.sourceRevision,
         })
         .from(generatedDocuments)
         .where(
@@ -898,7 +953,12 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
         )
         .limit(1);
 
-      if (existingDocument?.storageUrl) {
+      const isStale =
+        existingDocument != null &&
+        Number(existingDocument.sourceRevision ?? 0) <
+          Number(shipment.operationalDocumentRevision ?? 0);
+
+      if (existingDocument?.storageUrl && !isStale) {
         return {
           orderId: orderData.id,
           shipmentId,
@@ -1061,6 +1121,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
         fileSize,
         generatedById: ctx.user.id,
         regenerationCount: 0,
+        sourceRevision: shipment.operationalDocumentRevision ?? 0,
       })
       .onConflictDoUpdate({
         target: [
@@ -1077,6 +1138,7 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
           generatedAt: new Date(),
           updatedAt: new Date(),
           regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
+          sourceRevision: shipment.operationalDocumentRevision ?? 0,
         },
       })
       .returning({ regenerationCount: generatedDocuments.regenerationCount });
@@ -1117,7 +1179,11 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
       fileSize,
       checksum,
     };
-  });
+}
+
+export const generateShipmentDocument = createServerFn({ method: 'POST' })
+  .inputValidator(generateShipmentDocumentSchema)
+  .handler(generateShipmentDocumentHandler);
 
 // ============================================================================
 // CONVENIENCE EXPORTS
@@ -1129,8 +1195,8 @@ export const generateShipmentDocument = createServerFn({ method: 'POST' })
 export const generateOrderQuotePdf = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ orderId: z.string().uuid(), regenerate: z.boolean().optional() }))
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'quote' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'quote', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1146,8 +1212,8 @@ export const generateOrderInvoicePdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'invoice' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'invoice', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1157,8 +1223,8 @@ export const generateOrderInvoicePdf = createServerFn({ method: 'POST' })
 export const generateOrderProFormaPdf = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ orderId: z.string().uuid(), regenerate: z.boolean().optional() }))
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'pro-forma' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'pro-forma', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1178,8 +1244,8 @@ export const generateOrderPackingSlipPdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'packing-slip' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'packing-slip', regenerate: false },
     });
   });
 
@@ -1195,8 +1261,8 @@ export const generateOrderDeliveryNotePdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateOrderDocument({
-      data: { ...data, documentType: 'delivery-note' },
+    return generateOrderDocumentHandler({
+      data: { ...data, documentType: 'delivery-note', regenerate: false },
     });
   });
 
@@ -1208,8 +1274,8 @@ export const generateShipmentPackingSlipPdf = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'packing-slip' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'packing-slip', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1221,8 +1287,8 @@ export const generateShipmentDispatchNotePdf = createServerFn({ method: 'POST' }
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'dispatch-note' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'dispatch-note', regenerate: data.regenerate ?? false },
     });
   });
 
@@ -1234,7 +1300,7 @@ export const generateShipmentDeliveryNotePdf = createServerFn({ method: 'POST' }
     })
   )
   .handler(async ({ data }) => {
-    return generateShipmentDocument({
-      data: { ...data, documentType: 'delivery-note' },
+    return generateShipmentDocumentHandler({
+      data: { ...data, documentType: 'delivery-note', regenerate: data.regenerate ?? false },
     });
   });

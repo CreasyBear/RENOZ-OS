@@ -9,6 +9,7 @@
  */
 
 import { useWarrantyClaims } from '@/hooks/warranty';
+import { useCustomers } from '@/hooks/customers';
 import type {
   WarrantyClaimsListContainerProps,
 } from '@/lib/schemas/warranty';
@@ -23,7 +24,12 @@ export function WarrantyClaimsListContainer({
   onSearchChange,
   onRowClick,
 }: WarrantyClaimsListContainerProps) {
+  const { data: customersData } = useCustomers({ pageSize: 100 });
   const { data, isLoading, error, refetch } = useWarrantyClaims({
+    customerId: search.customerId,
+    claimantRole: search.claimantRole,
+    claimantMode: search.claimantMode,
+    claimantCustomerId: search.claimantCustomerId,
     status: search.status,
     claimType: search.type,
     quickFilter: search.quickFilter,
@@ -34,11 +40,20 @@ export function WarrantyClaimsListContainer({
   });
 
   const claims = data?.items ?? [];
+  const commercialCustomerOptions =
+    customersData?.items.map((customer) => ({
+      id: customer.id,
+      name: customer.name ?? 'Unknown customer',
+    })) ?? [];
   const pagination =
     data?.pagination ?? { page: 1, pageSize: 20, total: 0, totalPages: 0 };
 
   return (
     <WarrantyClaimsListView
+      commercialCustomerOptions={commercialCustomerOptions}
+      customerId={search.customerId}
+      claimantRole={search.claimantRole}
+      claimantMode={search.claimantMode}
       status={search.status}
       type={search.type}
       quickFilter={search.quickFilter}
@@ -46,6 +61,9 @@ export function WarrantyClaimsListContainer({
       pagination={pagination}
       isLoading={isLoading}
       error={error instanceof Error ? error : null}
+      onCommercialCustomerChange={(value) => onSearchChange({ customerId: value, page: 1 })}
+      onClaimantRoleChange={(value) => onSearchChange({ claimantRole: value, page: 1 })}
+      onClaimantModeChange={(value) => onSearchChange({ claimantMode: value, page: 1 })}
       onStatusChange={(value) => onSearchChange({ status: value })}
       onTypeChange={(value) => onSearchChange({ type: value })}
       onQuickFilterChange={(value) =>
@@ -57,6 +75,10 @@ export function WarrantyClaimsListContainer({
       }
       onClearFilters={() =>
         onSearchChange({
+          customerId: undefined,
+          claimantRole: undefined,
+          claimantMode: undefined,
+          claimantCustomerId: undefined,
           quickFilter: undefined,
           status: undefined,
           type: undefined,

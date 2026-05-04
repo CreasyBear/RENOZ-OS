@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   receiveGoods,
   listPurchaseOrderReceipts,
@@ -23,11 +24,17 @@ export function usePurchaseOrderReceipts(poId: string, options: { enabled?: bool
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderReceipts(poId),
     queryFn: async () => {
-      const result = await listPurchaseOrderReceipts({
-        data: { purchaseOrderId: poId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listPurchaseOrderReceipts({
+          data: { purchaseOrderId: poId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Purchase order receipts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!poId,
     staleTime: 30 * 1000,

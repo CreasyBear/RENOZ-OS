@@ -17,6 +17,7 @@ import { useState } from "react"
 import { Download, Trash2, Upload } from "lucide-react"
 import { cn } from "~/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   AlertDialog,
@@ -169,7 +170,7 @@ export function AttachmentList({
   editable = false,
   className,
 }: AttachmentListProps) {
-  const { data, isLoading, isError } = useAttachments(entityType, entityId)
+  const { data, isLoading, isError, error } = useAttachments(entityType, entityId)
   const deleteMutation = useDeleteFile()
 
   const handleDelete = (attachmentId: string) => {
@@ -194,7 +195,7 @@ export function AttachmentList({
   }
 
   // Error state
-  if (isError) {
+  if (isError && !data) {
     return (
       <div
         className={cn(
@@ -225,6 +226,13 @@ export function AttachmentList({
   // List view
   return (
     <div className={cn("space-y-2", className)}>
+      {error ? (
+        <Alert>
+          <AlertDescription>
+            {error.message || "Attachments are temporarily unavailable. Showing the most recent attachments."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {data.attachments.map((attachment) => (
         <AttachmentItem
           key={attachment.id}

@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, DollarSign } from 'lucide
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -119,8 +120,16 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
   const isReadOnly = ['cancelled', 'closed'].includes(poStatus);
 
   // Data fetching
-  const { data: costsData, isLoading: costsLoading } = usePurchaseOrderCosts(poId);
-  const { data: allocationData, isLoading: allocationLoading } = useAllocatedCosts(poId);
+  const {
+    data: costsData,
+    isLoading: costsLoading,
+    error: costsError,
+  } = usePurchaseOrderCosts(poId);
+  const {
+    data: allocationData,
+    isLoading: allocationLoading,
+    error: allocationError,
+  } = useAllocatedCosts(poId);
 
   // Mutations (must be declared before costDialogPending)
   const addCost = useAddPurchaseOrderCost();
@@ -132,6 +141,13 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
 
   const costs = costsData?.costs ?? [];
   const totalCosts = costsData?.totalCosts ?? 0;
+  const showCostsUnavailable = Boolean(costsError) && costs.length === 0;
+  const showCostsDegraded = Boolean(costsError) && costs.length > 0;
+  const showAllocationUnavailable = Boolean(allocationError) && !allocationData;
+  const showAllocationDegraded = Boolean(allocationError) && Boolean(allocationData);
+  const totalLandedCost =
+    allocationData?.summary?.totalLandedCost ??
+    (!allocationError && poCurrency === orgCurrency ? totalPOValue + totalCosts : null);
 
   // Handlers
   const handleOpenAdd = useCallback(() => {
@@ -224,44 +240,80 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
 
   return (
     <div className="space-y-6">
+      {showCostsUnavailable ? (
+        <Alert variant="destructive">
+          <AlertTitle>Purchase order costs unavailable</AlertTitle>
+          <AlertDescription>
+            {costsError?.message ??
+              'Purchase order costs are temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {showCostsDegraded ? (
+        <Alert>
+          <AlertTitle>Cost data may be outdated</AlertTitle>
+          <AlertDescription>
+            {costsError?.message ??
+              'Purchase order costs are temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {showAllocationUnavailable ? (
+        <Alert variant="destructive">
+          <AlertTitle>Landed cost allocation unavailable</AlertTitle>
+          <AlertDescription>
+            {allocationError?.message ??
+              'Landed cost allocation is temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {showAllocationDegraded ? (
+        <Alert>
+          <AlertTitle>Allocation preview may be outdated</AlertTitle>
+          <AlertDescription>
+            {allocationError?.message ??
+              'Landed cost allocation is temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Summary Card */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
-        <div className="grid grid-cols-3 gap-6">
-          <div>
-            <div className="text-xs text-muted-foreground">PO Value</div>
-            <div className="text-lg font-semibold tabular-nums">
-              <FormatAmount amount={totalPOValue} currency={poCurrency} />
+      {!showCostsUnavailable ? (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-3 gap-6">
+            <div>
+              <div className="text-xs text-muted-foreground">PO Value</div>
+              <div className="text-lg font-semibold tabular-nums">
+                <FormatAmount amount={totalPOValue} currency={poCurrency} />
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Additional Costs</div>
+              <div className="text-lg font-semibold tabular-nums">
+                <FormatAmount amount={totalCosts} currency={orgCurrency} />
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Total Landed Cost</div>
+              <div className="text-lg font-semibold tabular-nums text-primary">
+                <FormatAmount amount={totalLandedCost} currency={orgCurrency} />
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Additional Costs</div>
-            <div className="text-lg font-semibold tabular-nums">
-              <FormatAmount amount={totalCosts} currency={orgCurrency} />
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Total Landed Cost</div>
-            <div className="text-lg font-semibold tabular-nums text-primary">
-              <FormatAmount
-                amount={
-                  allocationData?.summary?.totalLandedCost ??
-                  (poCurrency === orgCurrency ? totalPOValue + totalCosts : null)
-                }
-                currency={orgCurrency}
-              />
-            </div>
-          </div>
+          {!isReadOnly && (
+            <Button onClick={handleOpenAdd} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Cost
+            </Button>
+          )}
         </div>
-        {!isReadOnly && (
-          <Button onClick={handleOpenAdd} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Cost
-          </Button>
-        )}
-      </div>
+      ) : null}
 
       {/* Costs Table */}
-      {costs.length === 0 ? (
+      {showCostsUnavailable ? null : costs.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No additional costs recorded</p>
@@ -331,7 +383,7 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
       )}
 
       {/* Allocation Preview Toggle */}
-      {costs.length > 0 && (
+      {!showCostsUnavailable && costs.length > 0 && (
         <>
           <Separator />
           <div>
@@ -398,7 +450,11 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
                       ))}
                     </TableBody>
                   </Table>
-                ) : null}
+                ) : showAllocationUnavailable ? null : (
+                  <div className="text-sm text-muted-foreground">
+                    Allocation preview is not available yet.
+                  </div>
+                )}
               </div>
             )}
           </div>

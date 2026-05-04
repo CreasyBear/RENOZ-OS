@@ -616,7 +616,7 @@ export const applyAmendment = createServerFn({ method: 'POST' })
         })
         .where(eq(orders.id, order.id));
 
-      // Recompute paidAmount from order_payments and set balanceDue, paymentStatus, paidAt
+      // Recompute the finance projection after order totals change.
       await updateOrderPaymentStatus(tx, order.id, ctx.organizationId, ctx.user.id);
 
       // Update amendment status

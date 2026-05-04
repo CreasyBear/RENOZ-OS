@@ -126,6 +126,7 @@ interface InvitationsPagePresenterProps {
     accepted: number;
     expired: number;
   };
+  statsUnavailableMessage?: string | null;
   /** @source Route.useSearch() in invitations-page-container.tsx */
   search: SearchParams;
   /** @source invitations.pagination from invitations-page-container.tsx */
@@ -166,6 +167,7 @@ interface InvitationsPagePresenterProps {
 export default function InvitationsPagePresenter({
   filteredInvitations,
   stats,
+  statsUnavailableMessage,
   search,
   pagination,
   searchQuery,
@@ -202,6 +204,14 @@ export default function InvitationsPagePresenter({
             Send Invitation
           </Button>
         </div>
+
+        {statsUnavailableMessage ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="py-3 text-sm text-amber-900">
+              {statsUnavailableMessage}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Stats Cards */}
         <div className="grid gap-4 sm:grid-cols-4">

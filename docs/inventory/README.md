@@ -13,8 +13,8 @@ This README covers:
 
 Related standards:
 
-1. `STANDARDS.md`
-2. `SCHEMA-TRACE.md`
+1. `docs/reference/repo-standards.md`
+2. `docs/reference/schema-trace.md`
 3. `docs/reliability/RELIABILITY-STANDARDS.md`
 4. `docs/reliability/MUTATION-CONTRACT-STANDARD.md`
 5. `docs/reliability/sql/finance-cost-layer-invariants.sql`

@@ -11,6 +11,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listForecasts,
@@ -59,9 +60,15 @@ export function useForecasts(options: UseForecastsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.inventory.productForecast('all', filters),
     queryFn: async () => {
-      const result = await listForecasts({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listForecasts({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Inventory forecasts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -81,11 +88,18 @@ export function useProductForecast(
   return useQuery({
     queryKey: queryKeys.inventory.productForecast(productId, { period, days }),
     queryFn: async () => {
-      const result = await getProductForecast({
-        data: { productId, period, days } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProductForecast({
+          data: { productId, period, days }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Demand forecast details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product forecast could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 5 * 60 * 1000,
@@ -99,9 +113,15 @@ export function useReorderRecommendations(filters: ReorderFilters = {}, enabled 
   return useQuery({
     queryKey: queryKeys.inventory.reorderRecommendations(filters),
     queryFn: async () => {
-      const result = await getReorderRecommendations({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getReorderRecommendations({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Reorder recommendations are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -124,11 +144,17 @@ export function useForecastAccuracy(
   return useQuery({
     queryKey: queryKeys.inventory.forecastAccuracy(productId),
     queryFn: async () => {
-      const result = await getForecastAccuracy({
-        data: { productId, period, lookbackDays } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getForecastAccuracy({
+          data: { productId, period, lookbackDays }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Forecast accuracy metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -148,11 +174,18 @@ export function useSafetyStock(
   return useQuery({
     queryKey: queryKeys.inventory.safetyStock(productId, { serviceLevel, leadTimeDays }),
     queryFn: async () => {
-      const result = await calculateSafetyStock({
-        data: { productId, serviceLevel, leadTimeDays } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await calculateSafetyStock({
+          data: { productId, serviceLevel, leadTimeDays }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Safety stock calculations are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested product for safety stock could not be found.',
+        });
+      }
     },
     enabled: enabled && !!productId,
     staleTime: 10 * 60 * 1000,

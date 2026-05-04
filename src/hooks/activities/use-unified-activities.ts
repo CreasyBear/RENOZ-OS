@@ -8,11 +8,14 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   transformAuditActivity,
   transformPlannedActivity,
   transformOpportunityActivity,
+  type OpportunityActivityRaw,
 } from '@/lib/schemas/unified-activity';
 import { getEntityActivities } from '@/server/functions/activities/activities';
 import { getCustomerActivities } from '@/server/functions/customers/customers';
@@ -20,6 +23,70 @@ import { getCustomerEmailActivities } from '@/server/functions/communications/cu
 import { getActivityTimeline } from '@/server/functions/pipeline/pipeline';
 import { queryKeys } from '@/lib/query-keys';
 import { isActivityEntityType, type UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';
+import type { ActivityWithUser } from '@/lib/schemas/activities';
+import type { CursorPaginatedResponse } from '@/lib/db/pagination';
+
+function getEntityActivityItems(
+  result: CursorPaginatedResponse<ActivityWithUser> | ActivityWithUser[] | null | undefined
+) {
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (result && Array.isArray(result.items)) {
+    return result.items;
+  }
+
+  throw new Error('Entity activities returned an invalid response');
+}
+
+function unwrapServerFnResult(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+
+  const record = value as Record<string, unknown>;
+  if ('result' in record && record.result !== value) {
+    return unwrapServerFnResult(record.result);
+  }
+  if ('data' in record && record.data !== value) {
+    return unwrapServerFnResult(record.data);
+  }
+
+  return value;
+}
+
+function normalizeEntityActivitiesResult(
+  result: unknown
+): CursorPaginatedResponse<ActivityWithUser> | ActivityWithUser[] | null | undefined {
+  const unwrapped = unwrapServerFnResult(result);
+
+  if (Array.isArray(unwrapped) || unwrapped == null) {
+    return unwrapped as ActivityWithUser[] | null | undefined;
+  }
+
+  if (
+    typeof unwrapped === 'object' &&
+    unwrapped !== null &&
+    'items' in unwrapped &&
+    Array.isArray((unwrapped as { items?: unknown }).items)
+  ) {
+    return unwrapped as CursorPaginatedResponse<ActivityWithUser>;
+  }
+
+  return undefined;
+}
+
+function getOpportunityTimelineActivities(result: unknown): OpportunityActivityRaw[] {
+  if (
+    typeof result !== 'object' ||
+    result === null ||
+    !('activities' in result) ||
+    !Array.isArray((result as { activities?: unknown }).activities)
+  ) {
+    throw new Error('Activity timeline returned an invalid response');
+  }
+
+  return (result as { activities: OpportunityActivityRaw[] }).activities;
+}
 
 // ============================================================================
 // HOOK
@@ -36,6 +103,11 @@ export function useUnifiedActivities({
   enabled = true,
   pageSize = 50,
 }: UseUnifiedActivitiesOptions) {
+  const getEntityActivitiesFn = useServerFn(getEntityActivities);
+  const getCustomerActivitiesFn = useServerFn(getCustomerActivities);
+  const getCustomerEmailActivitiesFn = useServerFn(getCustomerEmailActivities);
+  const getActivityTimelineFn = useServerFn(getActivityTimeline);
+
   // Fetch audit trail activities
   const {
     data: auditData,
@@ -48,23 +120,31 @@ export function useUnifiedActivities({
       relatedCustomerId ?? null
     ),
     queryFn: async () => {
-      // Validate entityType before use
-      if (!isActivityEntityType(entityType)) {
-        throw new Error(`Invalid entity type: ${entityType}`);
+      try {
+        // Validate entityType before use
+        if (!isActivityEntityType(entityType)) {
+          throw new Error(`Invalid entity type: ${entityType}`);
+        }
+
+        const result = normalizeEntityActivitiesResult(
+          await getEntityActivitiesFn({
+            data: {
+              entityType,
+              entityId,
+              relatedCustomerId,
+              pageSize,
+            },
+          })
+        );
+        const items = getEntityActivityItems(result);
+        return items.map((item) => transformAuditActivity(item));
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Activity history is temporarily unavailable. Please refresh and try again.',
+        });
       }
-      
-      const result = await getEntityActivities({
-        data: {
-          entityType,
-          entityId,
-          relatedCustomerId,
-          pageSize,
-        },
-      });
-      // transformAuditActivity expects Activity & { user?: ... }
-      // ActivityWithUser extends Activity and has compatible user structure
-      // The user property structure matches exactly, so we can pass directly
-      return result.items.map((item) => transformAuditActivity(item));
     },
     enabled: enabled && !!entityId,
   });
@@ -77,15 +157,28 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.unifiedActivities.entityPlanned(entityType, entityId),
     queryFn: async () => {
-      if (entityType !== 'customer') {
-        return [];
+      try {
+        if (entityType !== 'customer') {
+          return [];
+        }
+        const result = unwrapServerFnResult(
+          await getCustomerActivitiesFn({
+            data: {
+              customerId: entityId,
+            },
+          })
+        );
+        if (!Array.isArray(result)) {
+          throw new Error('Customer activities returned an invalid response');
+        }
+        return result.map((item) => transformPlannedActivity(item));
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Planned customer activity is temporarily unavailable. Please refresh and try again.',
+        });
       }
-      const result = await getCustomerActivities({
-        data: {
-          customerId: entityId,
-        },
-      });
-      return result.map((item) => transformPlannedActivity(item));
     },
     enabled: enabled && !!entityId && entityType === 'customer',
   });
@@ -98,13 +191,26 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.unifiedActivities.entityEmails(entityId),
     queryFn: async () => {
-      const result = await getCustomerEmailActivities({
-        data: {
-          customerId: entityId,
-          limit: 50,
-        },
-      });
-      return result;
+      try {
+        const result = unwrapServerFnResult(
+          await getCustomerEmailActivitiesFn({
+            data: {
+              customerId: entityId,
+              limit: 50,
+            },
+          })
+        );
+        if (!Array.isArray(result)) {
+          throw new Error('Customer email activities returned an invalid response');
+        }
+        return result;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer email activity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!entityId && entityType === 'customer',
   });
@@ -118,25 +224,36 @@ export function useUnifiedActivities({
   } = useQuery({
     queryKey: queryKeys.pipeline.activityTimeline(entityId, { days: 90 }),
     queryFn: async () => {
-      const result = await getActivityTimeline({
-        data: { opportunityId: entityId, days: 90 },
-      });
-      if (!result) throw new Error('Activity timeline returned no data');
-      return result.activities.map((a) =>
-        transformOpportunityActivity(
-          {
-            id: a.id,
-            type: a.type,
-            description: a.description,
-            outcome: a.outcome,
-            scheduledAt: a.scheduledAt,
-            completedAt: a.completedAt,
-            createdAt: a.createdAt,
-            createdBy: a.createdBy,
-          },
-          entityId
-        )
-      );
+      try {
+        const result = unwrapServerFnResult(
+          await getActivityTimelineFn({
+            data: { opportunityId: entityId, days: 90 },
+          })
+        );
+        if (!result) throw new Error('Activity timeline returned no data');
+        const activities = getOpportunityTimelineActivities(result);
+        return activities.map((a) =>
+          transformOpportunityActivity(
+            {
+              id: a.id,
+              type: a.type,
+              description: a.description,
+              outcome: a.outcome,
+              scheduledAt: a.scheduledAt,
+              completedAt: a.completedAt,
+              createdAt: a.createdAt,
+              createdBy: a.createdBy,
+            },
+            entityId
+          )
+        );
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!entityId && entityType === 'opportunity',
   });

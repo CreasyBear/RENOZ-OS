@@ -51,26 +51,30 @@ import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useOrderDetailComposite } from '@/hooks/orders/use-order-detail-composite';
 import { toastError, toastSuccess } from '@/hooks';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useTrackView } from '@/hooks/search';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import type { OrderWorkflowAction } from '@/lib/schemas/orders';
+import { useOrderShipments, useReopenShipment } from '@/hooks/orders';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
 import { ShipOrderDialog } from '../fulfillment/ship-order-dialog';
 import { ConfirmDeliveryDialog } from '../fulfillment/confirm-delivery-dialog';
+import { summarizeOrderShipmentAvailability } from '../fulfillment/shipment-availability';
 import { AmendmentRequestDialogContainer, AmendmentReviewDialog } from '../amendments';
 import { RecordPaymentDialog } from '../dialogs/record-payment-dialog';
 import { RefundPaymentDialog } from '../dialogs/refund-payment-dialog';
 import { RmaCreateDialog } from '@/components/domain/support/rma/rma-create-dialog';
-import { useCreateRma } from '@/hooks/support';
+import { useCreateRma, useIssue } from '@/hooks/support';
 import { useOrderDetailDialogState } from './use-order-detail-dialog-state';
 import { useOrderDetailRouteIntents } from './use-order-detail-route-intents';
 import { useOrderDetailContainerActions } from './use-order-detail-container-actions';
+import { resolveDispatchNoteAction } from './order-dispatch-note-routing';
 import {
   useOrderWorkflowOptions,
-  useUpdateOrderStatus,
+  useChangeOrderStatusManaged,
 } from '@/hooks/orders/use-order-status';
 
 export interface OrderDetailContainerRenderProps {
@@ -168,6 +172,8 @@ function HeaderActions({
   backLinkSearch,
   includeBack = true,
 }: HeaderActionsProps) {
+  const primaryWorkflowAction = workflowActions.find((action) => action.category === 'next');
+
   return (
     <div className="flex items-center gap-2">
       {includeBack && (
@@ -179,6 +185,15 @@ function HeaderActions({
           <ArrowLeft className="h-4 w-4" />
           <span className="sr-only">Back to orders</span>
         </Link>
+      )}
+
+      {primaryWorkflowAction && (
+        <Button
+          onClick={() => onWorkflowAction(primaryWorkflowAction)}
+          disabled={isRunningWorkflowAction}
+        >
+          {isRunningWorkflowAction ? 'Working...' : primaryWorkflowAction.label}
+        </Button>
       )}
 
       {/* Record Payment - prominent when balance due */}
@@ -277,28 +292,17 @@ function HeaderActions({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          {/* Edit - always visible, disabled when not draft */}
-          {orderStatus === 'draft' ? (
-            <DropdownMenuItem className="p-0">
-              {/* Avoid DropdownMenuItem asChild + TanStack Link SSR issues */}
-              <Link
-                to="/orders/$orderId"
-                params={{ orderId }}
-                search={{ edit: true }}
-                className="flex w-full items-center px-2 py-1.5"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Order
-              </Link>
-            </DropdownMenuItem>
-          ) : (
-            <DisabledMenuItem
-              disabledReason="Orders can only be edited in draft status"
+          <DropdownMenuItem className="p-0">
+            <Link
+              to="/orders/$orderId"
+              params={{ orderId }}
+              search={{ edit: true }}
+              className="flex w-full items-center px-2 py-1.5"
             >
               <Edit className="h-4 w-4 mr-2" />
               Edit Order
-            </DisabledMenuItem>
-          )}
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={onDuplicate}
             disabled={isDuplicating}
@@ -405,10 +409,17 @@ export function OrderDetailContainer({
   const navigate = useNavigate();
   const [reviewAmendmentId, setReviewAmendmentId] = useState<string | null>(null);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
+  const [pendingOperationalDocument, setPendingOperationalDocument] = useState<
+    'packing-slip' | 'dispatch-note' | 'delivery-note' | null
+  >(null);
   const clearSearch = useCallback(() => {
     navigate({ to: '/orders/$orderId', params: { orderId }, search: {} });
   }, [navigate, orderId]);
   const createRmaMutation = useCreateRma();
+  const { data: fromIssue } = useIssue({
+    issueId: fromIssueId ?? '',
+    enabled: !!fromIssueId,
+  });
   const {
     dialogState,
     isInteractionDialogOpen,
@@ -471,19 +482,41 @@ export function OrderDetailContainer({
     return Math.max(0, Number(refundPayment.amount) - refundedSoFar);
   }, [containerActions.payments, refundPayment]);
   const workflowOptionsQuery = useOrderWorkflowOptions(orderId, !!detail.order);
-  const cancelOrderMutation = useUpdateOrderStatus({
+  const shipmentsQuery = useOrderShipments(orderId, !!detail.order);
+  const workflowMutation = useChangeOrderStatusManaged({
     onSuccess: () => {
-      toastSuccess('Order cancelled');
+      toastSuccess('Order workflow updated');
       detail.refetch();
     },
     onError: (error) => {
-      toastError(error.message || 'Unable to cancel order.');
+      toastError(error.message || 'Unable to update the order workflow.');
       detail.refetch();
     },
   });
+  const reopenShipmentMutation = useReopenShipment();
   const orderStatus = detail.order?.status;
-  const { shipIntentBlocked } = useOrderDetailRouteIntents({
+  const shipmentAvailability = useMemo(
+    () =>
+      summarizeOrderShipmentAvailability(
+        detail.order?.lineItems ?? [],
+        shipmentsQuery.data ?? []
+      ),
+    [detail.order?.lineItems, shipmentsQuery.data]
+  );
+  const canShipFromStatus =
+    orderStatus === 'picked' || orderStatus === 'partially_shipped';
+  const canShipFromAvailability =
+    canShipFromStatus && shipmentAvailability.hasReservableItems;
+  const shipBlockedReason = !canShipFromStatus
+    ? 'status'
+    : shipmentAvailability.totalReservedQty > 0
+      ? 'reserved_in_draft'
+      : 'unavailable';
+  const { shipIntentBlockedReason } = useOrderDetailRouteIntents({
     orderStatus,
+    shipChecksReady: !!detail.order && !shipmentsQuery.isLoading,
+    canShip: canShipFromAvailability,
+    shipBlockedReason,
     dialogOpen: dialogState.open,
     editFromSearch,
     pickFromSearch,
@@ -496,6 +529,137 @@ export function OrderDetailContainer({
     openPayment,
     closeDialog,
   });
+
+  const generateShipmentOperationalDocument = useCallback(
+    async (
+      documentType: 'packing-slip' | 'dispatch-note' | 'delivery-note',
+      shipmentId: string
+    ) => {
+      try {
+        const mutation =
+          documentType === 'packing-slip'
+            ? containerActions.generateShipmentPackingSlip
+            : documentType === 'dispatch-note'
+              ? containerActions.generateShipmentDispatchNote
+              : containerActions.generateShipmentDeliveryNote;
+        const result = await mutation.mutateAsync({ shipmentId });
+        const label =
+          documentType === 'packing-slip'
+            ? 'Packing slip'
+            : documentType === 'dispatch-note'
+              ? 'Dispatch note'
+              : 'Delivery note';
+        toastSuccess(`${label} generated`);
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+      } catch (error) {
+        toastError(
+          error instanceof Error ? error.message : `Failed to generate ${documentType}`
+        );
+      }
+    },
+    [
+      containerActions.generateShipmentDeliveryNote,
+      containerActions.generateShipmentDispatchNote,
+      containerActions.generateShipmentPackingSlip,
+    ]
+  );
+
+  const launchOperationalDocumentFlow = useCallback(
+    async (documentType: 'packing-slip' | 'dispatch-note' | 'delivery-note') => {
+      if (shipmentsQuery.isLoading) {
+        toast.info('Loading shipment details...');
+        return;
+      }
+
+      const shipments = shipmentsQuery.data ?? [];
+
+      if (documentType === 'dispatch-note') {
+        const resolution = resolveDispatchNoteAction({
+          shipments,
+          orderStatus: detail.order?.status,
+        });
+
+        if (resolution.kind === 'generate') {
+          await generateShipmentOperationalDocument(documentType, resolution.shipmentId);
+          return;
+        }
+
+        detail.onTabChange('fulfillment');
+
+        if (resolution.kind === 'blocked') {
+          toast.warning('Dispatch note not ready yet', {
+            description: resolution.reason,
+          });
+          return;
+        }
+
+        if (resolution.kind === 'choose-shipment') {
+          toast.info('Choose a shipment in Fulfillment to generate the dispatch note.');
+          return;
+        }
+
+        if (resolution.kind === 'create-shipment') {
+          if (!canShipFromAvailability) {
+            toast.info('No picked units are currently available to ship. Review fulfillment first.');
+            return;
+          }
+          setPendingOperationalDocument(documentType);
+          openShip();
+          toast.info('Create the shipment and we will continue with the dispatch note.');
+          return;
+        }
+
+        toast.info('Finish the fulfillment steps first, then generate the dispatch note from the shipment.');
+        return;
+      }
+
+      if (shipments.length === 1) {
+        const [shipment] = shipments;
+        if (documentType === 'delivery-note' && shipment.canGenerateDeliveryNote === false) {
+          detail.onTabChange('fulfillment');
+          toast.warning('Delivery note not ready yet', {
+            description:
+              shipment.deliveryNoteBlockedReason ??
+              'Confirm delivery on the shipment before generating the delivery note.',
+          });
+          return;
+        }
+
+        await generateShipmentOperationalDocument(documentType, shipment.id);
+        return;
+      }
+
+      if (shipments.length > 1) {
+        detail.onTabChange('fulfillment');
+        toast.info(
+          `Choose a shipment in Fulfillment to generate the ${
+            documentType === 'packing-slip'
+              ? 'packing slip'
+              : 'delivery note'
+          }.`
+        );
+        return;
+      }
+
+      if (canShipFromAvailability) {
+        setPendingOperationalDocument(documentType);
+        openShip();
+        toast.info('Create the shipment and we will continue with the document.');
+        return;
+      }
+
+      detail.onTabChange('fulfillment');
+      toast.info('Operational documents are generated from shipment records in Fulfillment.');
+    },
+    [
+      canShipFromAvailability,
+      detail,
+      generateShipmentOperationalDocument,
+      openShip,
+      shipmentsQuery.data,
+      shipmentsQuery.isLoading,
+    ]
+  );
 
   // Map order line items to RmaCreateDialog format (must be before early returns - hooks rule)
   // @source detail.order.lineItems from useOrderDetailComposite (filtered to qtyShipped > 0)
@@ -533,6 +697,8 @@ export function OrderDetailContainer({
     });
   }, [detail.order]);
   const canCreateGenericRma = rmaOrderLineItems.length > 0;
+  const canCreateIssueRma = fromIssue?.rmaReadiness?.state === 'ready';
+  const canOpenRmaDialog = Boolean((fromIssueId && canCreateIssueRma) || canCreateGenericRma);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Loading State
@@ -569,28 +735,67 @@ export function OrderDetailContainer({
       <Alert key="from-issue" className="border-blue-500/50 bg-blue-500/10">
         <Package className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between gap-4">
-          <span>Creating RMA from issue — select items below and create the return authorization.</span>
-          <Button size="sm" onClick={openRma}>
-            <Package className="h-4 w-4 mr-2" />
-            Create RMA
-          </Button>
+          <span>
+            {fromIssue?.resolution
+              ? `Issue ${fromIssue.issueNumber} resolved as ${fromIssue.resolution.summary}.`
+              : 'Issue context is loading before RMA creation.'}{' '}
+            {fromIssue?.rmaReadiness?.state === 'ready'
+              ? 'Select items below and create the return authorization.'
+              : fromIssue?.rmaReadiness?.blockedReason
+                ? fromIssue.rmaReadiness.blockedReason
+                : 'RMA creation will unlock once the issue resolution is ready.'}
+          </span>
+          {canCreateIssueRma ? (
+            <Button size="sm" onClick={openRma}>
+              <Package className="h-4 w-4 mr-2" />
+              Create RMA
+            </Button>
+          ) : null}
         </AlertDescription>
       </Alert>
     );
   }
-  if (shipIntentBlocked) {
+  if (shipIntentBlockedReason) {
     contextualBanners.push(
       <Alert key="ship-intent-blocked" className="border-amber-500/50 bg-amber-500/10">
         <Package className="h-4 w-4" />
         <AlertDescription className="flex items-center justify-between gap-4">
-          <span>This order must be picked before it can be shipped.</span>
-          <Button size="sm" variant="outline" onClick={openPick}>
-            Pick Items
-          </Button>
+          <span>
+            {shipIntentBlockedReason === 'status'
+              ? 'This order must be picked before it can be shipped.'
+              : shipIntentBlockedReason === 'reserved_in_draft'
+                ? 'Picked stock is already reserved in pending shipment drafts. Review those drafts in Fulfillment.'
+                : 'No picked units are currently available to ship. Review fulfillment or adjust picking first.'}
+          </span>
+          {shipIntentBlockedReason === 'status' ? (
+            <Button size="sm" variant="outline" onClick={openPick}>
+              Pick Items
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => detail.onTabChange('fulfillment')}>
+              Open Fulfillment
+            </Button>
+          )}
         </AlertDescription>
       </Alert>
     );
   }
+
+  const documentActions = {
+    ...containerActions.documentActions,
+    onGeneratePackingSlip: async () => {
+      await launchOperationalDocumentFlow('packing-slip');
+    },
+    onGenerateDeliveryNote: async () => {
+      await launchOperationalDocumentFlow('delivery-note');
+    },
+    onGenerateDispatchNote: async () => {
+      await launchOperationalDocumentFlow('dispatch-note');
+    },
+    isGeneratingPackingSlip: containerActions.generateShipmentPackingSlip.isPending,
+    isGeneratingDeliveryNote: containerActions.generateShipmentDeliveryNote.isPending,
+    isGeneratingDispatchNote: containerActions.generateShipmentDispatchNote.isPending,
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Success State
@@ -602,11 +807,18 @@ export function OrderDetailContainer({
       paymentStatus={detail.order.paymentStatus}
       balanceDue={Number(detail.order.balanceDue || 0)}
       workflowActions={workflowOptionsQuery.data?.actions}
-      isRunningWorkflowAction={cancelOrderMutation.isPending}
+      isRunningWorkflowAction={workflowMutation.isPending || reopenShipmentMutation.isPending}
       isDuplicating={detail.isDuplicating}
       isDeleting={detail.isDeleting}
       onWorkflowAction={(action) => {
         switch (action.key) {
+          case 'confirm_order':
+            workflowMutation.mutate({
+              orderId,
+              targetStatus: 'confirmed',
+              reason: 'Confirmed from order workflow control',
+            });
+            return;
           case 'open_pick':
             openPick();
             return;
@@ -623,14 +835,40 @@ export function OrderDetailContainer({
               detail.onTabChange('fulfillment');
             }
             return;
+          case 'reopen_shipment':
+            if (!action.shipmentId) {
+              detail.onTabChange('fulfillment');
+              return;
+            }
+            if (!window.confirm('Reopen this shipment for correction? Shipped quantities will be reversed back into the pending shipment draft.')) {
+              return;
+            }
+            reopenShipmentMutation.mutate(
+              {
+                id: action.shipmentId,
+                idempotencyKey: `shipment-reopen:${action.shipmentId}`,
+                reason: 'Reopened from order workflow control',
+              },
+              {
+                onSuccess: () => {
+                  toastSuccess('Shipment reopened');
+                  detail.refetch();
+                },
+                onError: (error) => {
+                  toastError(error.message || 'Unable to reopen the shipment.');
+                  detail.refetch();
+                },
+              }
+            );
+            return;
           case 'cancel_order':
             if (!window.confirm('Cancel this order? This stops operational work before anything ships.')) {
               return;
             }
-            cancelOrderMutation.mutate({
-              id: orderId,
-              status: 'cancelled',
-              notes: 'Cancelled from order workflow control',
+            workflowMutation.mutate({
+              orderId,
+              targetStatus: 'cancelled',
+              reason: 'Cancelled from order workflow control',
             });
             return;
           default:
@@ -643,7 +881,7 @@ export function OrderDetailContainer({
       onRequestAmendment={openAmendment}
       onRecordPayment={openPayment}
       onCreateRma={openRma}
-      canCreateRma={canCreateGenericRma}
+      canCreateRma={fromIssueId ? canCreateIssueRma : canCreateGenericRma}
       backLinkSearch={
         fromIssueId && detail.order?.customerId
           ? { customerId: detail.order.customerId, fromIssueId }
@@ -666,7 +904,7 @@ export function OrderDetailContainer({
         activities={detail.activities}
         activitiesLoading={detail.activitiesLoading}
         activitiesError={detail.activitiesError}
-        documentActions={containerActions.documentActions}
+        documentActions={documentActions}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}
         onOrderUpdated={detail.refetch}
@@ -756,14 +994,40 @@ export function OrderDetailContainer({
         onOpenChange={handlePickDialogOpenChange}
         orderId={orderId}
         onSuccess={() => detail.refetch()}
+        onReviewFulfillment={() => {
+          detail.refetch();
+          detail.onTabChange('fulfillment');
+        }}
         onShipOrder={openShip}
       />
       <ShipOrderDialog
         open={dialogState.open === 'ship'}
-        onOpenChange={handleShipDialogOpenChange}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingOperationalDocument(null);
+          }
+          handleShipDialogOpenChange(open);
+        }}
         orderId={orderId}
-        onSuccess={() => detail.refetch()}
+        onSuccess={async (result) => {
+          detail.refetch();
+          if (!pendingOperationalDocument || !result?.shipmentId) {
+            setPendingOperationalDocument(null);
+            return;
+          }
+
+          if (pendingOperationalDocument === 'delivery-note') {
+            detail.onTabChange('fulfillment');
+            toast.info('Confirm delivery on the shipment, then generate the delivery note.');
+            setPendingOperationalDocument(null);
+            return;
+          }
+
+          await generateShipmentOperationalDocument(pendingOperationalDocument, result.shipmentId);
+          setPendingOperationalDocument(null);
+        }}
         onViewShipments={() => {
+          setPendingOperationalDocument(null);
           closeDialog();
           detail.onTabChange('fulfillment');
         }}
@@ -838,32 +1102,30 @@ export function OrderDetailContainer({
         />
       )}
 
-      {/* Edit Order Dialog (from ?edit=true in URL) */}
-      {detail.order.status === 'draft' && (
-        <OrderEditDialog
-          open={dialogState.open === 'edit'}
-          onOpenChange={handleEditDialogOpenChange}
-          order={{
-            id: detail.order.id,
-            orderNumber: detail.order.orderNumber ?? '',
-            customerId: detail.order.customerId ?? '',
-            status: detail.order.status ?? 'draft',
-            dueDate: detail.order.dueDate
-              ? (typeof detail.order.dueDate === 'string' ? new Date(detail.order.dueDate) : detail.order.dueDate)
-              : null,
-            internalNotes: detail.order.internalNotes ?? null,
-            customerNotes: detail.order.customerNotes ?? null,
-          }}
-          customers={containerActions.customers}
-          isLoadingCustomers={false}
-          onSubmit={containerActions.handleEditSubmit}
-          isSubmitting={containerActions.updateOrderMutation.isPending}
-          submitError={containerActions.updateOrderMutation.error?.message}
-        />
-      )}
+      <OrderEditDialog
+        open={dialogState.open === 'edit'}
+        onOpenChange={handleEditDialogOpenChange}
+        order={{
+          id: detail.order.id,
+          orderNumber: detail.order.orderNumber ?? '',
+          customerId: detail.order.customerId ?? '',
+          status: detail.order.status ?? 'draft',
+          dueDate: detail.order.dueDate
+            ? (typeof detail.order.dueDate === 'string' ? new Date(detail.order.dueDate) : detail.order.dueDate)
+            : null,
+          internalNotes: detail.order.internalNotes ?? null,
+          customerNotes: detail.order.customerNotes ?? null,
+          shippingAddress: detail.order.shippingAddress ?? null,
+        }}
+        customers={containerActions.customers}
+        isLoadingCustomers={false}
+        onSubmit={containerActions.handleEditSubmit}
+        isSubmitting={containerActions.updateOrderMutation.isPending}
+        submitError={containerActions.updateOrderMutation.error?.message}
+      />
 
       {/* RMA Create Dialog */}
-      {(fromIssueId || canCreateGenericRma) && (
+      {canOpenRmaDialog && (
         <RmaCreateDialog
           open={dialogState.open === 'rma'}
           onOpenChange={(open) => {
@@ -874,6 +1136,8 @@ export function OrderDetailContainer({
           orderLineItems={rmaOrderLineItems}
           issueId={fromIssueId}
           customerId={detail.order.customerId ?? undefined}
+          defaultReason={fromIssue?.rmaReadiness?.suggestedReason ?? undefined}
+          defaultReasonDetails={fromIssue?.resolution?.summary ?? null}
           onSuccess={(rmaId) => {
             closeDialog();
             toastSuccess('RMA created successfully', {

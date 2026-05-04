@@ -13,6 +13,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listRmas,
   getRma,
   createRma,
@@ -58,6 +63,12 @@ export interface UseRmasOptions {
   orderId?: string;
   /** Filter by issue */
   issueId?: string;
+  /** Filter by resolution */
+  resolution?: ListRmasInput['resolution'];
+  /** Filter by execution status */
+  executionStatus?: ListRmasInput['executionStatus'];
+  /** Filter by linked issue state */
+  linkedIssueOpenState?: ListRmasInput['linkedIssueOpenState'];
   /** Search by RMA number */
   search?: string;
   /** Page number (1-indexed) */
@@ -81,6 +92,9 @@ export function useRmas({
   customerId,
   orderId,
   issueId,
+  resolution,
+  executionStatus,
+  linkedIssueOpenState,
   search,
   page = 1,
   pageSize = 20,
@@ -94,6 +108,9 @@ export function useRmas({
     customerId,
     orderId,
     issueId,
+    resolution,
+    executionStatus,
+    linkedIssueOpenState,
     search,
     page,
     pageSize,
@@ -104,17 +121,28 @@ export function useRmas({
   return useQuery({
     queryKey: queryKeys.support.rmasListFiltered(filters),
     queryFn: async () => {
-      const result = await listRmas({
-        data: {
-          ...filters,
-          page: page ?? 1,
-          pageSize: pageSize ?? 20,
-          sortBy: sortBy ?? 'createdAt',
-          sortOrder: sortOrder ?? 'desc',
-        },
-      });
-      if (result == null) throw new Error('RMA list returned no data');
-      return result;
+      try {
+        const result = await listRmas({
+          data: {
+            ...filters,
+            page: page ?? 1,
+            pageSize: pageSize ?? 20,
+            sortBy: sortBy ?? 'createdAt',
+            sortOrder: sortOrder ?? 'desc',
+          },
+        });
+        return requireReadResult(result, {
+          message: 'RMA list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'RMAs are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'RMAs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -137,9 +165,22 @@ export function useRma({ rmaId, enabled = true }: UseRmaOptions) {
   return useQuery({
     queryKey: queryKeys.support.rmaDetail(rmaId),
     queryFn: async () => {
-      const result = await getRma({ data: { rmaId } });
-      if (result == null) throw new Error('RMA not found');
-      return result;
+      try {
+        const result = await getRma({ data: { rmaId } });
+        return requireReadResult(result, {
+          message: 'RMA not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'RMA details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested RMA could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'RMA details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested RMA could not be found.',
+        });
+      }
     },
     enabled: enabled && !!rmaId,
     staleTime: 30 * 1000,
@@ -161,8 +202,12 @@ export function useCreateRma() {
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
       }
     },
   });
@@ -230,6 +275,10 @@ export function useRejectRma() {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       }
     },
   });
@@ -299,6 +348,10 @@ export function useProcessRma() {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       if (result.orderId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+      }
+      if (result.issueId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.support.issuesList() });
       }
     },
   });

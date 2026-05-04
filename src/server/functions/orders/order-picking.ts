@@ -35,6 +35,10 @@ import {
   upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
 import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
+import {
+  releaseNonSerializedPickInventory,
+  reserveNonSerializedPickInventory,
+} from './order-inventory-reservations';
 
 // ============================================================================
 // PICK ORDER ITEMS
@@ -329,6 +333,24 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
           }
         }
 
+        if (!isSerialized && pickItem.qtyPicked > 0) {
+          if (!lineItem.productId) {
+            throw new ValidationError('Product-backed inventory is required for picking', {
+              productId: [`Line '${lineItem.description}' is not linked to a product.`],
+            });
+          }
+
+          await reserveNonSerializedPickInventory(tx, {
+            organizationId: ctx.organizationId,
+            orderId: data.orderId,
+            orderLineItemId: pickItem.lineItemId,
+            productId: lineItem.productId,
+            productName: lineItem.description,
+            quantity: pickItem.qtyPicked,
+            userId: ctx.user.id,
+          });
+        }
+
         // Merge serial numbers (use trimmed serials for storage)
         const existingItemSerials =
           canonicalLineSerials.get(lineItem.id) ??
@@ -593,6 +615,24 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
                 ? `Cannot unpick ${unpickItem.qtyToUnpick} for '${lineItem.description}'. Pending shipment drafts already reserve ${pendingReserved} unit${pendingReserved !== 1 ? 's' : ''}; resolve those drafts first.`
                 : `Cannot unpick ${unpickItem.qtyToUnpick} for '${lineItem.description}'. Picked: ${currentPicked}, shipped: ${currentShipped}, max unpickable: ${maxUnpickable}`,
             ],
+          });
+        }
+
+        if (!isSerialized && unpickItem.qtyToUnpick > 0) {
+          if (!lineItem.productId) {
+            throw new ValidationError('Product-backed inventory is required for unpicking', {
+              productId: [`Line '${lineItem.description}' is not linked to a product.`],
+            });
+          }
+
+          await releaseNonSerializedPickInventory(tx, {
+            organizationId: ctx.organizationId,
+            orderId: data.orderId,
+            orderLineItemId: unpickItem.lineItemId,
+            productId: lineItem.productId,
+            productName: lineItem.description,
+            quantity: unpickItem.qtyToUnpick,
+            userId: ctx.user.id,
           });
         }
 

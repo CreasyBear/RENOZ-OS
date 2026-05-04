@@ -59,6 +59,9 @@ export const generatedDocuments = pgTable(
     // Regeneration tracking (incremented on each regenerate)
     regenerationCount: integer("regeneration_count").notNull().default(0),
 
+    // Operational doc lineage (latest-only model)
+    sourceRevision: integer("source_revision"),
+
     // Standard timestamps
     ...timestampColumns,
   },

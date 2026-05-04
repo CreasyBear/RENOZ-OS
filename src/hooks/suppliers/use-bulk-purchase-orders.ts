@@ -10,6 +10,7 @@
 
 import { useQueries } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getPurchaseOrder } from '@/server/functions/suppliers/purchase-orders';
 
 // ============================================================================
@@ -40,12 +41,19 @@ export function useBulkPurchaseOrders({
     queries: purchaseOrderIds.map((poId) => ({
       queryKey: queryKeys.suppliers.purchaseOrderDetail(poId),
       queryFn: async () => {
-      const result = await getPurchaseOrder({
-        data: { id: poId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
-    },
+        try {
+          return await getPurchaseOrder({
+            data: { id: poId },
+          });
+        } catch (error) {
+          throw normalizeReadQueryError(error, {
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Purchase order details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested purchase order could not be found.',
+          });
+        }
+      },
       enabled: enabled && !!poId,
       staleTime: 30 * 1000,
     })),

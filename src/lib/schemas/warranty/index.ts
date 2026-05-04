@@ -6,6 +6,8 @@
 
 // --- Core schemas ---
 export * from './warranties';
+export * from './entitlements';
+export * from './owner-records';
 export * from './policies';
 export * from './claims';
 export * from './extensions';
@@ -15,9 +17,27 @@ export * from './bulk-import';
 
 // --- Re-export key types ---
 export type {
+  WarrantyEntitlementEvidenceType,
+  WarrantyEntitlementStatus,
+  WarrantyEntitlementProvisioningIssueCode,
+  WarrantyEntitlementFilters,
+  GetWarrantyEntitlementInput,
+  ActivateWarrantyFromEntitlementInput,
+  WarrantyEntitlementListItem,
+  ListWarrantyEntitlementsResult,
+  WarrantyEntitlementDetail,
+} from './entitlements';
+export type {
+  WarrantyOwnerAddress,
+  WarrantyOwnerRecord,
+  WarrantyOwnerRecordInput,
+  GetWarrantyOwnerRecordInput,
+} from './owner-records';
+export type {
   WarrantyStatus,
   CreateWarrantyInput,
   UpdateWarrantyInput,
+  TransferWarrantyInput,
   WarrantyFilters,
   WarrantyResponse,
   WarrantyListResponse,
@@ -34,6 +54,9 @@ export type {
   WarrantyListItem,
   ListWarrantiesResult,
   WarrantyDetail,
+  WarrantyServiceLinkageStatus,
+  WarrantyPendingServiceReview,
+  WarrantySystemHistoryPreviewItem,
   WarrantyDetailContainerRenderProps,
   WarrantyDetailContainerProps,
   WarrantyCertificateStatus,
@@ -60,11 +83,17 @@ export {
   isWarrantyClaimStatusValue,
   isWarrantyClaimTypeValue,
   isWarrantyClaimResolutionTypeValue,
+  isWarrantyClaimantRoleValue,
+  warrantyClaimQuickFilterSchema,
+  warrantyClaimQuickFilterValues,
 } from './claims';
 export type {
   WarrantyClaimStatusValue,
   WarrantyClaimTypeValue,
   WarrantyClaimResolutionTypeValue,
+  WarrantyClaimantRoleValue,
+  WarrantyClaimQuickFilterValue,
+  WarrantyClaimantSnapshot,
   CreateWarrantyClaimInput,
   UpdateClaimStatusInput,
   ApproveClaimInput,

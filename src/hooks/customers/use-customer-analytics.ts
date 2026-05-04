@@ -8,6 +8,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getCustomerKpis,
   getHealthDistribution,
   getCustomerTrends,
@@ -25,6 +30,16 @@ import {
   getProfitabilitySegments,
 } from '@/server/functions/customers/customer-analytics';
 
+function normalizeCustomerAnalyticsError(error: unknown, fallbackMessage: string) {
+  if (isReadQueryError(error)) {
+    return error;
+  }
+  return normalizeReadQueryError(error, {
+    contractType: 'always-shaped',
+    fallbackMessage,
+  });
+}
+
 // ============================================================================
 // DASHBOARD HOOKS
 // ============================================================================
@@ -36,11 +51,19 @@ export function useCustomerKpis(range: '7d' | '30d' | '90d' | '365d' | 'all' = '
   return useQuery({
     queryKey: queryKeys.customerAnalytics.kpis({ period: range }),
     queryFn: async () => {
-      const result = await getCustomerKpis({ data: { range } });
-      if (result == null) {
-        throw new Error('Customer KPIs returned no data');
+      try {
+        const result = await getCustomerKpis({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Customer KPIs returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer KPIs are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer KPIs are temporarily unavailable. Please refresh and try again.'
+        );
       }
-      return result;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -53,9 +76,20 @@ export function useHealthDistribution() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.healthDistribution(),
     queryFn: async () => {
-      const result = await getHealthDistribution({ data: {} });
-      if (result == null) throw new Error('Health distribution returned no data');
-      return result;
+      try {
+        const result = await getHealthDistribution({ data: {} });
+        return requireReadResult(result, {
+          message: 'Health distribution returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer health distribution is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer health distribution is temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -68,9 +102,19 @@ export function useCustomerTrends(range: '7d' | '30d' | '90d' | '365d' | 'all' =
   return useQuery({
     queryKey: queryKeys.customerAnalytics.trends({ period: range }),
     queryFn: async () => {
-      const result = await getCustomerTrends({ data: { range } });
-      if (result == null) throw new Error('Customer trends returned no data');
-      return result;
+      try {
+        const result = await getCustomerTrends({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Customer trends returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer trends are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer trends are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -87,9 +131,20 @@ export function useSegmentPerformance() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.segments(),
     queryFn: async () => {
-      const result = await getSegmentPerformance({ data: {} });
-      if (result == null) throw new Error('Segment performance returned no data');
-      return result;
+      try {
+        const result = await getSegmentPerformance({ data: {} });
+        return requireReadResult(result, {
+          message: 'Segment performance returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer segment performance is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer segment performance is temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -102,9 +157,20 @@ export function useSegmentAnalytics(tagId: string | null) {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.segmentAnalytics(tagId ?? ''),
     queryFn: async () => {
-      const result = await getSegmentAnalytics({ data: { tagId: tagId! } });
-      if (result == null) throw new Error('Segment analytics returned no data');
-      return result;
+      try {
+        const result = await getSegmentAnalytics({ data: { tagId: tagId! } });
+        return requireReadResult(result, {
+          message: 'Segment analytics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer segment analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer segment analytics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     enabled: !!tagId,
     staleTime: 5 * 60 * 1000,
@@ -122,9 +188,20 @@ export function useLifecycleStages() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.lifecycleStages(),
     queryFn: async () => {
-      const result = await getLifecycleStages({ data: {} });
-      if (result == null) throw new Error('Lifecycle stages returned no data');
-      return result;
+      try {
+        const result = await getLifecycleStages({ data: {} });
+        return requireReadResult(result, {
+          message: 'Lifecycle stages returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer lifecycle stages are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer lifecycle stages are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -137,9 +214,20 @@ export function useLifecycleCohorts(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.lifecycleCohorts({ range }),
     queryFn: async () => {
-      const result = await getLifecycleCohorts({ data: { range } });
-      if (result == null) throw new Error('Lifecycle cohorts returned no data');
-      return result;
+      try {
+        const result = await getLifecycleCohorts({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Lifecycle cohorts returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer lifecycle cohorts are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer lifecycle cohorts are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -152,9 +240,20 @@ export function useChurnMetrics(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.churnMetrics({ range }),
     queryFn: async () => {
-      const result = await getChurnMetrics({ data: { range } });
-      if (result == null) throw new Error('Churn metrics returned no data');
-      return result;
+      try {
+        const result = await getChurnMetrics({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Churn metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer churn metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer churn metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -167,9 +266,20 @@ export function useConversionFunnel(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.conversionFunnel({ range }),
     queryFn: async () => {
-      const result = await getConversionFunnel({ data: { range } });
-      if (result == null) throw new Error('Conversion funnel returned no data');
-      return result;
+      try {
+        const result = await getConversionFunnel({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Conversion funnel returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer conversion funnel is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer conversion funnel data is temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -182,9 +292,20 @@ export function useAcquisitionMetrics(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.acquisitionMetrics({ range }),
     queryFn: async () => {
-      const result = await getAcquisitionMetrics({ data: { range } });
-      if (result == null) throw new Error('Acquisition metrics returned no data');
-      return result;
+      try {
+        const result = await getAcquisitionMetrics({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Acquisition metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer acquisition metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer acquisition metrics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -197,9 +318,20 @@ export function useQuickStats(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30
   return useQuery({
     queryKey: queryKeys.customerAnalytics.quickStats({ range }),
     queryFn: async () => {
-      const result = await getQuickStats({ data: { range } });
-      if (result == null) throw new Error('Quick stats returned no data');
-      return result;
+      try {
+        const result = await getQuickStats({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Quick stats returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer quick statistics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer quick stats are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -212,9 +344,20 @@ export function useValueTiers() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.valueTiers(),
     queryFn: async () => {
-      const result = await getValueTiers({ data: {} });
-      if (result == null) throw new Error('Value tiers returned no data');
-      return result;
+      try {
+        const result = await getValueTiers({ data: {} });
+        return requireReadResult(result, {
+          message: 'Value tiers returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer value tiers are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer value tiers are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -227,9 +370,20 @@ export function useValueKpis(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.valueKpis({ range }),
     queryFn: async () => {
-      const result = await getValueKpis({ data: { range } });
-      if (result == null) throw new Error('Value KPIs returned no data');
-      return result;
+      try {
+        const result = await getValueKpis({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Value KPIs returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer value KPIs are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer value KPIs are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -242,9 +396,20 @@ export function useProfitabilitySegments(range: '3m' | '6m' | '1y' = '6m') {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.profitabilitySegments({ range }),
     queryFn: async () => {
-      const result = await getProfitabilitySegments({ data: { range } });
-      if (result == null) throw new Error('Profitability segments returned no data');
-      return result;
+      try {
+        const result = await getProfitabilitySegments({ data: { range } });
+        return requireReadResult(result, {
+          message: 'Profitability segments returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer profitability segments are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Customer profitability segments are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -257,9 +422,20 @@ export function useTopCustomers(limit: number = 10) {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.topCustomers({ limit }),
     queryFn: async () => {
-      const result = await getTopCustomers({ data: { limit } });
-      if (result == null) throw new Error('Top customers returned no data');
-      return result;
+      try {
+        const result = await getTopCustomers({ data: { limit } });
+        return requireReadResult(result, {
+          message: 'Top customers returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Top customers are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        throw normalizeCustomerAnalyticsError(
+          error,
+          'Top customer analytics are temporarily unavailable. Please refresh and try again.'
+        );
+      }
     },
     staleTime: 5 * 60 * 1000,
   });

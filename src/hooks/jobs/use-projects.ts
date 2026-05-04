@@ -13,6 +13,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getProjects,
   getProjectsCursor,
   getProject,
@@ -53,9 +58,20 @@ export function useProjects(options: UseProjectsOptions = {}) {
   return useQuery<ProjectListResponse>({
     queryKey: queryKeys.projects.list(filters),
     queryFn: async () => {
-      const result = await getProjects({ data: filters as ProjectListQuery });
-      if (result == null) throw new Error('Projects list returned no data');
-      return result;
+      try {
+        const result = await getProjects({ data: filters as ProjectListQuery });
+        return requireReadResult(result, {
+          message: 'Projects list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -69,21 +85,49 @@ export function useAllProjects(filters: Partial<ProjectListQuery> = {}, enabled 
   return useQuery<Project[]>({
     queryKey: queryKeys.projects.listAll(filters),
     queryFn: async () => {
-      const allResults: Project[] = [];
-      let page = 1;
-      let hasMore = true;
+      try {
+        const allResults: Project[] = [];
+        let page = 1;
+        let hasMore = true;
 
-      while (hasMore && page < 20) {
-        const result = (await getProjects({
-          data: { ...filters, page, pageSize: 100 } as ProjectListQuery,
-        })) as ProjectListResponse;
-        if (!result?.items) return allResults;
-        allResults.push(...result.items);
-        hasMore = result.items.length === 100 && allResults.length < result.pagination.totalItems;
-        page++;
+        while (hasMore && page < 20) {
+          const result = (await getProjects({
+            data: { ...filters, page, pageSize: 100 } as ProjectListQuery,
+          })) as ProjectListResponse | null;
+          const ensuredResult = requireReadResult(result, {
+            message: 'Projects list returned no data',
+            contractType: 'always-shaped',
+            fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+          });
+          if (!Array.isArray(ensuredResult.items)) {
+            throw normalizeReadQueryError(
+              {
+                code: 'SERVER_ERROR',
+                statusCode: 500,
+                message: 'Projects list returned malformed items',
+              },
+              {
+                contractType: 'always-shaped',
+                fallbackMessage:
+                  'Projects are temporarily unavailable. Please refresh and try again.',
+              }
+            );
+          }
+          allResults.push(...ensuredResult.items);
+          hasMore =
+            ensuredResult.items.length === 100 &&
+            allResults.length < ensuredResult.pagination.totalItems;
+          page++;
+        }
+
+        return allResults;
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+        });
       }
-
-      return allResults;
     },
     enabled,
     staleTime: 30 * 1000,
@@ -96,14 +140,41 @@ export function useAllProjects(filters: Partial<ProjectListQuery> = {}, enabled 
  */
 export function useLoadProjectOptions() {
   return async (search: string): Promise<{ value: string; label: string }[]> => {
-    const result = await getProjects({
-      data: {
-        search: search || undefined,
-        page: 1,
-        pageSize: 20,
-      } as ProjectListQuery,
-    });
-    const items = result?.items ?? [];
+    let items: Project[] = [];
+    try {
+      const result = await getProjects({
+        data: {
+          search: search || undefined,
+          page: 1,
+          pageSize: 20,
+        } as ProjectListQuery,
+      });
+      const ensuredResult = requireReadResult(result, {
+        message: 'Projects list returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+      });
+      if (!Array.isArray(ensuredResult.items)) {
+        throw normalizeReadQueryError(
+          {
+            code: 'SERVER_ERROR',
+            statusCode: 500,
+            message: 'Projects list returned malformed items',
+          },
+          {
+            contractType: 'always-shaped',
+            fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+          }
+        );
+      }
+      items = ensuredResult.items;
+    } catch (error) {
+      if (isReadQueryError(error)) throw error;
+      throw normalizeReadQueryError(error, {
+        contractType: 'always-shaped',
+        fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+      });
+    }
     return items.map((p) => ({
       value: p.id,
       label: `${p.title ?? 'Untitled'}${p.projectNumber ? ` (${p.projectNumber})` : ''}`,
@@ -118,9 +189,20 @@ export function useProjectsCursor(filters: Partial<ProjectCursorQuery> = {}) {
   return useQuery({
     queryKey: queryKeys.projects.listCursor(filters),
     queryFn: async () => {
-      const result = await getProjectsCursor({ data: filters as ProjectCursorQuery });
-      if (result == null) throw new Error('Projects cursor returned no data');
-      return result;
+      try {
+        const result = await getProjectsCursor({ data: filters as ProjectCursorQuery });
+        return requireReadResult(result, {
+          message: 'Projects cursor returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000,
   });
@@ -142,9 +224,22 @@ export function useProject({ projectId, enabled = true }: UseProjectOptions) {
   return useQuery<GetProjectRawInput>({
     queryKey: queryKeys.projects.detail(projectId),
     queryFn: async () => {
-      const result = await getProject({ data: { projectId } });
-      if (result == null) throw new Error('Project not found');
-      return result;
+      try {
+        const result = await getProject({ data: { projectId } });
+        return requireReadResult(result, {
+          message: 'Project not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Project details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested project could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Project details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested project could not be found.',
+        });
+      }
     },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000, // 1 minute
@@ -158,11 +253,24 @@ export function useProjectsByCustomer(customerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.projects.byCustomer(customerId),
     queryFn: async () => {
-      const result = await getProjects({
-        data: { customerId, page: 1, pageSize: 100 } as ProjectListQuery,
-      });
-      if (result == null) throw new Error('Projects by customer returned no data');
-      return result;
+      try {
+        const result = await getProjects({
+          data: { customerId, page: 1, pageSize: 100 } as ProjectListQuery,
+        });
+        return requireReadResult(result, {
+          message: 'Projects by customer returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Projects are temporarily unavailable for this customer. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Projects are temporarily unavailable for this customer. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!customerId,
     staleTime: 60 * 1000,
@@ -336,9 +444,24 @@ export function usePrefetchProject() {
     queryClient.prefetchQuery({
       queryKey: queryKeys.projects.detail(projectId),
       queryFn: async () => {
-        const result = await getProject({ data: { projectId } });
-        if (result == null) throw new Error('Project not found');
-        return result;
+        try {
+          const result = await getProject({ data: { projectId } });
+          return requireReadResult(result, {
+            message: 'Project not found',
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Project details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested project could not be found.',
+          });
+        } catch (error) {
+          if (isReadQueryError(error)) throw error;
+          throw normalizeReadQueryError(error, {
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Project details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested project could not be found.',
+          });
+        }
       },
       staleTime: 60 * 1000,
     });

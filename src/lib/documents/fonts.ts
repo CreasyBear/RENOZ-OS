@@ -10,31 +10,35 @@
  * @see https://react-pdf.org/fonts
  */
 import { Font } from "@react-pdf/renderer";
-
-// Import as ArrayBuffer and convert to data URL — react-pdf accepts data URLs
-// and reads font data in-memory (no filesystem path needed on Vercel)
-import InterRegularBuf from "./fonts/Inter-Regular.ttf?arraybuffer";
-import InterItalicBuf from "./fonts/Inter-Italic.ttf?arraybuffer";
-import InterMediumBuf from "./fonts/Inter-Medium.ttf?arraybuffer";
-import InterMediumItalicBuf from "./fonts/Inter-MediumItalic.ttf?arraybuffer";
-import InterSemiBoldBuf from "./fonts/Inter-SemiBold.ttf?arraybuffer";
-import InterSemiBoldItalicBuf from "./fonts/Inter-SemiBoldItalic.ttf?arraybuffer";
-import InterBoldBuf from "./fonts/Inter-Bold.ttf?arraybuffer";
-import InterBoldItalicBuf from "./fonts/Inter-BoldItalic.ttf?arraybuffer";
+import InterRegularBuffer from "./fonts/Inter-Regular.ttf?arraybuffer";
+import InterItalicBuffer from "./fonts/Inter-Italic.ttf?arraybuffer";
+import InterMediumBuffer from "./fonts/Inter-Medium.ttf?arraybuffer";
+import InterMediumItalicBuffer from "./fonts/Inter-MediumItalic.ttf?arraybuffer";
+import InterSemiBoldBuffer from "./fonts/Inter-SemiBold.ttf?arraybuffer";
+import InterSemiBoldItalicBuffer from "./fonts/Inter-SemiBoldItalic.ttf?arraybuffer";
+import InterBoldBuffer from "./fonts/Inter-Bold.ttf?arraybuffer";
+import InterBoldItalicBuffer from "./fonts/Inter-BoldItalic.ttf?arraybuffer";
 
 function toDataUrl(buf: ArrayBuffer): string {
   const base64 = Buffer.from(buf).toString("base64");
   return `data:font/ttf;base64,${base64}`;
 }
 
-const InterRegular = toDataUrl(InterRegularBuf);
-const InterItalic = toDataUrl(InterItalicBuf);
-const InterMedium = toDataUrl(InterMediumBuf);
-const InterMediumItalic = toDataUrl(InterMediumItalicBuf);
-const InterSemiBold = toDataUrl(InterSemiBoldBuf);
-const InterSemiBoldItalic = toDataUrl(InterSemiBoldItalicBuf);
-const InterBold = toDataUrl(InterBoldBuf);
-const InterBoldItalic = toDataUrl(InterBoldItalicBuf);
+/**
+ * Keep font loading fully static so the SSR bundle contains the bytes.
+ *
+ * The previous dynamic `import(\`./fonts/${name}.ttf?arraybuffer\`)` approach
+ * worked locally but could be left as a runtime asset lookup in Vercel SSR,
+ * which then crashed trying to import `/var/task/_ssr/fonts/*.ttf`.
+ */
+const InterRegular = toDataUrl(InterRegularBuffer as ArrayBuffer);
+const InterItalic = toDataUrl(InterItalicBuffer as ArrayBuffer);
+const InterMedium = toDataUrl(InterMediumBuffer as ArrayBuffer);
+const InterMediumItalic = toDataUrl(InterMediumItalicBuffer as ArrayBuffer);
+const InterSemiBold = toDataUrl(InterSemiBoldBuffer as ArrayBuffer);
+const InterSemiBoldItalic = toDataUrl(InterSemiBoldItalicBuffer as ArrayBuffer);
+const InterBold = toDataUrl(InterBoldBuffer as ArrayBuffer);
+const InterBoldItalic = toDataUrl(InterBoldItalicBuffer as ArrayBuffer);
 
 /**
  * Register Inter font family

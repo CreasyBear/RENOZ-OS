@@ -4,7 +4,7 @@
  * Registry of document-type → renderer functions for preview.
  * Replaces the large switch in preview-document.tsx.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import type { ReactElement } from 'react';
@@ -21,6 +21,7 @@ import { WarrantyCertificatePdfDocument } from '@/lib/documents/templates/certif
 import { CompletionCertificatePdfDocument } from '@/lib/documents/templates/certificates/completion';
 import { HandoverPackPdfDocument } from '@/lib/documents/templates/certificates/handover-pack';
 import type { DocumentOrganization, DocumentOrder, DocumentLineItem } from '@/lib/documents/types';
+import type { PreviewDocumentData } from '@/lib/documents/builders';
 
 export type PreviewDocumentType =
   | 'quote'
@@ -36,34 +37,7 @@ export type PreviewDocumentType =
 
 export interface PreviewRenderContext {
   documentType: PreviewDocumentType;
-  documentData: {
-    organization: Record<string, unknown>;
-    customer: {
-      name: string;
-      email?: string;
-      phone?: string;
-      address?: string;
-      addressLine2?: string;
-      city?: string;
-      state?: string;
-      postalCode?: string;
-      postcode?: string;
-      country?: string;
-    };
-    order: {
-      orderNumber: string;
-      createdAt: string;
-      dueDate?: string;
-      validUntil: string;
-      lineItems: Array<{ description: string; quantity: number; unitPrice: number; total: number; sku?: string }>;
-      subtotal: number;
-      taxRate?: number;
-      taxAmount: number;
-      discount?: number;
-      total: number;
-      notes?: string;
-      terms?: string;
-    };
+  documentData: PreviewDocumentData & {
     warranty: {
       certificateNumber: string;
       productName: string;
@@ -100,14 +74,17 @@ function sampleSerialsForPreview(idx: number): string[] | undefined {
 }
 
 function shippingAddressFromContext(ctx: PreviewRenderContext) {
-  const c = ctx.documentData.customer;
+  const shipping = ctx.baseOrder.shippingAddress ?? ctx.baseOrder.customer.address;
   return {
-    addressLine1: c.address ?? '',
-    addressLine2: c.addressLine2,
-    city: c.city ?? '',
-    state: c.state ?? '',
-    postalCode: c.postalCode ?? c.postcode ?? '',
-    country: c.country ?? '',
+    name: ctx.baseOrder.shippingAddress?.contactName ?? ctx.baseOrder.customer.name,
+    addressLine1: shipping?.addressLine1 ?? '',
+    addressLine2: shipping?.addressLine2,
+    city: shipping?.city ?? '',
+    state: shipping?.state ?? '',
+    postalCode: shipping?.postalCode ?? '',
+    country: shipping?.country ?? '',
+    contactName: ctx.baseOrder.shippingAddress?.contactName,
+    contactPhone: ctx.baseOrder.shippingAddress?.contactPhone,
   };
 }
 

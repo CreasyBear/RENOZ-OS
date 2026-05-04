@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { classifyReadFailureKind, normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getPurchaseOrderCosts,
   addPurchaseOrderCost,
@@ -26,11 +27,17 @@ export function usePurchaseOrderCosts(poId: string, options: { enabled?: boolean
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderCosts(poId),
     queryFn: async () => {
-      const result = await getPurchaseOrderCosts({
-        data: { purchaseOrderId: poId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPurchaseOrderCosts({
+          data: { purchaseOrderId: poId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Purchase order costs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!poId,
     staleTime: 30 * 1000,
@@ -43,11 +50,27 @@ export function useAllocatedCosts(poId: string, options: { enabled?: boolean } =
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderAllocatedCosts(poId),
     queryFn: async () => {
-      const result = await calculateAllocatedCosts({
-        data: { purchaseOrderId: poId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await calculateAllocatedCosts({
+          data: { purchaseOrderId: poId },
+        });
+      } catch (error) {
+        const normalizedError = normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Landed cost allocation is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested purchase order could not be found.',
+        });
+        if (
+          classifyReadFailureKind(error) === 'validation' &&
+          error &&
+          typeof error === 'object' &&
+          typeof (error as { message?: unknown }).message === 'string'
+        ) {
+          normalizedError.message = (error as { message: string }).message;
+        }
+        throw normalizedError;
+      }
     },
     enabled: enabled && !!poId,
     staleTime: 30 * 1000,

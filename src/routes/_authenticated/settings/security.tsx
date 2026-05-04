@@ -107,8 +107,16 @@ function SecuritySettings() {
   const confirm = useConfirmation();
 
   // Data fetching via hooks
-  const { data: sessions = [], isLoading: sessionsLoading } = useMySessions();
-  const { data: activityData, isLoading: activityLoading } = useMyActivity({ page: 1, pageSize: 10 });
+  const {
+    data: sessions = [],
+    isLoading: sessionsLoading,
+    error: sessionsError,
+  } = useMySessions();
+  const {
+    data: activityData,
+    isLoading: activityLoading,
+    error: activityError,
+  } = useMyActivity({ page: 1, pageSize: 10 });
   const securityEvents = activityData?.items ?? [];
 
   // Session mutations
@@ -211,7 +219,7 @@ function SecuritySettings() {
   };
 
   // Show loading skeleton while data is being fetched
-  if (sessionsLoading || activityLoading) {
+  if ((sessionsLoading && sessions.length === 0) || (activityLoading && !activityData)) {
     return <SettingsCardsSkeleton sections={4} />;
   }
 
@@ -225,6 +233,15 @@ function SecuritySettings() {
         <div className="max-w-4xl space-y-6">
 
       <div className="space-y-6">
+        {sessionsError || activityError ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="py-4 text-sm text-amber-900">
+              Security data is partially unavailable. Existing session and activity data is still
+              shown where available.
+            </CardContent>
+          </Card>
+        ) : null}
+
         {/* Password Section */}
         <PasswordChangeForm />
 
@@ -258,7 +275,16 @@ function SecuritySettings() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {sessions.map((session) => {
+              {sessionsError && sessions.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <p className="font-medium">Sessions unavailable</p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    We couldn&apos;t load your active sessions right now.
+                  </p>
+                </div>
+              ) : sessions.length === 0 ? (
+                <p className="text-muted-foreground py-4 text-center">No active sessions found</p>
+              ) : sessions.map((session) => {
                 const DeviceIcon = getDeviceIcon(session.deviceType);
                 const isTerminating = terminatingSessionId === session.id;
                 return (
@@ -384,12 +410,25 @@ function SecuritySettings() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {securityEvents.length === 0 ? (
+              {activityError && securityEvents.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <p className="font-medium">Security activity unavailable</p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    We couldn&apos;t load your recent activity right now.
+                  </p>
+                </div>
+              ) : securityEvents.length === 0 ? (
                 <p className="text-muted-foreground py-4 text-center text-sm">
                   No recent security activity
                 </p>
               ) : (
-                securityEvents.map(
+                <>
+                  {activityError ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      Showing the latest available security activity while refresh retries.
+                    </div>
+                  ) : null}
+                {securityEvents.map(
                   (event: {
                     id: string;
                     action: string;
@@ -416,7 +455,8 @@ function SecuritySettings() {
                       </div>
                     );
                   }
-                )
+                )}
+                </>
               )}
             </div>
           </CardContent>

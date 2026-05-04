@@ -25,6 +25,9 @@ import type { ProjectTabVisit } from '@/lib/schemas/jobs/project-detail';
 export interface UseProjectDetailTabRenderersParams {
   project: ProjectDetailData | null;
   siteVisits: ProjectTabVisit[];
+  siteVisitsError?: Error | null;
+  siteVisitsHasData?: boolean;
+  onRetrySiteVisits?: () => void;
   /** Project tasks for Overview Gantt (from useProjectDetail) */
   tasks?: unknown[];
   /** Workstream id->name for Gantt task labels */
@@ -55,6 +58,9 @@ export interface ProjectDetailTabRenderers {
 export function useProjectDetailTabRenderers({
   project,
   siteVisits,
+  siteVisitsError,
+  siteVisitsHasData = true,
+  onRetrySiteVisits,
   tasks = [],
   workstreamNames,
   onGanttDateChange,
@@ -90,10 +96,13 @@ export function useProjectDetailTabRenderers({
       <ProjectVisitsTab
         project={transformProjectForTabs(project)}
         visits={siteVisits ?? []}
+        error={siteVisitsError}
+        hasData={siteVisitsHasData}
+        onRetry={onRetrySiteVisits}
         onScheduleVisit={() => setSiteVisitCreateOpen(true)}
       />
     );
-  }, [project, siteVisits]);
+  }, [project, siteVisits, siteVisitsError, siteVisitsHasData, onRetrySiteVisits]);
 
   const renderTasksTab = useCallback(() => {
     if (!project) return null;

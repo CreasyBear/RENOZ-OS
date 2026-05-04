@@ -71,7 +71,7 @@ export type SaveStatementHistoryInput = z.infer<typeof saveStatementHistorySchem
  */
 export const markStatementSentSchema = z.object({
   statementId: idSchema,
-  sentToEmail: z.string().email('Invalid email address'),
+  sentToEmail: z.string().email('Invalid email address').optional(),
 });
 
 export type MarkStatementSentInput = z.infer<typeof markStatementSentSchema>;

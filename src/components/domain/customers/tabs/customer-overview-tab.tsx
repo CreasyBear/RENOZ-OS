@@ -31,11 +31,13 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { CustomerActiveItems, CustomerActiveItemsSkeleton } from '../active-items';
 import { CustomerHierarchyContainer } from '../containers/customer-hierarchy-container';
+import type { SummaryState } from '@/lib/metrics/summary-health';
 import type {
   CustomerDetailData,
   CustomerActiveItems as CustomerActiveItemsType,
@@ -49,6 +51,7 @@ export interface CustomerOverviewTabProps {
   customer: CustomerDetailData;
   activeItems?: CustomerActiveItemsType;
   activeItemsLoading?: boolean;
+  orderSummaryState?: SummaryState;
 }
 
 // ============================================================================
@@ -370,9 +373,22 @@ function AddressesSection({ addresses }: AddressesSectionProps) {
 
 interface RecentOrdersPreviewProps {
   orderSummary?: CustomerDetailData['orderSummary'];
+  orderSummaryState?: SummaryState;
 }
 
-function RecentOrdersPreview({ orderSummary }: RecentOrdersPreviewProps) {
+function RecentOrdersPreview({ orderSummary, orderSummaryState = 'ready' }: RecentOrdersPreviewProps) {
+  if (orderSummaryState === 'unavailable') {
+    return (
+      <Section title="Recent Orders">
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertDescription>
+            Recent orders are temporarily unavailable. Refresh when the summary query recovers or open the Orders module for the full order list.
+          </AlertDescription>
+        </Alert>
+      </Section>
+    );
+  }
+
   if (!orderSummary || orderSummary.recentOrders.length === 0) {
     return (
       <Section title="Recent Orders">
@@ -491,6 +507,7 @@ export const CustomerOverviewTab = memo(function CustomerOverviewTab({
   customer,
   activeItems,
   activeItemsLoading,
+  orderSummaryState = 'ready',
 }: CustomerOverviewTabProps) {
   return (
     <div className="space-y-10 pt-6">
@@ -512,7 +529,10 @@ export const CustomerOverviewTab = memo(function CustomerOverviewTab({
 
       <AddressesSection addresses={customer.addresses} />
 
-      <RecentOrdersPreview orderSummary={customer.orderSummary} />
+      <RecentOrdersPreview
+        orderSummary={customer.orderSummary}
+        orderSummaryState={orderSummaryState}
+      />
 
       <BusinessIdentifiers taxId={customer.taxId} registrationNumber={customer.registrationNumber} />
 

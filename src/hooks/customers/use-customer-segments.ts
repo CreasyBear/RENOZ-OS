@@ -8,6 +8,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getSegmentsWithStats,
   getSegmentAnalytics,
   type SegmentWithStats,
@@ -34,9 +39,20 @@ export function useSegments(options: UseSegmentsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.customers.segments.list({ includeEmpty }),
     queryFn: async () => {
-      const result = await segmentsFn({ data: { includeEmpty } });
-      if (result == null) throw new Error('Customer segments returned no data');
-      return result;
+      try {
+        const result = await segmentsFn({ data: { includeEmpty } });
+        return requireReadResult(result, {
+          message: 'Customer segments returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer segments are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Customer segments are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -63,9 +79,22 @@ export function useSegmentDetail(options: UseSegmentDetailOptions) {
   return useQuery({
     queryKey: queryKeys.customers.segments.analytics(segmentId),
     queryFn: async () => {
-      const result = await analyticsFn({ data: { segmentId } });
-      if (result == null) throw new Error('Segment analytics returned no data');
-      return result;
+      try {
+        const result = await analyticsFn({ data: { segmentId } });
+        return requireReadResult(result, {
+          message: 'Segment analytics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer segment analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Customer segment analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!segmentId,
     staleTime: 1000 * 60 * 2, // 2 minutes

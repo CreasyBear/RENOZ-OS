@@ -18,6 +18,7 @@ import {
   FileQuestion,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -185,7 +186,7 @@ export const OpportunityDocumentsTab = memo(function OpportunityDocumentsTab({
       {/* Content */}
       {isLoading ? (
         <LoadingSkeleton />
-      ) : error ? (
+      ) : error && !data ? (
         <div className="text-center py-8 text-destructive">
           <p>Failed to load documents</p>
           <Button variant="link" onClick={() => refetch()}>
@@ -196,6 +197,13 @@ export const OpportunityDocumentsTab = memo(function OpportunityDocumentsTab({
         <EmptyState />
       ) : (
         <div className="space-y-3">
+          {error ? (
+            <Alert>
+              <AlertDescription>
+                {error.message || 'Documents are temporarily unavailable. Showing the most recent documents.'}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {documents.map((doc) => (
             <DocumentCard key={doc.id} document={doc} />
           ))}

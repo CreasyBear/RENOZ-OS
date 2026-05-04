@@ -2,7 +2,7 @@
  * RMA Workflow Actions Component
  *
  * Provides workflow action buttons based on current RMA status.
- * Uses useConfirmation for approve/reject; custom dialogs for receive/process (forms).
+ * Uses useConfirmation for approve/reject and guided dialogs for receipt/remedy execution.
  *
  * @see src/hooks/use-rma.ts for mutations
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-003c
@@ -11,37 +11,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { Button } from '@/components/ui/button';
+
+import { useHasPermission, toastError } from '@/hooks';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
-import { useHasPermission } from '@/hooks';
-import { PERMISSIONS } from '@/lib/auth/permissions';
-import {
-  createPendingDialogInteractionGuards,
-  createPendingDialogOpenChangeHandler,
-} from '@/components/ui/dialog-pending-guards';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { toastError } from '@/hooks';
 import { useLocations } from '@/hooks/inventory';
-import type { RmaResponse, RmaResolution } from '@/lib/schemas/support/rma';
-import { CheckCircle, XCircle, Package, PackageCheck, Loader2 } from 'lucide-react';
+import { useOrderPayments } from '@/hooks/orders/use-order-payments';
+import { PERMISSIONS } from '@/lib/auth/permissions';
+import type { ProcessRmaPayload, RmaResponse } from '@/lib/schemas/support/rma';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, Loader2, Package, PackageCheck, XCircle } from 'lucide-react';
+
+import { RmaExecuteRemedyDialog } from './rma-execute-remedy-dialog';
+import { RmaReceiveDialog } from './rma-receive-dialog';
 
 interface RmaWorkflowActionsProps {
   rma: RmaResponse;
@@ -52,29 +33,16 @@ interface RmaWorkflowActionsProps {
   /** From route container (reject mutation). */
   onReject: (reason: string) => Promise<void>;
   /** From route container (receive mutation). */
-  onReceive: (inspection?: { condition?: string; notes?: string; locationId?: string }) => Promise<void>;
-  /** From route container (process mutation). */
-  onProcess: (resolution: RmaResolution, details?: { refundAmount?: number; notes?: string }) => Promise<void>;
+  onReceive: (inspection?: {
+    condition?: string;
+    notes?: string;
+    locationId?: string;
+  }) => Promise<void>;
+  /** From route container (remedy execution mutation). */
+  onProcess: (input: ProcessRmaPayload) => Promise<void>;
   /** From route container (mutation state). */
   isPending?: boolean;
 }
-
-// Resolution options for process dialog
-const RESOLUTION_OPTIONS: { value: RmaResolution; label: string }[] = [
-  { value: 'refund', label: 'Refund' },
-  { value: 'replacement', label: 'Replacement' },
-  { value: 'repair', label: 'Repair' },
-  { value: 'credit', label: 'Store Credit' },
-  { value: 'no_action', label: 'No Action Required' },
-];
-
-// Inspection condition options
-const CONDITION_OPTIONS = [
-  { value: 'good', label: 'Good Condition' },
-  { value: 'damaged', label: 'Damaged' },
-  { value: 'defective', label: 'Defective' },
-  { value: 'missing_parts', label: 'Missing Parts' },
-];
 
 export function RmaWorkflowActions({
   rma,
@@ -92,25 +60,17 @@ export function RmaWorkflowActions({
   const showReject = rma.status === 'requested';
   const showReceive = rma.status === 'approved' && canReceive;
   const showProcess = rma.status === 'received';
+
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
+
   const { locations, isLoading: locationsLoading } = useLocations({ autoFetch: showReceive });
+  const { data: orderPayments = [] } = useOrderPayments(rma.orderId, { enabled: showProcess });
 
-  const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
-  const handleReceiveDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, setReceiveDialogOpen);
-  const handleProcessDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, setProcessDialogOpen);
-
-  const [inspectionCondition, setInspectionCondition] = useState('good');
-  const [inspectionNotes, setInspectionNotes] = useState('');
-  const [receivingLocationId, setReceivingLocationId] = useState('');
-  const [resolution, setResolution] = useState<RmaResolution>('refund');
-  const [refundAmount, setRefundAmount] = useState('');
-  const [resolutionNotes, setResolutionNotes] = useState('');
-
-  // Handle approve (useConfirmation)
   const handleApprove = async () => {
     const { confirmed } = await confirm(confirmations.approve(rma.rmaNumber));
     if (!confirmed) return;
+
     try {
       await onApprove();
       onSuccess?.();
@@ -119,64 +79,15 @@ export function RmaWorkflowActions({
     }
   };
 
-  // Handle reject (useConfirmation with required reason)
   const handleReject = async () => {
     const { confirmed, reason } = await confirm(confirmations.reject(rma.rmaNumber));
     if (!confirmed || !reason?.trim()) return;
+
     try {
       await onReject(reason.trim());
       onSuccess?.();
     } catch (error) {
       toastError(error instanceof Error ? error.message : 'Failed to reject RMA');
-    }
-  };
-
-  // Handle receive
-  const handleReceive = async () => {
-    if (!receivingLocationId) {
-      toastError('Choose a receiving location before marking the RMA as received');
-      return;
-    }
-
-    try {
-      await onReceive({
-        condition: inspectionCondition,
-        notes: inspectionNotes || undefined,
-        locationId: receivingLocationId,
-      });
-      setReceiveDialogOpen(false);
-      setInspectionCondition('good');
-      setInspectionNotes('');
-      setReceivingLocationId('');
-      onSuccess?.();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to mark received');
-    }
-  };
-
-  // Handle process
-  const handleProcess = async () => {
-    // Validate refund amount if resolution is refund
-    if (resolution === 'refund' && refundAmount) {
-      const parsed = parseFloat(refundAmount);
-      if (isNaN(parsed) || parsed <= 0) {
-        toastError('Please enter a valid refund amount greater than 0');
-        return;
-      }
-    }
-
-    try {
-      await onProcess(resolution, {
-        refundAmount: refundAmount ? parseFloat(refundAmount) : undefined,
-        notes: resolutionNotes || undefined,
-      });
-      setProcessDialogOpen(false);
-      setResolution('refund');
-      setRefundAmount('');
-      setResolutionNotes('');
-      onSuccess?.();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to process RMA');
     }
   };
 
@@ -187,8 +98,7 @@ export function RmaWorkflowActions({
   return (
     <div className={className}>
       <div className="flex flex-wrap gap-2">
-        {/* Approve button */}
-        {showApprove && (
+        {showApprove ? (
           <Button variant="default" size="sm" onClick={handleApprove} disabled={isPending}>
             {isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -197,10 +107,9 @@ export function RmaWorkflowActions({
             )}
             Approve
           </Button>
-        )}
+        ) : null}
 
-        {/* Reject button */}
-        {showReject && (
+        {showReject ? (
           <Button
             variant="destructive"
             size="sm"
@@ -214,10 +123,9 @@ export function RmaWorkflowActions({
             )}
             Reject
           </Button>
-        )}
+        ) : null}
 
-        {/* Receive button */}
-        {showReceive && (
+        {showReceive ? (
           <Button
             variant="default"
             size="sm"
@@ -231,10 +139,9 @@ export function RmaWorkflowActions({
             )}
             Mark Received
           </Button>
-        )}
+        ) : null}
 
-        {/* Process button */}
-        {showProcess && (
+        {showProcess ? (
           <Button
             variant="default"
             size="sm"
@@ -246,174 +153,35 @@ export function RmaWorkflowActions({
             ) : (
               <PackageCheck className="mr-2 h-4 w-4" />
             )}
-            Process
+            Execute Remedy
           </Button>
-        )}
+        ) : null}
       </div>
 
-      {/* Receive dialog with inspection */}
-      <Dialog open={receiveDialogOpen} onOpenChange={handleReceiveDialogOpenChange}>
-        <DialogContent
-          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
-          onInteractOutside={pendingInteractionGuards.onInteractOutside}
-        >
-          <DialogHeader>
-            <DialogTitle>Receive Items</DialogTitle>
-            <DialogDescription>Log the receipt and inspection of returned items.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {rma.lineItems && rma.lineItems.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Items to receive</Label>
-                <ul className="rounded-md border p-3 text-sm">
-                  {rma.lineItems.map((item) => (
-                    <li key={item.id} className="flex justify-between py-1">
-                      <span>{item.orderLineItem?.productName ?? 'Unknown Product'}</span>
-                      <span className="text-muted-foreground">
-                        {item.quantityReturned}
-                        {item.serialNumber ? (
-                          <>
-                            {' · S/N: '}
-                            <Link
-                              to="/inventory/browser"
-                              search={{ view: 'serialized', serializedSearch: item.serialNumber, page: 1 }}
-                              className="font-mono text-primary hover:underline"
-                            >
-                              {item.serialNumber}
-                            </Link>
-                          </>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="receivingLocation">Receiving Location</Label>
-              <Select value={receivingLocationId} onValueChange={setReceivingLocationId}>
-                <SelectTrigger id="receivingLocation">
-                  <SelectValue
-                    placeholder={locationsLoading ? 'Loading locations...' : 'Select receiving location'}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations
-                    .filter((location) => location.isActive !== false)
-                    .map((location) => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name} ({location.code})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="condition">Item Condition</Label>
-              <Select value={inspectionCondition} onValueChange={setInspectionCondition}>
-                <SelectTrigger id="condition">
-                  <SelectValue placeholder="Select condition" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONDITION_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="inspectionNotes">Inspection Notes (optional)</Label>
-              <Textarea
-                id="inspectionNotes"
-                placeholder="Note any observations about the returned items..."
-                value={inspectionNotes}
-                onChange={(e) => setInspectionNotes(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setReceiveDialogOpen(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleReceive} disabled={isPending}>
-              {isPending ? 'Processing...' : 'Mark Received'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RmaReceiveDialog
+        open={receiveDialogOpen}
+        onOpenChange={setReceiveDialogOpen}
+        isPending={isPending}
+        rma={rma}
+        locations={locations}
+        locationsLoading={locationsLoading}
+        onReceive={async (inspection) => {
+          await onReceive(inspection);
+          onSuccess?.();
+        }}
+      />
 
-      {/* Process dialog with resolution */}
-      <Dialog open={processDialogOpen} onOpenChange={handleProcessDialogOpenChange}>
-        <DialogContent
-          onEscapeKeyDown={pendingInteractionGuards.onEscapeKeyDown}
-          onInteractOutside={pendingInteractionGuards.onInteractOutside}
-        >
-          <DialogHeader>
-            <DialogTitle>Process RMA</DialogTitle>
-            <DialogDescription>Select the resolution for this RMA.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="resolution">Resolution</Label>
-              <Select value={resolution} onValueChange={(v) => setResolution(v as RmaResolution)}>
-                <SelectTrigger id="resolution">
-                  <SelectValue placeholder="Select resolution" />
-                </SelectTrigger>
-                <SelectContent>
-                  {RESOLUTION_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {resolution === 'refund' && (
-              <div className="space-y-2">
-                <Label htmlFor="refundAmount">Refund Amount</Label>
-                <Input
-                  id="refundAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="resolutionNotes">Notes (optional)</Label>
-              <Textarea
-                id="resolutionNotes"
-                placeholder="Add any resolution notes..."
-                value={resolutionNotes}
-                onChange={(e) => setResolutionNotes(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setProcessDialogOpen(false)}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleProcess} disabled={isPending}>
-              {isPending ? 'Processing...' : 'Complete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RmaExecuteRemedyDialog
+        open={processDialogOpen}
+        onOpenChange={setProcessDialogOpen}
+        isPending={isPending}
+        rma={rma}
+        orderPayments={orderPayments}
+        onProcess={async (input) => {
+          await onProcess(input);
+          onSuccess?.();
+        }}
+      />
     </div>
   );
 }

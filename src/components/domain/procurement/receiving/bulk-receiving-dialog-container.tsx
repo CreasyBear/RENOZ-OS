@@ -14,6 +14,7 @@ import { useProductSerialization } from '@/hooks/purchase-orders/use-product-ser
 import { BulkReceivingDialog } from './bulk-receiving-dialog';
 import { transformPOItemsToReceiptItems, filterItemsWithPendingQuantity } from '@/components/domain/purchase-orders/utils/po-item-transform';
 import { ErrorState } from '@/components/shared/error-state';
+import { isReadQueryError } from '@/lib/read-path-policy';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { BulkReceiptData, PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
 
@@ -157,6 +158,13 @@ export function BulkReceivingDialogContainer({
     const firstError = poErrors[0]?.error instanceof Error 
       ? poErrors[0].error.message 
       : 'Unknown error';
+    const missingPurchaseOrders = poErrors.filter(
+      (errorItem) => isReadQueryError(errorItem.error) && errorItem.error.failureKind === 'not-found'
+    );
+    const title =
+      missingPurchaseOrders.length > 0 && missingPurchaseOrders.length === poErrors.length
+        ? 'Some purchase orders could not be found'
+        : 'Failed to load purchase order details';
 
     return (
       <BulkReceivingDialog
@@ -168,7 +176,7 @@ export function BulkReceivingDialogContainer({
         onConfirm={onConfirm}
         error={
           <ErrorState
-            title="Failed to load purchase order details"
+            title={title}
             message={errorMessages.length > 0 ? errorMessages.join('; ') : firstError}
             onRetry={() => {
               poQueries.forEach((query) => {

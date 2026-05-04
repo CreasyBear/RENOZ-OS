@@ -12,6 +12,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   listActivities,
   getActivityTimeline,
   getUpcomingFollowUps,
@@ -69,16 +74,29 @@ export function useActivities({
   return useQuery({
     queryKey: queryKeys.pipeline.activities(opportunityId),
     queryFn: async () => {
-      const result = await listActivities({
-        data: {
-          opportunityId,
-          type: types?.[0] as 'call' | 'email' | 'meeting' | 'note' | 'follow_up' | undefined,
-          page,
-          pageSize,
-        },
-      });
-      if (result == null) throw new Error('Activities list returned no data');
-      return result;
+      try {
+        const result = await listActivities({
+          data: {
+            opportunityId,
+            type: types?.[0] as 'call' | 'email' | 'meeting' | 'note' | 'follow_up' | undefined,
+            page,
+            pageSize,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Activities list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activities are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activities are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
@@ -106,9 +124,22 @@ export function useActivityTimeline({
   return useQuery({
     queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days }),
     queryFn: async () => {
-      const result = await getActivityTimeline({ data: { opportunityId, days } });
-      if (result == null) throw new Error('Activity timeline returned no data');
-      return result;
+      try {
+        const result = await getActivityTimeline({ data: { opportunityId, days } });
+        return requireReadResult(result, {
+          message: 'Activity timeline returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activity timeline is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activity timeline is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
@@ -132,9 +163,22 @@ export function useFollowUps({ opportunityId, days = 14, enabled = true }: UseFo
   return useQuery<{ overdue: FollowUpItem[]; upcoming: FollowUpItem[] }>({
     queryKey: queryKeys.pipeline.followUps(opportunityId),
     queryFn: async () => {
-      const result = await getUpcomingFollowUps({ data: { opportunityId, days } });
-      if (result == null) throw new Error('Upcoming follow-ups returned no data');
-      return result;
+      try {
+        const result = await getUpcomingFollowUps({ data: { opportunityId, days } });
+        return requireReadResult(result, {
+          message: 'Upcoming follow-ups returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity follow-ups are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity follow-ups are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!opportunityId,
     staleTime: 30 * 1000, // 30 seconds
@@ -168,15 +212,28 @@ export function useActivityAnalytics({
       { opportunityId, dateFrom, dateTo },
     ] as const,
     queryFn: async () => {
-      const result = await getActivityAnalytics({
-        data: {
-          opportunityId,
-          dateFrom,
-          dateTo,
-        },
-      });
-      if (result == null) throw new Error('Activity analytics returned no data');
-      return result;
+      try {
+        const result = await getActivityAnalytics({
+          data: {
+            opportunityId,
+            dateFrom,
+            dateTo,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Activity analytics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activity analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Opportunity activity analytics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes

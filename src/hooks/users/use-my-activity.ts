@@ -9,6 +9,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getMyActivity } from '@/server/functions/_shared/audit-logs';
 
 /**
@@ -34,11 +35,16 @@ export function useMyActivity(filters: MyActivityFilters = {}) {
   return useQuery({
     queryKey: queryKeys.users.myActivity.list({ page, pageSize }),
     queryFn: async () => {
-      const result = await getMyActivity({
-        data: { page, pageSize } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getMyActivity({
+          data: { page, pageSize }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Your recent security activity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000, // 30 seconds
   });

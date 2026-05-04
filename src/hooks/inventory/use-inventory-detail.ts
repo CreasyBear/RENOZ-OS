@@ -93,6 +93,7 @@ export interface UseInventoryDetailReturn {
   movementsLoading: boolean;
   costLayersLoading: boolean;
   qualityLoading: boolean;
+  qualityError: Error | null;
   activitiesLoading: boolean;
   activitiesError: Error | null;
   alertsLoading: boolean;
@@ -159,6 +160,7 @@ export interface UseInventoryDetailReturn {
   // Refetch
   // ─────────────────────────────────────────────────────────────────────────
   refetch: () => void;
+  refetchQuality: () => void;
 }
 
 // ============================================================================
@@ -206,6 +208,8 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
   const {
     data: qualityData,
     isLoading: qualityLoading,
+    error: qualityError,
+    refetch: refetchQuality,
   } = useQualityInspections(inventoryId);
 
   const {
@@ -409,6 +413,7 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
     movementsLoading,
     costLayersLoading,
     qualityLoading,
+    qualityError: qualityError ?? null,
     activitiesLoading,
     activitiesError: activitiesError ?? null,
     alertsLoading: false, // Alerts are derived synchronously
@@ -452,6 +457,7 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
 
     // Refetch
     refetch,
+    refetchQuality,
   };
 }
 

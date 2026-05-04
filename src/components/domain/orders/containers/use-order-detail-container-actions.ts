@@ -15,8 +15,15 @@ import { useApplyAmendment } from '@/hooks/orders';
 import {
   useGenerateOrderQuote,
   useGenerateOrderInvoice,
+  useGenerateOrderProForma,
+  useGenerateShipmentPackingSlip,
+  useGenerateShipmentDispatchNote,
+  useGenerateShipmentDeliveryNote,
 } from '@/hooks/documents';
-import type { EditOrderFormData } from '../cards/order-edit-dialog.schema';
+import {
+  normalizeEditOrderShippingAddress,
+  type EditOrderFormData,
+} from '../cards/order-edit-dialog.schema';
 
 interface UseOrderDetailContainerActionsOptions {
   orderId: string;
@@ -30,6 +37,10 @@ export function useOrderDetailContainerActions(
 ) {
   const generateQuote = useGenerateOrderQuote();
   const generateInvoice = useGenerateOrderInvoice();
+  const generateProForma = useGenerateOrderProForma();
+  const generateShipmentPackingSlip = useGenerateShipmentPackingSlip();
+  const generateShipmentDispatchNote = useGenerateShipmentDispatchNote();
+  const generateShipmentDeliveryNote = useGenerateShipmentDeliveryNote();
   const updateOrderMutation = useUpdateOrder();
   const applyAmendmentMutation = useApplyAmendment();
 
@@ -46,7 +57,7 @@ export function useOrderDetailContainerActions(
 
   const { data: customersData } = useCustomers({
     pageSize: 100,
-    enabled: options.orderStatus === 'draft',
+    enabled: true,
   });
 
   const customers = useMemo(
@@ -74,16 +85,17 @@ export function useOrderDetailContainerActions(
   const handleEditSubmit = useCallback(
     async (data: EditOrderFormData) => {
       if (!options.orderVersion) return;
+      const shippingAddress = normalizeEditOrderShippingAddress(data.shippingAddress);
 
       await updateOrderMutation.mutateAsync({
         id: options.orderId,
         expectedVersion: options.orderVersion,
         customerId: data.customerId,
         orderNumber: data.orderNumber,
-        status: data.status,
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : undefined,
-        internalNotes: data.internalNotes || undefined,
-        customerNotes: data.customerNotes || undefined,
+        dueDate: data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null,
+        internalNotes: data.internalNotes?.trim() ? data.internalNotes.trim() : null,
+        customerNotes: data.customerNotes?.trim() ? data.customerNotes.trim() : null,
+        shippingAddress,
       });
       toastSuccess('Order updated');
       options.refetch();
@@ -94,8 +106,9 @@ export function useOrderDetailContainerActions(
   const documentActions = {
     onGenerateQuote: async () => {
       try {
-        await generateQuote.mutateAsync({ orderId: options.orderId });
+        const result = await generateQuote.mutateAsync({ orderId: options.orderId });
         toastSuccess('Quote PDF generated');
+        window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
         ordersLogger.error('[OrderDetail] Failed to generate quote', error);
         toastError(error instanceof Error ? error.message : 'Failed to generate quote');
@@ -103,15 +116,29 @@ export function useOrderDetailContainerActions(
     },
     onGenerateInvoice: async () => {
       try {
-        await generateInvoice.mutateAsync({ orderId: options.orderId });
+        const result = await generateInvoice.mutateAsync({ orderId: options.orderId });
         toastSuccess('Invoice PDF generated');
+        window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
         ordersLogger.error('[OrderDetail] Failed to generate invoice', error);
         toastError(error instanceof Error ? error.message : 'Failed to generate invoice');
       }
     },
+    onGenerateProForma: async () => {
+      try {
+        const result = await generateProForma.mutateAsync({ orderId: options.orderId });
+        toastSuccess('Pro-forma PDF generated');
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+      } catch (error) {
+        ordersLogger.error('[OrderDetail] Failed to generate pro-forma', error);
+        toastError(error instanceof Error ? error.message : 'Failed to generate pro-forma');
+      }
+    },
     isGeneratingQuote: generateQuote.isPending,
     isGeneratingInvoice: generateInvoice.isPending,
+    isGeneratingProForma: generateProForma.isPending,
+    isGeneratingPackingSlip: generateShipmentPackingSlip.isPending,
+    isGeneratingDeliveryNote: generateShipmentDeliveryNote.isPending,
   };
 
   return {
@@ -123,6 +150,9 @@ export function useOrderDetailContainerActions(
     createPaymentMutation,
     createRefundMutation,
     updateOrderMutation,
+    generateShipmentPackingSlip,
+    generateShipmentDispatchNote,
+    generateShipmentDeliveryNote,
     handleApplyAmendment,
     handleEditSubmit,
     documentActions,

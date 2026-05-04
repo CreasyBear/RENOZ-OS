@@ -2,7 +2,7 @@ name: Deploy to Vercel
 
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -17,21 +17,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.9
 
-      - name: Install Vercel CLI
-        run: bun add -g vercel@latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Pre-merge gate
+        run: bun run predeploy
+
+      - name: Release verification
+        run: bun run release:verify
+
+      - name: Document schema gates
+        if: ${{ secrets.DATABASE_URL != '' }}
+        run: bun run reliability:document-gates
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Document schema gates skipped
+        if: ${{ secrets.DATABASE_URL == '' }}
+        run: echo "Skipping document schema gates because DATABASE_URL is not configured in GitHub Actions secrets."
 
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: bun x vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: bun x vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
+          NODE_OPTIONS: --max-old-space-size=12288
 
       - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: bun x vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Post-deploy probe
+        run: bun run deploy:probe
+        env:
+          APP_URL: ${{ vars.APP_URL }}

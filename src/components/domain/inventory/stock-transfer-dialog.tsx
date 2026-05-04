@@ -4,7 +4,7 @@
  * Dialog for transferring inventory between warehouse locations.
  * Follows DOM-INV-002c wireframe specifications.
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see _Initiation/_prd/2-domains/inventory/wireframes/INV-002c.wireframe.md
  */
 

@@ -2,7 +2,7 @@
 
 **Purpose:** Specification-grade documentation of user-visible workflows so **contracts, failures, side effects, and schema drift** are explicit. Used for audits, remediation, and onboarding senior engineers to a path without re-spelunking.
 
-**Read-only audit artifact:** Describes current behavior. Fixes live in code + issues/PRs. Process context: [WORKFLOW-AUDIT-REMEDIATION-PROCESS.md](../WORKFLOW-AUDIT-REMEDIATION-PROCESS.md).
+**Read-only audit artifact:** Describes current behavior. Fixes live in code + issues/PRs. Process context: [workflow-audit-remediation-process.md](../reference/workflow-audit-remediation-process.md).
 
 ## Quality bar
 
@@ -39,7 +39,7 @@ Traces use **`NN-slug.md`** prefixes so order stays stable in file listings and 
 
 ## Related docs
 
-- [WORKFLOW-AUDIT-REMEDIATION-PROCESS.md](../WORKFLOW-AUDIT-REMEDIATION-PROCESS.md)
+- [workflow-audit-remediation-process.md](../reference/workflow-audit-remediation-process.md)
 - [inventory/README.md](../inventory/README.md)
-- [SCHEMA-TRACE.md](../../SCHEMA-TRACE.md)
+- [schema-trace.md](../reference/schema-trace.md)
 - [MUTATION-CONTRACT-STANDARD.md](../reliability/MUTATION-CONTRACT-STANDARD.md)

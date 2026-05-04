@@ -67,6 +67,8 @@ export function ProcurementReportsPage() {
     dateTo: dateRange.to,
     includePreviousPeriod: true,
   });
+  const reportError = !data && error instanceof Error ? error : null;
+  const reportWarning = data && error instanceof Error ? error.message : null;
 
   const createCustomReport = useCreateCustomReport();
   const createScheduledReport = useCreateScheduledReport();
@@ -206,8 +208,9 @@ export function ProcurementReportsPage() {
     <>
       <ProcurementReports
         analytics={analytics}
-        isLoading={isLoading}
-        error={error}
+        isLoading={isLoading && !data}
+        error={reportError}
+        warning={reportWarning}
         dateRange={dateRange}
         activeTab={search.tab as ProcurementTab | undefined}
         onTabChange={handleTabChange}

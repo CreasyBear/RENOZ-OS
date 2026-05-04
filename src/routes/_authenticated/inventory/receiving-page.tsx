@@ -63,6 +63,7 @@ export default function ReceivingPage() {
   const {
     data: productsData,
     isLoading: isLoadingProducts,
+    error: productsError,
   } = useProducts({ search: productSearch, pageSize: 50 });
   const {
     data: selectedProductData,
@@ -70,7 +71,12 @@ export default function ReceivingPage() {
     isLoading: isLoadingSelectedProduct,
   } = useProduct(search.productId ?? "", !!search.productId);
 
-  const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
+  const {
+    locations: locationsData,
+    isLoading: isLoadingLocations,
+    locationsError,
+    fetchLocations,
+  } = useLocations({
     autoFetch: true,
   });
 
@@ -106,7 +112,8 @@ export default function ReceivingPage() {
     : productsFromSearch;
   const hasProductContext = search.source === "product_detail" && !!search.productId;
   const hasContextFailure =
-    hasProductContext && !isLoadingSelectedProduct && (!!selectedProductError || !selectedProduct);
+    hasProductContext && !isLoadingSelectedProduct && !selectedProduct;
+  const hasDegradedProductContext = !!selectedProductError && !!selectedProduct;
 
   const locations: Location[] = locationsData.map((l: HookWarehouseLocation) => ({
     id: l.id,
@@ -182,6 +189,7 @@ export default function ReceivingPage() {
   const headerDescription = hasProductContext && selectedProduct
     ? `Record non-PO inbound stock for ${selectedProduct.sku ? `${selectedProduct.name} (${selectedProduct.sku})` : selectedProduct.name}`
     : "Record non-PO inbound stock and update inventory levels";
+  const hasUnavailableLocations = !!locationsError && !isLoadingLocations && locations.length === 0;
 
   return (
     <PageLayout variant="full-width">
@@ -218,6 +226,16 @@ export default function ReceivingPage() {
           </Alert>
         ) : null}
 
+        {hasDegradedProductContext ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product details unavailable</AlertTitle>
+            <AlertDescription>
+              Showing the most recent product context while refresh is unavailable.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {!hasContextFailure ? (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList className="mb-6">
@@ -233,19 +251,45 @@ export default function ReceivingPage() {
 
           <TabsContent value="receive">
             <div className="grid gap-6 lg:grid-cols-2">
-              <ReceivingForm
-                products={products}
-                locations={locations}
-                isLoadingProducts={isLoadingProducts}
-                isLoadingLocations={isLoadingLocations}
-                onSubmit={handleReceive}
-                onCancel={handleCancel}
-                onProductSearch={handleProductSearch}
-                defaultLocationId={defaultLocation?.id}
-                defaultProductId={search.productId}
-                lockProductSelection={hasProductContext && !!selectedProduct}
-                submitError={receiveMutation.error?.message ?? null}
-              />
+              <div className="space-y-6">
+                {productsError instanceof Error ? (
+                  <Alert>
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Product catalog unavailable</AlertTitle>
+                    <AlertDescription>
+                      Product options could not be refreshed. Any products already loaded remain usable.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {hasUnavailableLocations ? (
+                  <Alert>
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Warehouse locations are temporarily unavailable</AlertTitle>
+                    <AlertDescription>
+                      {locationsError.message}
+                      <div className="mt-3">
+                        <Button variant="outline" onClick={() => void fetchLocations()}>
+                          Retry Locations
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <ReceivingForm
+                    products={products}
+                    locations={locations}
+                    isLoadingProducts={isLoadingProducts}
+                    isLoadingLocations={isLoadingLocations}
+                    onSubmit={handleReceive}
+                    onCancel={handleCancel}
+                    onProductSearch={handleProductSearch}
+                    defaultLocationId={defaultLocation?.id}
+                    defaultProductId={search.productId}
+                    lockProductSelection={hasProductContext && !!selectedProduct}
+                    submitError={receiveMutation.error?.message ?? null}
+                  />
+                )}
+              </div>
 
               {/* Recent receives sidebar */}
               <ReceivingHistory

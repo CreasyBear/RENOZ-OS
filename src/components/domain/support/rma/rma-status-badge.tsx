@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { StatusBadge, type StatusConfig } from '@/components/shared';
 import type { SemanticColor } from '@/lib/status';
 import type { RmaStatus, RmaReason, RmaResolution } from '@/lib/schemas/support/rma';
-import { REASON_LABELS } from './rma-options';
+import { REASON_LABELS, RMA_RESOLUTION_LABELS } from './rma-options';
 
 /**
  * RMA Status Configuration
@@ -24,6 +24,7 @@ import { REASON_LABELS } from './rma-options';
  * - received: progress (item received, processing)
  * - processed: success (completed)
  * - rejected: error (rejected)
+ * - cancelled: neutral (cancelled before receipt)
  */
 export const RMA_STATUS_CONFIG: StatusConfig = {
   requested: { variant: 'pending', label: 'Requested' },
@@ -31,6 +32,7 @@ export const RMA_STATUS_CONFIG: StatusConfig = {
   received: { variant: 'progress', label: 'Received' },
   processed: { variant: 'success', label: 'Processed' },
   rejected: { variant: 'error', label: 'Rejected' },
+  cancelled: { variant: 'neutral', label: 'Cancelled' },
 };
 
 interface RmaStatusBadgeProps {
@@ -76,18 +78,10 @@ interface RmaResolutionBadgeProps {
   className?: string;
 }
 
-const RESOLUTION_LABELS: Record<RmaResolution, string> = {
-  refund: 'Refund',
-  replacement: 'Replacement',
-  repair: 'Repair',
-  credit: 'Credit',
-  no_action: 'No Action',
-};
-
 export function RmaResolutionBadge({ resolution, className }: RmaResolutionBadgeProps) {
   return (
     <Badge variant="outline" className={cn('font-medium', className)}>
-      {RESOLUTION_LABELS[resolution]}
+      {RMA_RESOLUTION_LABELS[resolution]}
     </Badge>
   );
 }

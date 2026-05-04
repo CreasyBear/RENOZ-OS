@@ -10,6 +10,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getWinLossAnalysis, getCompetitors } from '@/server/functions/pipeline/win-loss-reasons';
 
 // ============================================================================
@@ -83,12 +84,18 @@ export function useWinLossAnalysis(options: UseWinLossAnalysisOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.winLossAnalysis(dateFromStr, dateToStr),
     queryFn: async () => {
-      const result = await getWinLossAnalysis({
-        data: { dateFrom, dateTo, type },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWinLossAnalysis({
+          data: { dateFrom, dateTo, type },
+        
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Win/loss analysis is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -121,12 +128,18 @@ export function useCompetitors(options: UseCompetitorsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.reports.competitors(dateFromStr, dateToStr),
     queryFn: async () => {
-      const result = await getCompetitors({
-        data: { dateFrom, dateTo },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCompetitors({
+          data: { dateFrom, dateTo },
+        
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Competitor analysis is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes

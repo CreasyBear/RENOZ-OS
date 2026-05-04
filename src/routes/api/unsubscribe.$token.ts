@@ -18,11 +18,8 @@
 import { db } from "@/lib/db";
 import { contacts, customerActivities } from "drizzle/schema";
 import { eq } from "drizzle-orm";
-import {
-  verifyUnsubscribeToken as verifyLegacyToken,
-} from "@/lib/server/communication-preferences";
 import { verifyUnsubscribeToken as verifySecureToken } from "@/lib/server/unsubscribe-tokens";
-import { addSuppressionDirect } from "@/server/functions/communications/email-suppression";
+import { addSuppressionDirect } from "@/server/functions/communications/_shared/suppression-mutations";
 import {
   checkRateLimitSync,
   getClientIdentifier,
@@ -44,7 +41,7 @@ const UNSUBSCRIBE_RATE_LIMIT = {
 };
 
 // ============================================================================
-// TOKEN VERIFICATION (supports both legacy and secure tokens)
+// TOKEN VERIFICATION
 // ============================================================================
 
 interface VerifiedToken {
@@ -53,19 +50,16 @@ interface VerifiedToken {
   organizationId?: string;
   email?: string;
   emailId?: string;
-  isSecure: boolean;
 }
 
 /**
  * Verify an unsubscribe token.
- * Supports both legacy (base64-only) and secure (HMAC-signed) token formats.
- * Legacy tokens are supported for backwards compatibility during transition.
+ * Accepts only secure HMAC-signed token formats.
  *
  * @param token - The token to verify
  * @returns Verified token data or null if invalid
  */
 function verifyToken(token: string): VerifiedToken | null {
-  // Try secure token format first (recommended)
   const securePayload = verifySecureToken(token);
   if (securePayload) {
     return {
@@ -74,19 +68,6 @@ function verifyToken(token: string): VerifiedToken | null {
       organizationId: securePayload.organizationId,
       email: securePayload.email,
       emailId: securePayload.emailId,
-      isSecure: true,
-    };
-  }
-
-  // Fall back to legacy token format (for existing links)
-  // This should be removed after migration period
-  const legacyData = verifyLegacyToken(token);
-  if (legacyData) {
-    logger.warn("[unsubscribe] Legacy token format used. Consider regenerating unsubscribe links.");
-    return {
-      contactId: legacyData.contactId,
-      channel: legacyData.channel,
-      isSecure: false,
     };
   }
 
@@ -349,7 +330,7 @@ export async function POST({
       changedBy: "self-service",
       method: "unsubscribe-link",
       contactName: `${contact.firstName} ${contact.lastName}`,
-      secureToken: tokenData.isSecure, // Track which token format was used
+      secureToken: true,
     },
   });
 

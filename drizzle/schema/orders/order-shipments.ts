@@ -110,6 +110,11 @@ export const orderShipments = pgTable(
     height: integer("height"), // in mm
     packageCount: integer("package_count").default(1),
 
+    // Increment when shipment-backed operational document inputs change.
+    operationalDocumentRevision: integer("operational_document_revision")
+      .notNull()
+      .default(0),
+
     // Dates
     shippedAt: timestamp("shipped_at", { withTimezone: true }),
     estimatedDeliveryAt: timestamp("estimated_delivery_at", {

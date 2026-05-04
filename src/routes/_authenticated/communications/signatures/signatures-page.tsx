@@ -20,6 +20,8 @@ import { SignaturesList } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
 import { ErrorState } from "@/components/shared";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 export default function SignaturesPage() {
   // ============================================================================
@@ -78,7 +80,7 @@ export default function SignaturesPage() {
   // ============================================================================
   // ERROR STATE
   // ============================================================================
-  if (error) {
+  if (error && !signaturesData) {
     return (
       <>
         <h2 className="text-xl font-semibold mb-4">Email Signatures</h2>
@@ -102,6 +104,17 @@ export default function SignaturesPage() {
       <p className="text-sm text-muted-foreground mb-4">
         Manage email signatures for your team
       </p>
+      {error ? (
+        <Alert className="mb-4">
+          <AlertTitle>Showing cached signatures</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <div className="max-w-4xl">
           <SignaturesList
             signatures={signatures}

@@ -24,6 +24,12 @@ export interface CustomerComboboxProps {
   disabled?: boolean;
   /** Additional class names */
   className?: string;
+  /** Optional id for form-field integration */
+  id?: string;
+  /** Optional aria-invalid for form-field integration */
+  'aria-invalid'?: boolean;
+  /** Optional aria-describedby for form-field integration */
+  'aria-describedby'?: string;
 }
 
 /**
@@ -35,6 +41,9 @@ export function CustomerCombobox({
   placeholder = 'Search customers...',
   disabled,
   className,
+  id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: CustomerComboboxProps) {
   const lookupCustomers = useCustomerLookup();
 
@@ -70,6 +79,9 @@ export function CustomerCombobox({
       emptyMessage="No customers found."
       disabled={disabled}
       className={className}
+      id={id}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
     />
   );
 }

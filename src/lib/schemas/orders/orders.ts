@@ -148,12 +148,28 @@ export type CreateOrder = z.infer<typeof createOrderSchema>;
 // UPDATE ORDER
 // ============================================================================
 
-export const updateOrderSchema = createOrderSchema
-  .partial()
-  .omit({ lineItems: true, clientRequestId: true })
-  .extend({
-    expectedVersion: z.number().int().positive('Expected version is required'),
-  });
+export const updateOrderSchema = z.object({
+  customerId: z.string().uuid('Customer is required').optional(),
+  orderNumber: z.string().min(1, 'Order number is required').max(50).optional(),
+  orderDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  billingAddress: orderAddressSchema.nullable().optional(),
+  shippingAddress: orderAddressSchema.nullable().optional(),
+  discountPercent: percentageSchema.optional(),
+  discountAmount: currencySchema.optional(),
+  shippingAmount: currencySchema.optional(),
+  metadata: orderMetadataSchema.optional(),
+  internalNotes: z.string().max(2000).nullable().optional(),
+  customerNotes: z.string().max(2000).nullable().optional(),
+  expectedVersion: z.number().int().positive('Expected version is required'),
+});
 
 export type UpdateOrder = z.infer<typeof updateOrderSchema>;
 
@@ -300,10 +316,12 @@ export type ChangeOrderStatusManagedInput = z.infer<
 >;
 
 export const orderWorkflowActionKeySchema = z.enum([
+  'confirm_order',
   'open_pick',
   'open_ship',
   'open_shipments',
   'confirm_delivery',
+  'reopen_shipment',
   'cancel_order',
 ]);
 export type OrderWorkflowActionKey = z.infer<typeof orderWorkflowActionKeySchema>;
@@ -387,6 +405,7 @@ export interface OrderListItem {
   orderDate: Date | string | null; // Database/JSON may return Date or ISO string
   dueDate: Date | string | null; // Database/JSON may return Date or ISO string
   total: number | null;
+  balanceDue: number | null;
   metadata: OrderMetadata | FlexibleJson | null; // FlexibleJson for ServerFn boundary per SCHEMA-TRACE
   createdAt: Date;
   updatedAt: Date;

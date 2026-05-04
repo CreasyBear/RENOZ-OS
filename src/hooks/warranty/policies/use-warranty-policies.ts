@@ -23,6 +23,7 @@ import {
   assignWarrantyPolicyToProduct,
   assignDefaultWarrantyPolicyToCategory,
 } from '@/server/functions/warranty/policies/warranty-policies';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   GetWarrantyPoliciesInput,
   CreateWarrantyPolicyInput,
@@ -60,11 +61,16 @@ export function useWarrantyPolicies(options?: GetWarrantyPoliciesInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.list(options),
     queryFn: async () => {
-      const result = await listWarrantyPolicies({
-        data: options ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWarrantyPolicies({
+          data: options ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty policies are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: LIST_STALE_TIME,
   });
@@ -77,11 +83,16 @@ export function useWarrantyPoliciesWithSla(options?: GetWarrantyPoliciesInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.listWithSla(options),
     queryFn: async () => {
-      const result = await getWarrantyPoliciesWithSla({
-        data: options ?? {} 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarrantyPoliciesWithSla({
+          data: options ?? {}
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty policies with SLA details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: LIST_STALE_TIME,
   });
@@ -98,11 +109,17 @@ export function useWarrantyPolicy(policyId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.detail(policyId ?? ''),
     queryFn: async () => {
-      const result = await getWarrantyPolicy({
-        data: { policyId: policyId! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarrantyPolicy({
+          data: { policyId: policyId! }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty policy details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty policy could not be found.',
+        });
+      }
     },
     enabled: !!policyId,
     staleTime: DETAIL_STALE_TIME,
@@ -120,11 +137,16 @@ export function useDefaultWarrantyPolicy(type: WarrantyPolicyTypeValue | undefin
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.default(type!),
     queryFn: async () => {
-      const result = await getDefaultWarrantyPolicy({
-        data: { type: type! } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getDefaultWarrantyPolicy({
+          data: { type: type! }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage: 'Default warranty policy is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!type,
     staleTime: DETAIL_STALE_TIME,
@@ -143,9 +165,14 @@ export function useResolveWarrantyPolicy(params: ResolveWarrantyPolicyInput) {
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.resolve(params),
     queryFn: async () => {
-      const result = await resolveWarrantyPolicy({ data: params });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await resolveWarrantyPolicy({ data: params });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty policy resolution is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: !!(params.productId || params.categoryId || params.type),
     staleTime: DETAIL_STALE_TIME,

@@ -67,7 +67,7 @@ export function useOrderDetailActions(options: UseOrderDetailActionsOptions) {
         } else if (status === 'picked' && options.onOpenShipDialog) {
           toast.success('Order picked', {
             action: {
-              label: 'Ship Order',
+              label: 'Open Fulfillment',
               onClick: options.onOpenShipDialog,
             },
           });

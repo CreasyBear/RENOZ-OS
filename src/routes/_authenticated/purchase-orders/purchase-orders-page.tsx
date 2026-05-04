@@ -157,7 +157,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
     sortBy,
     sortOrder,
   });
-  const { data: statusCounts } = usePurchaseOrderStatusCounts();
+  const { data: statusCounts, error: statusCountsError } = usePurchaseOrderStatusCounts();
 
   // Delete mutation using centralized hook
   const deleteMutation = useDeletePurchaseOrder();
@@ -548,6 +548,14 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
         }
       />
       <PageLayout.Content>
+        {statusCountsError instanceof Error ? (
+          <Alert className="mb-4">
+            <AlertTitle>Status counts unavailable</AlertTitle>
+            <AlertDescription>
+              Purchase order status chips are temporarily unavailable. The list is still usable while those headline counts reload.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {bulkDeleteFailures.length > 0 && (
           <Alert variant="destructive" className="mb-3">
             <AlertTitle>

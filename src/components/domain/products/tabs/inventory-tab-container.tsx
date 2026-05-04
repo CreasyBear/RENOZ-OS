@@ -14,6 +14,7 @@
 
 import { useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   useProductInventory,
   useProductInventoryStats,
@@ -50,22 +51,27 @@ export function ProductInventoryTabContainer({
   const {
     data: inventorySummary,
     isLoading: inventoryLoading,
+    error: inventoryError,
     refetch: refetchInventory,
   } = useProductInventory({
     productId,
     enabled: trackInventory,
   });
 
-  const { data: stats, isLoading: statsLoading } = useProductInventoryStats({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useProductInventoryStats({
     productId,
     enabled: trackInventory,
   });
 
-  const { data: lowStockAlerts } = useLowStockAlerts({
+  const { data: lowStockAlerts, error: lowStockError } = useLowStockAlerts({
     enabled: trackInventory,
   });
 
-  const { data: costLayersData } = useProductCostLayers({
+  const { data: costLayersData, error: costLayersError } = useProductCostLayers({
     productId,
     enabled: trackInventory,
   });
@@ -81,6 +87,22 @@ export function ProductInventoryTabContainer({
   const isLoading = inventoryLoading || statsLoading;
   const isLowStock = lowStockAlerts?.some((alert) => alert.productId === productId) ?? false;
   const preferredSupplierId = preferredSupplierPrices?.items?.[0]?.supplierId;
+  const inventoryUnavailableMessage =
+    inventoryError instanceof Error && !inventorySummary
+      ? 'Product inventory is temporarily unavailable. Please refresh and try again.'
+      : null;
+  const inventoryWarningMessage =
+    inventoryError instanceof Error && inventorySummary
+      ? 'Showing the most recent product inventory while refresh is unavailable.'
+      : statsError instanceof Error
+        ? 'Inventory statistics are temporarily unavailable right now.'
+        : null;
+  const secondaryWarningMessage =
+    costLayersError instanceof Error
+      ? 'Cost layers are temporarily unavailable right now.'
+      : lowStockError instanceof Error
+        ? 'Low stock alerts are temporarily unavailable right now.'
+        : null;
 
   // Refresh handler for after adjustments
   const handleRefresh = useCallback(() => {
@@ -115,24 +137,47 @@ export function ProductInventoryTabContainer({
     });
   }, [navigate, preferredSupplierId, productId]);
 
+  if (inventoryUnavailableMessage) {
+    return (
+      <Alert>
+        <AlertTitle>Inventory unavailable</AlertTitle>
+        <AlertDescription>{inventoryUnavailableMessage}</AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
-    <ProductInventoryTabView
-      productId={productId}
-      trackInventory={trackInventory}
-      isSerialized={isSerialized}
-      inventorySummary={inventorySummary}
-      stats={stats}
-      lowStockAlerts={lowStockAlerts}
-      isLowStock={isLowStock}
-      costLayersData={costLayersData}
-      isLoading={isLoading}
-      showAdjustment={showAdjustment}
-      selectedLocationId={selectedLocationId}
-      onShowAdjustmentChange={setShowAdjustment}
-      onOpenReceiveInventory={handleOpenReceiveInventory}
-      onOpenAdjustment={handleOpenAdjustment}
-      onOrderStock={handleOrderStock}
-      onRefresh={handleRefresh}
-    />
+    <div className="space-y-4">
+      {inventoryWarningMessage ? (
+        <Alert>
+          <AlertTitle>Inventory partially unavailable</AlertTitle>
+          <AlertDescription>{inventoryWarningMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+      {secondaryWarningMessage ? (
+        <Alert>
+          <AlertTitle>Inventory secondary data unavailable</AlertTitle>
+          <AlertDescription>{secondaryWarningMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+      <ProductInventoryTabView
+        productId={productId}
+        trackInventory={trackInventory}
+        isSerialized={isSerialized}
+        inventorySummary={inventorySummary}
+        stats={stats}
+        lowStockAlerts={lowStockAlerts}
+        isLowStock={isLowStock}
+        costLayersData={costLayersData}
+        isLoading={isLoading}
+        showAdjustment={showAdjustment}
+        selectedLocationId={selectedLocationId}
+        onShowAdjustmentChange={setShowAdjustment}
+        onOpenReceiveInventory={handleOpenReceiveInventory}
+        onOpenAdjustment={handleOpenAdjustment}
+        onOrderStock={handleOrderStock}
+        onRefresh={handleRefresh}
+      />
+    </div>
   );
 }

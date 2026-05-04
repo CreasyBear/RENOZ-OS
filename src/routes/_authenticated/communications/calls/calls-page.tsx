@@ -14,6 +14,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useScheduledCalls, useCompleteCall, useCancelCall, useRescheduleCall } from "@/hooks/communications";
 import { ScheduledCallsList, CallOutcomeDialog } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shared";
 
 export default function CallsPage() {
@@ -102,12 +104,14 @@ export default function CallsPage() {
   // ============================================================================
   // ERROR STATE
   // ============================================================================
-  if (error) {
+  if (error && !callsData) {
     return (
       <ErrorState
         title="Failed to load scheduled calls"
         message="There was an error loading your scheduled calls."
-        onRetry={() => refetch()}
+        onRetry={() => {
+          void refetch();
+        }}
       />
     );
   }
@@ -117,6 +121,21 @@ export default function CallsPage() {
   // ============================================================================
   return (
     <>
+      {error ? (
+        <Alert className="mb-6">
+          <AlertTitle>Showing cached scheduled calls</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Scheduled calls are temporarily unavailable. Please refresh and try again."}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <ScheduledCallsList
         calls={calls}
         isLoading={isLoading}

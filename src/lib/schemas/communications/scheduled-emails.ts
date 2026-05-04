@@ -45,7 +45,7 @@ export const cancelScheduledEmailSchema = z.object({
 
 export const getScheduledEmailsSchema = normalizeObjectInput(
   z.object({
-    status: z.enum(['pending', 'sent', 'cancelled']).optional(),
+    status: z.enum(['pending', 'processing', 'sent', 'failed', 'cancelled']).optional(),
     customerId: z.string().uuid().optional(),
     search: z.string().optional(), // Empty string is valid (means no search)
     limit: z.number().min(1).max(100).default(50),
@@ -56,7 +56,7 @@ export const getScheduledEmailsSchema = normalizeObjectInput(
 export const getScheduledEmailsCursorSchema = normalizeObjectInput(
   cursorPaginationSchema.merge(
     z.object({
-      status: z.enum(['pending', 'sent', 'cancelled']).optional(),
+      status: z.enum(['pending', 'processing', 'sent', 'failed', 'cancelled']).optional(),
       customerId: z.string().uuid().optional(),
       search: z.string().optional(),
     })
@@ -70,7 +70,7 @@ export const getScheduledEmailByIdSchema = z.object({
 export const scheduledEmailsSearchSchema = normalizeObjectInput(
   z.object({
     search: z.string().optional().default(''),
-    status: z.enum(['all', 'pending', 'sent', 'cancelled']).default('all'),
+    status: z.enum(['all', 'pending', 'processing', 'sent', 'failed', 'cancelled']).default('all'),
     customerId: z.string().uuid().optional(),
   })
 )
@@ -165,6 +165,10 @@ export interface ScheduleEmailDialogProps {
   initialData?: Pick<ScheduledEmail, 'id' | 'recipientEmail' | 'recipientName' | 'subject' | 'templateType' | 'scheduledAt' | 'timezone'> & {
     templateData?: ScheduledEmailTemplateData
   }
+  /** Whether edit pre-fill data is still loading */
+  isLoadingInitialData?: boolean
+  /** Error from loading edit pre-fill data */
+  initialDataError?: Error | null
   /** Pre-fill recipient for new email */
   defaultRecipient?: {
     email: string

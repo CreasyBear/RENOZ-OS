@@ -7,6 +7,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { queryKeys } from "@/lib/query-keys";
 import { QUERY_CONFIG } from "@/lib/constants";
 import { getDomainVerificationStatus } from "@/server/functions/communications/email-domain";
@@ -40,9 +41,14 @@ export function useDomainVerification(
   return useQuery({
     queryKey: queryKeys.communications.domainVerification.status(),
     queryFn: async () => {
-      const result = await getDomainVerificationStatus();
-      if (result == null) throw new Error('Domain verification status returned no data');
-      return result;
+      try {
+        return await getDomainVerificationStatus();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Domain verification status is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_LONG,

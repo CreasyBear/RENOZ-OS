@@ -26,6 +26,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChangeDiff } from "./change-diff";
+import { readAuditNote } from "@/lib/activities/read-audit-note";
 import {
   ACTION_ICONS,
   ACTION_COLORS,
@@ -82,6 +83,7 @@ const METADATA_SUMMARY_KEYS = [
 const METADATA_UUID_FIELDS = new Set(["customerId", "orderId", "opportunityId"]);
 
 const METADATA_HIDDEN_KEYS = new Set(["requestId", "activityKey"]);
+const NOTE_METADATA_SUMMARY_KEYS = new Set(["fullNotes", "contentPreview", "noteTitle", "noteImportance"]);
 
 // ============================================================================
 // TYPES
@@ -233,6 +235,7 @@ function buildRelatedEntities(
   pushRelated("project", metadata.projectId, metadata.projectTitle);
   pushRelated("product", metadata.productId, metadata.productName);
   pushRelated("warranty", metadata.warrantyId, metadata.warrantyNumber);
+  pushRelated("service_system", metadata.serviceSystemId, metadata.serviceSystemDisplayName);
 
   return related;
 }
@@ -366,13 +369,17 @@ export function ActivityItem({
 }: ActivityItemProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const hasChanges = activity.changes && activity.changes.fields?.length;
+  const note = React.useMemo(() => readAuditNote(activity), [activity]);
   const metadataEntries = React.useMemo(
     () => getMetadataEntries(activity.metadata),
     [activity.metadata]
   );
   const metadataSummary = React.useMemo(
-    () => getMetadataSummary(metadataEntries),
-    [metadataEntries]
+    () =>
+      getMetadataSummary(
+        note ? metadataEntries.filter((entry) => !NOTE_METADATA_SUMMARY_KEYS.has(entry.key)) : metadataEntries
+      ),
+    [metadataEntries, note]
   );
   const hasMetadata = metadataEntries.length > 0;
   const hasDetails = Boolean(hasChanges || hasMetadata);
@@ -420,11 +427,18 @@ export function ActivityItem({
               getLink={getEntityLink}
             />
           </div>
-          {activity.description && (
+          {note?.title ? (
+            <div className="mt-1 ml-7 min-w-0">
+              <p className="text-xs font-medium truncate">{note.title}</p>
+              {note.preview && note.preview !== note.title ? (
+                <p className="text-xs text-muted-foreground truncate">{note.preview}</p>
+              ) : null}
+            </div>
+          ) : activity.description ? (
             <p className="text-xs text-muted-foreground truncate mt-1 ml-7">
-              {activity.description}
+              {note?.preview ?? activity.description}
             </p>
-          )}
+          ) : null}
         </div>
         <time
           className="text-xs text-muted-foreground shrink-0 whitespace-nowrap"
@@ -479,9 +493,18 @@ export function ActivityItem({
             </div>
 
             {/* Row 2: Description */}
-            {activity.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed">{activity.description}</p>
-            )}
+            {note?.title ? (
+              <div className="space-y-1">
+                <p className="text-sm font-medium leading-relaxed">{note.title}</p>
+                {note.preview && note.preview !== note.title ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed">{note.preview}</p>
+                ) : null}
+              </div>
+            ) : activity.description ? (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {note?.preview ?? activity.description}
+              </p>
+            ) : null}
 
             {/* Row 3: Metadata badges */}
             {metadataSummary.length > 0 && (

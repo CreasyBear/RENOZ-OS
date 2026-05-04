@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listWorkstreams,
   getWorkstream,
@@ -30,11 +31,17 @@ export function useWorkstreams(projectId: string, options: { enabled?: boolean }
   return useQuery<ListWorkstreamsResponse>({
     queryKey: queryKeys.projectWorkstreams.byProject(projectId),
     queryFn: async () => {
-      const result = await listWorkstreams({
-        data: { projectId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWorkstreams({
+          data: { projectId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project workstreams are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: options.enabled ?? !!projectId,
   });
@@ -48,11 +55,18 @@ export function useWorkstream(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectWorkstreams.detail(id),
     queryFn: async () => {
-      const result = await getWorkstream({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWorkstream({
+          data: { id },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Workstream details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested workstream could not be found.',
+        });
+      }
     },
     enabled: options.enabled ?? !!id,
   });

@@ -5,3 +5,4 @@ export * from './email-domain';
 export * from './email-events';
 export * from './email-preview';
 export * from './email-suppression';
+export * from './inbox';

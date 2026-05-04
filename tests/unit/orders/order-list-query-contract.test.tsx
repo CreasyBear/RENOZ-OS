@@ -45,6 +45,45 @@ describe('order list query contract', () => {
     })
   })
 
+  it('passes through balanceDue on order list rows for lifecycle-aware overdue styling', async () => {
+    mockListOrders.mockResolvedValueOnce({
+      orders: [
+        {
+          id: 'order-1',
+          orderNumber: 'SO-100',
+          customerId: 'customer-1',
+          status: 'confirmed',
+          paymentStatus: 'partial',
+          orderDate: new Date('2026-04-01'),
+          dueDate: new Date('2026-04-05'),
+          total: 1200,
+          balanceDue: 450,
+          metadata: {},
+          createdAt: new Date('2026-04-01'),
+          updatedAt: new Date('2026-04-02'),
+          customer: {
+            id: 'customer-1',
+            name: 'Acme',
+          },
+          itemCount: 2,
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+      hasMore: false,
+    })
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { useOrders } = await import('@/hooks/orders/use-orders')
+
+    const { result } = renderHook(() => useOrders(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await waitFor(() => expect(result.current.data?.orders[0]?.balanceDue).toBe(450))
+  })
+
   it('uses the same normalized filters for the finite query key and server request', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const { useOrders } = await import('@/hooks/orders/use-orders')

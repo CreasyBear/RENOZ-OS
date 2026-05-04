@@ -9,6 +9,7 @@ import {
   customers,
   orderLineItems,
   orders,
+  orderShipments,
   type OrderAddress,
   type OrderMetadata,
 } from 'drizzle/schema';
@@ -19,7 +20,6 @@ import { computeChanges } from '@/lib/activity-logger';
 import {
   createOrderSchema,
   orderParamsSchema,
-  type OrderStatus,
   updateOrderSchema,
 } from '@/lib/schemas/orders';
 import { validateInvoiceTotals } from '@/lib/utils/financial';
@@ -33,9 +33,7 @@ import {
 import type { OrderWithLineItems } from './order-read';
 import { generateOrderNumber } from './order-numbering';
 import { calculateLineItemTotals, calculateOrderTotals } from './order-pricing';
-import { releaseOrderSerialAllocations } from './order-serial-side-effects';
 import { generateQuotePdf } from '@/trigger/jobs';
-import { validateStatusTransition } from './order-status-policy';
 
 const ORDER_EXCLUDED_FIELDS: string[] = [
   'updatedAt',
@@ -47,6 +45,19 @@ const ORDER_EXCLUDED_FIELDS: string[] = [
 ];
 
 type Order = typeof orders.$inferSelect;
+
+function toShipmentAddressFromOrderAddress(address: OrderAddress) {
+  return {
+    name: address.contactName ?? 'Delivery Contact',
+    street1: address.street1,
+    street2: address.street2 ?? undefined,
+    city: address.city,
+    state: address.state,
+    postcode: address.postalCode,
+    country: address.country,
+    phone: address.contactPhone ?? undefined,
+  };
+}
 
 export const createOrder = createServerFn({ method: 'POST' })
   .inputValidator(createOrderSchema)
@@ -295,8 +306,6 @@ export const updateOrder = createServerFn({ method: 'POST' })
     }
 
     const before = existing;
-    const currentStatus = existing.status as OrderStatus;
-    const requestedStatus = input.status as OrderStatus | undefined;
 
     if (existing.version !== expectedVersion) {
       throw new ConflictError('Order was modified by another user. Please refresh and try again.');
@@ -340,51 +349,15 @@ export const updateOrder = createServerFn({ method: 'POST' })
       }
     }
 
-    if (requestedStatus && requestedStatus !== currentStatus) {
-      if (!validateStatusTransition(currentStatus, requestedStatus)) {
-        throw new ValidationError('Invalid status transition', {
-          status: [`Cannot transition from '${currentStatus}' to '${requestedStatus}'`],
-        });
-      }
-
-      if (requestedStatus === 'cancelled') {
-        const [shippedLineItem] = await db
-          .select({ id: orderLineItems.id })
-          .from(orderLineItems)
-          .where(
-            and(
-              eq(orderLineItems.orderId, id),
-              eq(orderLineItems.organizationId, ctx.organizationId),
-              sql`${orderLineItems.qtyShipped} > 0`
-            )
-          )
-          .limit(1);
-
-        if (shippedLineItem) {
-          throw new ValidationError('Cannot cancel order with shipped items', {
-            status: ['This order has shipped quantities. Create returns/RMA before cancellation.'],
-          });
-        }
-      }
-    }
-
     const updateData: Record<string, unknown> = { ...input };
-    if (requestedStatus && requestedStatus === currentStatus) {
-      delete updateData.status;
+    const shippingAddressChanged =
+      Object.prototype.hasOwnProperty.call(input, 'shippingAddress') &&
+      JSON.stringify(existing.shippingAddress ?? null) !== JSON.stringify(input.shippingAddress ?? null);
+    if (Object.prototype.hasOwnProperty.call(input, 'billingAddress')) {
+      updateData.billingAddress = input.billingAddress as OrderAddress | null;
     }
-    if (requestedStatus && requestedStatus !== currentStatus) {
-      if (requestedStatus === 'shipped' || requestedStatus === 'partially_shipped') {
-        updateData.shippedDate = new Date().toISOString().slice(0, 10);
-      }
-      if (requestedStatus === 'delivered') {
-        updateData.deliveredDate = new Date().toISOString().slice(0, 10);
-      }
-    }
-    if (input.billingAddress) {
-      updateData.billingAddress = input.billingAddress as OrderAddress;
-    }
-    if (input.shippingAddress) {
-      updateData.shippingAddress = input.shippingAddress as OrderAddress;
+    if (Object.prototype.hasOwnProperty.call(input, 'shippingAddress')) {
+      updateData.shippingAddress = input.shippingAddress as OrderAddress | null;
     }
     if (input.metadata) {
       updateData.metadata = input.metadata as OrderMetadata;
@@ -395,14 +368,6 @@ export const updateOrder = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
-      if (requestedStatus === 'cancelled' && requestedStatus !== currentStatus) {
-        await releaseOrderSerialAllocations(tx, {
-          organizationId: ctx.organizationId,
-          orderId: id,
-          orderNumber: existing.orderNumber,
-          userId: ctx.user.id,
-        });
-      }
 
       const [result] = await tx
         .update(orders)
@@ -412,9 +377,6 @@ export const updateOrder = createServerFn({ method: 'POST' })
             eq(orders.id, id),
             eq(orders.organizationId, ctx.organizationId),
             eq(orders.version, expectedVersion),
-            requestedStatus && requestedStatus !== currentStatus
-              ? eq(orders.status, currentStatus)
-              : undefined,
             isNull(orders.deletedAt)
           )
         )
@@ -424,6 +386,26 @@ export const updateOrder = createServerFn({ method: 'POST' })
         throw new ConflictError(
           'Order was modified by another user. Please refresh and try again.'
         );
+      }
+
+      if (shippingAddressChanged) {
+        await tx
+          .update(orderShipments)
+          .set({
+            shippingAddress: input.shippingAddress
+              ? toShipmentAddressFromOrderAddress(input.shippingAddress as OrderAddress)
+              : null,
+            operationalDocumentRevision: sql`${orderShipments.operationalDocumentRevision} + 1`,
+            updatedBy: ctx.user.id,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(orderShipments.organizationId, ctx.organizationId),
+              eq(orderShipments.orderId, id),
+              eq(orderShipments.status, 'pending')
+            )
+          );
       }
 
       await enqueueSearchIndexOutbox(

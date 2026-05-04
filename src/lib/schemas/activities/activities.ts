@@ -62,6 +62,8 @@ export const activityEntityTypeValues = [
   'warranty_claim',
   'warranty_policy',
   'warranty_extension',
+  // Service domain
+  'service_system',
 ] as const;
 
 // Activity source values for tracking how activities were created (COMMS-AUTO-002)
@@ -89,6 +91,10 @@ export const logEntityActivitySchema = z.object({
   entityId: z.string().uuid(),
   activityType: z.enum(['call', 'email', 'meeting', 'note', 'follow_up']),
   description: z.string().min(1).max(2000),
+  title: z.string().max(200).optional(),
+  body: z.string().max(2000).optional(),
+  category: z.string().max(80).optional(),
+  importance: z.string().max(40).optional(),
   outcome: z.string().max(1000).optional(),
   scheduledAt: z.coerce.date().optional(),
   isFollowUp: z.boolean().default(false),
@@ -146,6 +152,11 @@ export const activityMetadataSchema = z.object({
   orderNumber: z.string().optional(),
   opportunityId: z.string().uuid().optional(),
   opportunityTitle: z.string().optional(),
+  reviewId: z.string().uuid().optional(),
+  serviceSystemId: z.string().uuid().optional(),
+  serviceSystemDisplayName: z.string().optional(),
+  currentOwnerId: z.string().uuid().optional(),
+  currentOwnerName: z.string().optional(),
 
   // Email activity fields
   emailId: z.string().optional(),
@@ -166,10 +177,17 @@ export const activityMetadataSchema = z.object({
   // Note activity fields
   noteId: z.string().optional(),
   contentPreview: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteImportance: z.string().optional(),
 
   // Communications fields
   logType: z.string().optional(),
   fullNotes: z.string().optional(),
+  filename: z.string().optional(),
+  fileSize: z.number().optional(),
+  documentType: z.string().optional(),
+  isRegeneration: z.boolean().optional(),
+  regenerationCount: z.number().optional(),
 
   // Customer fields (merge operations)
   mergedCount: z.number().optional(),

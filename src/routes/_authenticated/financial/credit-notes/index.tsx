@@ -19,7 +19,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { z } from 'zod';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CreditNotesListContainer } from '@/components/domain/financial/credit-notes-list-container';
 import { CreateCreditNoteDialog } from '@/components/domain/financial/credit-note-dialogs';
@@ -51,17 +51,7 @@ export const Route = createFileRoute('/_authenticated/financial/credit-notes/')(
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Credit Notes"
-        description="Customer credit notes and refund management"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -127,32 +117,33 @@ function CreditNotesPage() {
   );
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Credit Notes"
-        description="Customer credit notes and refund management"
-        actions={
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Credit Notes</h2>
+          <p className="text-sm text-muted-foreground">
+            Customer credit notes and refund management.
+          </p>
+        </div>
+        <div>
           <Button onClick={() => setCreateDialogOpen(true)} size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Create Credit Note
           </Button>
-        }
+        </div>
+      </div>
+      <CreditNotesListContainer
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onCreateCreditNote={() => setCreateDialogOpen(true)}
       />
-      <PageLayout.Content>
-        <CreditNotesListContainer
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onCreateCreditNote={() => setCreateDialogOpen(true)}
-        />
 
-        {/* Create Credit Note Dialog */}
-        <CreateCreditNoteDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          onCreate={handleCreate}
-          isPending={createMutation.isPending}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+      <CreateCreditNoteDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreate={handleCreate}
+        isPending={createMutation.isPending}
+      />
+    </div>
   );
 }

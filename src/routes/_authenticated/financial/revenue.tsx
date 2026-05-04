@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { startOfYear } from 'date-fns';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { RevenueReports } from '@/components/domain/financial/revenue-reports';
 import { recognitionStateValues } from '@/lib/schemas/financial/revenue-recognition';
@@ -33,17 +33,7 @@ export const Route = createFileRoute('/_authenticated/financial/revenue')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Revenue Recognition"
-        description="Track recognized and deferred revenue with sync status"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -96,29 +86,22 @@ function RevenueRecognitionPage() {
     {} as Record<RecognitionState, number>
   );
 
-  for (const record of records) {
-    stateCounts[record.state] = (stateCounts[record.state] ?? 0) + 1;
+  const serverStateCounts = (listData as { stateCounts?: Partial<Record<RecognitionState, number>> } | undefined)?.stateCounts ?? {};
+  for (const state of recognitionStateValues) {
+    stateCounts[state] = serverStateCounts[state] ?? 0;
   }
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Revenue Recognition"
-        description="Track recognized and deferred revenue with sync status"
-      />
-      <PageLayout.Content>
-        <RevenueReports
-          isLoading={isLoading}
-          records={records}
-          summary={summary}
-          balance={balance}
-          stateCounts={stateCounts}
-          stateFilter={stateFilter}
-          onStateFilterChange={setStateFilter}
-          retryingId={retryingId}
-          onRetry={handleRetry}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    <RevenueReports
+      isLoading={isLoading}
+      records={records}
+      summary={summary}
+      balance={balance}
+      stateCounts={stateCounts}
+      stateFilter={stateFilter}
+      onStateFilterChange={setStateFilter}
+      retryingId={retryingId}
+      onRetry={handleRetry}
+    />
   );
 }

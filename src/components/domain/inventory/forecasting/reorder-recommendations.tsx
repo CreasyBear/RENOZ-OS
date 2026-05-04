@@ -67,8 +67,11 @@ export interface ReorderRecommendation {
 interface ReorderRecommendationsProps {
   recommendations: ReorderRecommendation[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
   onReorder?: (productId: string, quantity: number) => void;
   onReorderAll?: () => void;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -113,8 +116,11 @@ const URGENCY_CONFIG: Record<
 export const ReorderRecommendations = memo(function ReorderRecommendations({
   recommendations,
   isLoading,
+  isError,
+  errorMessage,
   onReorder,
   onReorderAll,
+  onRetry,
   className,
 }: ReorderRecommendationsProps) {
   // Calculate summary
@@ -143,6 +149,29 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
               ))}
             </div>
             <Skeleton className="h-64" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle>Reorder Recommendations</CardTitle>
+          <CardDescription>Forecasting recommendations are temporarily unavailable.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm text-foreground">
+              {errorMessage ?? 'Reorder recommendations are temporarily unavailable. Please refresh and try again.'}
+            </p>
+            {onRetry ? (
+              <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>

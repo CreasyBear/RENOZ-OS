@@ -46,6 +46,7 @@ import {
 } from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { resolveMetadataUuids } from '@/lib/activities/activity-metadata';
+import { buildManualActivityLogPresentation } from '@/lib/activities/build-manual-activity-log';
 import { uploadFile, createSignedUrl } from '@/lib/storage';
 import {
   ActivityExportPdfDocument,
@@ -985,7 +986,7 @@ export const logEntityActivity = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read }); // Basic permission
 
-    const { entityType, entityId, activityType, description, outcome, scheduledAt, isFollowUp } = data;
+    const { entityType, entityId } = data;
 
     // Verify entity exists and belongs to org
     if (entityType === 'customer') {
@@ -997,25 +998,7 @@ export const logEntityActivity = createServerFn({ method: 'POST' })
     }
     // Other entity types: no verification (legacy/unsupported)
 
-    // Determine action based on activity type
-    const action = activityType === 'call' ? 'call_logged' : 'note_added';
-
-    // Build metadata object (follows pattern from quick-log.ts)
-    const metadata: ActivityMetadata = {
-      logType: activityType,
-      fullNotes: description,
-    };
-
-    // Add optional fields
-    if (outcome) {
-      metadata.notes = outcome; // Use notes field for outcome
-    }
-    if (scheduledAt) {
-      metadata.scheduledDate = scheduledAt.toISOString();
-    }
-    if (isFollowUp) {
-      metadata.reason = 'follow_up'; // Mark as follow-up in reason field
-    }
+    const { action, description, metadata } = buildManualActivityLogPresentation(data);
 
     // Create the activity
     const [activity] = await db
@@ -1026,7 +1009,7 @@ export const logEntityActivity = createServerFn({ method: 'POST' })
         entityType,
         entityId,
         action,
-        description: `${activityType.charAt(0).toUpperCase() + activityType.slice(1).replace('_', ' ')}: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+        description,
         metadata,
         source: 'manual',
         createdBy: ctx.user.id,

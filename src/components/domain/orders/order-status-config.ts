@@ -23,6 +23,13 @@ import type { LucideIcon } from "lucide-react";
 import type { SemanticStatusConfigItem } from "@/components/shared/data-table";
 import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
 
+interface OrderDueDateContext {
+  dueDate: string | Date | null | undefined;
+  status?: OrderStatus | null;
+  paymentStatus?: PaymentStatus | null;
+  balanceDue?: number | null;
+}
+
 // ============================================================================
 // DETAIL VIEW STATUS CONFIG (with Tailwind classes)
 // ============================================================================
@@ -164,8 +171,17 @@ export const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, SemanticStatusConfigIt
 /**
  * Check if an order's due date is overdue
  */
-export function isOrderOverdue(dueDate: string | Date | null | undefined): boolean {
+export function isOrderOverdue({
+  dueDate,
+  status,
+  paymentStatus,
+  balanceDue,
+}: OrderDueDateContext): boolean {
   if (!dueDate) return false;
+  if (status === "delivered" || status === "cancelled") return false;
+  if (paymentStatus === "paid") return false;
+  if (balanceDue != null && Number(balanceDue) <= 0) return false;
+
   const due = typeof dueDate === "string" ? new Date(dueDate) : dueDate;
   return due < new Date();
 }
@@ -174,13 +190,14 @@ export function isOrderOverdue(dueDate: string | Date | null | undefined): boole
  * Format due date with relative indicator for display
  */
 export function formatDueDateRelative(
-  dueDate: string | Date | null | undefined
+  context: OrderDueDateContext
 ): { text: string; isOverdue: boolean } {
+  const { dueDate } = context;
   if (!dueDate) return { text: "—", isOverdue: false };
 
   const due = typeof dueDate === "string" ? new Date(dueDate) : dueDate;
   const now = new Date();
-  const isOver = due < now;
+  const isOver = isOrderOverdue(context);
 
   const diffMs = due.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -189,6 +206,17 @@ export function formatDueDateRelative(
     return {
       text: `${Math.abs(diffDays)}d overdue`,
       isOverdue: true,
+    };
+  }
+
+  if (due < now) {
+    return {
+      text: due.toLocaleDateString("en-AU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }),
+      isOverdue: false,
     };
   }
 

@@ -22,6 +22,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { isReadQueryError, normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   generateQuotePdf,
   generateInvoicePdf,
@@ -184,9 +185,15 @@ export function useDocumentStatus(
   return useQuery<DocumentStatusResult, Error>({
     queryKey: queryKeys.documents.status(input.orderId, input.documentType),
     queryFn: async () => {
-      const result = await statusFn({ data: input });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await statusFn({ data: input });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Document status is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested order could not be found.',
+        });
+      }
     },
     enabled: options?.enabled ?? true,
     staleTime: 5 * 1000, // 5 seconds - document status can change quickly
@@ -221,13 +228,24 @@ export function useDocumentPolling(
   return useQuery<DocumentStatusResult, Error>({
     queryKey: queryKeys.documents.status(statusInput.orderId, statusInput.documentType),
     queryFn: async () => {
-      const result = await statusFn({ data: statusInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await statusFn({ data: statusInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Document status is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested order could not be found.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 1000,
     refetchInterval: (query) => {
+      const queryError = query.state.error;
+      if (isReadQueryError(queryError) && queryError.failureKind === 'not-found') {
+        return false;
+      }
+
       const data = query.state.data;
       // Stop polling if completed or failed
       if (data?.status === 'completed' || data?.status === 'failed') {

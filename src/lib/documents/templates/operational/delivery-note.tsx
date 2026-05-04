@@ -5,11 +5,17 @@
  * black borders, 5pt row padding. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   DocumentFixedHeader,
-  SerialNumbersCell,
+  DeliveryAcknowledgment,
+  DocumentDetailStrip,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  SerialNumbersSummary,
+  type DetailStripItem,
   formatAddressLines,
   formatDateForPdf,
   colors,
@@ -237,38 +243,6 @@ const styles = StyleSheet.create({
   colSku: { flex: 1 },
   colDescription: { flex: 2.5 },
   colQty: { width: 50, textAlign: "center" },
-  colSerial: { width: 70 },
-
-  serialSummarySection: {
-    marginTop: 20,
-    paddingTop: 12,
-    borderTopWidth: 0.5,
-    borderTopColor: DOCUMENT_BORDER_COLOR,
-  },
-  serialSummaryTitle: {
-    fontSize: 9,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.primary,
-    marginBottom: 8,
-  },
-  serialSummaryRow: {
-    flexDirection: "row",
-    marginBottom: 4,
-    gap: 8,
-  },
-  serialSummarySerial: {
-    fontSize: 9,
-    fontFamily: "Courier",
-    color: colors.text.primary,
-    minWidth: 70,
-  },
-  serialSummaryProduct: {
-    fontSize: 9,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
-    flex: 1,
-  },
-
   acknowledgmentSection: {
     marginTop: 20,
     paddingTop: 12,
@@ -322,16 +296,18 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
   const toAddressLines = formatAddressLines(data.shippingAddress);
-
-  const serialSummaryRows = hasSerials
-    ? data.lineItems.flatMap((item) =>
-        (item.serialNumbers ?? []).map((serial) => ({
-          serial,
-          description: item.description,
-          quantity: item.quantity,
-        }))
-      )
-    : [];
+  const detailItems = [
+    {
+      label: "Delivery Date",
+      value: formatDateForPdf(data.deliveryDate, locale, "short"),
+      weight: 1.4,
+      emphasis: "strong" as const,
+    },
+    data.carrier ? { label: "Carrier", value: data.carrier, weight: 1 } : null,
+    data.trackingNumber
+      ? { label: "Tracking", value: data.trackingNumber, weight: 1, emphasis: "subtle" as const }
+      : null,
+  ].filter(Boolean) as DetailStripItem[];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -341,87 +317,46 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header: Meta left, Logo right */}
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Delivery Note</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Note #: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Order #: </Text>
-              <Text style={styles.metaValue}>{data.orderNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Issue: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Delivery: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.deliveryDate, locale, "short")}
-              </Text>
-            </View>
-          </View>
+        <DocumentMasthead
+          title="Delivery Note"
+          meta={[
+            { label: "Note", value: data.documentNumber },
+            { label: "Order", value: data.orderNumber },
+            { label: "Issued", value: formatDateForPdf(data.issueDate, locale, "short") },
+          ]}
+          callout={{
+            eyebrow: "Delivered On",
+            title: formatDateForPdf(data.deliveryDate, locale, "short"),
+            detail: data.shippingAddress?.contactName
+              ? `Recipient ${data.shippingAddress.contactName}`
+              : "Confirm receipt below.",
+            tone: "success",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl && (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          )}
-        </View>
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              name={organization.name}
+              lines={[...fromAddressLines, ...(organization.phone ? [organization.phone] : [])]}
+            />
+          }
+          right={
+            <DocumentInfoPanel
+              label="Deliver To"
+              name={data.customer.name}
+              lines={toAddressLines}
+              mutedLines={[
+                ...(data.shippingAddress?.contactName ? [`Attn: ${data.shippingAddress.contactName}`] : []),
+                ...(data.shippingAddress?.contactPhone ? [data.shippingAddress.contactPhone] : []),
+              ]}
+            />
+          }
+        />
 
-        {/* From / Deliver To two-column */}
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>{line}</Text>
-            ))}
-            {organization.phone && (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            )}
-          </View>
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Deliver To</Text>
-            <Text style={styles.sectionName}>{data.customer.name}</Text>
-            {data.shippingAddress?.contactName && (
-              <Text style={styles.sectionDetail}>Attn: {data.shippingAddress.contactName}</Text>
-            )}
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>{line}</Text>
-              ))
-            ) : (
-              <Text style={styles.sectionDetail}>—</Text>
-            )}
-            {data.shippingAddress?.contactPhone && (
-              <Text style={styles.sectionDetail}>{data.shippingAddress.contactPhone}</Text>
-            )}
-          </View>
-        </View>
-
-        {/* Delivery Details */}
-        {(data.carrier || data.trackingNumber) && (
-          <View style={styles.deliveryDetails}>
-            {data.carrier && (
-              <View style={styles.deliveryItem}>
-                <Text style={styles.deliveryLabel}>Carrier</Text>
-                <Text style={styles.deliveryValue}>{data.carrier}</Text>
-              </View>
-            )}
-            {data.trackingNumber && (
-              <View style={styles.deliveryItem}>
-                <Text style={styles.deliveryLabel}>Tracking #</Text>
-                <Text style={styles.deliveryValue}>{data.trackingNumber}</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <DocumentDetailStrip items={detailItems} />
 
         {/* Line Items Table */}
         <View style={styles.table}>
@@ -431,9 +366,6 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
             <Text style={[styles.tableHeaderCell, styles.colSku]}>SKU</Text>
             <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
-            {hasSerials && (
-              <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serials</Text>
-            )}
           </View>
 
           {data.lineItems.length === 0 ? (
@@ -445,11 +377,6 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
               <Text style={[styles.tableCell, styles.colSku]}>—</Text>
               <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
               <Text style={[styles.tableCell, styles.colQty]}>—</Text>
-              {hasSerials && (
-                <View style={styles.colSerial}>
-                  <Text style={styles.tableCell}>—</Text>
-                </View>
-              )}
             </View>
           ) : (
             data.lineItems.map((item, index) => (
@@ -464,50 +391,23 @@ function DeliveryNoteContent({ data }: DeliveryNotePdfTemplateProps) {
                 {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
               </View>
               <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
-              {hasSerials && (
-                <View style={styles.colSerial}>
-                  <SerialNumbersCell serialNumbers={item.serialNumbers ?? []} />
-                </View>
-              )}
             </View>
             ))
           )}
         </View>
 
-        {/* Serial Summary */}
-        {hasSerials && serialSummaryRows.length > 0 && (
-          <View style={styles.serialSummarySection}>
-            <Text style={styles.serialSummaryTitle}>Serial Numbers on This Delivery</Text>
-            {serialSummaryRows.map((row, idx) => (
-              <View key={`${row.serial}-${idx}`} style={styles.serialSummaryRow}>
-                <Text style={styles.serialSummarySerial}>
-                  {idx + 1}. {row.serial}
-                </Text>
-                <Text style={styles.serialSummaryProduct}>
-                  {row.description} (Qty {row.quantity})
-                </Text>
-              </View>
-            ))}
-          </View>
+        {hasSerials && (
+          <SerialNumbersSummary
+            title="Serialized Items on This Delivery"
+            items={data.lineItems}
+          />
         )}
 
-        {/* Acknowledgment */}
-        <View style={styles.acknowledgmentSection} wrap={false}>
-          <Text style={styles.acknowledgmentTitle}>Delivery Acknowledgment</Text>
-          <Text style={styles.acknowledgmentText}>
-            I confirm receipt of the above items in good condition. Any damage or shortages must be reported within 24 hours of delivery.
-          </Text>
-          <View style={styles.signatureRow}>
-            <View style={styles.signatureBlock}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Signature</Text>
-            </View>
-            <View style={styles.dateBlock}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Date</Text>
-            </View>
-          </View>
-        </View>
+        <DeliveryAcknowledgment
+          recipientName={data.shippingAddress?.contactName ?? null}
+          deliveryDate={null}
+          acknowledgmentText="I confirm receipt of the goods listed above in good condition. Any shortages or damages must be reported within 24 hours of delivery."
+        />
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />

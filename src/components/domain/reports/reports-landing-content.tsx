@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format, isFuture } from 'date-fns';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,10 +107,20 @@ export interface ReportsLandingContentProps {
 export function ReportsLandingContent({ className }: ReportsLandingContentProps) {
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all');
 
-  const { data: favoritesData, isLoading: favoritesLoading } = useReportFavorites({
+  const {
+    data: favoritesData,
+    isLoading: favoritesLoading,
+    error: favoritesError,
+    refetch: refetchFavorites,
+  } = useReportFavorites({
     pageSize: 20,
   });
-  const { data: scheduledData, isLoading: scheduledLoading } = useScheduledReports({
+  const {
+    data: scheduledData,
+    isLoading: scheduledLoading,
+    error: scheduledError,
+    refetch: refetchScheduled,
+  } = useScheduledReports({
     isActive: true,
     pageSize: 50,
   });
@@ -145,6 +156,19 @@ export function ReportsLandingContent({ className }: ReportsLandingContentProps)
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {favoritesError ? (
+              <Alert className="mb-4" variant={favoritesData ? 'default' : 'destructive'}>
+                <AlertTitle>
+                  {favoritesData ? 'Showing cached favorites' : 'Favorites unavailable'}
+                </AlertTitle>
+                <AlertDescription className="flex items-center justify-between gap-3">
+                  <span>{favoritesError.message}</span>
+                  <Button variant="outline" size="sm" onClick={() => void refetchFavorites()}>
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {favoritesLoading ? (
               <FavoritesSkeleton />
             ) : favorites.length === 0 ? (
@@ -180,6 +204,19 @@ export function ReportsLandingContent({ className }: ReportsLandingContentProps)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {scheduledError ? (
+              <Alert variant={scheduledData ? 'default' : 'destructive'}>
+                <AlertTitle>
+                  {scheduledData ? 'Showing cached scheduled reports' : 'Scheduled reports unavailable'}
+                </AlertTitle>
+                <AlertDescription className="flex items-center justify-between gap-3">
+                  <span>{scheduledError.message}</span>
+                  <Button variant="outline" size="sm" onClick={() => void refetchScheduled()}>
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {/* Filter chips */}
             <div className="flex flex-wrap gap-2">
               <Button

@@ -81,6 +81,8 @@ const deliveryStatusConfig: Record<
   DeliveryStatus,
   { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
 > = {
+  queued: { label: 'Queued', variant: 'outline' },
+  pending: { label: 'Pending', variant: 'secondary' },
   sent: { label: 'Sent', variant: 'secondary' },
   delivered: { label: 'Delivered', variant: 'outline' },
   bounced: { label: 'Bounced', variant: 'destructive' },

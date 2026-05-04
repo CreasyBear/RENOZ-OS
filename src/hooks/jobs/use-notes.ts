@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listNotes,
   getNote,
@@ -37,11 +38,16 @@ export function useNotes(projectId: string, options: {
   return useQuery<ListNotesResponse>({
     queryKey: queryKeys.projectNotes.byProjectFiltered(projectId, { siteVisitId, noteType }),
     queryFn: async () => {
-      const result = await listNotes({
-        data: { projectId, siteVisitId, noteType } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listNotes({
+          data: { projectId, siteVisitId, noteType },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Project notes are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled ?? !!projectId,
   });
@@ -51,11 +57,17 @@ export function useNotesStats(projectId: string, options: { enabled?: boolean } 
   return useQuery({
     queryKey: queryKeys.projectNotes.stats(projectId),
     queryFn: async () => {
-      const result = await getProjectNotesStats({
-        data: { projectId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getProjectNotesStats({
+          data: { projectId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project note summary is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: options.enabled ?? !!projectId,
   });
@@ -69,11 +81,17 @@ export function useNote(id: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.projectNotes.detail(id),
     queryFn: async () => {
-      const result = await getNote({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getNote({
+          data: { id },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Project note details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested project note could not be found.',
+        });
+      }
     },
     enabled: options.enabled ?? !!id,
   });

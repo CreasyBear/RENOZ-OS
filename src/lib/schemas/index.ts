@@ -171,6 +171,9 @@ export * from "./search";
 // Support
 export * from "./support";
 
+// Service
+export * from "./service";
+
 // Warranty
 export * from "./warranty";
 

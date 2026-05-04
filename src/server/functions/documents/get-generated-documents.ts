@@ -23,6 +23,12 @@ import {
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
 
+const SHIPMENT_OPERATIONAL_DOCUMENT_TYPES = new Set([
+  'packing-slip',
+  'dispatch-note',
+  'delivery-note',
+]);
+
 // ============================================================================
 // SCHEMAS
 // ============================================================================
@@ -136,6 +142,7 @@ export const getGeneratedDocuments = createServerFn({ method: 'GET' })
         generatedAt: generatedDocuments.generatedAt,
         generatedById: generatedDocuments.generatedById,
         regenerationCount: generatedDocuments.regenerationCount,
+        sourceRevision: generatedDocuments.sourceRevision,
         createdAt: generatedDocuments.createdAt,
       })
       .from(generatedDocuments)
@@ -143,7 +150,53 @@ export const getGeneratedDocuments = createServerFn({ method: 'GET' })
       .orderBy(orderDirection(generatedDocuments.createdAt), orderDirection(generatedDocuments.id))
       .limit(limit + 1);
 
-    return buildStandardCursorResponse(results, limit);
+    const response = buildStandardCursorResponse(results, limit);
+
+    if (entityType !== 'shipment') {
+      return {
+        ...response,
+        items: response.items.map((item) => ({
+          ...item,
+          isStale: false,
+          staleReason: undefined,
+        })),
+      };
+    }
+
+    const [shipment] = await db
+      .select({
+        operationalDocumentRevision: orderShipments.operationalDocumentRevision,
+      })
+      .from(orderShipments)
+      .where(
+        and(
+          eq(orderShipments.id, entityId),
+          eq(orderShipments.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    const shipmentRevision = Number(shipment?.operationalDocumentRevision ?? 0);
+
+    return {
+      ...response,
+      items: response.items.map((item) => {
+        const isOperationalShipmentDoc =
+          item.entityType === 'shipment' &&
+          SHIPMENT_OPERATIONAL_DOCUMENT_TYPES.has(item.documentType);
+        const isStale =
+          isOperationalShipmentDoc &&
+          Number(item.sourceRevision ?? 0) < shipmentRevision;
+
+        return {
+          ...item,
+          isStale,
+          staleReason: isStale
+            ? 'Shipment details changed after this document was generated.'
+            : undefined,
+        };
+      }),
+    };
   });
 
 // ============================================================================
@@ -261,18 +314,6 @@ export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
       throw new NotFoundError('Order not found', 'order');
     }
 
-    const shipments = await db
-      .select({ id: orderShipments.id })
-      .from(orderShipments)
-      .where(
-        and(
-          eq(orderShipments.orderId, data.orderId),
-          eq(orderShipments.organizationId, ctx.organizationId)
-        )
-      );
-
-    const shipmentIds = shipments.map((shipment) => shipment.id);
-
     const orderDocuments = await db
       .select({
         id: generatedDocuments.id,
@@ -286,6 +327,7 @@ export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
         generatedAt: generatedDocuments.generatedAt,
         generatedById: generatedDocuments.generatedById,
         regenerationCount: generatedDocuments.regenerationCount,
+        sourceRevision: generatedDocuments.sourceRevision,
         createdAt: generatedDocuments.createdAt,
       })
       .from(generatedDocuments)
@@ -293,9 +335,30 @@ export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
         and(
           eq(generatedDocuments.organizationId, ctx.organizationId),
           eq(generatedDocuments.entityType, 'order'),
-          eq(generatedDocuments.entityId, data.orderId)
+          eq(generatedDocuments.entityId, data.orderId),
+          inArray(generatedDocuments.documentType, ['quote', 'invoice', 'pro-forma'])
         )
       );
+
+    const shipmentsById = new Map(
+      (
+        await db
+          .select({
+            id: orderShipments.id,
+            shipmentNumber: orderShipments.shipmentNumber,
+            operationalDocumentRevision: orderShipments.operationalDocumentRevision,
+          })
+          .from(orderShipments)
+          .where(
+            and(
+              eq(orderShipments.organizationId, ctx.organizationId),
+              eq(orderShipments.orderId, data.orderId)
+            )
+          )
+      ).map((shipment) => [shipment.id, shipment])
+    );
+
+    const shipmentIds = Array.from(shipmentsById.keys());
 
     const shipmentDocuments =
       shipmentIds.length === 0
@@ -313,6 +376,7 @@ export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
               generatedAt: generatedDocuments.generatedAt,
               generatedById: generatedDocuments.generatedById,
               regenerationCount: generatedDocuments.regenerationCount,
+              sourceRevision: generatedDocuments.sourceRevision,
               createdAt: generatedDocuments.createdAt,
             })
             .from(generatedDocuments)
@@ -324,9 +388,29 @@ export const getOrderGeneratedDocuments = createServerFn({ method: 'GET' })
               )
             );
 
-    return [...orderDocuments, ...shipmentDocuments].sort((a, b) => {
-      const left = new Date(a.createdAt).getTime();
-      const right = new Date(b.createdAt).getTime();
-      return right - left;
-    });
+    return [...orderDocuments, ...shipmentDocuments]
+      .map((document) => {
+        const shipment = document.entityType === 'shipment'
+          ? shipmentsById.get(document.entityId)
+          : null;
+        const isStale =
+          document.entityType === 'shipment' &&
+          SHIPMENT_OPERATIONAL_DOCUMENT_TYPES.has(document.documentType) &&
+          Number(document.sourceRevision ?? 0) <
+            Number(shipment?.operationalDocumentRevision ?? 0);
+
+        return {
+          ...document,
+          shipmentNumber: shipment?.shipmentNumber,
+          isStale,
+          staleReason: isStale
+            ? 'Shipment details changed after this document was generated.'
+            : undefined,
+        };
+      })
+      .sort((a, b) => {
+        const left = new Date(a.createdAt).getTime();
+        const right = new Date(b.createdAt).getTime();
+        return right - left;
+      });
   });

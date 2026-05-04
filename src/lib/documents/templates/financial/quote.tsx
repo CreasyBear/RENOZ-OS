@@ -5,10 +5,23 @@
  * black borders, 21pt total. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import {
+  buildFinancialSummaryRows,
+  buildFinancialTableRows,
+  getFinancialDocumentRecipientName,
+  resolveFinancialDocumentAddresses,
+} from "../../financial-presentation";
 import {
   PageNumber,
   DocumentFixedHeader,
+  DocumentBodyText,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  DocumentSplitRow,
+  DocumentSummaryCard,
   formatAddressLines,
   colors,
   tabularNums,
@@ -103,6 +116,9 @@ const styles = StyleSheet.create({
   toColumn: {
     flex: 1,
     marginLeft: 10,
+  },
+  secondaryAddressSection: {
+    marginTop: 12,
   },
   sectionLabel: {
     fontSize: 9,
@@ -316,9 +332,20 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
 
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
-  const toAddressLines = formatAddressLines(order.billingAddress);
-
-  const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
+  const { billTo, shipTo, showShipTo } = resolveFinancialDocumentAddresses(order);
+  const billToAddressLines = formatAddressLines(billTo);
+  const shipToAddressLines = formatAddressLines(shipTo);
+  const billToName = getFinancialDocumentRecipientName(billTo, order.customer.name);
+  const shipToName = getFinancialDocumentRecipientName(shipTo, order.customer.name);
+  const summaryRows = buildFinancialSummaryRows(order);
+  const tableRows = buildFinancialTableRows(order);
+  const hasPerItemTax = tableRows.some(item => item.taxRate != null);
+  const summaryCardRows = summaryRows.map((row) => ({
+    key: row.key,
+    label: row.label,
+    value: formatCurrencyForPdf(row.amount, organization.currency, locale),
+    emphasized: row.emphasized,
+  }));
 
   return (
     <Page size="A4" style={styles.page}>
@@ -328,79 +355,78 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header: Meta left, Logo right */}
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Quote</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Quote: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Date: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Valid Until: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.validUntil, locale, "short")}
-              </Text>
-            </View>
-            <Text style={styles.validityText}>
-              Valid until {formatDateForPdf(data.validUntil, locale, "short")}
-            </Text>
-          </View>
+        <DocumentMasthead
+          title="Quote"
+          variant="formal"
+          meta={[
+            { label: "Quote", value: data.documentNumber },
+            { label: "Prepared", value: formatDateForPdf(data.issueDate, locale, "short") },
+            { label: "Customer", value: order.customer.name },
+          ]}
+          callout={{
+            eyebrow: "Valid Until",
+            title: formatDateForPdf(data.validUntil, locale, "short"),
+            detail: "Acceptance should happen before this date.",
+            tone: "warning",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl && (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          )}
-        </View>
-
-        {/* From / Quote To two-column */}
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {organization.taxId && (
-              <Text style={styles.sectionDetail}>ABN: {organization.taxId}</Text>
-            )}
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>{line}</Text>
-            ))}
-            {organization.phone && (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            )}
-          </View>
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Quote To</Text>
-            <Text style={styles.sectionName}>{order.customer.name}</Text>
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>{line}</Text>
-              ))
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              variant="formal"
+              name={organization.name}
+              lines={[
+                ...(organization.taxId ? [`ABN: ${organization.taxId}`] : []),
+                ...fromAddressLines,
+                ...(organization.phone ? [organization.phone] : []),
+              ]}
+            />
+          }
+          right={
+            showShipTo ? (
+              <View>
+                <DocumentInfoPanel
+                  label="Bill To"
+                  variant="formal"
+                  name={billToName}
+                  lines={billToAddressLines}
+                />
+                <View style={{ marginTop: 12 }}>
+                  <DocumentInfoPanel
+                    label="Ship To"
+                    variant="formal"
+                    name={shipToName}
+                    lines={shipToAddressLines}
+                  />
+                </View>
+              </View>
             ) : (
-              <Text style={styles.sectionDetail}>—</Text>
-            )}
-          </View>
-        </View>
+              <DocumentInfoPanel
+                label="Bill To"
+                variant="formal"
+                name={billToName}
+                lines={billToAddressLines}
+              />
+            )
+          }
+        />
 
         {/* Line Items Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
-            <Text style={[styles.tableHeaderCell, styles.colPrice]}>Price</Text>
+            <Text style={[styles.tableHeaderCell, styles.colPrice]}>Unit Price</Text>
             {hasPerItemTax && (
-              <Text style={[styles.tableHeaderCell, styles.colTax]}>Tax %</Text>
+              <Text style={[styles.tableHeaderCell, styles.colTax]}>GST %</Text>
             )}
-            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
+            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount ex GST</Text>
           </View>
 
-          {order.lineItems.length === 0 ? (
+          {tableRows.length === 0 ? (
             <View style={styles.tableRow}>
               <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
               <Text style={[styles.tableCell, styles.colQty]}>—</Text>
@@ -411,8 +437,8 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
               <Text style={[styles.tableCell, styles.colTotal]}>—</Text>
             </View>
           ) : (
-            order.lineItems.map((item) => (
-            <View key={item.id} style={styles.tableRow} wrap={true}>
+            tableRows.map((item) => (
+            <View key={item.key} style={styles.tableRow} wrap={true}>
               <View style={hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription}>
                 <Text style={styles.tableCell}>{item.description || "—"}</Text>
                 {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
@@ -427,75 +453,53 @@ function QuoteContent({ data }: QuotePdfTemplateProps) {
                 </Text>
               )}
               <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colTotal]}>
-                {formatCurrencyForPdf(item.total, organization.currency, locale)}
+                {formatCurrencyForPdf(item.amount, organization.currency, locale)}
               </Text>
             </View>
             ))
           )}
         </View>
 
-        {/* Summary */}
-        <View style={styles.summarySection} wrap={false}>
-          <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
-              </Text>
+        <DocumentSplitRow
+          left={
+            <View>
+              {data.terms ? (
+                <DocumentSectionCard title="Terms & Conditions" variant="formal">
+                  <DocumentBodyText>{data.terms}</DocumentBodyText>
+                </DocumentSectionCard>
+              ) : null}
+              {data.notes ? (
+                <DocumentSectionCard title="Notes" variant="formal">
+                  <DocumentBodyText>{data.notes}</DocumentBodyText>
+                </DocumentSectionCard>
+              ) : null}
             </View>
+          }
+          right={<DocumentSummaryCard rows={summaryCardRows} variant="formal" />}
+        />
 
-            {order.discount && order.discount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Discount</Text>
-                <Text style={styles.summaryValue}>
-                  -{formatCurrencyForPdf(order.discount, organization.currency, locale)}
-                </Text>
+        <DocumentSectionCard title="Acceptance" variant="formal">
+          <>
+            <DocumentBodyText>
+              By signing below, the customer agrees to the terms above. Work will
+              commence upon receipt of signed acceptance and any required deposit.
+            </DocumentBodyText>
+            <View style={[styles.signatureRow, { marginTop: 12 }]} wrap={false}>
+              <View style={styles.signatureBlock}>
+                <View style={styles.signatureLine} />
+                <Text style={styles.signatureLabel}>Authorised signature</Text>
               </View>
-            )}
-
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
-              </Text>
+              <View style={styles.signatureBlock}>
+                <View style={styles.signatureLine} />
+                <Text style={styles.signatureLabel}>Printed name</Text>
+              </View>
+              <View style={styles.dateBlock}>
+                <View style={styles.signatureLine} />
+                <Text style={styles.signatureLabel}>Date</Text>
+              </View>
             </View>
-
-            <View style={styles.summaryTotal}>
-              <Text style={styles.summaryTotalLabel}>Total</Text>
-              <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(order.total, organization.currency, locale)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Terms */}
-        {data.terms && (
-          <View style={styles.termsSection}>
-            <Text style={styles.termsLabel}>Terms & Conditions</Text>
-            <Text style={styles.termsText} orphans={2} widows={2}>
-              {data.terms}
-            </Text>
-          </View>
-        )}
-
-        {/* Acceptance */}
-        <View style={styles.acceptanceSection} wrap={false}>
-          <Text style={styles.acceptanceTitle}>Acceptance</Text>
-          <Text style={styles.acceptanceText}>
-            By signing below, the customer agrees to the terms above. Work will commence upon receipt of signed acceptance and any required deposit.
-          </Text>
-          <View style={styles.signatureRow}>
-            <View style={styles.signatureBlock}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Authorised signature</Text>
-            </View>
-            <View style={styles.dateBlock}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Date</Text>
-            </View>
-          </View>
-        </View>
+          </>
+        </DocumentSectionCard>
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />

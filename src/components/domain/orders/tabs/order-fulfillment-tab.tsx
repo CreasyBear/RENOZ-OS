@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import { PackageCheck, Truck, Info } from 'lucide-react';
 import { ShipmentList } from '../fulfillment/shipment-list';
 import { AmendmentList } from '../amendments';
-import { useCancelAmendment } from '@/hooks/orders';
+import { useCancelAmendment, useOrderShipments } from '@/hooks/orders';
 import { OrderLineItemSerialsCell, SerialNumbersList } from '../components';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { useUserLookup } from '@/hooks/users';
 import { toastSuccess, toastError } from '@/hooks';
 import type { OrderWithCustomer } from '@/hooks/orders/use-order-detail';
+import { summarizeOrderShipmentAvailability } from '../fulfillment/shipment-availability';
 
 // ============================================================================
 // TYPES
@@ -108,10 +109,20 @@ function FulfillmentActionBar({
   lineItems?: OrderWithCustomer['lineItems'];
   orderId?: string;
 }) {
+  const actionBarActive = Boolean(fulfillmentActions && orderStatus);
+  const { data: shipments } = useOrderShipments(orderId ?? '', actionBarActive && !!orderId);
+
   if (!fulfillmentActions || !orderStatus) return null;
 
   const { onPickItems, onShipOrder, onConfirmDelivery } = fulfillmentActions;
   const progress = computeFulfillmentProgress(lineItems);
+  const shipmentAvailability = summarizeOrderShipmentAvailability(lineItems ?? [], shipments ?? []);
+  const hasOnlyPendingDraftReservations =
+    shipmentAvailability.pendingShipmentCount > 0 && !shipmentAvailability.hasReservableItems;
+  const draftReservationMessage =
+    shipmentAvailability.pendingShipmentCount === 1
+      ? 'Picked stock is already reserved in 1 pending shipment draft below.'
+      : `Picked stock is already reserved in ${shipmentAvailability.pendingShipmentCount} pending shipment drafts below.`;
 
   if ((orderStatus === 'confirmed' || orderStatus === 'picking') && onPickItems) {
     return (
@@ -141,6 +152,29 @@ function FulfillmentActionBar({
             <PackageCheck className="h-4 w-4 mr-2" />
             Pick Items
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    hasOnlyPendingDraftReservations &&
+    orderId &&
+    (orderStatus === 'picked' || orderStatus === 'partially_shipped')
+  ) {
+    return (
+      <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg mb-4">
+        <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+          <Truck className="h-4 w-4" />
+          <span>{draftReservationMessage}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {onPickItems && (
+            <Button size="sm" variant="outline" onClick={onPickItems}>
+              <PackageCheck className="h-4 w-4 mr-2" />
+              Pick / Unpick
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -202,16 +236,13 @@ function FulfillmentActionBar({
 
   if ((orderStatus === 'shipped' || orderStatus === 'partially_shipped') && onConfirmDelivery && orderId) {
     return (
-      <div className="mb-4">
+      <div className="flex items-center justify-end mb-4">
         {onPickItems && (
-          <div className="flex items-center justify-end mb-2">
-            <Button size="sm" variant="outline" onClick={onPickItems}>
-              <PackageCheck className="h-4 w-4 mr-2" />
-              Pick / Unpick
-            </Button>
-          </div>
+          <Button size="sm" variant="outline" onClick={onPickItems}>
+            <PackageCheck className="h-4 w-4 mr-2" />
+            Pick / Unpick
+          </Button>
         )}
-        <ShipmentList orderId={orderId} onConfirmDelivery={onConfirmDelivery} />
       </div>
     );
   }
@@ -269,6 +300,9 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
     },
     [cancelAmendmentMutation]
   );
+  const shouldShowShipmentList =
+    !!orderId &&
+    ['picked', 'partially_shipped', 'shipped', 'delivered'].includes(orderStatus ?? '');
 
   if (!lineItems?.length) {
     return (
@@ -287,6 +321,18 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
         lineItems={lineItems}
         orderId={orderId}
       />
+
+      {shouldShowShipmentList ? (
+        <div className="mb-6 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">Shipments</h3>
+            <p className="text-xs text-muted-foreground">
+              Review draft and in-transit shipments for this order.
+            </p>
+          </div>
+          <ShipmentList orderId={orderId} onConfirmDelivery={fulfillmentActions?.onConfirmDelivery} />
+        </div>
+      ) : null}
 
       <Table>
         <TableHeader>

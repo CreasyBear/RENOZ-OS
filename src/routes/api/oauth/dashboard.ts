@@ -4,13 +4,14 @@
  * GET /api/oauth/dashboard
  */
 
+import { createFileRoute } from '@tanstack/react-router';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema';
 import { and, eq, gte, sql, desc } from 'drizzle-orm';
 
-export async function GET() {
+async function handleDashboard() {
   const ctx = await withAuth({ permission: PERMISSIONS.organization.manageIntegrations });
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -97,3 +98,11 @@ export async function GET() {
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   );
 }
+
+export const Route = createFileRoute('/api/oauth/dashboard')({
+  server: {
+    handlers: {
+      GET: handleDashboard,
+    },
+  },
+});

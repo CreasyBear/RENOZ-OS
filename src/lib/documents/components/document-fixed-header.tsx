@@ -2,7 +2,7 @@
  * Minimal fixed header (org + doc #) on all pages
  *
  * Slim 9pt single line. Renders on every page via React-PDF `fixed` prop.
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";

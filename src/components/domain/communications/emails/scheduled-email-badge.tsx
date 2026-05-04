@@ -68,7 +68,9 @@ export function ScheduledEmailDot({
 }) {
   const colors: Record<ScheduledEmailStatus, string> = {
     pending: "bg-amber-500",
+    processing: "bg-blue-500",
     sent: "bg-green-500",
+    failed: "bg-red-500",
     cancelled: "bg-red-500",
   };
 

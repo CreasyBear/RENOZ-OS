@@ -13,6 +13,7 @@
  *
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  */
+import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   ChevronLeft,
@@ -37,9 +38,9 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { EntityHeader } from '@/components/shared';
+import { EmptyState, EntityHeader } from '@/components/shared';
 import { ISSUE_STATUS_CONFIG } from './issue-status-config';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SlaBadge } from '@/components/domain/support/sla/sla-badge';
@@ -50,12 +51,17 @@ import {
   IssueStatusChangeDialog,
   type StatusChangeResult,
 } from './issue-status-change-dialog';
+import {
+  ISSUE_NEXT_ACTION_LABELS,
+  ISSUE_RESOLUTION_CATEGORY_LABELS,
+} from './issue-options';
 import { formatDate } from '@/lib/formatters';
 import type {
   IssueStatus,
   IssuePriority,
   IssueType,
   IssueDetail,
+  IssueRelatedContext,
 } from '@/lib/schemas/support/issues';
 import type { CustomerContextData, IssueDetailActions } from '@/hooks/support';
 
@@ -89,6 +95,7 @@ interface IssueDetailViewProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   customerContext: CustomerContextData;
+  relatedContext: IssueRelatedContext | null;
   actions: IssueDetailActions;
   statusDialog: { open: boolean; toStatus: IssueStatus } | null;
   setStatusDialog: (dialog: { open: boolean; toStatus: IssueStatus } | null) => void;
@@ -112,6 +119,7 @@ export function IssueDetailView({
   activeTab,
   onTabChange,
   customerContext,
+  relatedContext,
   actions,
   statusDialog,
   setStatusDialog,
@@ -244,6 +252,15 @@ export function IssueDetailView({
           <main className="min-w-0 space-y-6">
             <TabsContent value="overview" className="mt-0 space-y-6">
               <DescriptionCard description={issue.description} />
+              {issue.resolution && (
+                <ResolutionCard resolution={issue.resolution} />
+              )}
+              {issue.rmaReadiness && (
+                <RemedyCard
+                  issueId={issue.id}
+                  rmaReadiness={issue.rmaReadiness}
+                />
+              )}
               {issue.slaMetrics && <SlaCard slaMetrics={issue.slaMetrics} />}
               {issue.escalatedAt && (
                 <EscalationCard
@@ -260,8 +277,8 @@ export function IssueDetailView({
             <TabsContent value="related" className="mt-0">
               <RelatedTab
                 customerId={customerId}
-                warrantyId={issue.warrantyId}
-                contextData={customerContext}
+                supportContext={issue.supportContext}
+                relatedContext={relatedContext}
               />
             </TabsContent>
           </main>
@@ -270,6 +287,7 @@ export function IssueDetailView({
             <ActionsCard
               issue={issue}
               customerId={customerId ?? null}
+              rmaReadiness={issue.rmaReadiness}
               onStatusChange={actions.onStatusChange}
               onDelete={actions.onDelete}
               isPending={isUpdatePending || isDeletePending}
@@ -378,6 +396,124 @@ function DescriptionCard({ description }: { description: string | null }) {
   );
 }
 
+function ResolutionCard({
+  resolution,
+}: {
+  resolution: NonNullable<IssueDetail['resolution']>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Resolution</CardTitle>
+        <CardDescription>
+          Structured resolution details for the issue record and downstream remedy decisions.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">
+            {ISSUE_RESOLUTION_CATEGORY_LABELS[resolution.category] ?? resolution.category}
+          </Badge>
+          <Badge variant="secondary">
+            {ISSUE_NEXT_ACTION_LABELS[resolution.nextActionType] ?? resolution.nextActionType}
+          </Badge>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Summary</p>
+          <p className="text-sm text-muted-foreground">{resolution.summary}</p>
+        </div>
+        {resolution.diagnosisNotes ? (
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Diagnosis Notes</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+              {resolution.diagnosisNotes}
+            </p>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RemedyCard({
+  issueId,
+  rmaReadiness,
+}: {
+  issueId: string;
+  rmaReadiness: NonNullable<IssueDetail['rmaReadiness']>;
+}) {
+  const stateLabel =
+    rmaReadiness.state === 'ready'
+      ? 'RMA Ready'
+      : rmaReadiness.state === 'linked'
+        ? 'RMA Already Linked'
+        : 'RMA Blocked';
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Remedy</CardTitle>
+        <CardDescription>
+          Current return-readiness and prior return context for this issue.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={rmaReadiness.state === 'ready' ? 'default' : 'outline'}>
+            {stateLabel}
+          </Badge>
+          {rmaReadiness.suggestedReason ? (
+            <Badge variant="secondary">
+              Suggested reason: {rmaReadiness.suggestedReason.replaceAll('_', ' ')}
+            </Badge>
+          ) : null}
+        </div>
+        {rmaReadiness.blockedReason ? (
+          <p className="text-sm text-muted-foreground">{rmaReadiness.blockedReason}</p>
+        ) : null}
+        {rmaReadiness.sourceOrder ? (
+          <p className="text-sm text-muted-foreground">
+            Source order:{' '}
+            <Link
+              to="/orders/$orderId"
+              params={{ orderId: rmaReadiness.sourceOrder.id }}
+              search={{ fromIssueId: issueId }}
+              className="text-primary hover:underline"
+            >
+              {rmaReadiness.sourceOrder.orderNumber ?? rmaReadiness.sourceOrder.id}
+            </Link>
+          </p>
+        ) : null}
+        {rmaReadiness.existingRmas.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Prior RMAs</p>
+            <div className="space-y-2">
+              {rmaReadiness.existingRmas.map((rma) => (
+                <RelatedEntityLink
+                  key={rma.id}
+                  to="/support/rmas/$rmaId"
+                  params={{ rmaId: rma.id }}
+                  title={rma.rmaNumber}
+                  subtitle={
+                    rma.creditNoteId
+                      ? `Credit note issued · ${formatDate(rma.createdAt)}`
+                      : rma.replacementOrderId
+                        ? `Replacement created · ${formatDate(rma.createdAt)}`
+                        : rma.refundPaymentId
+                          ? `Refund recorded · ${formatDate(rma.createdAt)}`
+                          : formatDate(rma.createdAt)
+                  }
+                  badge={rma.executionStatus ?? rma.status}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SlaCard({
   slaMetrics,
 }: {
@@ -438,16 +574,20 @@ function EscalationCard({
 
 function RelatedTab({
   customerId,
-  warrantyId,
-  contextData,
+  supportContext,
+  relatedContext,
 }: {
   customerId?: string | null;
-  warrantyId?: string | null;
-  contextData: CustomerContextData;
+  supportContext?: IssueDetail['supportContext'];
+  relatedContext: IssueRelatedContext | null;
 }) {
+  const hasAnchorIssues =
+    (relatedContext?.sameServiceSystemIssues.length ?? 0) > 0 ||
+    (relatedContext?.sameSerializedItemIssues.length ?? 0) > 0;
+
   return (
     <div className="space-y-6">
-      {warrantyId && (
+      {relatedContext?.linkedWarranty && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -458,67 +598,325 @@ function RelatedTab({
           <CardContent>
             <Link
               to="/support/warranties/$warrantyId"
-              params={{ warrantyId }}
+              params={{ warrantyId: relatedContext.linkedWarranty.id }}
               className="text-primary hover:underline"
             >
-              View Warranty
+              {relatedContext.linkedWarranty.warrantyNumber}
             </Link>
           </CardContent>
         </Card>
       )}
 
-      {customerId && (
+      {relatedContext?.linkedOrder && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Source Order
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Link
+              to="/orders/$orderId"
+              params={{ orderId: relatedContext.linkedOrder.id }}
+              className="text-primary hover:underline"
+            >
+              {relatedContext.linkedOrder.orderNumber ?? relatedContext.linkedOrder.id}
+            </Link>
+            {supportContext?.commercialCustomer?.id ? (
+              <p className="text-sm text-muted-foreground">
+                Purchased via{' '}
+                <Link
+                  to="/customers/$customerId"
+                  params={{ customerId: supportContext.commercialCustomer.id }}
+                  className="text-primary hover:underline"
+                >
+                  {supportContext.commercialCustomer.name ?? 'Commercial customer'}
+                </Link>
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {relatedContext?.linkedShipment && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Source Shipment
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <span className="text-sm text-muted-foreground">
+              {relatedContext.linkedShipment.shipmentNumber ?? relatedContext.linkedShipment.id}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {relatedContext?.relatedSerials?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Related Serials
+              <Badge variant="secondary" className="text-xs">
+                {relatedContext.relatedSerials.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Serials linked through the source order&apos;s shipment or allocation records.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {relatedContext.relatedSerials.map((serial) => (
+                <div
+                  key={`${serial.serialNumber}-${serial.orderLineItemId ?? 'line'}`}
+                  className="rounded-md border p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono font-medium">{serial.serialNumber}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {serial.source === 'shipment'
+                        ? 'Shipped'
+                        : serial.source === 'allocation'
+                          ? 'Allocated'
+                          : 'Order line'}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    {serial.productName ??
+                      serial.orderLineDescription ??
+                      'Serialized order item'}
+                    {serial.shipmentNumber ? ` · ${serial.shipmentNumber}` : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {supportContext?.serviceSystem && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <PackageSearch className="h-4 w-4" aria-hidden="true" />
+              Service System
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Link
+              to="/support/service-systems/$serviceSystemId"
+              params={{ serviceSystemId: supportContext.serviceSystem.id }}
+              className="text-primary hover:underline"
+            >
+              {supportContext.serviceSystem.displayName}
+            </Link>
+            {supportContext.currentOwner ? (
+              <p className="text-sm text-muted-foreground">
+                Current owner: {supportContext.currentOwner.fullName}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {relatedContext?.sameServiceSystemIssues?.length ? (
+        <RelatedIssuesListCard
+          title="Same Service System"
+          icon={<PackageSearch className="h-4 w-4" aria-hidden="true" />}
+          issues={relatedContext.sameServiceSystemIssues}
+        />
+      ) : null}
+
+      {relatedContext?.sameSerializedItemIssues?.length ? (
+        <RelatedIssuesListCard
+          title="Same Serialized Item"
+          icon={<Package className="h-4 w-4" aria-hidden="true" />}
+          issues={relatedContext.sameSerializedItemIssues}
+        />
+      ) : null}
+
+      {!hasAnchorIssues ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">System & Serial History</CardTitle>
+            <CardDescription>
+              Anchor-first history will show up here before we fall back to broader customer context.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EmptyState
+              icon={PackageSearch}
+              title="No anchor-linked issues yet"
+              message="No other issues were found for this service system or serialized item."
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {relatedContext?.linkedRmas?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <PackageSearch className="h-4 w-4" aria-hidden="true" />
+              Linked RMAs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {relatedContext.linkedRmas.map((rma) => (
+                <RelatedEntityLink
+                  key={rma.id}
+                  to="/support/rmas/$rmaId"
+                  params={{ rmaId: rma.id }}
+                  title={rma.rmaNumber}
+                  subtitle={
+                    rma.creditNoteId
+                      ? `Credit note created · ${formatDate(rma.createdAt)}`
+                      : rma.replacementOrderId
+                        ? `Replacement created · ${formatDate(rma.createdAt)}`
+                        : rma.refundPaymentId
+                          ? `Refund recorded · ${formatDate(rma.createdAt)}`
+                          : formatDate(rma.createdAt)
+                  }
+                  badge={rma.executionStatus ?? rma.status}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {customerId && relatedContext?.customerContext ? (
         <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Customer-Wide Context</CardTitle>
+              <CardDescription>
+                Commercial history stays visible here, but it is intentionally secondary to system and serialized-item context.
+              </CardDescription>
+            </CardHeader>
+            <CardContent />
+          </Card>
           <RelatedOrdersSection
-            data={contextData.orderSummary}
-            isLoading={contextData.isLoading}
-            error={contextData.error}
+            data={{
+              recentOrders: relatedContext.customerContext.recentOrders,
+              totalOrders: relatedContext.customerContext.recentOrders.length,
+            }}
+            isLoading={false}
+            error={null}
           />
           <RelatedWarrantiesSection
-            warranties={contextData.warranties}
-            isLoading={contextData.isLoading}
-            error={contextData.error}
+            warranties={relatedContext.customerContext.warranties}
+            isLoading={false}
+            error={null}
           />
           <RelatedIssuesSection
-            issues={contextData.otherIssues}
-            isLoading={contextData.isLoading}
-            error={contextData.error}
+            issues={relatedContext.customerContext.otherIssues}
+            isLoading={false}
+            error={null}
           />
         </>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function RelatedIssuesListCard({
+  title,
+  icon,
+  issues,
+}: {
+  title: string;
+  icon: ReactNode;
+  issues: NonNullable<IssueRelatedContext['sameServiceSystemIssues']>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {issues.map((relatedIssue) => (
+            <RelatedEntityLink
+              key={relatedIssue.id}
+              to="/support/issues/$issueId"
+              params={{ issueId: relatedIssue.id }}
+              title={`${relatedIssue.issueNumber} · ${relatedIssue.title}`}
+              subtitle={formatDate(relatedIssue.createdAt)}
+              badge={relatedIssue.status}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function ActionsCard({
   issue,
   customerId,
+  rmaReadiness,
   onStatusChange,
   onDelete,
   isPending,
 }: {
   issue: IssueDetail;
   customerId: string | null;
+  rmaReadiness?: IssueDetail['rmaReadiness'];
   onStatusChange: (status: IssueStatus) => void;
   onDelete: () => void | Promise<void>;
   isPending: boolean;
 }) {
+  const showRmaSection =
+    issue.status === 'resolved' || issue.status === 'closed'
+      ? Boolean(
+          customerId ||
+            issue.warrantyId ||
+            issue.warrantyEntitlementId ||
+            issue.orderId ||
+            issue.serialNumber
+        )
+      : false;
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">Actions</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        {(issue.status === 'resolved' || issue.status === 'closed') && customerId && (
+        {showRmaSection && (
           <>
-            <Link
-              to="/orders"
-              search={{ customerId, fromIssueId: issue.id }}
-              className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2 w-full justify-center')}
-            >
-              <PackageSearch className="h-4 w-4" aria-hidden="true" />
-              Create RMA
-            </Link>
+            {rmaReadiness?.state === 'ready' && rmaReadiness.sourceOrder ? (
+              <Link
+                to="/orders/$orderId"
+                params={{ orderId: rmaReadiness.sourceOrder.id }}
+                search={{ fromIssueId: issue.id }}
+                className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2 w-full justify-center')}
+              >
+                <PackageSearch className="h-4 w-4" aria-hidden="true" />
+                Create RMA
+              </Link>
+            ) : (
+              <div className="space-y-2">
+                <Button size="sm" disabled className="w-full gap-2">
+                  <PackageSearch className="h-4 w-4" aria-hidden="true" />
+                  Create RMA
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {rmaReadiness?.blockedReason ??
+                    'Resolve the source order before creating an RMA.'}
+                </p>
+              </div>
+            )}
             <Separator className="my-2" />
           </>
         )}

@@ -7,7 +7,7 @@
  * @see src/server/functions/financial/credit-notes.tsx (getCreditNote)
  */
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
+import { RouteErrorFallback, DetailPageBackButton } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CreditNoteDetailContainer } from '@/components/domain/financial/credit-note-detail-container';
 
@@ -20,14 +20,7 @@ export const Route = createFileRoute('/_authenticated/financial/credit-notes/$cr
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial/credit-notes" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header title={null} />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -40,14 +33,13 @@ function CreditNoteDetailPage() {
   return (
     <CreditNoteDetailContainer creditNoteId={creditNoteId}>
       {({ headerActions, content }) => (
-        <PageLayout variant="full-width">
-          <PageLayout.Header
-            title={null}
-            leading={<DetailPageBackButton to="/financial/credit-notes" aria-label="Back to credit notes" />}
-            actions={headerActions}
-          />
-          <PageLayout.Content>{content}</PageLayout.Content>
-        </PageLayout>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <DetailPageBackButton to="/financial/credit-notes" aria-label="Back to credit notes" />
+            {headerActions}
+          </div>
+          {content}
+        </div>
       )}
     </CreditNoteDetailContainer>
   );

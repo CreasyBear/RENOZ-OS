@@ -9,6 +9,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listAuditLogs,
   getAuditStats,
@@ -47,22 +48,26 @@ export function useAuditLogs(options: UseAuditLogsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.auditLogs.list(listFilters),
     queryFn: async () => {
-      const result = await listAuditLogs({
-        data: {
-          page: listFilters.page,
-          pageSize: listFilters.pageSize,
-          sortOrder: listFilters.sortOrder,
-          userId: listFilters.userId,
-          action: listFilters.action,
-          entityType: listFilters.entityType,
-          entityId: listFilters.entityId,
-          dateFrom: listFilters.dateFrom,
-          dateTo: listFilters.dateTo,
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listAuditLogs({
+          data: {
+            page: listFilters.page,
+            pageSize: listFilters.pageSize,
+            sortOrder: listFilters.sortOrder,
+            userId: listFilters.userId,
+            action: listFilters.action,
+            entityType: listFilters.entityType,
+            entityId: listFilters.entityId,
+            dateFrom: listFilters.dateFrom,
+            dateTo: listFilters.dateTo,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Audit log entries are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -88,15 +93,19 @@ export function useAuditStats(options: UseAuditStatsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.auditLogs.stats(filters),
     queryFn: async () => {
-      const result = await getAuditStats({
-        data: {
-          dateFrom: filters.dateFrom,
-          dateTo: filters.dateTo,
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getAuditStats({
+          data: {
+            dateFrom: filters.dateFrom,
+            dateTo: filters.dateTo,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Audit log metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

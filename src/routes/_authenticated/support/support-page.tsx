@@ -11,7 +11,7 @@
 
 import { Link, useNavigate } from '@tanstack/react-router';
 import { PageLayout } from '@/components/layout';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -44,6 +44,7 @@ const moreLinks = [
   { title: 'RMAs', href: '/support/rmas', icon: Package },
   { title: 'Warranties', href: '/support/warranties', icon: Shield },
   { title: 'Claims', href: '/support/claims', icon: FileCheck },
+  { title: 'Service Reviews', href: '/support/service-linkage-reviews', icon: AlertCircle },
   { title: 'Knowledge Base', href: '/support/knowledge-base', icon: BookOpen },
   { title: 'Dashboard', href: '/support/dashboard', icon: LayoutDashboard },
 ] as const;
@@ -64,10 +65,11 @@ export default function SupportLandingPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/support/issues/new"
+              search={{ intakeAnchor: 'serial' }}
               className={cn(buttonVariants({ size: "sm" }))}
             >
               <Plus className="mr-2 h-4 w-4" />
-              New Issue
+              Start from Serial
             </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -97,59 +99,108 @@ export default function SupportLandingPage() {
       />
 
       <PageLayout.Content className="space-y-6">
-        {/* Zone 2: Command bar with filter chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate({ to: '/support/issues' })}
-            className="min-h-[44px] min-w-[44px]"
-          >
-            All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate({ to: '/support/issues', search: { slaStatus: 'breached' } })}
-            className="min-h-[44px] min-w-[44px]"
-          >
-            Overdue SLA
-            {triage.overdueSla > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {triage.overdueSla}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate({ to: '/support/issues', search: { escalated: 'true' } })}
-            className="min-h-[44px] min-w-[44px]"
-          >
-            Escalated
-            {triage.escalated > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {triage.escalated}
-              </Badge>
-            )}
-          </Button>
-          {user && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                navigate({ to: '/support/issues', search: { assignedToUserId: user.id } })
-              }
-              className="min-h-[44px] min-w-[44px]"
-            >
-              My Issues
-              {triage.myIssues > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {triage.myIssues}
-                </Badge>
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Start a New Issue</CardTitle>
+              <CardDescription>
+                Choose the strongest anchor you have. Serial is usually best, but warranty, order,
+                and customer intake are there when the call starts from business context instead.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Link
+                to="/support/issues/new"
+                search={{ intakeAnchor: 'serial' }}
+                className={cn(buttonVariants({ size: 'sm' }), 'min-h-[44px]')}
+              >
+                Start from Serial
+              </Link>
+              <Link
+                to="/support/issues/new"
+                search={{ intakeAnchor: 'warranty' }}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'min-h-[44px]')}
+              >
+                Start from Warranty
+              </Link>
+              <Link
+                to="/support/issues/new"
+                search={{ intakeAnchor: 'order' }}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'min-h-[44px]')}
+              >
+                Start from Order
+              </Link>
+              <Link
+                to="/support/issues/new"
+                search={{ intakeAnchor: 'customer' }}
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'min-h-[44px]')}
+              >
+                Start from Customer
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Work the Queue</CardTitle>
+              <CardDescription>
+                Jump straight into the operational queues that usually need attention first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate({ to: '/support/issues' })}
+                className="min-h-[44px]"
+              >
+                All Issues
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate({ to: '/support/issues', search: { slaStatus: 'breached' } })}
+                className="min-h-[44px]"
+              >
+                Overdue SLA
+                {triage.overdueSla > 0 && (
+                  <Badge variant="destructive" className="ml-2">
+                    {triage.overdueSla}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate({ to: '/support/issues', search: { escalated: 'true' } })}
+                className="min-h-[44px]"
+              >
+                Escalated
+                {triage.escalated > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {triage.escalated}
+                  </Badge>
+                )}
+              </Button>
+              {user && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    navigate({ to: '/support/issues', search: { assignedToUserId: user.id } })
+                  }
+                  className="min-h-[44px]"
+                >
+                  My Issues
+                  {triage.myIssues > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {triage.myIssues}
+                    </Badge>
+                  )}
+                </Button>
               )}
-            </Button>
-          )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Secondary: link to dashboard for metrics */}

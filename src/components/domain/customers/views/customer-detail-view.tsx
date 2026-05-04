@@ -45,11 +45,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { toastSuccess } from '@/hooks';
+import { toastSuccess } from '@/hooks/_shared/use-toast';
 import { getInitials } from '@/lib/customer-utils';
+import { getCustomerOrderSummaryDisplayPolicy } from '@/lib/customer-order-summary-display';
 import { CUSTOMER_STATUS_CONFIG, CUSTOMER_TYPE_CONFIG, getHealthScoreSemanticColor, getHealthScoreLabel } from '../customer-status-config';
 import { getStatusColorClasses, getIconColorClasses } from '@/lib/status';
 import { DETAIL_VIEW } from '@/lib/constants/detail-view';
+import type { SummaryState } from '@/lib/metrics/summary-health';
 
 // Shared components (per METRIC-CARD-STANDARDS.md)
 import { MetricCard } from '@/components/shared/metric-card';
@@ -90,6 +92,7 @@ export interface CustomerDetailViewProps {
   activeItems?: CustomerActiveItemsType;
   activeItemsLoading?: boolean;
   extendedDataWarning?: string | null;
+  orderSummaryState?: SummaryState;
   headerActions?: React.ReactNode;
   /** Handler to open activity logging dialog */
   onLogActivity?: () => void;
@@ -118,9 +121,13 @@ function TabSkeleton() {
 
 interface CustomerHeaderProps {
   customer: CustomerDetailData;
+  orderSummaryState?: SummaryState;
 }
 
-function CustomerHeader({ customer }: CustomerHeaderProps) {
+function CustomerHeader({
+  customer,
+  orderSummaryState = 'ready',
+}: CustomerHeaderProps) {
   const statusConfig = CUSTOMER_STATUS_CONFIG[customer.status as keyof typeof CUSTOMER_STATUS_CONFIG] ?? CUSTOMER_STATUS_CONFIG.prospect;
   const StatusIcon = statusConfig.icon ?? User;
   const statusColorClasses = getStatusColorClasses(statusConfig.color);
@@ -130,6 +137,11 @@ function CustomerHeader({ customer }: CustomerHeaderProps) {
   // Parse numeric values for metrics
   const ltv = typeof customer.lifetimeValue === 'string' ? parseFloat(customer.lifetimeValue) : customer.lifetimeValue;
   const credit = typeof customer.creditLimit === 'string' ? parseFloat(customer.creditLimit) : customer.creditLimit;
+  const orderSummaryDisplay = getCustomerOrderSummaryDisplayPolicy({
+    orderSummaryState,
+    lifetimeValue: ltv,
+    totalOrders: customer.totalOrders,
+  });
 
   // Health score icon color using semantic colors per STATUS-BADGE-STANDARDS.md
   const getHealthIconColor = (score: number | null | undefined): string => {
@@ -195,15 +207,27 @@ function CustomerHeader({ customer }: CustomerHeaderProps) {
         <MetricCard
           variant="compact"
           title="Lifetime Value"
-          value={<FormatAmount amount={ltv ?? 0} cents={false} showCents={false} />}
+          value={
+            orderSummaryDisplay.lifetimeValueDisplay === '--'
+              ? '--'
+              : <FormatAmount amount={orderSummaryDisplay.lifetimeValueDisplay} cents={false} showCents={false} />
+          }
           icon={DollarSign}
-          iconClassName={ltv && ltv > 10000 ? getIconColorClasses('success') : 'text-muted-foreground'}
+          iconClassName={
+            orderSummaryDisplay.orderSummaryUnavailable
+              ? 'text-muted-foreground'
+              : ltv && ltv > 10000
+                ? getIconColorClasses('success')
+                : 'text-muted-foreground'
+          }
+          subtitle={orderSummaryDisplay.metricSubtitle}
         />
         <MetricCard
           variant="compact"
           title="Total Orders"
-          value={customer.totalOrders}
+          value={orderSummaryDisplay.totalOrdersDisplay}
           icon={ShoppingCart}
+          subtitle={orderSummaryDisplay.metricSubtitle}
         />
         {customer.creditHold ? (
           <MetricCard
@@ -260,6 +284,7 @@ export const CustomerDetailView = memo(function CustomerDetailView({
   activeItems,
   activeItemsLoading = false,
   extendedDataWarning,
+  orderSummaryState = 'ready',
   headerActions,
   onLogActivity,
   onScheduleFollowUp,
@@ -334,7 +359,10 @@ export const CustomerDetailView = memo(function CustomerDetailView({
       ───────────────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <CustomerHeader customer={customer} />
+          <CustomerHeader
+            customer={customer}
+            orderSummaryState={orderSummaryState}
+          />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* Header Actions from container */}
@@ -412,7 +440,11 @@ export const CustomerDetailView = memo(function CustomerDetailView({
                 onMouseEnter={handlePrefetchOrders}
                 onFocus={handlePrefetchOrders}
               >
-                Orders ({customer.totalOrders})
+                {getCustomerOrderSummaryDisplayPolicy({
+                  orderSummaryState,
+                  lifetimeValue: undefined,
+                  totalOrders: customer.totalOrders,
+                }).ordersTabLabel}
               </TabsTrigger>
               <TabsTrigger
                 value="activity"
@@ -432,6 +464,7 @@ export const CustomerDetailView = memo(function CustomerDetailView({
                     customer={customer}
                     activeItems={activeItems}
                     activeItemsLoading={activeItemsLoading}
+                    orderSummaryState={orderSummaryState}
                   />
                 </Suspense>
               )}
@@ -444,6 +477,7 @@ export const CustomerDetailView = memo(function CustomerDetailView({
                     orderSummary={customer.orderSummary}
                     totalOrders={customer.totalOrders}
                     customerId={customer.id}
+                    orderSummaryState={orderSummaryState}
                   />
                 </Suspense>
               )}

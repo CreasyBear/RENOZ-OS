@@ -5,10 +5,16 @@
  * black borders, 21pt total. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View } from "@react-pdf/renderer";
 import {
   PageNumber,
   DocumentFixedHeader,
+  DocumentBodyText,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  DocumentSummaryCard,
   formatAddressLines,
   colors,
   tabularNums,
@@ -264,6 +270,25 @@ function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
   const toAddressLines = formatAddressLines(data.customer.address);
 
   const totalCredit = data.amount + data.gstAmount;
+  const statusLabel = isApplied ? "Applied" : isIssued ? "Issued" : "Draft";
+  const summaryRows = [
+    {
+      key: "credit-amount",
+      label: "Credit Amount",
+      value: formatCurrencyForPdf(data.amount, organization.currency, locale),
+    },
+    {
+      key: "credit-gst",
+      label: "GST (10%)",
+      value: formatCurrencyForPdf(data.gstAmount, organization.currency, locale),
+    },
+    {
+      key: "credit-total",
+      label: "Total Credit",
+      value: formatCurrencyForPdf(totalCredit, organization.currency, locale),
+      emphasized: true,
+    },
+  ];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -273,105 +298,56 @@ function CreditNoteContent({ data }: CreditNotePdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header: Meta left, Logo right */}
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Credit Note</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Credit Note: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Date: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-            {data.relatedOrderNumber && (
-              <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Invoice: </Text>
-                <Text style={styles.metaValue}>{data.relatedOrderNumber}</Text>
-              </View>
-            )}
-            {isApplied && <Text style={styles.statusText}>Applied</Text>}
-            {isIssued && !isApplied && <Text style={styles.statusText}>Issued</Text>}
-          </View>
+        <DocumentMasthead
+          title="Credit Note"
+          variant="formal"
+          meta={[
+            { label: "Credit Note", value: data.documentNumber },
+            { label: "Issue Date", value: formatDateForPdf(data.issueDate, locale, "short") },
+            ...(data.relatedOrderNumber
+              ? [{ label: "Reference", value: data.relatedOrderNumber }]
+              : []),
+          ]}
+          callout={{
+            eyebrow: "Total Credit",
+            title: formatCurrencyForPdf(totalCredit, organization.currency, locale),
+            detail: statusLabel,
+            tone: isApplied ? "success" : "info",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl && (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          )}
-        </View>
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              variant="formal"
+              name={organization.name}
+              lines={[
+                ...(organization.taxId ? [`ABN: ${organization.taxId}`] : []),
+                ...fromAddressLines,
+                ...(organization.phone ? [organization.phone] : []),
+              ]}
+            />
+          }
+          right={
+            <DocumentInfoPanel
+              label="Credit To"
+              variant="formal"
+              name={data.customer.name}
+              lines={toAddressLines}
+            />
+          }
+        />
 
-        {/* From / Credit To two-column */}
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {organization.taxId && (
-              <Text style={styles.sectionDetail}>ABN: {organization.taxId}</Text>
-            )}
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>{line}</Text>
-            ))}
-            {organization.phone && (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            )}
-          </View>
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Credit To</Text>
-            <Text style={styles.sectionName}>{data.customer.name}</Text>
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>{line}</Text>
-              ))
-            ) : (
-              <Text style={styles.sectionDetail}>—</Text>
-            )}
-          </View>
-        </View>
-
-        {/* Summary */}
-        <View style={styles.summarySection} wrap={false}>
-          <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Credit Amount</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(data.amount, organization.currency, locale)}
-              </Text>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>GST (10%)</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(data.gstAmount, organization.currency, locale)}
-              </Text>
-            </View>
-
-            <View style={styles.summaryTotal}>
-              <Text style={styles.summaryTotalLabel}>Total Credit</Text>
-              <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(totalCredit, organization.currency, locale)}
-              </Text>
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={styles.statusRowLabel}>Status</Text>
-              <Text style={styles.statusRowValue}>
-                {isApplied ? "Applied" : isIssued ? "Issued" : "—"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Reason */}
-        <View style={styles.reasonSection}>
-          <Text style={styles.reasonLabel}>Reason for Credit</Text>
-          <Text style={styles.reasonText} orphans={2} widows={2}>
-            {data.reason}
-          </Text>
-        </View>
+        <DocumentPanelGrid
+          left={
+            <DocumentSectionCard title="Reason for Credit" variant="formal">
+              <DocumentBodyText>{data.reason}</DocumentBodyText>
+            </DocumentSectionCard>
+          }
+          right={<DocumentSummaryCard rows={summaryRows} variant="formal" />}
+        />
       </View>
 
       <PageNumber documentNumber={data.documentNumber} />

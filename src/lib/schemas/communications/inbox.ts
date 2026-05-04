@@ -92,13 +92,34 @@ export interface InboxEmailItem {
     source?: string;
     provider?: string;
     fromName?: string;
-    [key: string]: unknown;
+    [key: string]: NonNullable<unknown> | undefined;
+  } | null;
+  customer?: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
+  campaign?: {
+    id: string;
+    name: string | null;
+  } | null;
+  scheduledEmail?: {
+    id: string;
+    scheduledAt: Date;
   } | null;
   attachments?: Array<{
     name: string;
     size: number;
     type: string;
   }>;
+}
+
+export interface InboxListResult {
+  items: InboxEmailItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
 }
 
 // ============================================================================

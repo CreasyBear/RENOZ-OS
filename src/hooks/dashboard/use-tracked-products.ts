@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { getInventoryCountsByProductIds } from '@/server/functions/dashboard';
 import type {
@@ -136,11 +137,16 @@ export function useTrackedProducts(options: UseTrackedProductsOptions = {}) {
   const inventoryQuery = useQuery({
     queryKey: queryKeys.dashboard.trackedProductsInventory(productIds),
     queryFn: async () => {
-      const result = await getInventoryCountsByProductIds({
-        data: { productIds } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInventoryCountsByProductIds({
+          data: { productIds }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Tracked product inventory is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: fetchInventory && productIds.length > 0,
     staleTime: 60 * 1000, // 1 minute
@@ -148,12 +154,24 @@ export function useTrackedProducts(options: UseTrackedProductsOptions = {}) {
 
   // Combine products with inventory data
   const productsWithInventory: TrackedProductWithInventory[] = useMemo(() => {
+    if (productIds.length > 0 && !inventoryQuery.data) {
+      return [];
+    }
     const inventoryMap = inventoryQuery.data ?? {};
     return products.map((product) => ({
       ...product,
       quantity: inventoryMap[product.id]?.totalQuantity ?? 0,
     }));
-  }, [products, inventoryQuery.data]);
+  }, [productIds.length, products, inventoryQuery.data]);
+
+  const trackedProductsWarning =
+    inventoryQuery.error instanceof Error && inventoryQuery.data
+      ? 'Showing the most recent tracked product counts while refresh is unavailable.'
+      : null;
+  const trackedProductsUnavailable =
+    inventoryQuery.error instanceof Error && !inventoryQuery.data
+      ? 'Tracked product inventory is temporarily unavailable. Please refresh and try again.'
+      : null;
 
   return {
     // State
@@ -171,5 +189,7 @@ export function useTrackedProducts(options: UseTrackedProductsOptions = {}) {
     isLoading: inventoryQuery.isLoading,
     isError: inventoryQuery.isError,
     error: inventoryQuery.error,
+    trackedProductsWarning,
+    trackedProductsUnavailable,
   };
 }

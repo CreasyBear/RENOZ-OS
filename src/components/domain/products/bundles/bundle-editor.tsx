@@ -13,6 +13,7 @@ import {
   Package,
   RefreshCw,
 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,13 +76,21 @@ export function BundleEditor({
   const [deletingComponent, setDeletingComponent] = useState<BundleComponent | null>(null);
 
   // Queries
-  const { data: componentsData, isLoading } = useBundleComponents({
+  const {
+    data: componentsData,
+    isLoading,
+    error: componentsError,
+  } = useBundleComponents({
     bundleProductId,
   });
-  const { data: priceData } = useCalculateBundlePrice({
+  const { data: priceData, error: priceError } = useCalculateBundlePrice({
     bundleProductId,
   });
-  const { data: validation, refetch: refetchValidation } = useValidateBundle({
+  const {
+    data: validation,
+    error: validationError,
+    refetch: refetchValidation,
+  } = useValidateBundle({
     bundleProductId,
   });
 
@@ -91,6 +100,8 @@ export function BundleEditor({
   const removeComponent = useRemoveBundleComponent();
 
   const components = componentsData?.components ?? [];
+  const hasUnavailableComponents = !!componentsError && components.length === 0 && !isLoading;
+  const hasDegradedComponents = !!componentsError && components.length > 0;
   const priceBreakdown = priceData
     ? {
         componentTotal: priceData.componentTotal,
@@ -188,8 +199,44 @@ export function BundleEditor({
             <Plus className="mr-2 h-4 w-4" />
             Add Components
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      </CardHeader>
+      <CardContent className="space-y-4">
+          {hasUnavailableComponents ? (
+            <Alert>
+              <AlertTitle>Bundle components unavailable</AlertTitle>
+              <AlertDescription>
+                Bundle components are temporarily unavailable. Please refresh and try again.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {hasDegradedComponents ? (
+            <Alert>
+              <AlertTitle>Bundle components unavailable</AlertTitle>
+              <AlertDescription>
+                Showing the most recent bundle components while refresh is unavailable.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {priceError instanceof Error ? (
+            <Alert>
+              <AlertTitle>Bundle pricing unavailable</AlertTitle>
+              <AlertDescription>
+                Bundle price calculations are temporarily unavailable right now.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {validationError instanceof Error ? (
+            <Alert>
+              <AlertTitle>Bundle validation unavailable</AlertTitle>
+              <AlertDescription>
+                Bundle validation could not be refreshed. Existing components are still shown.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {/* Validation status */}
           {validation && (
             <div

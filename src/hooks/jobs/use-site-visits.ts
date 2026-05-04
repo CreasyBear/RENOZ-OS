@@ -13,6 +13,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   getSiteVisits,
   getSiteVisit,
@@ -59,9 +60,26 @@ export function useSiteVisits(options: UseSiteVisitsOptions = {}) {
     queryFn: async () => {
       const parsed = siteVisitListQuerySchema.safeParse(filters);
       if (!parsed.success) {
-        throw new Error('Invalid site visit filters');
+        throw normalizeReadQueryError(
+          {
+            code: 'VALIDATION_ERROR',
+            statusCode: 400,
+            message: 'Invalid site visit filters',
+          },
+          {
+            contractType: 'always-shaped',
+            fallbackMessage: 'Site visits are temporarily unavailable. Please refresh and try again.',
+          }
+        );
       }
-      return getSiteVisits({ data: parsed.data });
+      try {
+        return await getSiteVisits({ data: parsed.data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Site visits are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -77,9 +95,27 @@ export function useSiteVisitsByProject(projectId: string, enabled = true) {
     queryFn: async () => {
       const parsed = siteVisitListQuerySchema.safeParse({ projectId, page: 1, pageSize: 100 });
       if (!parsed.success) {
-        throw new Error('Invalid site visit filters');
+        throw normalizeReadQueryError(
+          {
+            code: 'VALIDATION_ERROR',
+            statusCode: 400,
+            message: 'Invalid site visit filters',
+          },
+          {
+            contractType: 'always-shaped',
+            fallbackMessage: 'Project site visits are temporarily unavailable. Please refresh and try again.',
+          }
+        );
       }
-      return getSiteVisits({ data: parsed.data });
+      try {
+        return await getSiteVisits({ data: parsed.data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Project site visits are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000,
@@ -95,9 +131,28 @@ export function useSiteVisitsByInstaller(installerId: string, enabled = true) {
     queryFn: async () => {
       const parsed = siteVisitListQuerySchema.safeParse({ installerId, page: 1, pageSize: 100 });
       if (!parsed.success) {
-        throw new Error('Invalid site visit filters');
+        throw normalizeReadQueryError(
+          {
+            code: 'VALIDATION_ERROR',
+            statusCode: 400,
+            message: 'Invalid site visit filters',
+          },
+          {
+            contractType: 'always-shaped',
+            fallbackMessage:
+              'Installer site visits are temporarily unavailable. Please refresh and try again.',
+          }
+        );
       }
-      return getSiteVisits({ data: parsed.data });
+      try {
+        return await getSiteVisits({ data: parsed.data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer site visits are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!installerId,
     staleTime: 60 * 1000,
@@ -124,9 +179,26 @@ export function useSchedule(
         pageSize: 500,
       });
       if (!parsed.success) {
-        throw new Error('Invalid site visit filters');
+        throw normalizeReadQueryError(
+          {
+            code: 'VALIDATION_ERROR',
+            statusCode: 400,
+            message: 'Invalid site visit filters',
+          },
+          {
+            contractType: 'always-shaped',
+            fallbackMessage: 'Schedule data is temporarily unavailable. Please refresh and try again.',
+          }
+        );
       }
-      return getSiteVisits({ data: parsed.data });
+      try {
+        return await getSiteVisits({ data: parsed.data });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Schedule data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -141,9 +213,15 @@ export function usePastDueSiteVisits(enabled = true) {
   return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.pastDue(),
     queryFn: async () => {
-      const result = await getPastDueSiteVisits({});
-      if (result == null) throw new Error('Past due site visits returned no data');
-      return result;
+      try {
+        return await getPastDueSiteVisits({});
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Past-due site visits are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -166,11 +244,18 @@ export function useSiteVisit({ siteVisitId, enabled = true }: UseSiteVisitOption
   return useQuery({
     queryKey: queryKeys.siteVisits.detail(siteVisitId),
     queryFn: async () => {
-      const result = await getSiteVisit({
-        data: { siteVisitId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getSiteVisit({
+          data: { siteVisitId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Site visit details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested site visit could not be found.',
+        });
+      }
     },
     enabled: enabled && !!siteVisitId,
     staleTime: 60 * 1000, // 1 minute
@@ -418,12 +503,19 @@ export function usePrefetchSiteVisit() {
     queryClient.prefetchQuery({
       queryKey: queryKeys.siteVisits.detail(siteVisitId),
       queryFn: async () => {
-      const result = await getSiteVisit({
-        data: { siteVisitId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
-    },
+        try {
+          return await getSiteVisit({
+            data: { siteVisitId },
+          });
+        } catch (error) {
+          throw normalizeReadQueryError(error, {
+            contractType: 'detail-not-found',
+            fallbackMessage:
+              'Site visit details are temporarily unavailable. Please refresh and try again.',
+            notFoundMessage: 'The requested site visit could not be found.',
+          });
+        }
+      },
       staleTime: 60 * 1000,
     });
   };

@@ -9,6 +9,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { getInventoryCountsBySkus } from '@/server/functions/dashboard';
 import type {
@@ -57,11 +58,16 @@ export function useInventoryCountsBySkus(options: UseInventoryCountsBySkusOption
   return useQuery({
     queryKey: queryKeys.dashboard.inventoryCounts(skuPatterns),
     queryFn: async () => {
-      const result = await getInventoryCountsBySkus({
-        data: { skuPatterns } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInventoryCountsBySkus({
+          data: { skuPatterns }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Inventory counts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && skuPatterns.length > 0,
     staleTime: 60 * 1000, // 1 minute

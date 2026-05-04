@@ -37,6 +37,7 @@ import type { ListFeedbackInput } from '@/lib/schemas/support/csat-responses';
 import type { ListIssueTemplatesInput } from '@/lib/schemas/support/issue-templates';
 import type { ListRmasInput } from '@/lib/schemas/support/rma';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
+import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 
 type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
@@ -132,6 +133,9 @@ export interface RmaFilters {
   customerId?: string
   orderId?: string
   issueId?: string
+  resolution?: string
+  executionStatus?: string
+  linkedIssueOpenState?: string
   search?: string
   page?: number
   pageSize?: number
@@ -146,6 +150,12 @@ export interface IssueFilters {
   customerId?: string
   assignedToUserId?: string
   search?: string
+  nextActionType?: string
+  rmaState?: 'any' | 'ready' | 'blocked' | 'linked'
+  serialState?: 'any' | 'present' | 'missing'
+  warrantyState?: 'any' | 'present' | 'missing'
+  orderState?: 'any' | 'present' | 'missing'
+  serviceSystemState?: 'any' | 'present' | 'missing'
   limit?: number
   offset?: number
   includeSlaMetrics?: boolean
@@ -1042,6 +1052,8 @@ export const queryKeys = {
       [...queryKeys.support.issuesList(), filters ?? {}] as const,
     issueDetails: () => [...queryKeys.support.all, 'issues', 'detail'] as const,
     issueDetail: (id: string) => [...queryKeys.support.issueDetails(), id] as const,
+    issueIntakePreview: (input?: Record<string, unknown>) =>
+      [...queryKeys.support.all, 'issues', 'intake-preview', input ?? {}] as const,
 
     // RMAs
     rmasList: () => [...queryKeys.support.all, 'rmas', 'list'] as const,
@@ -1234,10 +1246,14 @@ export const queryKeys = {
       [...queryKeys.products.all, 'stockLevels', productId] as const,
     stockAlerts: (productId: string) =>
       [...queryKeys.products.all, 'stockAlerts', productId] as const,
+    movementsForProduct: (productId: string) =>
+      [...queryKeys.products.all, 'movements', productId] as const,
     movements: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'movements', productId, filters ?? {}] as const,
+      [...queryKeys.products.movementsForProduct(productId), filters ?? {}] as const,
+    movementsAggregatedForProduct: (productId: string) =>
+      [...queryKeys.products.all, 'movements', 'aggregated', productId] as const,
     movementsAggregated: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'movements', 'aggregated', productId, filters ?? {}] as const,
+      [...queryKeys.products.movementsAggregatedForProduct(productId), filters ?? {}] as const,
     locations: () => [...queryKeys.products.all, 'locations'] as const,
   },
 
@@ -1276,6 +1292,33 @@ export const queryKeys = {
       [...queryKeys.warrantyCertificates.details(), warrantyId] as const,
   },
 
+  warrantyEntitlements: {
+    all: ['warrantyEntitlements'] as const,
+    lists: () => [...queryKeys.warrantyEntitlements.all, 'list'] as const,
+    list: (filters?: WarrantyEntitlementFilters) =>
+      [...queryKeys.warrantyEntitlements.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.warrantyEntitlements.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.warrantyEntitlements.details(), id] as const,
+  },
+
+  serviceSystems: {
+    all: ['serviceSystems'] as const,
+    lists: () => [...queryKeys.serviceSystems.all, 'list'] as const,
+    list: (filters?: { search?: string; ownershipStatus?: string }) =>
+      [...queryKeys.serviceSystems.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.serviceSystems.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.serviceSystems.details(), id] as const,
+  },
+
+  serviceLinkageReviews: {
+    all: ['serviceLinkageReviews'] as const,
+    lists: () => [...queryKeys.serviceLinkageReviews.all, 'list'] as const,
+    list: (filters?: { status?: string; reasonCode?: string }) =>
+      [...queryKeys.serviceLinkageReviews.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.serviceLinkageReviews.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.serviceLinkageReviews.details(), id] as const,
+  },
+
   warrantyClaims: {
     all: ['warrantyClaims'] as const,
     lists: () => [...queryKeys.warrantyClaims.all, 'list'] as const,
@@ -1285,6 +1328,9 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.warrantyClaims.details(), id] as const,
     byWarranty: (warrantyId: string) =>
       [...queryKeys.warrantyClaims.lists(), { warrantyId }] as const,
+    byCommercialCustomer: (customerId: string) =>
+      [...queryKeys.warrantyClaims.lists(), { customerId }] as const,
+    /** Compatibility alias: this remains commercial-account based. */
     byCustomer: (customerId: string) =>
       [...queryKeys.warrantyClaims.lists(), { customerId }] as const,
     summary: (warrantyId: string) =>
@@ -1368,8 +1414,8 @@ export const queryKeys = {
       [...queryKeys.communications.campaigns(), 'detail', id] as const,
     campaignRecipients: (campaignId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.communications.campaigns(), 'recipients', campaignId, filters ?? {}] as const,
-    campaignPreview: (criteria: unknown) =>
-      [...queryKeys.communications.campaigns(), 'preview', criteria] as const,
+    campaignPreview: (input: { recipientCriteria: unknown; sampleSize?: number }) =>
+      [...queryKeys.communications.campaigns(), 'preview', input] as const,
 
     // Templates
     templates: () => [...queryKeys.communications.all, 'templates'] as const,
@@ -1560,8 +1606,8 @@ export const queryKeys = {
     xero: () => [...queryKeys.financial.all, 'xero'] as const,
     xeroStatus: (orderId: string) =>
       [...queryKeys.financial.xero(), 'status', orderId] as const,
-    xeroSyncs: (status?: string) =>
-      [...queryKeys.financial.xero(), 'syncs', status ?? ''] as const,
+    xeroSyncs: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.xero(), 'syncs', filters ?? {}] as const,
     xeroIntegration: () =>
       [...queryKeys.financial.xero(), 'integration'] as const,
     xeroPaymentEvents: () =>
@@ -1572,8 +1618,8 @@ export const queryKeys = {
       [...queryKeys.financial.xero(), 'contact-search', customerId, query] as const,
 
     // Statements
-    statements: (customerId?: string) =>
-      [...queryKeys.financial.all, 'statements', customerId ?? ''] as const,
+    statements: (customerId?: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'statements', customerId ?? '', filters ?? {}] as const,
     statement: (statementId: string) =>
       [...queryKeys.financial.all, 'statement', statementId] as const,
     statementHistory: (customerId: string, filters?: { page?: number; pageSize?: number; dateFrom?: string; dateTo?: string }) =>
@@ -1583,10 +1629,10 @@ export const queryKeys = {
     deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
     outstandingInvoices: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'outstandingInvoices', filters ?? {}] as const,
-    recognitions: (state?: string) =>
-      [...queryKeys.financial.all, 'recognitions', state ?? ''] as const,
-    recognitionSummary: (dateFrom?: string, dateTo?: string) =>
-      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? ''] as const,
+    recognitions: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'recognitions', filters ?? {}] as const,
+    recognitionSummary: (dateFrom?: string, dateTo?: string, groupBy?: string) =>
+      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? '', groupBy ?? ''] as const,
     topCustomers: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'topCustomers', filters ?? {}] as const,
   },

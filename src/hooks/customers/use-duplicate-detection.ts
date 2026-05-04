@@ -14,6 +14,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   detectDuplicates,
   type DuplicateMatch,
@@ -101,19 +102,23 @@ export function useDuplicateDetection(
       limit,
     }),
     queryFn: async () => {
-      const result = await detectDuplicatesFn({
-        data: {
-          name: hasName ? debouncedInput.name : undefined,
-          email: hasEmail ? debouncedInput.email : undefined,
-          phone: hasPhone ? debouncedInput.phone : undefined,
-          threshold,
-          excludeCustomerId,
-          limit,
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await detectDuplicatesFn({
+          data: {
+            name: hasName ? debouncedInput.name : undefined,
+            email: hasEmail ? debouncedInput.email : undefined,
+            phone: hasPhone ? debouncedInput.phone : undefined,
+            threshold,
+            excludeCustomerId,
+            limit,
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Duplicate detection is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: isEnabled,
     staleTime: 10 * 1000,

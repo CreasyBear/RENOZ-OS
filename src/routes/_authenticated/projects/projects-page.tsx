@@ -94,7 +94,7 @@ export default function ProjectsPage() {
   // This check is redundant since route handles loading state
 
   // Error state
-  if (error) {
+  if (error && projects.length === 0) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Header title="Projects" description="Error loading projects" />
@@ -122,6 +122,20 @@ export default function ProjectsPage() {
       />
 
       <PageLayout.Content>
+        {error ? (
+          <Alert className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Showing cached projects</AlertTitle>
+            <AlertDescription>
+              <div className="flex items-center gap-2">
+                <span>{error.message}</span>
+                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
+                  Retry
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <ProjectsDashboard
           projects={projects}
           isLoading={isLoading}

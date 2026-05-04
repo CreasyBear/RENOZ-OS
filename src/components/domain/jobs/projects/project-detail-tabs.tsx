@@ -25,6 +25,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { toast } from '@/lib/toast';
@@ -221,7 +222,7 @@ export function ProjectOverviewTab({
  */
 export function ProjectWorkstreamsTab({ project }: TabProps) {
   // Data fetching
-  const { data: workstreamsData, isLoading } = useWorkstreams(project.id);
+  const { data: workstreamsData, isLoading, error, refetch } = useWorkstreams(project.id);
   const workstreams = workstreamsData?.data || [];
 
   // Mutations
@@ -278,6 +279,11 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
         onReorderWorkstreams={handleReorderWorkstreams}
         isLoading={isLoading}
         isReorderable={workstreams.length > 1}
+        error={error as Error | null}
+        hasData={workstreamsData !== undefined}
+        onRetry={() => {
+          void refetch();
+        }}
       />
 
       <WorkstreamCreateDialog
@@ -296,9 +302,19 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
 interface ProjectVisitsTabProps extends TabProps {
   visits?: ProjectTabVisit[];
   onScheduleVisit?: () => void;
+  error?: Error | null;
+  hasData?: boolean;
+  onRetry?: () => void;
 }
 
-export function ProjectVisitsTab({ project, visits = [], onScheduleVisit }: ProjectVisitsTabProps) {
+export function ProjectVisitsTab({
+  project,
+  visits = [],
+  onScheduleVisit,
+  error,
+  hasData = true,
+  onRetry,
+}: ProjectVisitsTabProps) {
   const navigate = useNavigate();
   const safeVisits = Array.isArray(visits) ? visits : [];
 
@@ -312,7 +328,21 @@ export function ProjectVisitsTab({ project, visits = [], onScheduleVisit }: Proj
         </Button>
       </div>
 
-      {safeVisits.length === 0 ? (
+      {error ? (
+        <Alert variant={!hasData ? 'destructive' : 'default'}>
+          <AlertTitle>{!hasData ? 'Site visits unavailable' : 'Showing cached site visits'}</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message || 'Project site visits are temporarily unavailable. Please refresh and try again.'}</span>
+            {onRetry ? (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!hasData && error ? null : safeVisits.length === 0 ? (
         <Card className="p-8 text-center">
           <Calendar className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-medium">No visits scheduled</h3>

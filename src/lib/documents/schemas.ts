@@ -197,12 +197,35 @@ export type InvoiceDocumentDataSchema = z.infer<
 >;
 
 // ============================================================================
+// PRO FORMA DOCUMENT DATA SCHEMA
+// ============================================================================
+
+export const proFormaDocumentDataSchema = z.object({
+  type: z.literal("pro-forma"),
+  documentNumber: z.string(),
+  issueDate: z.coerce.date(),
+  order: documentOrderSchema,
+  validUntil: z.coerce.date(),
+  paymentDetails: documentPaymentDetailsSchema.nullable().optional(),
+  terms: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  reference: z.string().nullable().optional(),
+  generatedAt: z.coerce.date().nullable().optional(),
+  generatedBy: z.string().uuid().nullable().optional(),
+});
+
+export type ProFormaDocumentDataSchema = z.infer<
+  typeof proFormaDocumentDataSchema
+>;
+
+// ============================================================================
 // DOCUMENT DATA SCHEMA (discriminated union)
 // ============================================================================
 
 export const documentDataSchema = z.discriminatedUnion("type", [
   quoteDocumentDataSchema,
   invoiceDocumentDataSchema,
+  proFormaDocumentDataSchema,
 ]);
 
 export type DocumentDataSchema = z.infer<typeof documentDataSchema>;

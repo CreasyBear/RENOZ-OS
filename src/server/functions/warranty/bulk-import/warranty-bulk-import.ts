@@ -9,7 +9,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-005a
  */
 
-import { eq, and, sql, or, inArray, like } from 'drizzle-orm';
+import { eq, and, sql, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, products, warrantyItems, inventory } from 'drizzle/schema';
@@ -23,6 +23,7 @@ import {
   addSerializedItemEvent,
   findSerializedItemBySerial,
 } from '@/server/functions/_shared/serialized-lineage';
+import { generateWarrantyNumbersTx } from '../_shared/warranty-numbering';
 
 const MAX_IMPORT_ROWS = 1000;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5MB
@@ -239,51 +240,6 @@ function parseDate(dateStr: string): string | null {
   }
 
   return null;
-}
-
-/**
- * Generate multiple warranty numbers in WRN-YYYY-NNNNN format.
- * Single query to get max, then generates all numbers in memory.
- */
-async function generateWarrantyNumbers(
-  organizationId: string,
-  count: number
-): Promise<string[]> {
-  if (count === 0) return [];
-
-  const year = new Date().getFullYear();
-  const prefix = `WRN-${year}-`;
-
-  // Get the max warranty number for this year and org (single query)
-  const result = await db
-    .select({
-      maxNumber: sql<string>`MAX(${warranties.warrantyNumber})`,
-    })
-    .from(warranties)
-    .where(
-      and(
-        eq(warranties.organizationId, organizationId),
-        like(warranties.warrantyNumber, `${prefix}%`)
-      )
-    );
-
-  const maxNumber = result[0]?.maxNumber;
-  let nextSequence = 1;
-
-  if (maxNumber) {
-    const match = maxNumber.match(/WRN-\d{4}-(\d+)$/);
-    if (match) {
-      nextSequence = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  // Generate all warranty numbers in memory
-  const warrantyNumbers: string[] = [];
-  for (let i = 0; i < count; i++) {
-    warrantyNumbers.push(`${prefix}${(nextSequence + i).toString().padStart(5, '0')}`);
-  }
-
-  return warrantyNumbers;
 }
 
 /**
@@ -734,7 +690,10 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
     );
 
     // Pre-generate all warranty numbers (WAR-001: row-by-row allows partial success)
-    const warrantyNumbers = await generateWarrantyNumbers(ctx.organizationId, rows.length);
+    const warrantyNumbers = await generateWarrantyNumbersTx(db, {
+      organizationId: ctx.organizationId,
+      count: rows.length,
+    });
 
     // Pre-fetch inventory for serial linkage (batch for efficiency)
     const serialProductIds = [...new Set(rows.filter((r) => r.serialNumber).map((r) => r.productId))];

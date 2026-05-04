@@ -89,9 +89,12 @@ type SortDirection = 'asc' | 'desc';
 interface AlertsListProps {
   alerts: AlertRule[];
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
   onEdit?: (alert: AlertRule) => void;
   onDelete?: (alert: AlertRule) => void;
   onToggleActive?: (alertId: string, isActive: boolean) => void;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -176,9 +179,12 @@ function SortHeader({
 export const AlertsList = memo(function AlertsList({
   alerts,
   isLoading,
+  isError,
+  errorMessage,
   onEdit,
   onDelete,
   onToggleActive,
+  onRetry,
   className,
 }: AlertsListProps) {
   const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
@@ -277,6 +283,29 @@ export const AlertsList = memo(function AlertsList({
                 ))}
               </TableBody>
             </Table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle>Alert Rules</CardTitle>
+          <CardDescription>Inventory alert rules are temporarily unavailable.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm text-foreground">
+              {errorMessage ?? 'Inventory alert rules are temporarily unavailable. Please refresh and try again.'}
+            </p>
+            {onRetry ? (
+              <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>

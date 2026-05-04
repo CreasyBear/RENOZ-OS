@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getOnboardingProgress,
@@ -57,9 +58,15 @@ export function useOnboardingProgress() {
   return useQuery<OnboardingProgress>({
     queryKey: queryKeys.user.onboarding(),
     queryFn: async () => {
-      const result = await getProgressFn({ data: {} });
-      if (result == null) throw new Error('Onboarding progress returned no data');
-      return result as OnboardingProgress;
+      try {
+        const result = await getProgressFn({ data: {} });
+        return result as OnboardingProgress;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Onboarding progress is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });

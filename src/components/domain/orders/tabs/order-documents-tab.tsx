@@ -19,9 +19,11 @@ import {
   Receipt,
   Package,
   Truck,
+  ArrowRight,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useServerFn } from '@tanstack/react-start';
@@ -32,6 +34,7 @@ import {
   getDocumentTypeLabel,
 } from '@/hooks/documents';
 import { getOrderGeneratedDocuments } from '@/server/functions/documents';
+import type { DocumentActions } from '../views/order-detail-view';
 
 // ============================================================================
 // TYPES
@@ -39,6 +42,8 @@ import { getOrderGeneratedDocuments } from '@/server/functions/documents';
 
 export interface OrderDocumentsTabProps {
   orderId: string;
+  documentActions?: DocumentActions;
+  onOpenFulfillment?: () => void;
   className?: string;
 }
 
@@ -49,6 +54,7 @@ export interface OrderDocumentsTabProps {
 const DOCUMENT_TYPE_ICONS: Record<string, React.ElementType> = {
   quote: FileText,
   invoice: Receipt,
+  'pro-forma': Receipt,
   'packing-slip': Package,
   'dispatch-note': Truck,
   'delivery-note': Truck,
@@ -57,6 +63,7 @@ const DOCUMENT_TYPE_ICONS: Record<string, React.ElementType> = {
 function getDocumentBadgeVariant(documentType: string) {
   switch (documentType) {
     case 'quote':
+    case 'pro-forma':
       return 'secondary';
     case 'invoice':
       return 'default';
@@ -79,23 +86,39 @@ interface DocumentCardProps {
     id: string;
     documentType: string;
     entityType: string;
+    entityId: string;
     filename: string;
     storageUrl: string;
     fileSize: number | null;
     generatedAt: Date | string;
+    shipmentNumber?: string | null;
+    isStale?: boolean;
+    staleReason?: string;
   };
+  onOpenFulfillment?: () => void;
 }
 
-function DocumentCard({ document }: DocumentCardProps) {
+function DocumentCard({ document, onOpenFulfillment }: DocumentCardProps) {
   const generatedDate = new Date(document.generatedAt);
   const IconComponent = DOCUMENT_TYPE_ICONS[document.documentType] ?? FileText;
 
   const handleDownload = () => {
+    if (document.isStale) {
+      onOpenFulfillment?.();
+      return;
+    }
     window.open(document.storageUrl, '_blank');
   };
 
   return (
-    <div className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
+    <div
+      className={cn(
+        'flex items-center justify-between p-4 rounded-lg border bg-card transition-colors',
+        document.isStale
+          ? 'border-amber-300/80 bg-amber-50/60 hover:bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
+          : 'hover:bg-muted/30'
+      )}
+    >
       <div className="flex items-center gap-4">
         {/* Document icon */}
         <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -114,7 +137,12 @@ function DocumentCard({ document }: DocumentCardProps) {
             </Badge>
             {document.entityType === 'shipment' && (
               <Badge variant="outline" className="text-xs">
-                Shipment
+                {document.shipmentNumber ? `Shipment ${document.shipmentNumber}` : 'Shipment'}
+              </Badge>
+            )}
+            {document.isStale && (
+              <Badge variant="destructive" className="text-xs">
+                Stale
               </Badge>
             )}
           </div>
@@ -130,6 +158,11 @@ function DocumentCard({ document }: DocumentCardProps) {
               </span>
             )}
           </div>
+          {document.isStale && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              {document.staleReason ?? 'Shipment details changed after this document was generated.'}
+            </p>
+          )}
         </div>
       </div>
 
@@ -140,8 +173,17 @@ function DocumentCard({ document }: DocumentCardProps) {
         onClick={handleDownload}
         className="shrink-0"
       >
-        <Download className="h-4 w-4 mr-2" />
-        Download
+        {document.isStale ? (
+          <>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Regenerate in Fulfillment
+          </>
+        ) : (
+          <>
+            <Download className="h-4 w-4 mr-2" />
+            Download
+          </>
+        )}
       </Button>
     </div>
   );
@@ -157,9 +199,29 @@ function EmptyState() {
       <FileQuestion className="h-12 w-12 text-muted-foreground/50 mb-4" />
       <p className="text-muted-foreground font-medium">No documents yet</p>
       <p className="text-sm text-muted-foreground mt-1">
-        Generate a quote, invoice, packing slip, or shipment note to see it here
+        Generate a commercial document or create a shipment-backed fulfillment note to see it here
       </p>
     </div>
+  );
+}
+
+interface ActionSectionProps {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}
+
+function ActionSection({ title, description, children }: ActionSectionProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm">{title}</CardTitle>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -190,6 +252,8 @@ function LoadingSkeleton() {
 
 export const OrderDocumentsTab = memo(function OrderDocumentsTab({
   orderId,
+  documentActions,
+  onOpenFulfillment,
   className,
 }: OrderDocumentsTabProps) {
   const getOrderDocumentsFn = useServerFn(getOrderGeneratedDocuments);
@@ -211,23 +275,95 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
   return (
     <div className={cn('space-y-6', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-foreground">Documents</h2>
           <p className="text-sm text-muted-foreground">
-            Quotes, invoices, packing slips, dispatch notes, and delivery notes
+            Quotes, pro formas, invoices, and shipment-backed fulfillment notes
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isRefetching}
-        >
-          <RefreshCw className={cn('h-4 w-4 mr-2', isRefetching && 'animate-spin')} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={cn('h-4 w-4 mr-2', isRefetching && 'animate-spin')} />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {documentActions && (
+        <div className="space-y-4">
+          <ActionSection
+            title="Commercial Documents"
+            description="Order-scoped paperwork generated directly from the sales record."
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGenerateQuote}
+              disabled={documentActions.isGeneratingQuote}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingQuote ? 'Generating Quote...' : 'Generate Quote'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGenerateInvoice}
+              disabled={documentActions.isGeneratingInvoice}
+            >
+              <Receipt className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingInvoice ? 'Generating Invoice...' : 'Generate Invoice'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGenerateProForma}
+              disabled={documentActions.isGeneratingProForma}
+            >
+              <Receipt className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingProForma ? 'Generating Pro Forma...' : 'Generate Pro Forma'}
+            </Button>
+          </ActionSection>
+
+          <ActionSection
+            title="Fulfillment Documents"
+            description="Generated from shipment records so the paperwork matches what is actually going out the door."
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGeneratePackingSlip}
+              disabled={documentActions.isGeneratingPackingSlip}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingPackingSlip ? 'Generating Packing Slip...' : 'Generate Packing Slip'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGenerateDeliveryNote}
+              disabled={documentActions.isGeneratingDeliveryNote}
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingDeliveryNote ? 'Generating Delivery Note...' : 'Generate Delivery Note'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={documentActions.onGenerateDispatchNote}
+              disabled={documentActions.isGeneratingDispatchNote}
+            >
+              <Truck className="h-4 w-4 mr-2" />
+              {documentActions.isGeneratingDispatchNote ? 'Preparing Dispatch Note...' : 'Generate Dispatch Note'}
+            </Button>
+          </ActionSection>
+        </div>
+      )}
 
       {/* Content */}
       {isLoading ? (
@@ -244,8 +380,25 @@ export const OrderDocumentsTab = memo(function OrderDocumentsTab({
       ) : (
         <div className="space-y-3">
           {documents.map((doc) => (
-            <DocumentCard key={doc.id} document={doc} />
+            <DocumentCard
+              key={doc.id}
+              document={doc}
+              onOpenFulfillment={onOpenFulfillment}
+            />
           ))}
+        </div>
+      )}
+
+      {documents.some((doc) => doc.isStale) && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+          <RefreshCw className="h-4 w-4" />
+          <span>Stale fulfillment docs need regeneration from the latest shipment state.</span>
+          {onOpenFulfillment && (
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={onOpenFulfillment}>
+              Open Fulfillment
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -11,67 +11,38 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense } from 'react';
-import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const FinancialLandingPage = lazy(() => import('./financial-landing-page'));
 
+function FinancialLandingSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-48" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const Route = createFileRoute('/_authenticated/financial/')({
   component: () => (
-    <Suspense
-      fallback={
-        <PageLayout variant="full-width">
-          <PageLayout.Header
-            title="Financial"
-            description="Accounts receivable, revenue recognition, and payment management"
-          />
-          <PageLayout.Content>
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-              <div className="space-y-4">
-                <Skeleton className="h-6 w-48" />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <Skeleton key={i} className="h-32 w-full" />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </PageLayout.Content>
-        </PageLayout>
-      }
-    >
+    <Suspense fallback={<FinancialLandingSkeleton />}>
       <FinancialLandingPage />
     </Suspense>
   ),
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Financial"
-        description="Accounts receivable, revenue recognition, and payment management"
-      />
-      <PageLayout.Content>
-        <div className="space-y-8">
-          <div className="space-y-4">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-6 w-48" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Skeleton key={i} className="h-32 w-full" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialLandingSkeleton />,
 });

@@ -69,6 +69,9 @@ export * from "./files";
 // Support domain (SLA, issues, knowledge base)
 export * from "./support";
 
+// Service domain (non-CRM owners and systems)
+export * from "./service";
+
 // Warranty domain
 export * from "./warranty";
 

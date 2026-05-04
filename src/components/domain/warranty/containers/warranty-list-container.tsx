@@ -168,7 +168,24 @@ export function WarrantyListContainer({
 
   // Handle transfer dialog submit
   const handleTransferSubmit = useCallback(
-    async (payload: { id: string; newCustomerId: string; reason?: string }) => {
+    async (payload: {
+      id: string;
+      newOwner: {
+        fullName: string;
+        email?: string;
+        phone?: string;
+        address?: {
+          street1: string;
+          street2?: string;
+          city: string;
+          state: string;
+          postalCode: string;
+          country: string;
+        };
+        notes?: string;
+      };
+      reason: string;
+    }) => {
       await transferWarrantyMutation.mutateAsync(payload);
     },
     [transferWarrantyMutation]
@@ -196,7 +213,6 @@ export function WarrantyListContainer({
             warrantyNumber: selectedWarrantyForTransfer.warrantyNumber,
             productName: selectedWarrantyForTransfer.productName ?? undefined,
             customerName: selectedWarrantyForTransfer.customerName ?? undefined,
-            customerId: selectedWarrantyForTransfer.customerId,
           }
         : null,
     [selectedWarrantyForTransfer]

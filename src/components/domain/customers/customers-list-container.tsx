@@ -56,6 +56,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { BulkOperations, RollbackUI, type OperationResult } from "./bulk";
 import { DomainFilterBar } from "@/components/shared/filters";
 import {
@@ -647,10 +648,27 @@ export function CustomersListContainer({
           />
         )}
 
+        {customersError && customers.length > 0 ? (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Showing cached customers</AlertTitle>
+            <AlertDescription className="flex items-center gap-2">
+              <span>
+                {customersError instanceof Error
+                  ? customersError.message
+                  : 'Customer data is temporarily unavailable. Please refresh and try again.'}
+              </span>
+              <Button variant="link" className="h-auto p-0" onClick={() => void refetchCustomers()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <CustomersListPresenter
           customers={customers}
           isLoading={isCustomersLoading}
-          error={customersError as Error | null}
+          error={customers.length === 0 ? (customersError as Error | null) : null}
           onRetry={() => {
             void refetchCustomers();
           }}

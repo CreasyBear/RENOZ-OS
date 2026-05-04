@@ -44,6 +44,7 @@ import {
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges, excludeFieldsForActivity } from '@/lib/activity-logger';
 import { warrantyLogger } from '@/lib/logger';
+import { resolveWarrantyPolicyTx } from '../_shared/policy-resolution';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -442,144 +443,13 @@ export const resolveWarrantyPolicy = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(resolveWarrantyPolicySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
-
-    // 1. If product specified, check product's direct policy
-    if (data.productId) {
-      const [product] = await db
-        .select({
-          warrantyPolicyId: products.warrantyPolicyId,
-          categoryId: products.categoryId,
-        })
-        .from(products)
-        .where(
-          and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
-        )
-        .limit(1);
-
-      if (!product) {
-        throw new NotFoundError('Product not found', 'product');
-      }
-
-      // If product has a direct policy, use it
-      if (product.warrantyPolicyId) {
-        const [policy] = await db
-          .select()
-          .from(warrantyPolicies)
-          .where(
-            and(
-              eq(warrantyPolicies.id, product.warrantyPolicyId),
-              eq(warrantyPolicies.isActive, true)
-            )
-          )
-          .limit(1);
-
-        if (policy) {
-          return { policy, source: 'product' as const };
-        }
-      }
-
-      // 2. Check product's category default
-      if (product.categoryId) {
-        const [category] = await db
-          .select({
-            defaultWarrantyPolicyId: categories.defaultWarrantyPolicyId,
-          })
-          .from(categories)
-          .where(eq(categories.id, product.categoryId))
-          .limit(1);
-
-        if (category?.defaultWarrantyPolicyId) {
-          const [policy] = await db
-            .select()
-            .from(warrantyPolicies)
-            .where(
-              and(
-                eq(warrantyPolicies.id, category.defaultWarrantyPolicyId),
-                eq(warrantyPolicies.isActive, true)
-              )
-            )
-            .limit(1);
-
-          if (policy) {
-            return { policy, source: 'category' as const };
-          }
-        }
-      }
-    }
-
-    // 3. If category specified directly (not via product)
-    if (data.categoryId && !data.productId) {
-      const [category] = await db
-        .select({
-          defaultWarrantyPolicyId: categories.defaultWarrantyPolicyId,
-        })
-        .from(categories)
-        .where(
-          and(eq(categories.id, data.categoryId), eq(categories.organizationId, ctx.organizationId))
-        )
-        .limit(1);
-
-      if (!category) {
-        throw new NotFoundError('Category not found', 'category');
-      }
-
-      if (category.defaultWarrantyPolicyId) {
-        const [policy] = await db
-          .select()
-          .from(warrantyPolicies)
-          .where(
-            and(
-              eq(warrantyPolicies.id, category.defaultWarrantyPolicyId),
-              eq(warrantyPolicies.isActive, true)
-            )
-          )
-          .limit(1);
-
-        if (policy) {
-          return { policy, source: 'category' as const };
-        }
-      }
-    }
-
-    // 4. Fall back to org default for the specified type
-    if (data.type) {
-      const [policy] = await db
-        .select()
-        .from(warrantyPolicies)
-        .where(
-          and(
-            eq(warrantyPolicies.organizationId, ctx.organizationId),
-            eq(warrantyPolicies.type, data.type),
-            eq(warrantyPolicies.isDefault, true),
-            eq(warrantyPolicies.isActive, true)
-          )
-        )
-        .limit(1);
-
-      if (policy) {
-        return { policy, source: 'organization_default' as const };
-      }
-
-      // Fall back to any active policy of this type
-      const [fallback] = await db
-        .select()
-        .from(warrantyPolicies)
-        .where(
-          and(
-            eq(warrantyPolicies.organizationId, ctx.organizationId),
-            eq(warrantyPolicies.type, data.type),
-            eq(warrantyPolicies.isActive, true)
-          )
-        )
-        .orderBy(asc(warrantyPolicies.createdAt))
-        .limit(1);
-
-      if (fallback) {
-        return { policy: fallback, source: 'organization_fallback' as const };
-      }
-    }
-
-    return { policy: null, source: null };
+    return resolveWarrantyPolicyTx(db, {
+      organizationId: ctx.organizationId,
+      productId: data.productId,
+      categoryId: data.categoryId,
+      type: data.type,
+      throwIfMissing: true,
+    });
   });
 
 // ============================================================================

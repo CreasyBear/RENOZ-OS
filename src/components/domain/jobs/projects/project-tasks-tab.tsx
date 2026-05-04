@@ -54,6 +54,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import type { SemanticColor } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -964,7 +965,7 @@ function EmptyTasksState({ onAdd }: { onAdd: () => void }) {
 
 export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTasksTabProps) {
   const queryClient = useQueryClient();
-  const { data: tasksData, isLoading, refetch } = useProjectTasks({ projectId });
+  const { data: tasksData, error, isLoading, refetch } = useProjectTasks({ projectId });
   const { data: workstreamsData } = useWorkstreams(projectId);
   const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
   const updateStatus = useUpdateProjectTaskStatus(projectId);
@@ -1345,9 +1346,38 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     );
   }
 
+  if (error && tasksData === undefined) {
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Tasks unavailable</AlertTitle>
+          <AlertDescription className="flex items-center gap-2">
+            <span>{error.message}</span>
+            <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   if (tasks.length === 0 && !hasActiveFilters) {
     return (
       <div className="space-y-4">
+        {error ? (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Showing cached tasks</AlertTitle>
+            <AlertDescription className="flex items-center gap-2">
+              <span>{error.message}</span>
+              <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-lg font-medium">Tasks</h3>
@@ -1379,6 +1409,18 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   return (
     <TooltipProvider>
     <div className="space-y-6">
+      {error ? (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Showing cached tasks</AlertTitle>
+          <AlertDescription className="flex items-center gap-2">
+            <span>{error.message}</span>
+            <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* Quick Add */}
       <div className="max-w-md">
         <KanbanQuickAdd

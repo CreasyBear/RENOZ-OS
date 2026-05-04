@@ -45,6 +45,7 @@ export interface OverviewDashboardProps {
   stats?: OverviewStatsData | null;
   statsSummaryWarning?: string | null;
   trackedProducts?: TrackedProductWithInventory[];
+  trackedProductsWarning?: string | null;
   onTrackedProductsChange?: (products: TrackedProduct[]) => void;
   maxTrackedProducts?: number;
   cashFlow?: CashFlowDataPoint[] | null;
@@ -76,6 +77,7 @@ export function OverviewDashboard({
   stats,
   statsSummaryWarning,
   trackedProducts,
+  trackedProductsWarning,
   onTrackedProductsChange,
   maxTrackedProducts,
   cashFlow,
@@ -123,6 +125,7 @@ export function OverviewDashboard({
         trackedProductsLoading={loadingStates.stats}
         summaryWarning={statsSummaryWarning}
         trackedProducts={trackedProducts}
+        trackedProductsWarning={trackedProductsWarning}
         onTrackedProductsChange={onTrackedProductsChange}
         maxTrackedProducts={maxTrackedProducts}
       />

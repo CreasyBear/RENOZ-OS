@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Clock, Plus } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ActiveTimer } from '../../time/active-timer';
 import { TimeEntryDialog } from '../../time/time-entry-dialog';
@@ -43,7 +44,7 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
   // Fetch time entries for this project (using projectId as jobId)
-  const { data: timeData, isLoading } = useJobTimeEntries({
+  const { data: timeData, isLoading, error, refetch } = useJobTimeEntries({
     jobId: projectId,
   });
 
@@ -122,6 +123,23 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {error ? (
+            <Alert variant={timeData === undefined ? 'destructive' : 'default'}>
+              <AlertTitle>
+                {timeData === undefined ? 'Time tracking unavailable' : 'Showing cached time tracking'}
+              </AlertTitle>
+              <AlertDescription className="flex items-center justify-between gap-3">
+                <span>
+                  {error instanceof Error
+                    ? error.message
+                    : 'Time tracking is temporarily unavailable. Please refresh and try again.'}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {/* Active Timer */}
           <ActiveTimer
             activeEntry={activeEntry}

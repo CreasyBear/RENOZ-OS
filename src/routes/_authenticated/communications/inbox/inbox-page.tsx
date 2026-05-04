@@ -80,7 +80,7 @@ export default function InboxPage() {
     ? filters.status as "sent" | "delivered" | "opened" | "clicked" | "pending" | "bounced" | "failed"
     : undefined;
 
-  const { items, isLoading, error, refetch } = useInbox({
+  const { data: inboxData, isLoading, error, refetch } = useInbox({
     search: filters.search || undefined,
     tab: filters.tab,
     status: statusFilter,
@@ -92,6 +92,7 @@ export default function InboxPage() {
     page: search.page,
     pageSize: search.pageSize,
   });
+  const items = inboxData?.items ?? [];
 
   // ============================================================================
   // HANDLERS
@@ -118,7 +119,9 @@ export default function InboxPage() {
         error={error}
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        onRetry={refetch}
+        onRetry={() => {
+          void refetch();
+        }}
       />
     </ErrorBoundary>
   );

@@ -62,6 +62,16 @@ import type { InvoiceAlert } from '@/hooks/invoices/use-invoice-detail';
 // TYPES
 // ============================================================================
 
+type InvoicePaymentRow = {
+  id: string;
+  amount: string | number;
+  paymentMethod: string | null;
+  paymentDate: string | Date;
+  reference: string | null;
+  notes: string | null;
+  isRefund: boolean | null;
+};
+
 export interface InvoiceDetailViewProps {
   invoice: InvoiceDetail;
   alerts?: InvoiceAlert[];
@@ -73,6 +83,9 @@ export interface InvoiceDetailViewProps {
   activities?: import('@/lib/schemas/unified-activity').UnifiedActivity[];
   activitiesLoading?: boolean;
   activitiesError?: Error | null;
+  payments?: InvoicePaymentRow[];
+  paymentsLoading?: boolean;
+  paymentsError?: Error | null;
   /** Handler to open activity logging dialog */
   onLogActivity?: () => void;
   className?: string;
@@ -184,6 +197,9 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
   activities = [],
   activitiesLoading = false,
   activitiesError = null,
+  payments = [],
+  paymentsLoading = false,
+  paymentsError = null,
   onLogActivity,
   className,
 }: InvoiceDetailViewProps) {
@@ -219,8 +235,12 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
   // Calculations
   const total = Number(invoice.total || 0);
   const balanceDue = Number(invoice.balanceDue || 0);
-  const paidAmount = total - balanceDue;
-  const paidPercent = total > 0 ? Math.round((paidAmount / total) * 100) : 0;
+  const recordedPaymentTotal = payments.reduce((sum, payment) => {
+    const amount = Number(payment.amount || 0);
+    return sum + (payment.isRefund ? -amount : amount);
+  }, 0);
+  const cashPaidAmount = Number(invoice.paidAmount ?? recordedPaymentTotal ?? 0);
+  const paidPercent = total > 0 ? Math.round((cashPaidAmount / total) * 100) : 0;
   const itemsCount = invoice.lineItems?.length ?? 0;
   const currentStageIndex = getStageIndex(status);
 
@@ -613,10 +633,10 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-muted-foreground">
-                                Amount Paid
+                                Cash Paid
                               </span>
                               <span className="tabular-nums text-green-600">
-                                <FormatAmount amount={paidAmount} />
+                                <FormatAmount amount={cashPaidAmount} />
                               </span>
                             </div>
                             <Separator />
@@ -715,29 +735,75 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
                   {/* Payments Tab */}
                   <TabsContent value="payments" className="mt-0">
                     <div className="space-y-4">
-                      <h3 className="text-sm font-medium">Payment History</h3>
-                      {paidAmount > 0 ? (
-                        <div className="rounded-md border p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium">Payment History</h3>
+                        {payments.length > 0 ? (
+                          <p className="text-sm text-muted-foreground tabular-nums">
+                            Net recorded: <FormatAmount amount={recordedPaymentTotal} />
+                          </p>
+                        ) : null}
+                      </div>
+                      {paymentsLoading ? (
+                        <div className="rounded-md border p-4 text-sm text-muted-foreground">
+                          Loading payments...
+                        </div>
+                      ) : paymentsError ? (
+                        <Alert variant="destructive">
+                          <AlertTitle>Could not load payment history</AlertTitle>
+                          <AlertDescription>{paymentsError.message}</AlertDescription>
+                        </Alert>
+                      ) : payments.length > 0 ? (
+                        <div className="space-y-3">
+                          {payments.map((payment) => {
+                            const isRefund = Boolean(payment.isRefund);
+                            return (
+                              <div key={payment.id} className="rounded-md border p-4">
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={cn(
+                                        "h-8 w-8 rounded-full flex items-center justify-center",
+                                        isRefund
+                                          ? "bg-red-100 dark:bg-red-900/30"
+                                          : "bg-green-100 dark:bg-green-900/30"
+                                      )}
+                                    >
+                                      <Receipt
+                                        className={cn(
+                                          "h-4 w-4",
+                                          isRefund ? "text-red-600" : "text-green-600"
+                                        )}
+                                      />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium">
+                                        {isRefund ? "Refund Recorded" : "Payment Recorded"}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {format(new Date(payment.paymentDate), 'PPp')}
+                                        {payment.paymentMethod ? ` · ${payment.paymentMethod}` : ""}
+                                        {payment.reference ? ` · ${payment.reference}` : ""}
+                                      </p>
+                                      {payment.notes ? (
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                          {payment.notes}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <p
+                                    className={cn(
+                                      "font-semibold tabular-nums",
+                                      isRefund ? "text-red-600" : "text-green-600"
+                                    )}
+                                  >
+                                    {isRefund ? "-" : ""}
+                                    <FormatAmount amount={Number(payment.amount || 0)} />
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium">Payment Received</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {invoice.paidAt
-                                    ? format(new Date(invoice.paidAt), 'PPp')
-                                    : status === 'paid'
-                                      ? 'Paid in full'
-                                      : 'Partial payment'}
-                                </p>
-                              </div>
-                            </div>
-                            <p className="font-semibold tabular-nums text-green-600">
-                              <FormatAmount amount={paidAmount} />
-                            </p>
-                          </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">

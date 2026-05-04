@@ -5,11 +5,18 @@
  * black borders, 5pt row padding. Fixed header on all pages.
  */
 
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   PageNumber,
   DocumentFixedHeader,
-  SerialNumbersCell,
+  DocumentBodyText,
+  DocumentDetailStrip,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  SerialNumbersSummary,
+  type DetailStripItem,
   formatAddressLines,
   formatDateForPdf,
   colors,
@@ -239,7 +246,6 @@ const styles = StyleSheet.create({
   colSku: { flex: 1.2 },
   colDescription: { flex: 2.5 },
   colQty: { width: 50, textAlign: "center" },
-  colSerial: { width: 70 },
   colLocation: { width: 80, textAlign: "center" },
 
   summarySection: {
@@ -296,6 +302,24 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
   const fromAddressLines = formatAddressLines(organization.address);
   const toAddressLines = formatAddressLines(data.shippingAddress);
+  const detailItems = [
+    data.shipDate
+      ? {
+          label: data.shipDateLabel ?? "Ship Date",
+          value: formatDateForPdf(data.shipDate, locale, "short"),
+          weight: 1.4,
+          emphasis: "strong" as const,
+        }
+      : null,
+    data.carrier ? { label: "Carrier", value: data.carrier, weight: 1 } : null,
+    data.shippingMethod ? { label: "Method", value: data.shippingMethod, weight: 1 } : null,
+    data.packageCount != null
+      ? { label: "Packages", value: String(data.packageCount), weight: 0.8, emphasis: "subtle" as const }
+      : null,
+    data.totalWeight != null
+      ? { label: "Weight", value: `${data.totalWeight} kg`, weight: 0.8, emphasis: "subtle" as const }
+      : null,
+  ].filter(Boolean) as DetailStripItem[];
 
   return (
     <Page size="A4" style={styles.page}>
@@ -305,103 +329,44 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header: Meta left, Logo right */}
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Packing Slip</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Slip #: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Order #: </Text>
-              <Text style={styles.metaValue}>{data.orderNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Date: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-          </View>
+        <DocumentMasthead
+          title="Packing Slip"
+          meta={[
+            { label: "Slip", value: data.documentNumber },
+            { label: "Order", value: data.orderNumber },
+            { label: "Issued", value: formatDateForPdf(data.issueDate, locale, "short") },
+          ]}
+          callout={{
+            eyebrow: "Shipment Snapshot",
+            title: `${data.packageCount ?? 1} package${(data.packageCount ?? 1) === 1 ? "" : "s"}`,
+            detail: data.totalWeight != null ? `Total weight ${data.totalWeight} kg` : "Ready for pick and pack.",
+            tone: "info",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl && (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          )}
-        </View>
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              name={organization.name}
+              lines={[...fromAddressLines, ...(organization.phone ? [organization.phone] : [])]}
+            />
+          }
+          right={
+            <DocumentInfoPanel
+              label="Ship To"
+              name={data.customer.name}
+              lines={toAddressLines}
+              mutedLines={[
+                ...(data.shippingAddress?.contactName ? [`Attn: ${data.shippingAddress.contactName}`] : []),
+                ...(data.shippingAddress?.contactPhone ? [data.shippingAddress.contactPhone] : []),
+              ]}
+            />
+          }
+        />
 
-        {/* From / Ship To two-column */}
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>{line}</Text>
-            ))}
-            {organization.phone && (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            )}
-          </View>
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Ship To</Text>
-            <Text style={styles.sectionName}>{data.customer.name}</Text>
-            {data.shippingAddress?.contactName && (
-              <Text style={styles.sectionDetail}>Attn: {data.shippingAddress.contactName}</Text>
-            )}
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>{line}</Text>
-              ))
-            ) : (
-              <Text style={styles.sectionDetail}>—</Text>
-            )}
-            {data.shippingAddress?.contactPhone && (
-              <Text style={styles.sectionDetail}>{data.shippingAddress.contactPhone}</Text>
-            )}
-          </View>
-        </View>
-
-        {/* Shipping Details */}
-        {(data.carrier || data.shippingMethod || data.shipDate || data.packageCount || data.totalWeight) && (
-          <View style={styles.shippingDetails}>
-            {data.carrier && (
-              <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>Carrier</Text>
-                <Text style={styles.shippingValue}>{data.carrier}</Text>
-              </View>
-            )}
-            {data.shippingMethod && (
-              <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>Method</Text>
-                <Text style={styles.shippingValue}>{data.shippingMethod}</Text>
-              </View>
-            )}
-            {data.shipDate && (
-              <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>
-                  {data.shipDateLabel ?? "Ship Date"}
-                </Text>
-                <Text style={styles.shippingValue}>
-                  {formatDateForPdf(data.shipDate, locale, "short")}
-                </Text>
-              </View>
-            )}
-            {data.packageCount != null && (
-              <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>Packages</Text>
-                <Text style={styles.shippingValue}>{String(data.packageCount)}</Text>
-              </View>
-            )}
-            {data.totalWeight != null && (
-              <View style={styles.shippingItem}>
-                <Text style={styles.shippingLabel}>Weight</Text>
-                <Text style={styles.shippingValue}>{`${data.totalWeight} kg`}</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <DocumentDetailStrip items={detailItems} />
 
         {/* Line Items Table */}
         <View style={styles.table}>
@@ -410,9 +375,6 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
             <Text style={[styles.tableHeaderCell, styles.colSku]}>SKU</Text>
             <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
-            {hasSerials && (
-              <Text style={[styles.tableHeaderCell, styles.colSerial]}>Serials</Text>
-            )}
             <Text style={[styles.tableHeaderCell, styles.colLocation]}>Location</Text>
           </View>
 
@@ -424,11 +386,6 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
               <Text style={[styles.tableCell, styles.colSku]}>—</Text>
               <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
               <Text style={[styles.tableCell, styles.colQty]}>—</Text>
-              {hasSerials && (
-                <View style={styles.colSerial}>
-                  <Text style={styles.tableCell}>—</Text>
-                </View>
-              )}
               <Text style={[styles.tableCell, styles.colLocation]}>—</Text>
             </View>
           ) : (
@@ -443,41 +400,24 @@ function PackingSlipContent({ data }: PackingSlipPdfTemplateProps) {
                 {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
               </View>
               <Text style={[styles.tableCell, styles.colQty]}>{String(item.quantity)}</Text>
-              {hasSerials && (
-                <View style={styles.colSerial}>
-                  <SerialNumbersCell serialNumbers={item.serialNumbers ?? []} />
-                </View>
-              )}
               <Text style={[styles.tableCell, styles.colLocation]}>{item.location || "—"}</Text>
             </View>
             ))
           )}
         </View>
 
-        {/* Summary */}
-        <View style={styles.summarySection}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Package count:</Text>
-              <Text style={styles.summaryValue}>
-                {data.packageCount != null ? String(data.packageCount) : "1"}
-              </Text>
-            </View>
-            {data.totalWeight != null && (
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total weight:</Text>
-                <Text style={styles.summaryValue}>{`${data.totalWeight} kg`}</Text>
-              </View>
-            )}
-          </View>
-        </View>
+        {hasSerials && (
+          <SerialNumbersSummary
+            title="Serialized Items in This Shipment"
+            items={data.lineItems}
+          />
+        )}
 
         {/* Special Instructions */}
         {data.specialInstructions && (
-          <View style={styles.instructionsSection}>
-            <Text style={styles.instructionsLabel}>Special Instructions</Text>
-            <Text style={styles.instructionsText}>{data.specialInstructions}</Text>
-          </View>
+          <DocumentSectionCard title="Special Instructions">
+            <DocumentBodyText>{data.specialInstructions}</DocumentBodyText>
+          </DocumentSectionCard>
         )}
       </View>
 

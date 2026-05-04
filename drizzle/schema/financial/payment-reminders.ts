@@ -137,7 +137,7 @@ export const reminderHistory = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
 
     // Delivery status
-    deliveryStatus: text("delivery_status").default("sent"), // sent, delivered, bounced, failed
+    deliveryStatus: text("delivery_status").default("queued"), // queued, pending, sent, delivered, bounced, failed
     deliveryError: text("delivery_error"),
 
     // Manual send flag (vs automated job)

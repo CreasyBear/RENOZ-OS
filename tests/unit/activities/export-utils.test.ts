@@ -35,6 +35,37 @@ describe('activity export utils', () => {
     expect(csv).toContain('""source"":""csv""');
   });
 
+  it('exports structured notes using the preview body instead of the note title', () => {
+    const csv = buildActivityExportCsv([
+      {
+        id: 'activity-note-1',
+        organizationId: 'org-1',
+        userId: 'user-1',
+        entityType: 'customer',
+        entityId: 'customer-1',
+        entityName: 'Acme Solar',
+        action: 'note_added',
+        changes: null,
+        metadata: {
+          noteTitle: 'Battery configuration updated',
+          contentPreview: 'Configured standby timeout to 1440 minutes.',
+          fullNotes: 'Configured standby timeout to 1440 minutes.\nCustomer approved the change.',
+        },
+        ipAddress: null,
+        userAgent: null,
+        description: 'Configured standby timeout to 1440 minutes.',
+        source: 'manual',
+        sourceRef: null,
+        createdAt: new Date('2026-03-16T00:00:00.000Z'),
+        createdBy: 'user-1',
+        user: { id: 'user-1', name: 'Alice', email: 'alice@example.com' },
+      },
+    ]);
+
+    expect(csv).toContain('"Configured standby timeout to 1440 minutes."');
+    expect(csv).toContain('"Battery configuration updated"');
+  });
+
   it('builds a human-readable filter summary', () => {
     expect(
       buildFilterSummary({

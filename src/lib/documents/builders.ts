@@ -4,10 +4,33 @@
  * Shared builders for transforming order/customer data into document-ready shapes.
  * Used by preview, generate-documents-sync, generate-quote-pdf, and quote-versions.
  *
- * @see docs/DOCUMENT_DESIGN_SYSTEM.md
+ * @see docs/reference/document-design-system.md
  */
 
 import type { DocumentOrder, DocumentCustomer, DocumentAddress, DocumentLineItem } from "./types";
+
+interface AddressRecord {
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+}
+
+interface OrderAddressRecord {
+  street1?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+}
 
 // ============================================================================
 // TYPES - Input shapes from DB fetches
@@ -18,13 +41,19 @@ export interface OrderDataFromDb {
   orderNumber: string;
   orderDate: Date | string | null;
   dueDate: Date | string | null;
+  billingAddress?: OrderAddressRecord | null;
+  shippingAddress?: OrderAddressRecord | null;
   subtotal: number;
   discountAmount: number;
   discountPercent: number;
   taxAmount: number;
+  shippingAmount?: number | null;
   total: number;
+  paidAmount?: number | null;
+  balanceDue?: number | null;
   customerNotes: string | null;
   internalNotes: string | null;
+  status?: string | null;
   paymentStatus?: string | null;
   lineItems: Array<{
     id: string;
@@ -46,54 +75,131 @@ export interface CustomerDataFromDb {
   name: string;
   email: string | null;
   phone: string | null;
-  address?: {
-    addressLine1: string;
-    addressLine2?: string | null;
-    city: string;
-    state: string | null;
-    postalCode: string;
-    country: string;
-  };
+  address?: AddressRecord;
+  billingAddress?: AddressRecord;
+  shippingAddress?: AddressRecord;
+  primaryAddress?: AddressRecord;
 }
 
 // ============================================================================
 // TYPES - Preview document data shape
 // ============================================================================
 
-export interface PreviewDocumentData {
-  organization: Record<string, unknown>;
-  customer: {
-    name: string;
-    email?: string;
-    phone?: string;
-    address?: string;
-    addressLine2?: string;
-    city?: string;
-    state?: string;
-    postalCode?: string;
-    postcode?: string;
-    country?: string;
-  };
-  order: {
-    orderNumber: string;
-    createdAt: string;
-    dueDate?: string;
-    validUntil: string;
-    lineItems: Array<{
-      description: string;
-      quantity: number;
-      unitPrice: number;
-      total: number;
-      sku?: string;
-    }>;
-    subtotal: number;
-    taxRate?: number;
-    taxAmount: number;
-    discount?: number;
+export interface PreviewOrganizationData {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  abn?: string;
+  logoUrl?: string | null;
+}
+
+export interface PreviewCustomerData {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  postcode?: string;
+  country?: string;
+  billingAddress?: AddressRecord;
+  shippingAddress?: AddressRecord;
+  primaryAddress?: AddressRecord;
+}
+
+export interface PreviewOrderData {
+  orderNumber: string;
+  createdAt: string;
+  dueDate?: string;
+  validUntil: string;
+  billingAddress?: AddressRecord;
+  shippingAddress?: AddressRecord;
+  lineItems: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
     total: number;
+    sku?: string;
+    discountPercent?: number;
+    discountAmount?: number;
+    taxAmount?: number;
+    taxRate?: number;
     notes?: string;
-    terms?: string;
+  }>;
+  subtotal: number;
+  taxRate?: number;
+  taxAmount: number;
+  discount?: number;
+  shippingAmount?: number;
+  paidAmount?: number;
+  balanceDue?: number;
+  total: number;
+  notes?: string;
+  terms?: string;
+}
+
+export interface PreviewDocumentData {
+  organization: PreviewOrganizationData;
+  customer: PreviewCustomerData;
+  order: PreviewOrderData;
+}
+
+function isMeaningfulAddress(address?: AddressRecord | null) {
+  if (!address) {
+    return false;
+  }
+
+  return Object.values(address).some((value) => (typeof value === 'string' ? value.trim().length > 0 : Boolean(value)));
+}
+
+export function toDocumentAddress(
+  address?: AddressRecord | OrderAddressRecord | null,
+): DocumentAddress | undefined {
+  if (!address) {
+    return undefined;
+  }
+
+  const isDocumentStyleAddress = 'addressLine1' in address || 'addressLine2' in address;
+  const documentStyleAddress = address as AddressRecord;
+  const orderStyleAddress = address as OrderAddressRecord;
+  const addressLine1 = isDocumentStyleAddress ? documentStyleAddress.addressLine1 : orderStyleAddress.street1;
+  const addressLine2 = isDocumentStyleAddress ? documentStyleAddress.addressLine2 : orderStyleAddress.street2;
+  const postalCode = isDocumentStyleAddress
+    ? documentStyleAddress.postalCode
+    : orderStyleAddress.postalCode ?? orderStyleAddress.postcode;
+
+  const candidate: DocumentAddress = {
+    addressLine1: addressLine1 ?? undefined,
+    addressLine2: addressLine2 ?? undefined,
+    city: address.city ?? undefined,
+    state: address.state ?? undefined,
+    postalCode: postalCode ?? undefined,
+    country: address.country ?? undefined,
+    contactName: address.contactName ?? undefined,
+    contactPhone: address.contactPhone ?? undefined,
   };
+
+  return isMeaningfulAddress(candidate) ? candidate : undefined;
+}
+
+function coalesceDocumentAddress<T extends AddressRecord | OrderAddressRecord>(
+  ...addresses: Array<T | null | undefined>
+) {
+  for (const address of addresses) {
+    const mapped = toDocumentAddress(address);
+    if (mapped) {
+      return mapped;
+    }
+  }
+
+  return undefined;
 }
 
 // ============================================================================
@@ -113,27 +219,30 @@ export function buildDocumentOrderFromDb(
   const dueDate =
     options?.dueDate ??
     (orderData.dueDate ? new Date(orderData.dueDate) : undefined);
-  const taxRate =
-    orderData.subtotal > 0 ? (orderData.taxAmount / orderData.subtotal) * 100 : 10;
+
+  const customerAddress =
+    customerData.primaryAddress ??
+    customerData.billingAddress ??
+    customerData.shippingAddress ??
+    customerData.address;
+  const billingAddress = coalesceDocumentAddress(
+    orderData.billingAddress,
+    customerData.billingAddress,
+    customerData.primaryAddress,
+    customerData.address,
+  );
+  const shippingAddress = coalesceDocumentAddress(
+    orderData.shippingAddress,
+    customerData.shippingAddress,
+  );
 
   const customer: DocumentCustomer = {
     id: customerData.id,
     name: customerData.name,
     email: customerData.email,
     phone: customerData.phone,
-    address: customerData.address,
+    address: customerAddress,
   };
-
-  const billingAddress: DocumentAddress | undefined = customerData.address
-    ? {
-        addressLine1: customerData.address.addressLine1,
-        addressLine2: customerData.address.addressLine2,
-        city: customerData.address.city,
-        state: customerData.address.state,
-        postalCode: customerData.address.postalCode,
-        country: customerData.address.country,
-      }
-    : undefined;
 
   const lineItems: DocumentLineItem[] = orderData.lineItems.map((item) => ({
     id: item.id,
@@ -154,18 +263,21 @@ export function buildDocumentOrderFromDb(
     orderNumber: orderData.orderNumber,
     orderDate,
     dueDate,
-    status: (orderData as { status?: string }).status,
+    status: orderData.status,
     paymentStatus: orderData.paymentStatus,
     customer,
     billingAddress,
+    shippingAddress,
     lineItems,
     subtotal: orderData.subtotal,
     discount: orderData.discountAmount,
     discountType: orderData.discountPercent ? "percentage" : "fixed",
     discountPercent: orderData.discountPercent,
-    taxRate,
     taxAmount: orderData.taxAmount,
+    shippingAmount: orderData.shippingAmount ?? undefined,
     total: orderData.total,
+    paidAmount: orderData.paidAmount ?? undefined,
+    balanceDue: orderData.balanceDue ?? undefined,
     customerNotes: orderData.customerNotes,
     internalNotes: orderData.internalNotes,
   };
@@ -189,22 +301,7 @@ export function buildDocumentOrderFromPreviewData(
   const postalCode =
     documentData.customer.postalCode ?? documentData.customer.postcode ?? "";
 
-  const customer: DocumentCustomer = {
-    id: options?.customerId ?? "preview-customer",
-    name: documentData.customer.name,
-    email: documentData.customer.email,
-    phone: documentData.customer.phone,
-    address: {
-      addressLine1,
-      addressLine2: addressLine2 ?? undefined,
-      city: documentData.customer.city ?? "",
-      state: documentData.customer.state ?? "",
-      postalCode,
-      country: documentData.customer.country ?? "",
-    },
-  };
-
-  const billingAddress: DocumentAddress = {
+  const previewCustomerAddress: AddressRecord = {
     addressLine1,
     addressLine2: addressLine2 ?? undefined,
     city: documentData.customer.city ?? "",
@@ -212,6 +309,30 @@ export function buildDocumentOrderFromPreviewData(
     postalCode,
     country: documentData.customer.country ?? "",
   };
+
+  const customer: DocumentCustomer = {
+    id: options?.customerId ?? "preview-customer",
+    name: documentData.customer.name,
+    email: documentData.customer.email,
+    phone: documentData.customer.phone,
+    address: coalesceDocumentAddress(
+      documentData.customer.primaryAddress,
+      documentData.customer.billingAddress,
+      documentData.customer.shippingAddress,
+      previewCustomerAddress,
+    ),
+  };
+
+  const billingAddress = coalesceDocumentAddress(
+    documentData.order.billingAddress,
+    documentData.customer.billingAddress,
+    documentData.customer.primaryAddress,
+    previewCustomerAddress,
+  );
+  const shippingAddress = coalesceDocumentAddress(
+    documentData.order.shippingAddress,
+    documentData.customer.shippingAddress,
+  );
 
   const lineItems: DocumentLineItem[] = documentData.order.lineItems.map(
     (item, index) => ({
@@ -221,11 +342,12 @@ export function buildDocumentOrderFromPreviewData(
       description: item.description,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      discountPercent: 0,
-      discountAmount: 0,
-      taxAmount: 0,
+      discountPercent: item.discountPercent ?? 0,
+      discountAmount: item.discountAmount ?? 0,
+      taxAmount: item.taxAmount ?? 0,
+      taxRate: item.taxRate ?? null,
       total: item.total,
-      notes: null,
+      notes: item.notes ?? null,
     })
   );
 
@@ -236,13 +358,16 @@ export function buildDocumentOrderFromPreviewData(
     dueDate,
     customer,
     billingAddress,
+    shippingAddress,
     lineItems,
     subtotal: documentData.order.subtotal,
     discount: documentData.order.discount,
     discountPercent: 0,
-    taxRate: (documentData.order.taxRate ?? 0.1) * 100,
+    shippingAmount: documentData.order.shippingAmount ?? undefined,
     taxAmount: documentData.order.taxAmount,
     total: documentData.order.total,
+    paidAmount: documentData.order.paidAmount ?? undefined,
+    balanceDue: documentData.order.balanceDue ?? undefined,
     customerNotes: documentData.order.notes ?? null,
     internalNotes: null,
   };

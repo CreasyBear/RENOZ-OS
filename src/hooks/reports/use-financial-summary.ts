@@ -7,6 +7,11 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getFinancialSummaryReport, generateFinancialSummaryReport } from '@/server/functions/reports';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 import type {
   GetFinancialSummaryReportInput,
   GenerateFinancialSummaryReportInput,
@@ -27,15 +32,28 @@ export function useFinancialSummaryReport(options: Partial<UseFinancialSummaryRe
   return useQuery({
     queryKey: queryKeys.reports.financialSummary(fromStr, toStr, periodType),
     queryFn: async () => {
-      const result = await getFinancialSummaryReport({
-        data: {
-          dateFrom: dateFrom instanceof Date ? dateFrom : new Date(fromStr),
-          dateTo: dateTo instanceof Date ? dateTo : new Date(toStr),
-          periodType,
-        },
-      });
-      if (result == null) throw new Error('Financial summary report returned no data');
-      return result;
+      try {
+        const result = await getFinancialSummaryReport({
+          data: {
+            dateFrom: dateFrom instanceof Date ? dateFrom : new Date(fromStr),
+            dateTo: dateTo instanceof Date ? dateTo : new Date(toStr),
+            periodType,
+          },
+        });
+        return requireReadResult(result, {
+          message: 'Financial summary report returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial summary is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Financial summary is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!dateFromStr && !!dateToStr,
     staleTime: 60 * 1000,

@@ -25,6 +25,11 @@ import type {
 } from '@/server/functions/jobs/job-batch-operations';
 import { queryKeys, type JobFilters } from '@/lib/query-keys';
 import { useCurrentOrg } from '@/hooks/auth';
+import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
 
 // ============================================================================
 // JOB LIST HOOKS
@@ -54,25 +59,43 @@ export function useJobs(options: UseJobsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.jobs.list(filters),
     queryFn: async () => {
-      if (!organizationId) {
-        return { jobs: [], total: 0 };
-      }
-      const result = await listJobAssignments({
-        data: {
-          organizationId,
-          filters: {
-            installerIds: filters?.installerIds,
-            statuses: filters?.statuses as ('scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled')[] | undefined,
-            dateFrom: filters?.dateFrom,
-            dateTo: filters?.dateTo,
-            search: filters?.search,
-            limit: filters?.limit ?? 50,
-            offset: filters?.offset ?? 0,
+      try {
+        if (!organizationId) {
+          return { jobs: [], total: 0 };
+        }
+        const result = await listJobAssignments({
+          data: {
+            organizationId,
+            filters: {
+              installerIds: filters?.installerIds,
+              statuses: filters?.statuses as (
+                | 'scheduled'
+                | 'in_progress'
+                | 'on_hold'
+                | 'completed'
+                | 'cancelled'
+              )[]
+                | undefined,
+              dateFrom: filters?.dateFrom,
+              dateTo: filters?.dateTo,
+              search: filters?.search,
+              limit: filters?.limit ?? 50,
+              offset: filters?.offset ?? 0,
+            },
           },
-        },
-      });
-      if (result == null) throw new Error('Jobs list returned no data');
-      return result;
+        });
+        return requireReadResult(result, {
+          message: 'Jobs list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage: 'Jobs are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Jobs are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!organizationId,
     staleTime: 30 * 1000, // 30 seconds
@@ -89,11 +112,24 @@ export function useJob(jobId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.jobs.detail(jobId),
     queryFn: async () => {
-      const result = await getJobAssignment({
-        data: { id: jobId, organizationId: organizationId! },
-      });
-      if (result == null) throw new Error('Job not found');
-      return result;
+      try {
+        const result = await getJobAssignment({
+          data: { id: jobId, organizationId: organizationId! },
+        });
+        return requireReadResult(result, {
+          message: 'Job not found',
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Job details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested job could not be found.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Job details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested job could not be found.',
+        });
+      }
     },
     enabled: enabled && !!jobId && !!organizationId,
     staleTime: 30 * 1000,
@@ -258,20 +294,35 @@ export function useJobAssignmentsForKanban(options: UseJobAssignmentsForKanbanOp
   return useQuery({
     queryKey: queryKeys.jobAssignments.kanbanSelector({ organizationId }),
     queryFn: async () => {
-      if (!organizationId) {
-        return { jobs: [] as Array<{ id: string; jobNumber: string; title: string }> };
-      }
-      return listAssignmentsFn({
-        data: {
-          organizationId,
-          filters: {
-            limit,
-            offset: 0,
-            sortBy: 'scheduledDate',
-            sortOrder: 'asc',
+      try {
+        if (!organizationId) {
+          return { jobs: [] as Array<{ id: string; jobNumber: string; title: string }> };
+        }
+        const result = await listAssignmentsFn({
+          data: {
+            organizationId,
+            filters: {
+              limit,
+              offset: 0,
+              sortBy: 'scheduledDate',
+              sortOrder: 'asc',
+            },
           },
-        },
-      });
+        });
+        return requireReadResult(result, {
+          message: 'Jobs list returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Job assignments are temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Job assignments are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!organizationId,
     staleTime: 60 * 1000, // 1 minute

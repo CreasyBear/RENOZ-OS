@@ -11,6 +11,7 @@ import { getPreferences, setPreference, setPreferences } from "@/server/function
 import { toast } from "@/hooks/_shared/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { PREFERENCE_CATEGORIES } from "@/lib/schemas/users";
+import { normalizeReadQueryError } from "@/lib/read-path-policy";
 
 export interface NotificationPreferences {
   email: boolean;
@@ -75,14 +76,19 @@ function mapFieldToDbKey(field: keyof NotificationPreferences): string {
 export function useNotificationPreferences() {
   const queryClient = useQueryClient();
 
-  const { data: rawPreferences, isLoading } = useQuery({
+  const { data: rawPreferences, isLoading, error } = useQuery({
     queryKey: queryKeys.user.preferences("notifications"),
     queryFn: async () => {
-      const result = await getPreferences({
-        data: { category: PREFERENCE_CATEGORIES.NOTIFICATIONS } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getPreferences({
+          data: { category: PREFERENCE_CATEGORIES.NOTIFICATIONS }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Notification preferences are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
   });
 
@@ -165,6 +171,7 @@ export function useNotificationPreferences() {
   return {
     preferences,
     isLoading,
+    error,
     isPending,
     updatePreference,
     updatePreferences,

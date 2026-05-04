@@ -10,6 +10,7 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { getJobStatus, getActiveJobs } from '@/server/automation-jobs';
 import type { Job, JobStatus } from '@/lib/schemas/automation-jobs';
@@ -98,12 +99,15 @@ export function useJobProgress({
         const result = await getJobStatusFn({ data: { jobId } });
         // Reset backoff on success
         consecutiveErrorsRef.current = 0;
-        if (result == null) throw new Error('Job status returned no data');
         return result;
       } catch (err) {
         // Exponential backoff on error (max 30s)
         consecutiveErrorsRef.current += 1;
-        throw err;
+        throw normalizeReadQueryError(err, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Job progress is temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested job could not be found.',
+        });
       }
     },
     enabled: enabled && !!jobId,
@@ -186,11 +190,13 @@ export function useActiveJobs({
       try {
         const result = await getActiveJobsFn();
         setConsecutiveErrors(0); // Reset on success
-        if (result == null) throw new Error('Active jobs returned no data');
         return result;
       } catch (err) {
         setConsecutiveErrors((prev) => prev + 1);
-        throw err;
+        throw normalizeReadQueryError(err, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Active jobs are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled,

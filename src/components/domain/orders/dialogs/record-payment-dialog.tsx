@@ -4,7 +4,7 @@
  * Dialog for recording new payments against an order.
  * Uses TanStack Form for form handling per FORM-STANDARDS.md.
  *
- * @see docs/design-system/FORM-STANDARDS.md
+ * @see docs/reference/form-standards.md
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json
  */
 

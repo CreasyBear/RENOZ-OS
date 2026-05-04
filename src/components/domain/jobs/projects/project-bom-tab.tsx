@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -879,7 +880,7 @@ function BomItemsTable({
 // ============================================================================
 
 export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
-  const { data: bomData, isLoading } = useProjectBom({ projectId });
+  const { data: bomData, isLoading, error, refetch } = useProjectBom({ projectId });
   const createBom = useCreateProjectBom(projectId);
   const removeItem = useRemoveBomItem(projectId);
   const removeItems = useRemoveBomItems(projectId);
@@ -896,6 +897,18 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
 
   const bom = bomData?.data?.bom ?? undefined;
   const items: BomItemWithProduct[] = bomData?.data?.items ?? [];
+  const bomWarning = error ? (
+    <Alert variant={bomData === undefined ? 'destructive' : 'default'}>
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>{bomData === undefined ? 'Materials unavailable' : 'Showing cached materials'}</AlertTitle>
+      <AlertDescription className="flex items-center justify-between gap-3">
+        <span>{error.message || 'Project materials are temporarily unavailable. Please refresh and try again.'}</span>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
 
   const {
     selectedItems,
@@ -1026,7 +1039,9 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
             </p>
           </div>
         </div>
+        {bomWarning}
 
+        {bomData === undefined && error ? null : (
         <Card className="p-12 text-center">
           <div className="p-4 bg-muted rounded-full w-fit mx-auto mb-4">
             <Calculator className="h-8 w-8 text-muted-foreground" />
@@ -1079,6 +1094,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
             </Button>
           </div>
         </Card>
+        )}
       </div>
     );
   }
@@ -1087,6 +1103,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
 
   return (
     <div className="space-y-6">
+      {bomWarning}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

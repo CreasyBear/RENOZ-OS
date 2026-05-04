@@ -11,7 +11,7 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { ARAgingReport } from '@/components/domain/financial/ar-aging-report';
 import { useARAgingReport } from '@/hooks/financial';
@@ -25,17 +25,7 @@ export const Route = createFileRoute('/_authenticated/financial/ar-aging')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="AR Aging Report"
-        description="Accounts receivable aging analysis by customer"
-      />
-      <PageLayout.Content>
-        <FinancialTableSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <FinancialTableSkeleton />,
 });
 
 // ============================================================================
@@ -130,22 +120,14 @@ function ARAgingReportPage() {
   }, [data]);
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="AR Aging Report"
-        description="Accounts receivable aging analysis by customer"
-      />
-      <PageLayout.Content>
-        <ARAgingReport
-          report={data}
-          isLoading={isLoading}
-          error={error}
-          commercialOnly={commercialOnly}
-          onCommercialOnlyChange={setCommercialOnly}
-          onCustomerClick={handleCustomerClick}
-          onExport={handleExport}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    <ARAgingReport
+      report={data}
+      isLoading={isLoading}
+      error={error}
+      commercialOnly={commercialOnly}
+      onCommercialOnlyChange={setCommercialOnly}
+      onCustomerClick={handleCustomerClick}
+      onExport={handleExport}
+    />
   );
 }

@@ -8,6 +8,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   submitInternalFeedback,
@@ -46,11 +47,16 @@ export function useIssueFeedback({ issueId, enabled = true }: UseIssueFeedbackOp
   return useQuery({
     queryKey: queryKeys.support.csatDetail(issueId),
     queryFn: async () => {
-      const result = await getIssueFeedback({
-        data: { issueId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getIssueFeedback({
+          data: { issueId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage: 'Issue feedback is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!issueId,
     staleTime: 60 * 1000, // 1 minute
@@ -107,18 +113,22 @@ export function useFeedbackList({
   return useQuery({
     queryKey: queryKeys.support.csatListFiltered(filters),
     queryFn: async () => {
-      const result = await listFeedback({
-        data: {
-          ...filters,
-          page: page ?? 1,
-          pageSize: pageSize ?? 20,
-          sortBy: sortBy ?? 'submittedAt',
-          sortOrder: sortOrder ?? 'desc',
-        },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listFeedback({
+          data: {
+            ...filters,
+            page: page ?? 1,
+            pageSize: pageSize ?? 20,
+            sortBy: sortBy ?? 'submittedAt',
+            sortOrder: sortOrder ?? 'desc',
+          },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Feedback history is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -144,9 +154,14 @@ export function useCsatMetrics({ startDate, endDate, enabled = true }: UseCsatMe
   return useQuery({
     queryKey: queryKeys.support.csatMetricsWithFilters(filters),
     queryFn: async () => {
-      const result = await getCsatMetrics({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getCsatMetrics({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'CSAT metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -198,11 +213,16 @@ export function useValidateFeedbackToken({
   return useQuery({
     queryKey: queryKeys.support.csatToken(token),
     queryFn: async () => {
-      const result = await validateFeedbackToken({
-        data: { token } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await validateFeedbackToken({
+          data: { token }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Feedback link validation is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!token,
     retry: false,

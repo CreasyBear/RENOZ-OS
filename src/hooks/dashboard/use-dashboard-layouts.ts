@@ -12,6 +12,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listDashboardLayouts,
@@ -59,9 +60,14 @@ export function useDashboardLayouts(options: UseDashboardLayoutsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.list(filters),
     queryFn: async () => {
-      const result = await listDashboardLayouts({ data: filters as ListDashboardLayoutsInput });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listDashboardLayouts({ data: filters as ListDashboardLayoutsInput });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Dashboard layouts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
@@ -79,11 +85,17 @@ export function useDashboardLayout({ id, enabled = true }: UseDashboardLayoutOpt
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.detail(id),
     queryFn: async () => {
-      const result = await getDashboardLayout({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getDashboardLayout({
+          data: { id }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Dashboard layout details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested dashboard layout could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
@@ -97,9 +109,14 @@ export function useUserLayout(enabled = true) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.userLayout(),
     queryFn: async () => {
-      const result = await getUserLayout();
-      if (result == null) throw new Error('User layout returned no data');
-      return result;
+      try {
+        return await getUserLayout();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Your dashboard layout is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -113,9 +130,14 @@ export function useAvailableWidgets(enabled = true) {
   return useQuery({
     queryKey: queryKeys.dashboard.layouts.widgets(),
     queryFn: async () => {
-      const result = await getAvailableWidgets();
-      if (result == null) throw new Error('Available widgets returned no data');
-      return result;
+      try {
+        return await getAvailableWidgets();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Available dashboard widgets are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes - widgets don't change often

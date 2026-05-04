@@ -28,6 +28,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
@@ -233,7 +235,7 @@ export function UpcomingCallsWidget({
   >(null);
 
   // Fetch upcoming calls
-  const { data: callsData, isLoading } = useScheduledCalls({
+  const { data: callsData, isLoading, error, refetch } = useScheduledCalls({
     assigneeId: userId,
     status: "pending",
     fromDate: new Date(),
@@ -276,6 +278,34 @@ export function UpcomingCallsWidget({
     );
   }
 
+  if (error && !callsData) {
+    return (
+      <Card className={className} aria-label="upcoming-calls-widget">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            Upcoming Calls
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTitle>Upcoming calls unavailable</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>
+                {error instanceof Error
+                  ? error.message
+                  : "Upcoming calls are temporarily unavailable. Please refresh and try again."}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Empty state
   if (calls.length === 0) {
     return (
@@ -304,13 +334,30 @@ export function UpcomingCallsWidget({
   }
 
   return (
-    <UpcomingCallsWidgetPresenter
-      overdueCalls={overdueCalls}
-      upcomingCalls={upcomingCalls}
-      className={className}
-      onCallComplete={setSelectedCallForOutcome}
-      selectedCallForOutcome={selectedCallForOutcome}
-      onSelectedCallChange={setSelectedCallForOutcome}
-    />
+    <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached upcoming calls</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Upcoming calls are temporarily unavailable. Please refresh and try again."}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <UpcomingCallsWidgetPresenter
+        overdueCalls={overdueCalls}
+        upcomingCalls={upcomingCalls}
+        className={className}
+        onCallComplete={setSelectedCallForOutcome}
+        selectedCallForOutcome={selectedCallForOutcome}
+        onSelectedCallChange={setSelectedCallForOutcome}
+      />
+    </div>
   );
 }

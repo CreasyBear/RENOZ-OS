@@ -133,6 +133,9 @@ export function useCreateOrderPayment(orderId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(orderId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
     },
   });
 }
@@ -163,6 +166,9 @@ export function useUpdateOrderPayment(orderId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(orderId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
     },
   });
 }
@@ -188,6 +194,9 @@ export function useDeleteOrderPayment(orderId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(orderId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
     },
   });
 }
@@ -224,6 +233,9 @@ export function useCreateRefundPayment(orderId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(orderId),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
     },
   });
 }

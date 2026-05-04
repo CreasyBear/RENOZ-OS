@@ -13,7 +13,18 @@
 import { cache } from 'react';
 import { eq, and, gte, lte, sql, desc, asc, inArray, isNull, ilike, or, exists } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { warranties, warrantyItems, warrantyPolicies, warrantyClaims, customers, products } from 'drizzle/schema';
+import {
+  warranties,
+  warrantyItems,
+  warrantyPolicies,
+  warrantyClaims,
+  customers,
+  products,
+  orders,
+  orderShipments,
+  warrantyEntitlements,
+  warrantyOwnerRecords,
+} from 'drizzle/schema';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -26,6 +37,7 @@ import {
   getExpiringWarrantiesSchema,
   getExpiringWarrantiesReportSchema,
   getWarrantySchema,
+  transferWarrantySchema,
   warrantyFiltersSchema,
   updateWarrantyOptOutSchema,
   updateCustomerWarrantyOptOutSchema,
@@ -38,6 +50,8 @@ import {
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { verifyWarrantyExists, verifyCustomerExists } from '@/server/functions/_shared/entity-verification';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { getWarrantyServiceMissionControlContext } from '@/server/functions/service/_shared/service-resolver';
+import { transferServiceSystemOwnershipTx } from '@/server/functions/service/_shared/service-writer';
 // Types are now imported from @/lib/schemas/warranty - do not define inline
 
 // ============================================================================
@@ -539,6 +553,12 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
         organizationId: warranties.organizationId,
         customerId: warranties.customerId,
         customerName: customers.name,
+        ownerRecordId: warrantyOwnerRecords.id,
+        ownerRecordFullName: warrantyOwnerRecords.fullName,
+        ownerRecordEmail: warrantyOwnerRecords.email,
+        ownerRecordPhone: warrantyOwnerRecords.phone,
+        ownerRecordAddress: warrantyOwnerRecords.address,
+        ownerRecordNotes: warrantyOwnerRecords.notes,
         productId: warranties.productId,
         productName: products.name,
         productSerial: warranties.productSerial,
@@ -555,6 +575,18 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
         lastExpiryAlertSent: warranties.lastExpiryAlertSent,
         certificateUrl: warranties.certificateUrl,
         notes: warranties.notes,
+        activatedAt: warranties.activatedAt,
+        sourceEntitlementId: warrantyEntitlements.id,
+        sourceEntitlementStatus: warrantyEntitlements.status,
+        sourceEntitlementEvidenceType: warrantyEntitlements.evidenceType,
+        sourceEntitlementIssueCode: warrantyEntitlements.provisioningIssueCode,
+        sourceEntitlementDeliveredAt: warrantyEntitlements.deliveredAt,
+        sourceEntitlementOrderId: orders.id,
+        sourceEntitlementOrderNumber: orders.orderNumber,
+        sourceEntitlementShipmentId: orderShipments.id,
+        sourceEntitlementShipmentNumber: orderShipments.shipmentNumber,
+        sourceEntitlementProductSerial: warrantyEntitlements.productSerial,
+        sourceEntitlementUnitSequence: warrantyEntitlements.unitSequence,
         createdAt: warranties.createdAt,
         updatedAt: warranties.updatedAt,
       })
@@ -562,6 +594,10 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
       .innerJoin(customers, eq(customers.id, warranties.customerId))
       .innerJoin(products, eq(products.id, warranties.productId))
       .innerJoin(warrantyPolicies, eq(warrantyPolicies.id, warranties.warrantyPolicyId))
+      .leftJoin(warrantyOwnerRecords, eq(warrantyOwnerRecords.id, warranties.ownerRecordId))
+      .leftJoin(warrantyEntitlements, eq(warrantyEntitlements.id, warranties.sourceEntitlementId))
+      .leftJoin(orders, eq(orders.id, warrantyEntitlements.orderId))
+      .leftJoin(orderShipments, eq(orderShipments.id, warrantyEntitlements.shipmentId))
       .where(and(eq(warranties.id, id), eq(warranties.organizationId, organizationId)))
       .limit(1);
 
@@ -570,7 +606,8 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
     }
 
     const w = result[0];
-    const items = await db
+    const [items, serviceMissionControl] = await Promise.all([
+      db
       .select({
         id: warrantyItems.id,
         productId: warrantyItems.productId,
@@ -590,13 +627,31 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
           eq(warrantyItems.organizationId, organizationId)
         )
       )
-      .orderBy(asc(warrantyItems.warrantyStartDate));
+      .orderBy(asc(warrantyItems.warrantyStartDate)),
+      getWarrantyServiceMissionControlContext(organizationId, w.id),
+    ]);
     return {
       id: w.id,
       warrantyNumber: w.warrantyNumber,
       organizationId: w.organizationId,
       customerId: w.customerId,
       customerName: w.customerName,
+      serviceSystem: serviceMissionControl.serviceSystem,
+      currentOwner: serviceMissionControl.currentOwner,
+      ownershipHistorySummary: serviceMissionControl.ownershipHistorySummary,
+      serviceLinkageStatus: serviceMissionControl.serviceLinkageStatus,
+      pendingServiceReview: serviceMissionControl.pendingServiceReview,
+      systemHistoryPreview: serviceMissionControl.systemHistoryPreview,
+      ownerRecord: w.ownerRecordId
+        ? {
+            id: w.ownerRecordId,
+            fullName: w.ownerRecordFullName ?? '',
+            email: w.ownerRecordEmail,
+            phone: w.ownerRecordPhone,
+            address: w.ownerRecordAddress ?? null,
+            notes: w.ownerRecordNotes,
+          }
+        : null,
       productId: w.productId,
       productName: w.productName,
       productSerial: w.productSerial,
@@ -613,6 +668,22 @@ const _getWarrantyCached = cache(async (id: string, organizationId: string): Pro
       lastExpiryAlertSent: w.lastExpiryAlertSent?.toISOString() ?? null,
       certificateUrl: w.certificateUrl,
       notes: w.notes,
+      activatedAt: w.activatedAt?.toISOString() ?? null,
+      sourceEntitlement: w.sourceEntitlementId
+        ? {
+            id: w.sourceEntitlementId,
+            status: w.sourceEntitlementStatus!,
+            evidenceType: w.sourceEntitlementEvidenceType!,
+            provisioningIssueCode: w.sourceEntitlementIssueCode,
+            deliveredAt: w.sourceEntitlementDeliveredAt!.toISOString(),
+            orderId: w.sourceEntitlementOrderId!,
+            orderNumber: w.sourceEntitlementOrderNumber,
+            shipmentId: w.sourceEntitlementShipmentId!,
+            shipmentNumber: w.sourceEntitlementShipmentNumber,
+            productSerial: w.sourceEntitlementProductSerial,
+            unitSequence: w.sourceEntitlementUnitSequence,
+          }
+        : null,
       createdAt: w.createdAt.toISOString(),
       updatedAt: w.updatedAt.toISOString(),
       items: items.map((item) => ({
@@ -888,35 +959,36 @@ export const voidWarranty = createServerFn({ method: 'POST' })
  * Cannot transfer if there are open claims (submitted, under_review, approved)
  */
 export const transferWarranty = createServerFn({ method: 'POST' })
-  .inputValidator(
-    z.object({
-      id: z.string().uuid(),
-      newCustomerId: z.string().uuid('Invalid customer ID'),
-      reason: z.string().max(2000).optional(),
-    })
-  )
+  .inputValidator(transferWarrantySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const logger = createActivityLoggerWithContext(ctx);
-    const { id, newCustomerId, reason } = data;
+    const { id, newOwner, reason } = data;
 
     // Verify warranty exists and belongs to organization
-    const existing = await db.query.warranties.findFirst({
-      where: and(
-        eq(warranties.id, id),
-        eq(warranties.organizationId, ctx.organizationId),
-        isNull(warranties.deletedAt)
-      ),
-    });
+    const existing = await db
+      .select({
+        id: warranties.id,
+        warrantyNumber: warranties.warrantyNumber,
+        status: warranties.status,
+        customerId: warranties.customerId,
+        serviceSystemId: warranties.serviceSystemId,
+      })
+      .from(warranties)
+      .where(
+        and(
+          eq(warranties.id, id),
+          eq(warranties.organizationId, ctx.organizationId),
+          isNull(warranties.deletedAt)
+        )
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
 
     if (!existing) {
       throw new NotFoundError('Warranty not found', 'warranty');
     }
 
-    // Guard: Cannot transfer if already transferred or voided
-    if (existing.status === 'transferred') {
-      throw new ValidationError('Warranty is already transferred');
-    }
     if (existing.status === 'voided') {
       throw new ValidationError('Cannot transfer a voided warranty');
     }
@@ -926,45 +998,50 @@ export const transferWarranty = createServerFn({ method: 'POST' })
       throw new ValidationError('Cannot transfer warranty with open claims. Resolve or cancel all claims first.');
     }
 
-    // Verify new customer exists and belongs to organization
-    const newCustomer = await db.query.customers.findFirst({
-      where: and(eq(customers.id, newCustomerId), eq(customers.organizationId, ctx.organizationId)),
+    const transferResult = await db.transaction(async (tx) => {
+      let serviceSystemId = existing.serviceSystemId;
+
+      if (!serviceSystemId) {
+        throw new ValidationError(
+          'This warranty is not yet linked to a service system. Resolve the system linkage before transferring ownership.'
+        );
+      }
+
+      return transferServiceSystemOwnershipTx(tx, {
+        organizationId: ctx.organizationId,
+        serviceSystemId,
+        newOwner: {
+          fullName: newOwner.fullName,
+          email: newOwner.email ?? undefined,
+          phone: newOwner.phone ?? undefined,
+          address: newOwner.address,
+          notes: newOwner.notes ?? undefined,
+        },
+        reason,
+        effectiveAt: new Date(),
+        userId: ctx.user.id,
+      });
     });
-
-    if (!newCustomer) {
-      throw new NotFoundError('New customer not found', 'customer');
-    }
-
-    // Update warranty customer and status
-    await db
-      .update(warranties)
-      .set({
-        customerId: newCustomerId,
-        status: 'transferred',
-        updatedAt: new Date(),
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(warranties.id, id));
 
     // Log activity
     logger.logAsync({
       entityType: 'warranty',
       entityId: id,
       action: 'updated',
-      description: `Transferred warranty: ${existing.warrantyNumber} to customer ${newCustomer.name}${reason ? ` - ${reason}` : ''}`,
+      description: `Transferred system ownership for warranty ${existing.warrantyNumber} to ${transferResult.newOwner.fullName}${reason ? ` - ${reason}` : ''}`,
       changes: {
-        before: { customerId: existing.customerId, status: existing.status },
-        after: { customerId: newCustomerId, status: 'transferred' },
-        fields: ['customerId', 'status'],
+        before: { ownerRecordId: null },
+        after: { ownerName: transferResult.newOwner.fullName },
+        fields: ['ownerRecordId'],
       },
       metadata: {
         warrantyNumber: existing.warrantyNumber,
-        previousStatus: existing.status,
-        newStatus: 'transferred',
+        customerId: existing.customerId,
         reason: reason ?? undefined,
         customFields: {
-          previousCustomerId: existing.customerId,
-          newCustomerId,
+          serviceSystemId: existing.serviceSystemId,
+          newOwnerId: transferResult.newOwner.id,
+          newOwnerName: transferResult.newOwner.fullName,
         },
       },
     });
@@ -973,7 +1050,8 @@ export const transferWarranty = createServerFn({ method: 'POST' })
       success: true, 
       id,
       previousCustomerId: existing.customerId,
-      newCustomerId,
+      serviceSystemId: existing.serviceSystemId,
+      newOwnerId: transferResult.newOwner.id,
     };
   });
 

@@ -24,6 +24,7 @@ import {
   createShipment,
   markShipped,
   deleteShipment,
+  reopenShipment,
 } from '@/server/functions/orders/order-shipments';
 
 // ============================================================================
@@ -328,6 +329,28 @@ export function useDeleteShipment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables) });
       invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+    },
+  });
+}
+
+export function useReopenShipment() {
+  const queryClient = useQueryClient();
+  const reopenFn = useServerFn(reopenShipment);
+
+  return useMutation({
+    mutationFn: async (input: { id: string; idempotencyKey: string; reason?: string }) => {
+      try {
+        return await reopenFn({ data: input });
+      } catch (error) {
+        throw normalizeShipmentMutationError(error, 'Unable to reopen shipment.');
+      }
+    },
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipmentDetail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.details() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
+      invalidateOrderCollectionQueries(queryClient);
     },
   });
 }

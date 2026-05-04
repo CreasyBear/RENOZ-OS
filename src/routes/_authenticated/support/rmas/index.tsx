@@ -14,26 +14,24 @@ import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
 import {
+  linkedIssueOpenStateSchema,
+  rmaExecutionStatusSchema,
+  rmaReasonSchema,
+  rmaResolutionSchema,
+  rmaStatusSchema,
+} from '@/lib/schemas/support/rma';
+import {
   DEFAULT_RMA_SORT_DIRECTION,
   DEFAULT_RMA_SORT_FIELD,
   RMA_SORT_FIELDS,
 } from '@/components/domain/support/rma/rma-sorting';
 
 export const rmasSearchSchema = z.object({
-  status: z
-    .enum(['requested', 'approved', 'received', 'processed', 'rejected'])
-    .optional(),
-  reason: z
-    .enum([
-      'defective',
-      'damaged_in_shipping',
-      'wrong_item',
-      'not_as_described',
-      'performance_issue',
-      'installation_failure',
-      'other',
-    ])
-    .optional(),
+  status: rmaStatusSchema.optional(),
+  reason: rmaReasonSchema.optional(),
+  resolution: rmaResolutionSchema.optional(),
+  executionStatus: rmaExecutionStatusSchema.optional(),
+  linkedIssueOpenState: linkedIssueOpenStateSchema.optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(20),

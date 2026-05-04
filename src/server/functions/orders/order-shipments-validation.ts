@@ -8,6 +8,7 @@ import { orderLineItems, orderLineSerialAllocations, serializedItems } from 'dri
 import { products } from 'drizzle/schema/products/products';
 import type { ShipmentStatus } from '@/lib/schemas';
 import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
+import { readActiveReservationsForLineItems } from './order-inventory-reservations';
 
 export interface ValidateShipmentItem {
   orderLineItemId: string;
@@ -94,6 +95,10 @@ export async function validateShipmentItems(
     orderId,
     excludeShipmentId: options?.excludeShipmentId,
   });
+  const activeReservationsByLineItem = await readActiveReservationsForLineItems(executor, {
+    organizationId,
+    orderLineItemIds: lineItemIds,
+  });
   const canonicalAllocations =
     lineItemIds.length > 0
       ? await executor
@@ -141,6 +146,19 @@ export async function validateShipmentItems(
           `Only ${available} picked unit${available !== 1 ? 's are' : ' is'} available for shipment, requested ${item.quantity}`,
         ],
       });
+    }
+
+    if (!lineData.isSerialized && lineData.productId && item.quantity > 0) {
+      const reservedQuantity = (activeReservationsByLineItem.get(item.orderLineItemId) ?? [])
+        .reduce((sum, reservation) => sum + reservation.quantity, 0);
+
+      if (item.quantity > reservedQuantity) {
+        throw new ValidationError('Picked inventory is not reserved', {
+          [item.orderLineItemId]: [
+            `Only ${reservedQuantity} reserved picked unit${reservedQuantity !== 1 ? 's are' : ' is'} available for "${lineData.description}". Unpick and pick this line again so stock is reserved before shipping.`,
+          ],
+        });
+      }
     }
 
     if (lineData.isSerialized && item.quantity > 0) {

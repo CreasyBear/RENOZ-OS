@@ -35,6 +35,8 @@ export interface ActivityMetadata {
   requestId?: string;
   reason?: string;
   assignedTo?: string;
+  format?: string;
+  recordCount?: number;
   customerId?: string;
   customerName?: string;
   orderId?: string;
@@ -54,9 +56,18 @@ export interface ActivityMetadata {
   notes?: string;
   noteId?: string;
   contentPreview?: string;
+  noteTitle?: string;
+  noteImportance?: string;
   logType?: string;
+  fullNotes?: string;
   status?: string;
   changedFields?: string[];
+  filename?: string;
+  fileSize?: number;
+  documentType?: string;
+  isRegeneration?: boolean;
+  regenerationCount?: number;
+  scheduledDate?: string;
   previousStage?: string;
   newStage?: string;
   stage?: string;

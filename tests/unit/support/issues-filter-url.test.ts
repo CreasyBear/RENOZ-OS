@@ -10,6 +10,20 @@
 import { describe, it, expect } from 'vitest';
 import { fromUrlParams, toUrlParams } from '@/lib/utils/issues-filter-url';
 
+const baseFilters = {
+  search: '',
+  status: [],
+  priority: [],
+  assignedTo: null,
+  customerId: null,
+  nextActionType: null,
+  rmaState: 'any' as const,
+  serialState: 'any' as const,
+  warrantyState: 'any' as const,
+  orderState: 'any' as const,
+  serviceSystemState: 'any' as const,
+};
+
 describe('issues-filter-url', () => {
   describe('fromUrlParams', () => {
     it('parses empty search to defaults', () => {
@@ -50,38 +64,45 @@ describe('issues-filter-url', () => {
       const result = fromUrlParams({ assignedToUserId: userId });
       expect(result.assignedTo).toBe(userId);
     });
+
+    it('maps legacy has* params to present lineage states', () => {
+      const result = fromUrlParams({ hasWarranty: true, hasSerial: true });
+      expect(result.warrantyState).toBe('present');
+      expect(result.serialState).toBe('present');
+      expect(result.orderState).toBe('any');
+    });
+
+    it('parses nextActionType and rmaState', () => {
+      const result = fromUrlParams({
+        nextActionType: 'create_rma',
+        rmaState: 'blocked',
+      });
+      expect(result.nextActionType).toBe('create_rma');
+      expect(result.rmaState).toBe('blocked');
+    });
   });
 
   describe('toUrlParams', () => {
     it('outputs comma-separated status for multi-value', () => {
       const result = toUrlParams({
-        search: '',
+        ...baseFilters,
         status: ['open', 'in_progress'],
-        priority: [],
-        assignedTo: null,
-        customerId: null,
       });
       expect(result.status).toBe('open,in_progress');
     });
 
     it('outputs comma-separated priority for multi-value', () => {
       const result = toUrlParams({
-        search: '',
-        status: [],
+        ...baseFilters,
         priority: ['critical', 'high'],
-        assignedTo: null,
-        customerId: null,
       });
       expect(result.priority).toBe('critical,high');
     });
 
     it('outputs assignedToFilter me when assignedTo is me', () => {
       const result = toUrlParams({
-        search: '',
-        status: [],
-        priority: [],
+        ...baseFilters,
         assignedTo: 'me',
-        customerId: null,
       });
       expect(result.assignedToFilter).toBe('me');
       expect(result.assignedToUserId).toBeUndefined();
@@ -89,11 +110,8 @@ describe('issues-filter-url', () => {
 
     it('outputs assignedToFilter unassigned when assignedTo is unassigned', () => {
       const result = toUrlParams({
-        search: '',
-        status: [],
-        priority: [],
+        ...baseFilters,
         assignedTo: 'unassigned',
-        customerId: null,
       });
       expect(result.assignedToFilter).toBe('unassigned');
       expect(result.assignedToUserId).toBeUndefined();
@@ -102,25 +120,41 @@ describe('issues-filter-url', () => {
     it('outputs assignedToUserId when assignedTo is user UUID', () => {
       const userId = '550e8400-e29b-41d4-a716-446655440000';
       const result = toUrlParams({
-        search: '',
-        status: [],
-        priority: [],
+        ...baseFilters,
         assignedTo: userId,
-        customerId: null,
       });
       expect(result.assignedToUserId).toBe(userId);
       expect(result.assignedToFilter).toBeUndefined();
+    });
+
+    it('writes only new lineage state params', () => {
+      const result = toUrlParams({
+        ...baseFilters,
+        serialState: 'missing',
+        warrantyState: 'present',
+      });
+      expect(result.serialState).toBe('missing');
+      expect(result.warrantyState).toBe('present');
+      expect(result.hasSerial).toBeUndefined();
+      expect(result.hasWarranty).toBeUndefined();
+    });
+
+    it('writes nextActionType and rmaState', () => {
+      const result = toUrlParams({
+        ...baseFilters,
+        nextActionType: 'create_rma',
+        rmaState: 'ready',
+      });
+      expect(result.nextActionType).toBe('create_rma');
+      expect(result.rmaState).toBe('ready');
     });
   });
 
   describe('round-trip', () => {
     it('preserves Open preset (status=open,in_progress)', () => {
       const filters = {
-        search: '',
+        ...baseFilters,
         status: ['open', 'in_progress'] as ['open', 'in_progress'],
-        priority: [],
-        assignedTo: null,
-        customerId: null,
       };
       const url = toUrlParams(filters);
       const back = fromUrlParams(url as Parameters<typeof fromUrlParams>[0]);
@@ -129,11 +163,8 @@ describe('issues-filter-url', () => {
 
     it('preserves Critical preset (priority=critical,high)', () => {
       const filters = {
-        search: '',
-        status: [],
+        ...baseFilters,
         priority: ['critical', 'high'] as ['critical', 'high'],
-        assignedTo: null,
-        customerId: null,
       };
       const url = toUrlParams(filters);
       const back = fromUrlParams(url as Parameters<typeof fromUrlParams>[0]);
@@ -142,11 +173,8 @@ describe('issues-filter-url', () => {
 
     it('preserves My Issues preset (assignedToFilter=me)', () => {
       const filters = {
-        search: '',
-        status: [],
-        priority: [],
+        ...baseFilters,
         assignedTo: 'me' as const,
-        customerId: null,
       };
       const url = toUrlParams(filters);
       const back = fromUrlParams(url as Parameters<typeof fromUrlParams>[0]);
@@ -155,11 +183,8 @@ describe('issues-filter-url', () => {
 
     it('preserves Unassigned preset (assignedToFilter=unassigned)', () => {
       const filters = {
-        search: '',
-        status: [],
-        priority: [],
+        ...baseFilters,
         assignedTo: 'unassigned' as const,
-        customerId: null,
       };
       const url = toUrlParams(filters);
       const back = fromUrlParams(url as Parameters<typeof fromUrlParams>[0]);

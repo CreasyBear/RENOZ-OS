@@ -18,7 +18,11 @@ import {
   transferWarranty,
 } from '@/server/functions/warranty';
 import { queryKeys } from '@/lib/query-keys';
-import type { WarrantyFilters } from '@/lib/schemas/warranty/warranties';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import type {
+  TransferWarrantyInput,
+  WarrantyFilters,
+} from '@/lib/schemas/warranty/warranties';
 
 export interface UseWarrantiesOptions extends Partial<WarrantyFilters> {
   enabled?: boolean;
@@ -44,9 +48,14 @@ export function useWarranties(options: UseWarrantiesOptions = {}) {
   return useQuery({
     queryKey: queryKeys.warranties.list(queryFilters),
     queryFn: async () => {
-      const result = await listWarranties({ data: queryFilters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWarranties({ data: queryFilters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranties are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
   });
@@ -57,9 +66,14 @@ export function useWarrantyStatusCounts() {
   return useQuery({
     queryKey: queryKeys.warranties.statusCounts(),
     queryFn: async () => {
-      const result = await getWarrantyStatusCounts();
-      if (result == null) throw new Error('Warranty status counts returned no data');
-      return result;
+      try {
+        return await getWarrantyStatusCounts();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Warranty status counts are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     staleTime: 30 * 1000,
   });
@@ -74,11 +88,17 @@ export function useWarranty({ id, enabled = true }: UseWarrantyOptions) {
   return useQuery({
     queryKey: queryKeys.warranties.detail(id),
     queryFn: async () => {
-      const result = await getWarranty({
-        data: { id } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getWarranty({
+          data: { id }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'Warranty details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested warranty could not be found.',
+        });
+      }
     },
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
@@ -149,14 +169,14 @@ export function useVoidWarranty() {
 }
 
 /**
- * Transfer a warranty to a new customer
+ * Transfer beneficial ownership for a warranty's linked service system.
  */
 export function useTransferWarranty() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, newCustomerId, reason }: { id: string; newCustomerId: string; reason?: string }) =>
-      transferWarranty({ data: { id, newCustomerId, reason } }),
+    mutationFn: (input: TransferWarrantyInput) =>
+      transferWarranty({ data: input }),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(variables.id) });
@@ -164,13 +184,13 @@ export function useTransferWarranty() {
       if (result.previousCustomerId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(result.previousCustomerId) });
       }
-      if (result.newCustomerId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(result.newCustomerId) });
+      if (result.serviceSystemId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.serviceSystems.detail(result.serviceSystemId) });
       }
-      toast.success('Warranty transferred successfully');
+      toast.success('Warranty ownership transferred successfully');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer warranty');
+      toast.error(error instanceof Error ? error.message : 'Failed to transfer warranty ownership');
     },
   });
 }

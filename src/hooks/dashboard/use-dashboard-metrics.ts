@@ -15,6 +15,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
+  isReadQueryError,
+  normalizeReadQueryError,
+  requireReadResult,
+} from '@/lib/read-path-policy';
+import {
   getDashboardMetrics,
   getMetricsComparison,
   getEnhancedComparison,
@@ -58,25 +63,38 @@ export function useDashboardMetrics(options: UseDashboardMetricsOptions = {}) {
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.summary(filters as Record<string, unknown>),
     queryFn: async () => {
-      const result = await getDashboardMetricsFn({ data: filters });
-      if (import.meta.env.DEV) {
-        console.debug('[useDashboardMetrics] raw-result', result);
+      try {
+        const result = await getDashboardMetricsFn({ data: filters });
+        if (import.meta.env.DEV) {
+          console.debug('[useDashboardMetrics] raw-result', result);
+        }
+        const ensuredResult = requireReadResult(result, {
+          message: 'Dashboard metrics returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
+        const dr = ensuredResult.dateRange;
+        return {
+          ...ensuredResult,
+          dateRange: {
+            from: typeof dr.from === 'string' ? new Date(dr.from) : dr.from,
+            to: typeof dr.to === 'string' ? new Date(dr.to) : dr.to,
+            preset: dr.preset,
+          },
+          lastUpdated:
+            typeof ensuredResult.lastUpdated === 'string'
+              ? new Date(ensuredResult.lastUpdated)
+              : ensuredResult.lastUpdated,
+        };
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Dashboard metrics are temporarily unavailable. Please refresh and try again.',
+        });
       }
-      if (result == null) throw new Error('Dashboard metrics returned no data');
-      // Normalize dateRange and lastUpdated from ISO strings (RPC serialization) to Date objects
-      const dr = result.dateRange;
-      return {
-        ...result,
-        dateRange: {
-          from: typeof dr.from === 'string' ? new Date(dr.from) : dr.from,
-          to: typeof dr.to === 'string' ? new Date(dr.to) : dr.to,
-          preset: dr.preset,
-        },
-        lastUpdated:
-          typeof result.lastUpdated === 'string'
-            ? new Date(result.lastUpdated)
-            : result.lastUpdated,
-      };
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds - metrics refresh frequently
@@ -102,14 +120,27 @@ export function useMetricsComparison({
       comparisonType: comparisonType === 'none' ? 'previous_period' : comparisonType,
     }),
     queryFn: async () => {
-      const result = await getMetricsComparisonFn({
-        data: { dateFrom, dateTo, comparisonType },
-      });
-      if (import.meta.env.DEV) {
-        console.debug('[useMetricsComparison] raw-result', result);
+      try {
+        const result = await getMetricsComparisonFn({
+          data: { dateFrom, dateTo, comparisonType },
+        });
+        if (import.meta.env.DEV) {
+          console.debug('[useMetricsComparison] raw-result', result);
+        }
+        return requireReadResult(result, {
+          message: 'Metrics comparison returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Metrics comparison is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Metrics comparison is temporarily unavailable. Please refresh and try again.',
+        });
       }
-      if (result == null) throw new Error('Metrics comparison returned no data');
-      return result;
     },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 60 * 1000, // 1 minute - comparison data changes less frequently
@@ -146,24 +177,37 @@ export function useEnhancedComparison({
       includeInsights,
     }),
     queryFn: async () => {
-      const result = await getEnhancedComparisonFn({
-        data: {
-          dateFrom,
-          dateTo,
-          comparisonPeriod,
-          customPreviousFrom,
-          customPreviousTo,
-          metrics,
-          includeTrend,
-          includeSignificance,
-          includeInsights,
-        },
-      });
-      if (import.meta.env.DEV) {
-        console.debug('[useEnhancedComparison] raw-result', result);
+      try {
+        const result = await getEnhancedComparisonFn({
+          data: {
+            dateFrom,
+            dateTo,
+            comparisonPeriod,
+            customPreviousFrom,
+            customPreviousTo,
+            metrics,
+            includeTrend,
+            includeSignificance,
+            includeInsights,
+          },
+        });
+        if (import.meta.env.DEV) {
+          console.debug('[useEnhancedComparison] raw-result', result);
+        }
+        return requireReadResult(result, {
+          message: 'Enhanced comparison returned no data',
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Enhanced comparison is temporarily unavailable. Please refresh and try again.',
+        });
+      } catch (error) {
+        if (isReadQueryError(error)) throw error;
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Enhanced comparison is temporarily unavailable. Please refresh and try again.',
+        });
       }
-      if (result == null) throw new Error('Enhanced comparison returned no data');
-      return result;
     },
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 60 * 1000, // 1 minute - comparison data changes less frequently

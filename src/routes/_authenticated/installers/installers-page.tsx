@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/shared/empty-state';
+import { ErrorState } from '@/components/shared/error-state';
 import {
   InstallerCard,
   InstallerCardSkeleton,
@@ -121,7 +122,7 @@ export default function InstallersPage({ search }: InstallersPageProps) {
     search: filters.search || undefined,
     status: filters.status[0],
   };
-  const { data, isLoading } = useInstallers(listFilters);
+  const { data, isLoading, error, refetch } = useInstallers(listFilters);
   const { data: usersData, isLoading: isUsersLoading } = useUsers(
     {
       page: 1,
@@ -286,6 +287,18 @@ export default function InstallersPage({ search }: InstallersPageProps) {
               <InstallerCardSkeleton key={i} />
             ))}
           </div>
+        ) : error && !data ? (
+          <ErrorState
+            title="Installer directory unavailable"
+            message={
+              error instanceof Error
+                ? error.message
+                : 'Installer directory is temporarily unavailable. Please refresh and try again.'
+            }
+            onRetry={() => {
+              void refetch();
+            }}
+          />
         ) : installers.length === 0 ? (
           <EmptyState
             icon={Search}

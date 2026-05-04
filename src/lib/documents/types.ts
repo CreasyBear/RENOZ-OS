@@ -238,6 +238,21 @@ export interface InvoiceDocumentData extends BaseDocumentData {
 }
 
 // ============================================================================
+// PRO FORMA DOCUMENT DATA
+// ============================================================================
+
+/**
+ * Pro-forma-specific document data
+ */
+export interface ProFormaDocumentData extends BaseDocumentData {
+  type: "pro-forma";
+  /** Pro-forma validity period end date */
+  validUntil: Date;
+  /** Optional payment details shown on the pro-forma */
+  paymentDetails?: DocumentPaymentDetails | null;
+}
+
+// ============================================================================
 // DISCRIMINATED UNION
 // ============================================================================
 
@@ -257,7 +272,7 @@ export interface InvoiceDocumentData extends BaseDocumentData {
  *   }
  * }
  */
-export type DocumentData = QuoteDocumentData | InvoiceDocumentData;
+export type DocumentData = QuoteDocumentData | InvoiceDocumentData | ProFormaDocumentData;
 
 // ============================================================================
 // TYPE GUARDS
@@ -275,6 +290,13 @@ export function isQuoteData(data: DocumentData): data is QuoteDocumentData {
  */
 export function isInvoiceData(data: DocumentData): data is InvoiceDocumentData {
   return data.type === "invoice";
+}
+
+/**
+ * Type guard for pro-forma document data
+ */
+export function isProFormaData(data: DocumentData): data is ProFormaDocumentData {
+  return data.type === "pro-forma";
 }
 
 // ============================================================================

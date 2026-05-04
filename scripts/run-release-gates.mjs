@@ -2,6 +2,8 @@
 /**
  * Unified release gate runner for controlled cutover.
  *
+ * Runs stable release checks that do not depend on production-only environment.
+ *
  * Runs:
  * 1. Route-intent smoke checks
  * 2. Unhappy-path regression pack
@@ -16,6 +18,17 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const ARTIFACT_DIR = path.join(ROOT, 'artifacts', 'release-gates');
+const UNHAPPY_PATH_ARGS = [
+  'vitest',
+  'run',
+  'tests/unit/orders/order-create-page-idempotency.test.tsx',
+  'tests/unit/orders/order-write-contracts.test.ts',
+  'tests/unit/orders/order-client-contracts.test.ts',
+  'tests/unit/orders/order-status-contract.test.ts',
+  'tests/unit/orders/order-shipments-facade.test.ts',
+  'tests/unit/routes/xero-webhook-route.test.ts',
+  'tests/unit/financial/xero-webhook-batch-policy.test.ts',
+];
 
 function runWithCapture(command, args = []) {
   return new Promise((resolve) => {
@@ -53,19 +66,31 @@ function extractJsonPayload(output) {
   }
 }
 
+function detectFailureHint(output) {
+  if (/listen EPERM|EMFILE|too many open files/i.test(output)) {
+    return 'This gate starts a local loopback server and can fail in restricted shells or low file-descriptor environments.';
+  }
+
+  if (/CouldntReadCurrentDirectory/i.test(output)) {
+    return 'The Bun runtime could not read the working directory in this execution environment.';
+  }
+
+  return null;
+}
+
 mkdirSync(ARTIFACT_DIR, { recursive: true });
 const generatedAt = new Date().toISOString();
 
 const checks = [
   {
     gateName: 'route-intent-smoke',
-    command: 'npm',
-    args: ['run', 'test:route-intent-smoke'],
+    command: 'node',
+    args: ['scripts/run-route-intent-smoke.mjs'],
   },
   {
     gateName: 'unhappy-path-regressions',
-    command: 'npm',
-    args: ['run', 'test:unhappy-paths'],
+    command: 'npx',
+    args: UNHAPPY_PATH_ARGS,
   },
 ];
 
@@ -75,6 +100,8 @@ let hasFailure = false;
 for (const check of checks) {
   const result = await runWithCapture(check.command, check.args);
   const parsed = extractJsonPayload(result.stdout) ?? extractJsonPayload(result.stderr);
+  const failureHint =
+    result.code === 0 ? null : detectFailureHint(`${result.stdout}\n${result.stderr}`);
   const gateResult = {
     gateName: check.gateName,
     status: result.code === 0 ? 'pass' : 'fail',
@@ -86,6 +113,7 @@ for (const check of checks) {
           .map(([key]) => key)
       : [],
     exitCode: result.code,
+    failureHint: failureHint ?? undefined,
   };
   results.push(gateResult);
   if (result.code !== 0) hasFailure = true;

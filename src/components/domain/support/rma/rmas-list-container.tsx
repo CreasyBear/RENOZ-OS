@@ -20,7 +20,13 @@ import { useRmas, useBulkApproveRma, useBulkReceiveRma } from '@/hooks/support';
 import { useTableSelection, BulkActionsBar } from '@/components/shared/data-table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RmaList } from './rma-list';
-import type { RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
+import type {
+  LinkedIssueOpenState,
+  RmaExecutionStatus,
+  RmaReason,
+  RmaResolution,
+  RmaStatus,
+} from '@/lib/schemas/support/rma';
 import { CheckCircle, Package } from 'lucide-react';
 import type { RmaSortField, SortDirection } from './rma-sorting';
 
@@ -28,6 +34,9 @@ export interface RmasListContainerProps {
   /** Filter state from URL */
   status?: RmaStatus;
   reason?: RmaReason;
+  resolution?: RmaResolution;
+  executionStatus?: RmaExecutionStatus;
+  linkedIssueOpenState?: LinkedIssueOpenState;
   search?: string;
   page?: number;
   pageSize?: number;
@@ -38,6 +47,9 @@ export interface RmasListContainerProps {
   /** Called when filters/search/page change; parent updates URL */
   onStatusFilterChange?: (value: RmaStatus | 'all') => void;
   onReasonFilterChange?: (value: RmaReason | 'all') => void;
+  onResolutionFilterChange?: (value: RmaResolution | 'all') => void;
+  onExecutionStatusFilterChange?: (value: RmaExecutionStatus | 'all') => void;
+  onLinkedIssueOpenStateChange?: (value: LinkedIssueOpenState) => void;
   onSearchChange?: (value: string) => void;
   onPageChange?: (page: number) => void;
   onSortChange?: (sortBy: RmaSortField, sortOrder: SortDirection) => void;
@@ -46,6 +58,9 @@ export interface RmasListContainerProps {
 export function RmasListContainer({
   status,
   reason,
+  resolution,
+  executionStatus,
+  linkedIssueOpenState,
   search,
   page = 1,
   pageSize = 20,
@@ -54,6 +69,9 @@ export function RmasListContainer({
   onCreateRma,
   onStatusFilterChange,
   onReasonFilterChange,
+  onResolutionFilterChange,
+  onExecutionStatusFilterChange,
+  onLinkedIssueOpenStateChange,
   onSearchChange,
   onPageChange,
   onSortChange,
@@ -63,6 +81,9 @@ export function RmasListContainer({
   const { data, isLoading, error, refetch } = useRmas({
     status,
     reason,
+    resolution,
+    executionStatus,
+    linkedIssueOpenState,
     search,
     page,
     pageSize,
@@ -72,6 +93,7 @@ export function RmasListContainer({
 
   const rmas = useMemo(() => data?.data ?? [], [data?.data]);
   const totalCount = data?.pagination?.totalCount ?? 0;
+  const hasRmas = rmas.length > 0;
 
   const {
     selectedIds,
@@ -275,6 +297,17 @@ export function RmasListContainer({
         </Alert>
       )}
 
+      {error && hasRmas ? (
+        <Alert className="mb-3">
+          <AlertTitle>Showing cached RMAs</AlertTitle>
+          <AlertDescription>
+            {error instanceof Error
+              ? error.message
+              : 'RMA data is temporarily unavailable. Please refresh and try again.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Bulk Actions Bar - show when 2+ selected */}
       {selectedIds.size >= 2 && (
         <BulkActionsBar selectedCount={selectedIds.size} onClear={clearSelection}>
@@ -303,17 +336,23 @@ export function RmasListContainer({
         rmas={rmas}
         totalCount={totalCount}
         isLoading={isLoading}
-        error={error instanceof Error ? error : null}
+        error={!hasRmas && error instanceof Error ? error : null}
         onRetry={refetch}
         statusFilter={status ?? 'all'}
-        reasonFilter={reason ?? 'all'}
-        searchQuery={search ?? ''}
+      reasonFilter={reason ?? 'all'}
+      resolutionFilter={resolution ?? 'all'}
+      executionStatusFilter={executionStatus ?? 'all'}
+      linkedIssueOpenStateFilter={linkedIssueOpenState ?? 'any'}
+      searchQuery={search ?? ''}
         page={page}
         sortBy={sortBy}
         sortOrder={sortOrder}
         onStatusFilterChange={onStatusFilterChange ?? (() => {})}
-        onReasonFilterChange={onReasonFilterChange ?? (() => {})}
-        onSearchChange={onSearchChange ?? (() => {})}
+      onReasonFilterChange={onReasonFilterChange ?? (() => {})}
+      onResolutionFilterChange={onResolutionFilterChange ?? (() => {})}
+      onExecutionStatusFilterChange={onExecutionStatusFilterChange ?? (() => {})}
+      onLinkedIssueOpenStateChange={onLinkedIssueOpenStateChange ?? (() => {})}
+      onSearchChange={onSearchChange ?? (() => {})}
         onPageChange={onPageChange ?? (() => {})}
         onSortChange={onSortChange}
         onRmaClick={handleRmaClick}

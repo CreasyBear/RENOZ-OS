@@ -14,7 +14,13 @@ import { Package, ExternalLink } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RmasListContainer } from '@/components/domain/support/rma/rmas-list-container';
-import type { RmaStatus, RmaReason } from '@/lib/schemas/support/rma';
+import type {
+  LinkedIssueOpenState,
+  RmaExecutionStatus,
+  RmaReason,
+  RmaResolution,
+  RmaStatus,
+} from '@/lib/schemas/support/rma';
 import type { SortDirection } from '@/components/domain/support/rma/rma-sorting';
 import type { rmasSearchSchema } from './index';
 import type { z } from 'zod';
@@ -71,6 +77,9 @@ export default function RmasPage({ search }: RmasPageProps) {
         <RmasListContainer
           status={search.status}
           reason={search.reason}
+          resolution={search.resolution}
+          executionStatus={search.executionStatus}
+          linkedIssueOpenState={search.linkedIssueOpenState}
           search={search.search}
           page={search.page}
           pageSize={search.pageSize}
@@ -82,6 +91,21 @@ export default function RmasPage({ search }: RmasPageProps) {
           }
           onReasonFilterChange={(value) =>
             updateSearch({ reason: value === 'all' ? undefined : (value as RmaReason) })
+          }
+          onResolutionFilterChange={(value) =>
+            updateSearch({ resolution: value === 'all' ? undefined : (value as RmaResolution) })
+          }
+          onExecutionStatusFilterChange={(value) =>
+            updateSearch({
+              executionStatus:
+                value === 'all' ? undefined : (value as RmaExecutionStatus),
+            })
+          }
+          onLinkedIssueOpenStateChange={(value) =>
+            updateSearch({
+              linkedIssueOpenState:
+                value === 'any' ? undefined : (value as LinkedIssueOpenState),
+            })
           }
           onSearchChange={(value) => updateSearch({ search: value || undefined })}
           onPageChange={(page) => updateSearch({ page })}

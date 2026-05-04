@@ -6,7 +6,7 @@
  * the required Inter TTF files to public/fonts/inter/ for local use.
  *
  * Run: node scripts/download-pdf-fonts.mjs
- * Or: npm run fonts:download (if script is added to package.json)
+ * Or: bun run fonts:download
  */
 
 import { createWriteStream, mkdirSync, existsSync, copyFileSync } from "fs";

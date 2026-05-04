@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -713,7 +714,7 @@ function EmptyFilesState({ onUpload }: { onUpload: () => void }) {
 // ============================================================================
 
 export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
-  const { data: filesData, isLoading, refetch } = useFiles(projectId);
+  const { data: filesData, isLoading, error, refetch } = useFiles(projectId);
   const deleteFile = useDeleteProjectFile(projectId);
   const { getUser } = useUserLookup();
 
@@ -778,6 +779,21 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
     );
   }
 
+  const filesWarning = error ? (
+    <Alert variant={files.length === 0 ? 'destructive' : 'default'}>
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>{files.length === 0 ? 'Files unavailable' : 'Showing cached files'}</AlertTitle>
+      <AlertDescription className="flex items-center justify-between gap-3">
+        <span>
+          {error.message || 'Project files are temporarily unavailable. Please refresh and try again.'}
+        </span>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </AlertDescription>
+    </Alert>
+  ) : null;
+
   if (files.length === 0) {
     return (
       <div className="space-y-4">
@@ -789,7 +805,8 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
             </p>
           </div>
         </div>
-        <EmptyFilesState onUpload={() => setUploadDialogOpen(true)} />
+        {filesWarning}
+        {error ? null : <EmptyFilesState onUpload={() => setUploadDialogOpen(true)} />}
         <FileUploadDialog
           open={uploadDialogOpen}
           onOpenChange={setUploadDialogOpen}
@@ -802,6 +819,7 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
 
   return (
     <div className="space-y-6">
+      {filesWarning}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

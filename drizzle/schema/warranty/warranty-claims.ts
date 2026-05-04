@@ -19,6 +19,7 @@ import {
   index,
   uniqueIndex,
   pgEnum,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import {
@@ -73,6 +74,19 @@ export const warrantyClaimResolutionTypeEnum = pgEnum(
   ]
 );
 
+export const warrantyClaimantRoleEnum = pgEnum("warranty_claimant_role", [
+  "channel_partner",
+  "owner",
+  "internal",
+  "other",
+]);
+
+export interface WarrantyClaimantSnapshot {
+  fullName: string;
+  email?: string;
+  phone?: string;
+}
+
 // ============================================================================
 // WARRANTY CLAIMS TABLE
 // ============================================================================
@@ -97,6 +111,16 @@ export const warrantyClaims = pgTable(
     customerId: uuid("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
+
+    // Explicit claimant tracking
+    claimantRole: warrantyClaimantRoleEnum("claimant_role")
+      .notNull()
+      .default("channel_partner"),
+    claimantCustomerId: uuid("claimant_customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    claimantSnapshot: jsonb("claimant_snapshot").$type<WarrantyClaimantSnapshot>(),
+    channelBypassReason: text("channel_bypass_reason"),
 
     // Linked support issue (optional)
     issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
@@ -163,6 +187,9 @@ export const warrantyClaims = pgTable(
 
     // Customer lookup (find all claims by customer)
     customerIdx: index("idx_warranty_claims_customer").on(table.customerId),
+    claimantCustomerIdx: index("idx_warranty_claims_claimant_customer").on(
+      table.claimantCustomerId
+    ),
 
     // Issue lookup (linked support ticket)
     issueIdx: index("idx_warranty_claims_issue").on(table.issueId),
@@ -215,6 +242,11 @@ export const warrantyClaimsRelations = relations(warrantyClaims, ({ one }) => ({
     fields: [warrantyClaims.customerId],
     references: [customers.id],
   }),
+  claimantCustomer: one(customers, {
+    fields: [warrantyClaims.claimantCustomerId],
+    references: [customers.id],
+    relationName: "warrantyClaimClaimantCustomer",
+  }),
   assignedUser: one(users, {
     fields: [warrantyClaims.assignedUserId],
     references: [users.id],
@@ -257,3 +289,5 @@ export type WarrantyClaimType =
   (typeof warrantyClaimTypeEnum.enumValues)[number];
 export type WarrantyClaimResolutionType =
   (typeof warrantyClaimResolutionTypeEnum.enumValues)[number];
+export type WarrantyClaimantRole =
+  (typeof warrantyClaimantRoleEnum.enumValues)[number];

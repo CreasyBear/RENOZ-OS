@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { isPast, isBefore, addDays } from 'date-fns';
+import { isBefore, addDays } from 'date-fns';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useXeroInvoiceStatus } from '@/hooks/financial';
 import type { OrderStatus } from '@/lib/schemas/orders';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
+import { isOrderOverdue } from '@/components/domain/orders/order-status-config';
 import {
   useOrderWithCustomer,
   type OrderWithCustomer,
@@ -127,7 +128,12 @@ function generateOrderAlerts(
 
   if (order.dueDate && order.status !== 'delivered' && order.status !== 'cancelled') {
     const dueDate = new Date(order.dueDate);
-    const isOverdue = isPast(dueDate);
+    const isOverdue = isOrderOverdue({
+      dueDate,
+      status: order.status as OrderStatus,
+      paymentStatus: order.paymentStatus as OrderWithCustomer['paymentStatus'],
+      balanceDue: Number(order.balanceDue ?? 0),
+    });
     const isUrgent = !isOverdue && isBefore(dueDate, addDays(new Date(), 7));
 
     if (isOverdue) {

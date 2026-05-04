@@ -14,6 +14,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   listInstallers,
   listAllActiveInstallers,
@@ -62,9 +63,15 @@ export function useInstallers(options: UseInstallersOptions = {}) {
   return useQuery({
     queryKey: queryKeys.installers.list(filters),
     queryFn: async () => {
-      const result = await listInstallers({ data: filters as InstallerListQuery });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listInstallers({ data: filters as InstallerListQuery });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer directory is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
@@ -110,11 +117,18 @@ export function useInstaller(installerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.installers.detail(installerId),
     queryFn: async () => {
-      const result = await getInstaller({
-        data: { id: installerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInstaller({
+          data: { id: installerId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Installer details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested installer could not be found.',
+        });
+      }
     },
     enabled: enabled && !!installerId,
     staleTime: 30 * 1000,
@@ -137,12 +151,17 @@ export function useInstallerAvailability(
   return useQuery({
     queryKey: queryKeys.installers.availability(installerId, startDate, endDate),
     queryFn: async () => {
-      const result = await checkAvailability({
-        data: { installerId, startDate: startDate!, endDate: endDate! },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await checkAvailability({
+          data: { installerId, startDate: startDate!, endDate: endDate! },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer availability is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!installerId && !!startDate && !!endDate,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -156,11 +175,17 @@ export function useInstallerWorkload(installerId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.installers.workload(installerId),
     queryFn: async () => {
-      const result = await getInstallerWorkload({
-        data: { id: installerId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getInstallerWorkload({
+          data: { id: installerId },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer workload is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!installerId,
     staleTime: 60 * 1000, // 1 minute
@@ -179,12 +204,17 @@ export function useSuggestInstallers(
   return useQuery({
     queryKey: queryKeys.installers.suggestions(postcode, normalizedOptions),
     queryFn: async () => {
-      const result = await suggestInstallers({
-        data: { postcode, ...normalizedOptions },
-      
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await suggestInstallers({
+          data: { postcode, ...normalizedOptions },
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer suggestions are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!postcode,
     staleTime: 5 * 60 * 1000, // 5 minutes - suggestions don't change often

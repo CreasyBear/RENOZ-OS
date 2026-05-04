@@ -5,9 +5,7 @@
  * for the issue detail view. Follows the hook pattern from DETAIL-VIEW-STANDARDS.md.
  *
  * @source issue from useIssue hook
- * @source orderSummary from useCustomerOrderSummary hook
- * @source warranties from useWarranties hook
- * @source otherIssues from useIssues hook
+ * @source relatedContext from getIssueById server shape
  *
  * @see docs/design-system/DETAIL-VIEW-STANDARDS.md
  * @see STANDARDS.md - Hook patterns
@@ -15,12 +13,10 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useIssue, useUpdateIssue, useDeleteIssue, useEscalateIssue, useIssues } from './use-issues';
-import { useCustomerOrderSummary } from '@/hooks/customers';
-import { useWarranties } from '@/hooks/warranty';
+import { useIssue, useUpdateIssue, useDeleteIssue, useEscalateIssue } from './use-issues';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { toast } from 'sonner';
-import type { IssueStatus } from '@/lib/schemas/support/issues';
+import type { IssueRelatedContext, IssueStatus } from '@/lib/schemas/support/issues';
 import type { StatusChangeResult } from '@/components/domain/support/issues/issue-status-change-dialog';
 import { trackSupportIssueTransition } from '@/lib/analytics';
 
@@ -78,8 +74,10 @@ export interface UseIssueDetailReturn {
   activeTab: string;
   /** Tab change handler */
   onTabChange: (tab: string) => void;
-  /** Customer context data for sidebar and related tab */
+  /** Customer context data for sidebar */
   customerContext: CustomerContextData;
+  /** Anchor-first related context for the related tab */
+  relatedContext: IssueRelatedContext | null;
   /** Customer ID from issue (null if not linked) */
   customerId: string | null;
   /** Available actions */
@@ -119,74 +117,28 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
   // Fetch issue detail
   const { data: issue, isLoading, error, refetch } = useIssue({ issueId });
 
-  // Fetch customer context data (only when customer is linked)
-  const customerId = issue?.customerId;
-  const {
-    data: orderSummary,
-    isLoading: isOrdersLoading,
-    error: ordersError,
-  } = useCustomerOrderSummary({
-    customerId: customerId ?? '',
-    enabled: !!customerId,
-  });
-  const {
-    data: warrantiesData,
-    isLoading: isWarrantiesLoading,
-    error: warrantiesError,
-  } = useWarranties({
-    customerId: customerId ?? '',
-    limit: 10,
-    enabled: !!customerId,
-  });
-  const {
-    data: issuesData,
-    isLoading: isIssuesLoading,
-    error: issuesError,
-  } = useIssues({
-    customerId: customerId ?? '',
-    limit: 10,
-    enabled: !!customerId,
-  });
+  const customerId = issue?.customerId ?? null;
 
   // Mutations
   const updateMutation = useUpdateIssue();
   const deleteMutation = useDeleteIssue();
   const escalateMutation = useEscalateIssue();
 
-  // Consolidate context data
-  const customerContext: CustomerContextData = useMemo(
+  const relatedContext = useMemo(() => issue?.relatedContext ?? null, [issue?.relatedContext]);
+  const customerContext = useMemo<CustomerContextData>(
     () => ({
-      orderSummary: orderSummary
+      orderSummary: relatedContext?.customerContext
         ? {
-            recentOrders: orderSummary.recentOrders || [],
-            totalOrders: orderSummary.totalOrders || 0,
+            recentOrders: relatedContext.customerContext.recentOrders,
+            totalOrders: relatedContext.customerContext.recentOrders.length,
           }
         : null,
-      warranties: warrantiesData?.warranties || [],
-      otherIssues: (issuesData || [])
-        .filter((i) => i.id !== issueId)
-        .slice(0, 10)
-        .map((i) => ({
-          id: i.id,
-          title: i.title,
-          createdAt: i.createdAt,
-          status: i.status,
-        })),
-      isLoading: isOrdersLoading || isWarrantiesLoading || isIssuesLoading,
-      error: ordersError || warrantiesError || issuesError,
+      warranties: relatedContext?.customerContext?.warranties ?? [],
+      otherIssues: relatedContext?.customerContext?.otherIssues ?? [],
+      isLoading: false,
+      error: null,
     }),
-    [
-      orderSummary,
-      warrantiesData,
-      issuesData,
-      issueId,
-      isOrdersLoading,
-      isWarrantiesLoading,
-      isIssuesLoading,
-      ordersError,
-      warrantiesError,
-      issuesError,
-    ]
+    [relatedContext]
   );
 
   // Actions
@@ -215,10 +167,24 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
         const toStatus = statusDialog.toStatus;
         void (async () => {
           try {
-            await updateMutation.mutateAsync({
+            const payload: Parameters<typeof updateMutation.mutateAsync>[0] = {
               issueId,
               status: toStatus,
-              ...(result.note && { resolutionNotes: result.note }),
+            };
+
+            if (toStatus === 'on_hold' && result.note) {
+              payload.holdReason = result.note;
+            }
+
+            if (toStatus === 'resolved') {
+              payload.resolutionNotes = result.note;
+              payload.resolutionCategory = result.resolutionCategory;
+              payload.diagnosisNotes = result.diagnosisNotes ?? null;
+              payload.nextActionType = result.nextActionType;
+            }
+
+            await updateMutation.mutateAsync({
+              ...payload,
             });
             trackSupportIssueTransition({
               name: 'support_issue_transition',
@@ -318,6 +284,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
     activeTab,
     onTabChange: setActiveTab,
     customerContext,
+    relatedContext,
     customerId: customerId ?? null,
     actions,
     statusDialog,

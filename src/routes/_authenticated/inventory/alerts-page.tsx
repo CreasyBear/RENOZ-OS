@@ -53,8 +53,20 @@ export default function AlertsPage() {
   const [editingAlert, setEditingAlert] = useState<AlertRule | null>(null);
 
   // Data hooks
-  const { data: alertsData, isLoading: isLoadingRules } = useAlerts({ pageSize: 100 });
-  const { data: triggeredData, isLoading: isLoadingTriggered } = useTriggeredAlerts();
+  const {
+    data: alertsData,
+    isLoading: isLoadingRules,
+    isError: isRulesError,
+    error: rulesError,
+    refetch: refetchRules,
+  } = useAlerts({ pageSize: 100 });
+  const {
+    data: triggeredData,
+    isLoading: isLoadingTriggered,
+    isError: isTriggeredError,
+    error: triggeredError,
+    refetch: refetchTriggered,
+  } = useTriggeredAlerts();
   const { data: productsData } = useProducts({ pageSize: 100 });
   const { locations: locationsData } = useLocations({ autoFetch: true });
 
@@ -279,7 +291,7 @@ export default function AlertsPage() {
             <TabsTrigger value="active">
               <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
               Active Alerts
-              {triggeredAlerts.length > 0 && (
+              {!isTriggeredError && triggeredAlerts.length > 0 && (
                 <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs">
                   {triggeredAlerts.length}
                 </span>
@@ -299,7 +311,10 @@ export default function AlertsPage() {
             <AlertsPanel
               alerts={triggeredAlerts}
               isLoading={isLoadingTriggered}
+              isError={isTriggeredError}
+              errorMessage={triggeredError instanceof Error ? triggeredError.message : undefined}
               onAcknowledge={handleAcknowledgeAlert}
+              onRetry={() => refetchTriggered()}
             />
           </TabsContent>
 
@@ -307,9 +322,12 @@ export default function AlertsPage() {
             <AlertsList
               alerts={alertRules}
               isLoading={isLoadingRules}
+              isError={isRulesError}
+              errorMessage={rulesError instanceof Error ? rulesError.message : undefined}
               onEdit={setEditingAlert}
               onDelete={handleDeleteAlert}
               onToggleActive={handleToggleActive}
+              onRetry={() => refetchRules()}
             />
           </TabsContent>
 
@@ -321,6 +339,9 @@ export default function AlertsPage() {
                   new Date(a.acknowledgedAt ?? a.triggeredAt).getTime()
               )}
               isLoading={isLoadingTriggered}
+              isError={isTriggeredError}
+              errorMessage={triggeredError instanceof Error ? triggeredError.message : undefined}
+              onRetry={() => refetchTriggered()}
               maxHeight="520px"
             />
           </TabsContent>

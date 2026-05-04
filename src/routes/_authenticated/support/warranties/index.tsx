@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { lazy, Suspense } from 'react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
+import { warrantyPolicyTypeSchema, warrantyStatusSchema } from '@/lib/schemas/warranty';
 import {
   DEFAULT_WARRANTY_SORT_DIRECTION,
   DEFAULT_WARRANTY_SORT_FIELD,
@@ -23,10 +24,8 @@ const WarrantiesPage = lazy(() => import('./warranties-page'));
 
 export const searchSchema = z.object({
   search: z.string().optional(),
-  status: z.enum(['active', 'expiring_soon', 'expired', 'voided', 'transferred']).optional(),
-  policyType: z
-    .enum(['battery_performance', 'inverter_manufacturer', 'installation_workmanship'])
-    .optional(),
+  status: warrantyStatusSchema.optional(),
+  policyType: warrantyPolicyTypeSchema.optional(),
   page: z.coerce.number().min(1).default(1).catch(1),
   pageSize: z.coerce.number().min(10).max(100).default(20).catch(20),
   sortBy: z.enum(WARRANTY_SORT_FIELDS)

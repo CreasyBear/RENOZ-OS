@@ -12,6 +12,7 @@
 import { useState, useEffect, startTransition } from "react";
 import { Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
 import type { ReorderRecommendation } from "./reorder-recommendations";
 import {
@@ -69,7 +70,11 @@ export function CreatePOFromRecommendationDialog({
 }: CreatePOFromRecommendationDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
-  const { data: suppliersData, isLoading: loadingSuppliers } = useSuppliers({
+  const {
+    data: suppliersData,
+    isLoading: loadingSuppliers,
+    error: suppliersError,
+  } = useSuppliers({
     enabled: open,
   });
   const suppliers = suppliersData?.items ?? [];
@@ -176,6 +181,13 @@ export function CreatePOFromRecommendationDialog({
       className="sm:max-w-[500px]"
       resetOnClose={false}
     >
+      {suppliersError instanceof Error ? (
+        <Alert>
+          <AlertDescription>
+            Supplier options are temporarily unavailable. Refresh and try again if you need to select a supplier.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {recommendation && (
           <div className="bg-muted/50 p-4 rounded-lg space-y-2">
             <div className="flex items-center justify-between">

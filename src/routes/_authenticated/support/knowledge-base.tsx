@@ -17,8 +17,10 @@ import { KnowledgeBaseSkeleton } from '@/components/skeletons/support';
 import { BookOpen, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { LoadingState } from '@/components/shared/loading-state';
+import { ErrorState } from '@/components/shared/error-state';
 import { KbCategoryTree } from '@/components/domain/support/knowledge-base/kb-category-tree';
 import { KbArticleList } from '@/components/domain/support/knowledge-base/kb-article-list';
 import { KbArticleSearch } from '@/components/domain/support/knowledge-base/kb-article-search';
@@ -85,7 +87,12 @@ function KnowledgeBasePage() {
     adjustCounts: adjustFeedbackCounts,
   } = useOptimisticFeedbackDeltas();
 
-  const { data: categories, isLoading: categoriesLoading } = useKbCategories({
+  const {
+    data: categories,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+    refetch: refetchCategories,
+  } = useKbCategories({
     isActive: true,
     includeArticleCount: true,
   });
@@ -197,6 +204,25 @@ function KnowledgeBasePage() {
   const suggestedArticles = rawSuggestedArticles.map(adjustFeedbackCounts);
   const suggestedIsLoading = hasSuggestionFilters ? suggestedLoading : popularViewedLoading;
   const suggestedErrorState = hasSuggestionFilters ? suggestedError : popularViewedError;
+  const popularArticlesError =
+    (popularViewedError && !popularViewedData ? popularViewedError : null) ??
+    (helpfulError && !helpfulData ? helpfulError : null);
+  const popularArticlesWarning =
+    (popularViewedError && popularViewedData) || (helpfulError && helpfulData)
+      ? 'Showing the most recent popular articles while refresh is unavailable.'
+      : undefined;
+  const suggestedArticlesError = suggestedErrorState && !suggestedData ? suggestedErrorState : null;
+  const suggestedArticlesWarning =
+    suggestedErrorState &&
+    (hasSuggestionFilters ? suggestedData : popularViewedData)
+      ? hasSuggestionFilters
+        ? 'Showing the most recent suggested articles while refresh is unavailable.'
+        : 'Showing the most recent article suggestions while refresh is unavailable.'
+      : undefined;
+  const categoryTreeError = categoriesError && !categories ? categoriesError : null;
+  const categoryTreeWarning = categoriesError && categories ? categoriesError : null;
+  const articleListError = articlesError && !articlesData ? articlesError : null;
+  const articleListWarning = articlesError && articlesData ? articlesError : null;
 
   const { data: previewArticle } = useKbArticle({
     articleId: previewArticleId ?? '',
@@ -377,14 +403,32 @@ function KnowledgeBasePage() {
           <CardContent className="pt-0">
             {categoriesLoading ? (
               <LoadingState text="Loading..." />
+            ) : categoryTreeError ? (
+              <ErrorState
+                title="Failed to load categories"
+                message={categoryTreeError.message}
+                onRetry={() => {
+                  void refetchCategories();
+                }}
+              />
             ) : (
+                <>
+                  {categoryTreeWarning ? (
+                    <Alert className="mb-3">
+                      <AlertTitle>Categories unavailable</AlertTitle>
+                      <AlertDescription>
+                        Showing the most recent categories while refresh is unavailable.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
                 <KbCategoryTree
                   categories={categories ?? []}
                   selectedId={searchState.categoryId ?? null}
                   onSelect={handleCategorySelect}
                   showActions={false}
                   showCounts={true}
-              />
+                />
+                </>
             )}
           </CardContent>
         </Card>
@@ -402,12 +446,21 @@ function KnowledgeBasePage() {
             </div>
           )}
 
+          {articleListWarning ? (
+            <Alert>
+              <AlertTitle>Articles unavailable</AlertTitle>
+              <AlertDescription>
+                Showing the most recent article results while refresh is unavailable.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           <KbArticleList
             categoryId={selectedCategory?.id}
             articles={articlesData?.data ?? []}
             pagination={articlesData?.pagination}
             isLoading={articlesLoading}
-            error={articlesError}
+            error={articleListError}
             searchInput={searchInput}
             status={status}
             selectedTags={selectedTags}
@@ -458,13 +511,15 @@ function KnowledgeBasePage() {
             mostViewed={popularViewedData?.data ?? []}
             mostHelpful={mostHelpful}
             isLoading={popularViewedLoading || helpfulLoading}
-            error={popularViewedError ?? helpfulError}
+            error={popularArticlesError}
+            warningMessage={popularArticlesWarning}
           />
 
           <KbSuggestedArticles
             articles={suggestedArticles}
             isLoading={suggestedIsLoading}
-            error={suggestedErrorState}
+            error={suggestedArticlesError}
+            warningMessage={suggestedArticlesWarning}
             title="Suggested Articles"
             description={
               hasSuggestionFilters ? 'Articles matching your filters' : 'Most viewed articles'

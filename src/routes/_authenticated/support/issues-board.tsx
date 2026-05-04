@@ -127,6 +127,17 @@ function IssuesBoardPage() {
   const filters = fromUrlParams(search);
 
   // Fetch issues (URL params drive server-side triage filters)
+  const assignedToFilter =
+    filters.assignedTo === 'me'
+      ? ('me' as const)
+      : filters.assignedTo === 'unassigned'
+        ? ('unassigned' as const)
+        : undefined;
+  const assignedToUserId =
+    filters.assignedTo && filters.assignedTo !== 'me' && filters.assignedTo !== 'unassigned'
+      ? filters.assignedTo
+      : undefined;
+
   const { data, isLoading, error, refetch } = useIssuesWithSlaMetrics({
     status: filters.status.length > 0 ? filters.status : undefined,
     priority: filters.priority.length > 0 ? filters.priority : undefined,
@@ -134,7 +145,14 @@ function IssuesBoardPage() {
     search: search.search,
     slaStatus: search.slaStatus,
     escalated: search.escalated,
-    assignedToUserId: search.assignedToUserId,
+    nextActionType: filters.nextActionType ?? undefined,
+    rmaState: filters.rmaState,
+    serialState: filters.serialState,
+    warrantyState: filters.warrantyState,
+    orderState: filters.orderState,
+    serviceSystemState: filters.serviceSystemState,
+    assignedToFilter,
+    assignedToUserId,
     limit: search.pageSize,
     offset: (search.page - 1) * search.pageSize,
   });
@@ -365,6 +383,12 @@ function IssuesBoardPage() {
       if (!issue) return;
       if (transitionPendingIds.has(event.issueId)) return;
 
+      if (event.toStatus === 'resolved') {
+        toast.info('Resolve this issue from the detail page so you can capture structured resolution details.');
+        navigate({ to: '/support/issues/$issueId', params: { issueId: event.issueId } });
+        return;
+      }
+
       if (skipStatusPrompt) {
         void (async () => {
           await runStatusTransition({
@@ -386,7 +410,7 @@ function IssuesBoardPage() {
         });
       }
     },
-    [issues, skipStatusPrompt, transitionPendingIds, runStatusTransition]
+    [issues, navigate, skipStatusPrompt, transitionPendingIds, runStatusTransition]
   );
 
   // Handle status change dialog confirmation
@@ -453,6 +477,9 @@ function IssuesBoardPage() {
       }
       if (event.action === 'change_status' || event.action === 'close') {
         const toStatus = event.value as IssueStatus;
+        if (toStatus === 'resolved') {
+          throw new Error('Resolve issues from the detail page so structured resolution details can be captured.');
+        }
         const fromStatus = issues.find((i) => i.id === issueId)?.status;
         await updateMutation.mutateAsync({ issueId, status: toStatus });
         trackSupportIssueTransition({

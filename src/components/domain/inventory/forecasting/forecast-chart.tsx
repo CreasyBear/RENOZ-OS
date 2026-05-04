@@ -71,6 +71,9 @@ interface ForecastChartProps {
   period: ForecastPeriod;
   onPeriodChange?: (period: ForecastPeriod) => void;
   isLoading?: boolean;
+  isError?: boolean;
+  errorMessage?: string;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -85,6 +88,9 @@ export const ForecastChart = memo(function ForecastChart({
   period,
   onPeriodChange,
   isLoading,
+  isError,
+  errorMessage,
+  onRetry,
   className,
 }: ForecastChartProps) {
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
@@ -126,6 +132,29 @@ export const ForecastChart = memo(function ForecastChart({
         </CardHeader>
         <CardContent>
           <Skeleton className="h-64" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle>Demand Forecast</CardTitle>
+          <CardDescription>{productName}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <p className="text-sm text-foreground">
+              {errorMessage ?? 'Demand forecast details are temporarily unavailable. Please refresh and try again.'}
+            </p>
+            {onRetry ? (
+              <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     );

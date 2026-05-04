@@ -70,6 +70,12 @@ export interface EntityComboboxProps<T> {
   disabled?: boolean
   /** Additional class names */
   className?: string
+  /** Optional id for the trigger button */
+  id?: string
+  /** Forwarded aria-invalid state for form integration */
+  'aria-invalid'?: boolean
+  /** Forwarded aria-describedby for form integration */
+  'aria-describedby'?: string
 }
 
 export function EntityCombobox<T>({
@@ -85,6 +91,9 @@ export function EntityCombobox<T>({
   debounceMs = 300,
   disabled = false,
   className,
+  id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: EntityComboboxProps<T>) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -162,9 +171,12 @@ export function EntityCombobox<T>({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal",

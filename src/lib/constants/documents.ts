@@ -13,15 +13,15 @@
 // ============================================================================
 
 /** Supported document types for generation */
-export const DOCUMENT_TYPES = ['quote', 'invoice', 'packing-slip', 'delivery-note'] as const;
+export const DOCUMENT_TYPES = ['quote', 'invoice', 'pro-forma', 'packing-slip', 'dispatch-note', 'delivery-note'] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 /** Financial document types (include pricing) */
-export const FINANCIAL_DOCUMENT_TYPES = ['quote', 'invoice'] as const;
+export const FINANCIAL_DOCUMENT_TYPES = ['quote', 'invoice', 'pro-forma'] as const;
 export type FinancialDocumentType = (typeof FINANCIAL_DOCUMENT_TYPES)[number];
 
 /** Operational document types (for logistics) */
-export const OPERATIONAL_DOCUMENT_TYPES = ['packing-slip', 'delivery-note'] as const;
+export const OPERATIONAL_DOCUMENT_TYPES = ['packing-slip', 'dispatch-note', 'delivery-note'] as const;
 export type OperationalDocumentType = (typeof OPERATIONAL_DOCUMENT_TYPES)[number];
 
 // ============================================================================
@@ -38,7 +38,9 @@ export const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 365;
 export const DOCUMENT_TYPE_FOLDERS: Record<DocumentType, string> = {
   'quote': 'quotes',
   'invoice': 'invoices',
+  'pro-forma': 'pro-formas',
   'packing-slip': 'packing-slips',
+  'dispatch-note': 'dispatch-notes',
   'delivery-note': 'delivery-notes',
 };
 

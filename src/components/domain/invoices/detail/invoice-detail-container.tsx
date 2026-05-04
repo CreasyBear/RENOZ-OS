@@ -51,6 +51,7 @@ import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { DisabledMenuItem } from '@/components/shared/disabled-with-tooltip';
 import { useInvoiceDetail } from '@/hooks/invoices/use-invoice-detail';
+import { useCreateOrderPayment, useOrderPayments } from '@/hooks/orders/use-order-payments';
 import { useGenerateOrderInvoice } from '@/hooks/documents';
 import { useVoidInvoice } from '@/hooks/invoices';
 import { useCreateCreditNote } from '@/hooks/financial';
@@ -64,6 +65,7 @@ import { InvoiceDetailView } from './invoice-detail-view';
 import { InvoiceDetailSkeleton } from '@/components/skeletons/invoices';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreateCreditNoteDialog } from '@/components/domain/financial/credit-note-dialogs';
+import { RecordPaymentDialog } from '@/components/domain/orders/dialogs/record-payment-dialog';
 import {
   INVOICE_STATUS_CONFIG,
   type InvoiceStatus,
@@ -160,7 +162,7 @@ function HeaderActions({
       {canMarkPaid && (
         <Button onClick={onMarkPaid} disabled={isUpdatingStatus}>
           <CheckCircle className="h-4 w-4 mr-2" />
-          {isUpdatingStatus ? 'Processing...' : 'Mark as Paid'}
+          {isUpdatingStatus ? 'Processing...' : 'Record Payment'}
         </Button>
       )}
 
@@ -344,6 +346,9 @@ export function InvoiceDetailContainer({
 }: InvoiceDetailContainerProps) {
   const navigate = useNavigate();
   const detail = useInvoiceDetail(invoiceId);
+  const orderPaymentsQuery = useOrderPayments(invoiceId, {
+    enabled: Boolean(detail.invoice?.id),
+  });
   useTrackView(
     'invoice',
     detail.invoice?.id,
@@ -358,6 +363,7 @@ export function InvoiceDetailContainer({
   );
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
+  const [recordPaymentDialogOpen, setRecordPaymentDialogOpen] = useState(false);
 
   const { onLogActivity, loggerProps } = useEntityActivityLogging({
     entityType: 'order',
@@ -373,6 +379,9 @@ export function InvoiceDetailContainer({
 
   // Credit note mutation
   const createCreditNote = useCreateCreditNote();
+
+  // Payment mutation: invoice paid status is projected from this real ledger row.
+  const createOrderPayment = useCreateOrderPayment(invoiceId);
 
   const handleGeneratePdf = () => {
     generateInvoicePdf.mutate(
@@ -476,7 +485,7 @@ export function InvoiceDetailContainer({
       isGeneratingPdf={generateInvoicePdf.isPending}
       isSendingReminder={detail.isSendingReminder}
       onUpdateStatus={(status) => detail.actions.onUpdateStatus(status)}
-      onMarkPaid={detail.actions.onMarkPaid}
+      onMarkPaid={() => setRecordPaymentDialogOpen(true)}
       onMarkUnpaid={detail.actions.onMarkUnpaid}
       onSchedule={detail.actions.onSchedule}
       onSendReminder={detail.actions.onSendReminder}
@@ -503,6 +512,9 @@ export function InvoiceDetailContainer({
         activities={detail.activities}
         activitiesLoading={detail.activitiesLoading}
         activitiesError={detail.activitiesError}
+        payments={orderPaymentsQuery.data ?? []}
+        paymentsLoading={orderPaymentsQuery.isLoading}
+        paymentsError={orderPaymentsQuery.error}
         onLogActivity={onLogActivity}
         headerActions={children ? null : headerActionsEl}
         className={className}
@@ -541,6 +553,25 @@ export function InvoiceDetailContainer({
           orderId={invoiceId}
           onCreate={handleCreditNoteSubmit}
           isPending={createCreditNote.isPending}
+        />
+      )}
+
+      {detail.invoice && (
+        <RecordPaymentDialog
+          open={recordPaymentDialogOpen}
+          onOpenChange={setRecordPaymentDialogOpen}
+          orderId={invoiceId}
+          orderNumber={detail.invoice.orderNumber ?? detail.invoice.invoiceNumber ?? invoiceId}
+          balanceDue={Number(detail.invoice.balanceDue ?? 0)}
+          onSubmit={async (data) => {
+            await createOrderPayment.mutateAsync(data);
+            setRecordPaymentDialogOpen(false);
+            await Promise.all([detail.refetch(), orderPaymentsQuery.refetch()]);
+            toast.success('Payment recorded', {
+              description: 'Invoice payment status was recalculated from the payment ledger.',
+            });
+          }}
+          isSubmitting={createOrderPayment.isPending}
         />
       )}
     </>

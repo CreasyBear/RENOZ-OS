@@ -62,6 +62,18 @@ export default function WarrantiesPage({ search }: WarrantiesPageProps) {
               Import Warranties
             </Button>
             <Link
+              to="/support/warranty-entitlements"
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              Entitlements
+            </Link>
+            <Link
+              to="/support/service-linkage-reviews"
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              Linkage Reviews
+            </Link>
+            <Link
               to="/settings/warranty-policies"
               className={cn(buttonVariants({ variant: 'outline' }))}
             >

@@ -97,6 +97,7 @@ export async function renderPdfToBuffer(
 const ALLOWED_DOCUMENT_TYPES = [
   'quote',
   'invoice',
+  'pro-forma',
   'packing-slip',
   'dispatch-note',
   'delivery-note',
@@ -110,6 +111,7 @@ type AllowedDocumentType = (typeof ALLOWED_DOCUMENT_TYPES)[number];
 const DOCUMENT_TYPE_FOLDERS: Record<AllowedDocumentType, string> = {
   'quote': 'quotes',
   'invoice': 'invoices',
+  'pro-forma': 'pro-formas',
   'packing-slip': 'packing-slips',
   'dispatch-note': 'dispatch-notes',
   'delivery-note': 'delivery-notes',

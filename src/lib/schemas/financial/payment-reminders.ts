@@ -14,7 +14,7 @@ import { idSchema, normalizeObjectInput, optionalEmailSchema, paginationSchema }
 // DELIVERY STATUS ENUM
 // ============================================================================
 
-export const deliveryStatusValues = ['sent', 'delivered', 'bounced', 'failed'] as const;
+export const deliveryStatusValues = ['queued', 'pending', 'sent', 'delivered', 'bounced', 'failed'] as const;
 
 export const deliveryStatusSchema = z.enum(deliveryStatusValues);
 

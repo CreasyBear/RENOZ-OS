@@ -23,6 +23,7 @@ import {
   useUsers,
 } from '@/hooks/users';
 import { PageLayout } from '@/components/layout';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import { AdminDetailSkeleton } from '@/components/skeletons/admin';
 import { Route } from './$groupId';
@@ -55,6 +56,18 @@ export default function GroupDetailPageContainer() {
   const addMemberMutation = useAddGroupMember();
   const updateMemberRoleMutation = useUpdateGroupMemberRole();
   const removeMemberMutation = useRemoveGroupMember();
+  const membersUnavailableMessage = membersError && !membersData ? (
+    membersError.message || 'Group members are temporarily unavailable. Please refresh and try again.'
+  ) : null;
+  const membersDegradedMessage = membersError && membersData ? (
+    membersError.message || 'Group members are temporarily unavailable. Showing the most recent members.'
+  ) : null;
+  const usersUnavailableMessage = usersError && !usersData ? (
+    usersError.message || 'Available users are temporarily unavailable. Please refresh and try again.'
+  ) : null;
+  const usersDegradedMessage = usersError && usersData ? (
+    usersError.message || 'Available users are temporarily unavailable. Showing the most recent user list.'
+  ) : null;
 
   // Handlers (must be before any conditional returns - Rules of Hooks)
   const handleSaveChanges = useCallback(async (updates: {
@@ -145,7 +158,7 @@ export default function GroupDetailPageContainer() {
   }
 
   // Handle errors
-  if (groupError || membersError || usersError) {
+  if (groupError || !group) {
     return (
       <PageLayout variant="full-width">
         <PageLayout.Content>
@@ -158,21 +171,42 @@ export default function GroupDetailPageContainer() {
   }
 
   return (
-    <GroupDetailPagePresenter
-      group={group!}
-      members={membersData?.items ?? []}
-      users={usersData?.items ?? []}
-      tab={tab}
-      groupId={groupId}
-      updateGroupMutation={updateGroupMutation}
-      addMemberMutation={addMemberMutation}
-      updateMemberRoleMutation={updateMemberRoleMutation}
-      removeMemberMutation={removeMemberMutation}
-      onSaveChanges={handleSaveChanges}
-      onAddMember={handleAddMember}
-      onUpdateRole={handleUpdateRole}
-      onRemoveMember={handleRemoveMember}
-      onTabChange={handleTabChange}
-    />
+    <>
+      {membersError || usersError ? (
+        <PageLayout variant="full-width">
+          <PageLayout.Content className="pb-0">
+            <Alert>
+              <AlertDescription>
+                {membersDegradedMessage ||
+                  usersDegradedMessage ||
+                  membersUnavailableMessage ||
+                  usersUnavailableMessage ||
+                  'Some group data is temporarily unavailable. Showing the most recent available information.'}
+              </AlertDescription>
+            </Alert>
+          </PageLayout.Content>
+        </PageLayout>
+      ) : null}
+      <GroupDetailPagePresenter
+        group={group!}
+        members={membersData?.items ?? []}
+        users={usersData?.items ?? []}
+        membersUnavailableMessage={membersUnavailableMessage}
+        membersDegradedMessage={membersDegradedMessage}
+        usersUnavailableMessage={usersUnavailableMessage}
+        usersDegradedMessage={usersDegradedMessage}
+        tab={tab}
+        groupId={groupId}
+        updateGroupMutation={updateGroupMutation}
+        addMemberMutation={addMemberMutation}
+        updateMemberRoleMutation={updateMemberRoleMutation}
+        removeMemberMutation={removeMemberMutation}
+        onSaveChanges={handleSaveChanges}
+        onAddMember={handleAddMember}
+        onUpdateRole={handleUpdateRole}
+        onRemoveMember={handleRemoveMember}
+        onTabChange={handleTabChange}
+      />
+    </>
   );
 }

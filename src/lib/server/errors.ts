@@ -79,6 +79,35 @@ export class ValidationError extends ServerError {
 }
 
 /**
+ * Thrown when explicitly supplied issue anchors contradict resolved lineage.
+ * HTTP 400 Bad Request
+ */
+export class IssueAnchorConflictError extends ServerError {
+  public readonly summary: string
+  public readonly conflicts: Array<{
+    field: string
+    expected?: string | null
+    actual?: string | null
+    reason: string
+  }>
+
+  constructor(
+    summary: string,
+    conflicts: Array<{
+      field: string
+      expected?: string | null
+      actual?: string | null
+      reason: string
+    }>
+  ) {
+    super(summary, 400, 'ISSUE_ANCHOR_CONFLICT')
+    this.name = 'IssueAnchorConflictError'
+    this.summary = summary
+    this.conflicts = conflicts
+  }
+}
+
+/**
  * Thrown when a request conflicts with existing data.
  * HTTP 409 Conflict
  */
@@ -134,6 +163,12 @@ export function serializeError(error: unknown): {
     // Add additional details for specific error types
     if (error instanceof ValidationError && Object.keys(error.errors).length > 0) {
       serialized.details = { validationErrors: error.errors }
+    }
+    if (error instanceof IssueAnchorConflictError) {
+      serialized.details = {
+        summary: error.summary,
+        conflicts: error.conflicts,
+      }
     }
     if (error instanceof PermissionDeniedError && error.requiredPermission) {
       serialized.details = { requiredPermission: error.requiredPermission }

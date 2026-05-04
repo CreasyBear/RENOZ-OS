@@ -1,33 +1,26 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { usePortalOrders, usePortalJobs, usePortalQuotes } from '@/hooks/portal';
 import { PageLayout } from '@/components/layout/page-layout';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export const Route = createFileRoute('/portal/')({
   component: PortalHome,
 });
 
 function PortalHome() {
-  const { data: orders = [], isLoading: ordersLoading, error: ordersError } = usePortalOrders();
-  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = usePortalJobs();
-  const { data: quotes = [], isLoading: quotesLoading, error: quotesError } = usePortalQuotes();
+  const { data: ordersData, isLoading: ordersLoading, error: ordersError } = usePortalOrders();
+  const { data: jobsData, isLoading: jobsLoading, error: jobsError } = usePortalJobs();
+  const { data: quotesData, isLoading: quotesLoading, error: quotesError } = usePortalQuotes();
 
-  const isLoading = ordersLoading || jobsLoading || quotesLoading;
-  const error = ordersError || jobsError || quotesError;
+  const orders = ordersData ?? [];
+  const jobs = jobsData ?? [];
+  const quotes = quotesData ?? [];
+  const hasAnyData = ordersData !== undefined || jobsData !== undefined || quotesData !== undefined;
 
-  if (isLoading) {
+  if (!hasAnyData && (ordersLoading || jobsLoading || quotesLoading)) {
     return (
       <PageLayout variant="container">
         <div className="text-muted-foreground py-12 text-sm">Loading portal data...</div>
-      </PageLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageLayout variant="container">
-        <div className="py-12 text-sm text-destructive">
-          {error instanceof Error ? error.message : 'Something went wrong.'}
-        </div>
       </PageLayout>
     );
   }
@@ -44,7 +37,17 @@ function PortalHome() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Orders</h2>
-        {orders.length === 0 ? (
+        {ordersError ? (
+          <Alert>
+            <AlertTitle>Orders unavailable</AlertTitle>
+            <AlertDescription>
+              {ordersData !== undefined
+                ? 'Showing the most recent portal orders while refresh is unavailable.'
+                : ordersError.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {ordersError && ordersData === undefined ? null : orders.length === 0 ? (
           <p className="text-muted-foreground text-sm">No orders available.</p>
         ) : (
           <ul className="space-y-1 text-sm">
@@ -62,7 +65,17 @@ function PortalHome() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Jobs</h2>
-        {jobs.length === 0 ? (
+        {jobsError ? (
+          <Alert>
+            <AlertTitle>Jobs unavailable</AlertTitle>
+            <AlertDescription>
+              {jobsData !== undefined
+                ? 'Showing the most recent portal jobs while refresh is unavailable.'
+                : jobsError.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {jobsError && jobsData === undefined ? null : jobs.length === 0 ? (
           <p className="text-muted-foreground text-sm">No jobs available.</p>
         ) : (
           <ul className="space-y-1 text-sm">
@@ -78,7 +91,17 @@ function PortalHome() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Quotes</h2>
-        {quotes.length === 0 ? (
+        {quotesError ? (
+          <Alert>
+            <AlertTitle>Quotes unavailable</AlertTitle>
+            <AlertDescription>
+              {quotesData !== undefined
+                ? 'Showing the most recent portal quotes while refresh is unavailable.'
+                : quotesError.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {quotesError && quotesData === undefined ? null : quotes.length === 0 ? (
           <p className="text-muted-foreground text-sm">No quotes available.</p>
         ) : (
           <ul className="space-y-1 text-sm">

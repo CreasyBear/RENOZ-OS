@@ -9,7 +9,13 @@
 
 import type { ReactNode } from 'react';
 import { z } from 'zod';
-import { currencySchema, normalizeObjectInput } from '../_shared/patterns';
+import {
+  currencySchema,
+  normalizeObjectInput,
+  optionalEmailSchema,
+  phoneSchema,
+} from '../_shared/patterns';
+import type { WarrantyOwnerRecord } from './owner-records';
 
 // ============================================================================
 // ENUMS
@@ -42,6 +48,32 @@ export const warrantyClaimResolutionTypeSchema = z.enum([
 ]);
 export type WarrantyClaimResolutionTypeValue = z.infer<typeof warrantyClaimResolutionTypeSchema>;
 
+export const warrantyClaimantRoleSchema = z.enum([
+  'channel_partner',
+  'owner',
+  'internal',
+  'other',
+]);
+export type WarrantyClaimantRoleValue = z.infer<typeof warrantyClaimantRoleSchema>;
+
+export const warrantyClaimantModeSchema = z.enum(['channel_partner', 'direct']);
+export type WarrantyClaimantModeValue = z.infer<typeof warrantyClaimantModeSchema>;
+
+export const warrantyClaimQuickFilterValues = [
+  'submitted',
+  'at_risk_sla',
+  'awaiting_decision',
+] as const;
+export const warrantyClaimQuickFilterSchema = z.enum(warrantyClaimQuickFilterValues);
+export type WarrantyClaimQuickFilterValue = z.infer<typeof warrantyClaimQuickFilterSchema>;
+
+export const warrantyClaimantSnapshotSchema = z.object({
+  fullName: z.string().min(1).max(255),
+  email: optionalEmailSchema,
+  phone: phoneSchema,
+});
+export type WarrantyClaimantSnapshot = z.infer<typeof warrantyClaimantSnapshotSchema>;
+
 // ============================================================================
 // TYPE GUARDS (SCHEMA-TRACE: replace `as` assertions in components)
 // ============================================================================
@@ -62,6 +94,10 @@ export function isWarrantyClaimResolutionTypeValue(
   return warrantyClaimResolutionTypeSchema.safeParse(v).success;
 }
 
+export function isWarrantyClaimantRoleValue(v: unknown): v is WarrantyClaimantRoleValue {
+  return warrantyClaimantRoleSchema.safeParse(v).success;
+}
+
 // ============================================================================
 // CREATE WARRANTY CLAIM
 // ============================================================================
@@ -72,6 +108,18 @@ export const createWarrantyClaimSchema = z.object({
   description: z.string().min(10, 'Description must be at least 10 characters').max(5000),
   cycleCountAtClaim: z.number().int().nonnegative().optional(),
   notes: z.string().max(2000).optional(),
+  claimantRole: warrantyClaimantRoleSchema.optional(),
+  claimantCustomerId: z.string().uuid('Invalid claimant customer ID').optional(),
+  claimantSnapshot: warrantyClaimantSnapshotSchema.optional(),
+  channelBypassReason: z.string().max(2000).optional(),
+}).superRefine((data, ctx) => {
+  if (data.claimantRole && data.claimantRole !== 'channel_partner' && !data.channelBypassReason?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['channelBypassReason'],
+      message: 'A channel bypass reason is required for direct claims',
+    });
+  }
 });
 
 export type CreateWarrantyClaimInput = z.infer<typeof createWarrantyClaimSchema>;
@@ -135,9 +183,12 @@ export type ResolveClaimInput = z.infer<typeof resolveClaimSchema>;
 export const listWarrantyClaimsBaseSchema = z.object({
   warrantyId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
+  claimantRole: warrantyClaimantRoleSchema.optional(),
+  claimantMode: warrantyClaimantModeSchema.optional(),
+  claimantCustomerId: z.string().uuid().optional(),
   status: warrantyClaimStatusSchema.optional(),
   claimType: warrantyClaimTypeSchema.optional(),
-  quickFilter: z.enum(['submitted', 'at_risk_sla', 'awaiting_decision']).optional(),
+  quickFilter: warrantyClaimQuickFilterSchema.optional(),
   assignedUserId: z.string().uuid().optional(),
   // Pagination
   page: z.coerce.number().int().positive().default(1),
@@ -188,6 +239,10 @@ export interface WarrantyClaimListItem {
   claimNumber: string;
   warrantyId: string;
   customerId: string;
+  claimantRole: WarrantyClaimantRoleValue;
+  claimantCustomerId: string | null;
+  claimantSnapshot: WarrantyClaimantSnapshot | null;
+  channelBypassReason: string | null;
   productId: string | null;
   claimType: WarrantyClaimTypeValue;
   status: WarrantyClaimStatusValue;
@@ -199,9 +254,25 @@ export interface WarrantyClaimListItem {
     warrantyNumber: string;
     productSerial: string | null;
   };
+  commercialCustomer: {
+    id: string;
+    name: string | null;
+  };
+  /** Legacy compatibility alias for the commercial customer. Prefer commercialCustomer in new UI. */
   customer: {
     id: string;
     name: string | null;
+  };
+  claimant: {
+    role: WarrantyClaimantRoleValue;
+    displayName: string | null;
+    customerId: string | null;
+    customer: {
+      id: string;
+      name: string | null;
+    } | null;
+    snapshot: WarrantyClaimantSnapshot | null;
+    channelBypassReason: string | null;
   };
   product: {
     id: string;
@@ -239,9 +310,13 @@ export interface WarrantyClaimSummary {
 
 /** Search params for warranty claims list */
 export interface WarrantyClaimsSearchParams {
+  customerId?: string;
+  claimantRole?: WarrantyClaimantRoleValue;
+  claimantMode?: WarrantyClaimantModeValue;
+  claimantCustomerId?: string;
   status?: WarrantyClaimStatusValue;
   type?: WarrantyClaimTypeValue;
-  quickFilter?: 'submitted' | 'at_risk_sla' | 'awaiting_decision';
+  quickFilter?: WarrantyClaimQuickFilterValue;
   page: number;
   pageSize: number;
   sortBy: NonNullable<ListWarrantyClaimsInput['sortBy']>;
@@ -257,17 +332,24 @@ export interface WarrantyClaimsListContainerProps {
 
 /** Props for WarrantyClaimsListView */
 export interface WarrantyClaimsListViewProps {
+  commercialCustomerOptions: Array<{ id: string; name: string }>;
+  customerId?: string;
+  claimantRole?: WarrantyClaimantRoleValue;
+  claimantMode?: WarrantyClaimantModeValue;
   status?: WarrantyClaimStatusValue;
   type?: WarrantyClaimTypeValue;
-  quickFilter?: 'submitted' | 'at_risk_sla' | 'awaiting_decision';
+  quickFilter?: WarrantyClaimQuickFilterValue;
   claims: WarrantyClaimListItem[];
   pagination: WarrantyClaimPagination;
   isLoading: boolean;
   error: Error | null;
+  onCommercialCustomerChange: (value: string | undefined) => void;
+  onClaimantRoleChange: (value: WarrantyClaimantRoleValue | undefined) => void;
+  onClaimantModeChange: (value: WarrantyClaimantModeValue | undefined) => void;
   onStatusChange: (value: WarrantyClaimStatusValue | undefined) => void;
   onTypeChange: (value: WarrantyClaimTypeValue | undefined) => void;
   onQuickFilterChange: (
-    value: 'submitted' | 'at_risk_sla' | 'awaiting_decision' | undefined
+    value: WarrantyClaimQuickFilterValue | undefined
   ) => void;
   onClearFilters: () => void;
   onPageChange: (page: number) => void;
@@ -316,10 +398,37 @@ export interface WarrantyClaimDetailViewClaim {
   notes?: string | null;
   cycleCountAtClaim?: number | null;
   customerId: string;
+  claimantRole: WarrantyClaimantRoleValue;
+  claimantCustomerId: string | null;
+  claimantSnapshot: WarrantyClaimantSnapshot | null;
+  channelBypassReason: string | null;
   product?: { id?: string | null; name?: string | null } | null;
   warrantyId: string;
   warranty?: { warrantyNumber?: string | null } | null;
+  commercialCustomer?: { id: string; name?: string | null } | null;
+  /** Legacy compatibility alias for the commercial customer. Prefer commercialCustomer in new UI. */
   customer?: { name?: string | null } | null;
+  claimant?: {
+    role: WarrantyClaimantRoleValue;
+    displayName: string | null;
+    customerId: string | null;
+    customer: { id: string; name: string | null } | null;
+    snapshot: WarrantyClaimantSnapshot | null;
+    channelBypassReason: string | null;
+  } | null;
+  serviceSystem?: {
+    id: string;
+    displayName: string;
+    siteAddressLabel: string | null;
+    commercialCustomer?: { id: string; name?: string | null } | null;
+  } | null;
+  currentOwner?: {
+    id: string;
+    fullName: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  ownerRecord?: Pick<WarrantyOwnerRecord, 'id' | 'fullName' | 'email' | 'phone' | 'address' | 'notes'> | null;
   approvedByUser?: { name?: string | null; email?: string | null } | null;
   slaTracking?: {
     responseDueAt?: Date | string | null;

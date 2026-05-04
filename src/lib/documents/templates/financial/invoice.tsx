@@ -6,11 +6,24 @@
  */
 
 import { useMemo } from "react";
-import { Document, Page, StyleSheet, View, Text, Image } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
+import {
+  buildFinancialSummaryRows,
+  buildFinancialTableRows,
+  getFinancialDocumentRecipientName,
+  resolveFinancialDocumentAddresses,
+} from "../../financial-presentation";
 import {
   PageNumber,
   PaidWatermark,
   DocumentFixedHeader,
+  DocumentBodyText,
+  DocumentInfoPanel,
+  DocumentMasthead,
+  DocumentPanelGrid,
+  DocumentSectionCard,
+  DocumentSplitRow,
+  DocumentSummaryCard,
   formatAddressLines,
   colors,
   tabularNums,
@@ -105,6 +118,9 @@ const styles = StyleSheet.create({
   toColumn: {
     flex: 1,
     marginLeft: 10,
+  },
+  secondaryAddressSection: {
+    marginTop: 12,
   },
   sectionLabel: {
     fontSize: 9,
@@ -275,6 +291,9 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: 1.4,
   },
+  dataTable: {
+    marginTop: 12,
+  },
 });
 
 // ============================================================================
@@ -303,12 +322,43 @@ function InvoiceContent({ data }: InvoicePdfTemplateProps) {
   const isOverdue = !isPaid && data.dueDate && new Date(data.dueDate).getTime() < now;
 
   // Check if any line items have per-item tax rates
-  const hasPerItemTax = order.lineItems.some(item => item.taxRate != null);
+  const tableRows = buildFinancialTableRows(order);
+  const hasPerItemTax = tableRows.some(item => item.taxRate != null);
 
   const logoUrl = organization.branding?.logoDataUrl ?? organization.branding?.logoUrl;
 
   const fromAddressLines = formatAddressLines(organization.address);
-  const toAddressLines = formatAddressLines(order.billingAddress);
+  const { billTo, shipTo, showShipTo } = resolveFinancialDocumentAddresses(order);
+  const billToAddressLines = formatAddressLines(billTo);
+  const shipToAddressLines = formatAddressLines(shipTo);
+  const billToName = getFinancialDocumentRecipientName(billTo, order.customer.name);
+  const shipToName = getFinancialDocumentRecipientName(shipTo, order.customer.name);
+  const summaryRows = buildFinancialSummaryRows(order, { includeBalanceDue: !isPaid }).map((row) =>
+    row.key === "balanceDue" ? { ...row, emphasized: false } : row
+  );
+  const balanceDue = order.balanceDue ?? order.total;
+  const paymentLines = [
+    data.paymentDetails?.bankName ? `Bank: ${data.paymentDetails.bankName}` : null,
+    data.paymentDetails?.accountName ? `Account: ${data.paymentDetails.accountName}` : null,
+    data.paymentDetails?.bsb ? `BSB: ${data.paymentDetails.bsb}` : null,
+    data.paymentDetails?.accountNumber ? `Account #: ${data.paymentDetails.accountNumber}` : null,
+  ].filter((line): line is string => Boolean(line));
+  const dueLabel = isPaid
+    ? "Paid in full"
+    : data.dueDate
+      ? formatDateForPdf(data.dueDate, locale, "short")
+      : "On receipt";
+  const dueDetail = isPaid
+    ? data.paidAt
+      ? `Paid ${formatDateForPdf(data.paidAt, locale, "short")}`
+      : "No balance outstanding"
+    : `Balance due ${formatCurrencyForPdf(balanceDue, organization.currency, locale)}`;
+  const summaryCardRows = summaryRows.map((row) => ({
+    key: row.key,
+    label: row.label,
+    value: formatCurrencyForPdf(row.amount, organization.currency, locale),
+    emphasized: row.emphasized,
+  }));
 
   return (
     <Page size="A4" style={styles.page}>
@@ -318,87 +368,80 @@ function InvoiceContent({ data }: InvoicePdfTemplateProps) {
         documentNumber={data.documentNumber}
       />
       <View style={styles.content}>
-        {/* Header: Meta left, Logo right  */}
-        <View style={styles.headerRow}>
-          <View style={styles.metaSection}>
-            <Text style={styles.metaTitle}>Invoice</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Invoice: </Text>
-              <Text style={styles.metaValue}>{data.documentNumber}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Date: </Text>
-              <Text style={styles.metaValue}>
-                {formatDateForPdf(data.issueDate, locale, "short")}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Due: </Text>
-              <Text style={styles.metaValue}>
-                {data.dueDate
-                  ? formatDateForPdf(data.dueDate, locale, "short")
-                  : "On receipt"}
-              </Text>
-            </View>
-            {!isPaid && !isOverdue && data.dueDate && (
-              <Text style={styles.statusText}>
-                Due {formatDateForPdf(data.dueDate, locale, "short")}
-              </Text>
-            )}
-            {isPaid && <Text style={styles.statusText}>Paid</Text>}
-            {isOverdue && <Text style={styles.statusText}>Overdue</Text>}
-          </View>
+        <DocumentMasthead
+          title="Invoice"
+          variant="formal"
+          meta={[
+            { label: "Invoice", value: data.documentNumber },
+            { label: "Issue Date", value: formatDateForPdf(data.issueDate, locale, "short") },
+            { label: "Customer", value: order.customer.name },
+          ]}
+          callout={{
+            eyebrow: isPaid ? "Paid" : "Pay By",
+            title: dueLabel,
+            detail: dueDetail,
+            tone: isPaid ? "success" : isOverdue ? "warning" : "info",
+          }}
+          logoUrl={logoUrl}
+        />
 
-          {logoUrl && (
-            <View style={styles.logoWrapper}>
-              <Image src={logoUrl} style={styles.logo} />
-            </View>
-          )}
-        </View>
-
-        {/* From / Bill To two-column */}
-        <View style={styles.fromToRow}>
-          <View style={styles.fromColumn}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <Text style={styles.sectionName}>{organization.name}</Text>
-            {organization.taxId && (
-              <Text style={styles.sectionDetail}>ABN: {organization.taxId}</Text>
-            )}
-            {fromAddressLines.map((line) => (
-              <Text key={line} style={styles.sectionDetail}>{line}</Text>
-            ))}
-            {organization.phone && (
-              <Text style={styles.sectionDetail}>{organization.phone}</Text>
-            )}
-          </View>
-          <View style={styles.toColumn}>
-            <Text style={styles.sectionLabel}>Bill To</Text>
-            <Text style={styles.sectionName}>{order.customer.name}</Text>
-            {toAddressLines.length > 0 ? (
-              toAddressLines.map((line) => (
-                <Text key={line} style={styles.sectionDetail}>{line}</Text>
-              ))
+        <DocumentPanelGrid
+          left={
+            <DocumentInfoPanel
+              label="From"
+              variant="formal"
+              name={organization.name}
+              lines={[
+                ...(organization.taxId ? [`ABN: ${organization.taxId}`] : []),
+                ...fromAddressLines,
+                ...(organization.phone ? [organization.phone] : []),
+              ]}
+            />
+          }
+          right={
+            showShipTo ? (
+              <View>
+                <DocumentInfoPanel
+                  label="Bill To"
+                  variant="formal"
+                  name={billToName}
+                  lines={billToAddressLines}
+                />
+                <View style={{ marginTop: 12 }}>
+                  <DocumentInfoPanel
+                    label="Ship To"
+                    variant="formal"
+                    name={shipToName}
+                    lines={shipToAddressLines}
+                  />
+                </View>
+              </View>
             ) : (
-              <Text style={styles.sectionDetail}>—</Text>
-            )}
-          </View>
-        </View>
+              <DocumentInfoPanel
+                label="Bill To"
+                variant="formal"
+                name={billToName}
+                lines={billToAddressLines}
+              />
+            )
+          }
+        />
 
         {/* Line Items Table */}
-        <View style={styles.table}>
+        <View style={[styles.table, styles.dataTable]}>
           {/* Header */}
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription]}>Description</Text>
             <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
-            <Text style={[styles.tableHeaderCell, styles.colPrice]}>Price</Text>
+              <Text style={[styles.tableHeaderCell, styles.colPrice]}>Unit Price</Text>
             {hasPerItemTax && (
-              <Text style={[styles.tableHeaderCell, styles.colTax]}>Tax %</Text>
+              <Text style={[styles.tableHeaderCell, styles.colTax]}>GST %</Text>
             )}
-            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
+            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount ex GST</Text>
           </View>
 
           {/* Rows */}
-          {order.lineItems.length === 0 ? (
+          {tableRows.length === 0 ? (
             <View style={styles.tableRow}>
               <Text style={[styles.tableCell, styles.colDescription]}>—</Text>
               <Text style={[styles.tableCell, styles.colQty]}>—</Text>
@@ -409,8 +452,8 @@ function InvoiceContent({ data }: InvoicePdfTemplateProps) {
               <Text style={[styles.tableCell, styles.colTotal]}>—</Text>
             </View>
           ) : (
-            order.lineItems.map((item) => (
-            <View key={item.id} style={styles.tableRow} wrap={true}>
+            tableRows.map((item) => (
+            <View key={item.key} style={styles.tableRow} wrap={true}>
               <View style={hasPerItemTax ? styles.colDescriptionWithTax : styles.colDescription}>
                 <Text style={styles.tableCell}>{item.description}</Text>
                 {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
@@ -425,95 +468,39 @@ function InvoiceContent({ data }: InvoicePdfTemplateProps) {
                 </Text>
               )}
               <Text style={[styles.tableCell, styles.tableCellNumeric, styles.colTotal]}>
-                {formatCurrencyForPdf(item.total, organization.currency, locale)}
+                {formatCurrencyForPdf(item.amount, organization.currency, locale)}
               </Text>
             </View>
             ))
           )}
         </View>
 
-        {/* Summary - unbreakable */}
-        <View style={styles.summarySection} wrap={false}>
-          <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
-              </Text>
+        <DocumentSplitRow
+          left={
+            <View>
+              {paymentLines.length > 0 ? (
+                <DocumentSectionCard title="Payment Details" variant="formal">
+                  <>
+                    {paymentLines.map((line) => (
+                      <DocumentBodyText key={line}>{line}</DocumentBodyText>
+                    ))}
+                  </>
+                </DocumentSectionCard>
+              ) : null}
+              {data.notes ? (
+                <DocumentSectionCard title="Notes" variant="formal">
+                  <DocumentBodyText>{data.notes}</DocumentBodyText>
+                </DocumentSectionCard>
+              ) : null}
+              {data.terms ? (
+                <DocumentSectionCard title="Terms" variant="formal">
+                  <DocumentBodyText>{data.terms}</DocumentBodyText>
+                </DocumentSectionCard>
+              ) : null}
             </View>
-            
-            {order.discount && order.discount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Discount</Text>
-                <Text style={styles.summaryValue}>
-                  -{formatCurrencyForPdf(order.discount, organization.currency, locale)}
-                </Text>
-              </View>
-            )}
-            
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{`Tax (${order.taxRate || 0}%)`}</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
-              </Text>
-            </View>
-
-            <View style={styles.summaryTotal}>
-              <Text style={styles.summaryTotalLabel}>Total</Text>
-              <Text style={styles.summaryTotalValue}>
-                {formatCurrencyForPdf(order.total, organization.currency, locale)}
-              </Text>
-            </View>
-
-            {!isPaid && order.balanceDue && order.balanceDue > 0 && (
-              <View style={styles.balanceDue}>
-                <Text style={styles.balanceDueLabel}>Balance Due</Text>
-                <Text style={styles.balanceDueValue}>
-                  {formatCurrencyForPdf(order.balanceDue, organization.currency, locale)}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Payment / Notes two-column  */}
-        {(data.paymentDetails || data.notes || data.terms) && (
-          <View style={styles.paymentNotesRow} wrap={false}>
-            <View style={styles.paymentColumn}>
-              {data.paymentDetails && (
-                <>
-                  <Text style={styles.paymentTitle}>Payment Details</Text>
-                  {data.paymentDetails.bankName && (
-                    <Text style={styles.paymentValue}>Bank: {data.paymentDetails.bankName}</Text>
-                  )}
-                  {data.paymentDetails.accountName && (
-                    <Text style={styles.paymentValue}>Account: {data.paymentDetails.accountName}</Text>
-                  )}
-                  {data.paymentDetails.bsb && (
-                    <Text style={styles.paymentValue}>BSB: {data.paymentDetails.bsb}</Text>
-                  )}
-                  {data.paymentDetails.accountNumber && (
-                    <Text style={styles.paymentValue}>Account #: {data.paymentDetails.accountNumber}</Text>
-                  )}
-                </>
-              )}
-            </View>
-            <View style={styles.notesColumn}>
-              {data.notes && (
-                <>
-                  <Text style={styles.notesLabel}>Notes</Text>
-                  <Text style={styles.notesText} orphans={2} widows={2}>{data.notes}</Text>
-                </>
-              )}
-              {data.terms && (
-                <>
-                  <Text style={[styles.notesLabel, { marginTop: data.notes ? 8 : 0 }]}>Terms</Text>
-                  <Text style={styles.notesText} orphans={2} widows={2}>{data.terms}</Text>
-                </>
-              )}
-            </View>
-          </View>
-        )}
+          }
+          right={<DocumentSummaryCard rows={summaryCardRows} variant="formal" />}
+        />
 
 
       </View>

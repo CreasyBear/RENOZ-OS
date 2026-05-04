@@ -19,6 +19,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRightLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
 import { useOpportunities, useDeleteOpportunity, useBulkUpdateOpportunityStage } from "@/hooks/pipeline";
@@ -360,6 +361,17 @@ export function OpportunitiesListContainer({
         isLoading={bulkStageChangeMutation.isPending}
       />
       <div className="space-y-4">
+        {opportunitiesError && opportunities.length > 0 ? (
+          <Alert>
+            <ArrowRightLeft className="h-4 w-4" />
+            <AlertTitle>Showing cached opportunities</AlertTitle>
+            <AlertDescription>
+              {opportunitiesError instanceof Error
+                ? opportunitiesError.message
+                : 'Opportunity data is temporarily unavailable. Please refresh and try again.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {/* Bulk Actions Bar */}
         <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
           <span className="text-sm text-muted-foreground mr-2">
@@ -378,7 +390,7 @@ export function OpportunitiesListContainer({
         <OpportunitiesListPresenter
           opportunities={opportunities}
           isLoading={isOpportunitiesLoading}
-          error={opportunitiesError instanceof Error ? opportunitiesError : null}
+          error={opportunities.length === 0 && opportunitiesError instanceof Error ? opportunitiesError : null}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
           isPartiallySelected={isPartiallySelected}

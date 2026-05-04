@@ -8,8 +8,8 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { normalizeQueryError } from '@/lib/error-handling';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
   createDelegation,
   listMyDelegations,
@@ -46,16 +46,14 @@ export function useMyDelegations(filters?: DelegationFilters, enabled = true) {
     queryKey: queryKeys.users.delegations.myDelegations(filters),
     queryFn: async () => {
       try {
-        const result = await listMyDelegations({
+        return await listMyDelegations({
           data: filters ?? { page: 1, pageSize: 50 }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Delegations are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Delegations are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled,
@@ -71,16 +69,14 @@ export function useDelegationsToMe(filters?: DelegationFilters, enabled = true) 
     queryKey: queryKeys.users.delegations.delegationsToMe(filters),
     queryFn: async () => {
       try {
-        const result = await listDelegationsToMe({
+        return await listDelegationsToMe({
           data: filters ?? { page: 1, pageSize: 50 }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Delegations are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Delegations are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled,
@@ -96,16 +92,14 @@ export function useAllDelegations(filters?: AllDelegationsFilters, enabled = tru
     queryKey: queryKeys.users.delegations.allDelegations(filters),
     queryFn: async () => {
       try {
-        const result = await listAllDelegations({
+        return await listAllDelegations({
           data: filters ?? { page: 1, pageSize: 50, activeOnly: true }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Delegations are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Delegations are temporarily unavailable. Please refresh and try again.',
+        });
       }
     },
     enabled,
@@ -121,16 +115,15 @@ export function useActiveDelegate(userId: string, enabled = true) {
     queryKey: queryKeys.users.delegations.activeDelegate(userId),
     queryFn: async () => {
       try {
-        const result = await getActiveDelegate({
+        return await getActiveDelegate({
           data: { id: userId }
         });
-        if (result == null) throw new Error('Query returned no data');
-        return result;
       } catch (error) {
-        throw normalizeQueryError(
-          error,
-          'Active delegation details are temporarily unavailable. Please refresh and try again.'
-        );
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage: 'Active delegation details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested user could not be found.',
+        });
       }
     },
     enabled: enabled && !!userId,

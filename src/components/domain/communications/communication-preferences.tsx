@@ -51,6 +51,8 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { getUserFriendlyMessage } from "@/lib/error-handling";
 import type {
   ContactPreferences,
@@ -403,7 +405,7 @@ export function CommunicationPreferences({
   >(null);
 
   // Fetch current preferences
-  const { data: preferencesData, isLoading } = useContactPreferences({
+  const { data: preferencesData, isLoading, error, refetch } = useContactPreferences({
     contactId,
     enabled: !!contactId,
   });
@@ -478,18 +480,55 @@ export function CommunicationPreferences({
     );
   }
 
+  if (error && !preferencesData) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="text-lg">Communication Preferences</CardTitle>
+          <CardDescription>
+            Manage how we communicate with this contact
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTitle>Preferences unavailable</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error.message}</span>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <CommunicationPreferencesPresenter
-      preferences={preferences}
-      isUpdating={updateMutation.isPending}
-      submitError={updateMutation.error?.message ?? null}
-      contactName={contactName}
-      className={className}
-      onToggle={handleToggle}
-      onConfirmOptOut={confirmOptOutAction}
-      confirmOptOut={confirmOptOut}
-      onConfirmOptOutChange={setConfirmOptOut}
-    />
+    <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached preferences</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <CommunicationPreferencesPresenter
+        preferences={preferences}
+        isUpdating={updateMutation.isPending}
+        submitError={updateMutation.error?.message ?? null}
+        contactName={contactName}
+        className={className}
+        onToggle={handleToggle}
+        onConfirmOptOut={confirmOptOutAction}
+        confirmOptOut={confirmOptOut}
+        onConfirmOptOutChange={setConfirmOptOut}
+      />
+    </div>
   );
 }
 
@@ -503,7 +542,7 @@ export function PreferenceHistory({
   customerId,
   className,
 }: PreferenceHistoryProps) {
-  const { data: historyData, isLoading } = usePreferenceHistory({
+  const { data: historyData, isLoading, error, refetch } = usePreferenceHistory({
     contactId,
     customerId,
     limit: 50,
@@ -532,5 +571,44 @@ export function PreferenceHistory({
     );
   }
 
-  return <PreferenceHistoryPresenter history={history} className={className} />;
+  if (error && !historyData) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Preference History
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTitle>Preference history unavailable</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error.message}</span>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached preference history</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <PreferenceHistoryPresenter history={history} className={className} />
+    </div>
+  );
 }

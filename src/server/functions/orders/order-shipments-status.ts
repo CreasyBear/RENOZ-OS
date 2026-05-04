@@ -24,6 +24,7 @@ import {
 } from '@/lib/schemas';
 import { normalizeSerial } from '@/lib/serials';
 import { serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
+import { createEntitlementsForDeliveredShipmentTx } from '@/server/functions/warranty/_shared/entitlement-core';
 import { validateShipmentStatusTransition } from './order-shipments-validation';
 import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
 
@@ -168,6 +169,13 @@ export async function updateShipmentStatusHandler({
           idempotencyKey: idempotencyKey ?? undefined,
         },
         createdBy: ctx.user.id,
+      });
+
+      await createEntitlementsForDeliveredShipmentTx(tx, {
+        organizationId: ctx.organizationId,
+        shipmentId: updatedShipment.id,
+        deliveredAt: updateValues.deliveredAt ?? new Date(),
+        userId: ctx.user.id,
       });
 
       return updatedShipment;
@@ -383,6 +391,13 @@ export async function confirmDeliveryHandler({
       orderId: existing.orderId,
       userId: ctx.user.id,
       deliveredAt,
+    });
+
+    await createEntitlementsForDeliveredShipmentTx(tx, {
+      organizationId: ctx.organizationId,
+      shipmentId: updatedShipment.id,
+      deliveredAt,
+      userId: ctx.user.id,
     });
 
     await tx.insert(activities).values({

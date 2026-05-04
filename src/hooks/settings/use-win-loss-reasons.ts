@@ -8,6 +8,7 @@
  * - Delete reason
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listWinLossReasons,
@@ -68,9 +69,14 @@ export function useWinLossReasons({
   return useQuery({
     queryKey: queryKeys.settings.winLossReasonsFiltered(filters as Record<string, unknown>),
     queryFn: async () => {
-      const result = await listWinLossReasons({ data: filters });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listWinLossReasons({ data: filters });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Win/loss reasons are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000, // 30 seconds

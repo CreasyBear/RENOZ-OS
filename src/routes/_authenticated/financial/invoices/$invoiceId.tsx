@@ -9,7 +9,7 @@
  * @see src/routes/_authenticated/invoices/$invoiceId.tsx (original - now redirects here)
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { PageLayout, RouteErrorFallback, DetailPageBackButton } from "@/components/layout";
+import { RouteErrorFallback, DetailPageBackButton } from "@/components/layout";
 import { InvoiceDetailSkeleton } from "@/components/skeletons/invoices";
 import { InvoiceDetailContainer } from "@/components/domain/invoices/detail/invoice-detail-container";
 
@@ -22,14 +22,7 @@ export const Route = createFileRoute("/_authenticated/financial/invoices/$invoic
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/financial/invoices" />
   ),
-  pendingComponent: () => (
-    <PageLayout variant="full-width">
-      <PageLayout.Header title={null} />
-      <PageLayout.Content>
-        <InvoiceDetailSkeleton />
-      </PageLayout.Content>
-    </PageLayout>
-  ),
+  pendingComponent: () => <InvoiceDetailSkeleton />,
 });
 
 // ============================================================================
@@ -42,14 +35,13 @@ function InvoiceDetailPage() {
   return (
     <InvoiceDetailContainer invoiceId={invoiceId}>
       {({ headerActions, content }) => (
-        <PageLayout variant="full-width">
-          <PageLayout.Header
-            title={null}
-            leading={<DetailPageBackButton to="/financial/invoices" aria-label="Back to invoices" />}
-            actions={headerActions}
-          />
-          <PageLayout.Content>{content}</PageLayout.Content>
-        </PageLayout>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <DetailPageBackButton to="/financial/invoices" aria-label="Back to invoices" />
+            {headerActions}
+          </div>
+          {content}
+        </div>
       )}
     </InvoiceDetailContainer>
   );

@@ -34,6 +34,7 @@ import {
   type KanbanPriority,
 } from '@/components/shared/kanban';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { logger } from '@/lib/logger';
@@ -177,7 +178,7 @@ export const MyTasksKanban = memo(function MyTasksKanban({
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   // Fetch tasks
-  const { data, isLoading, refetch } = useMyTasksKanban({ projectId });
+  const { data, error, isLoading, refetch } = useMyTasksKanban({ projectId });
   const updateTask = useUpdateTask();
 
   // Flatten tasks for kanban
@@ -252,13 +253,56 @@ export const MyTasksKanban = memo(function MyTasksKanban({
     return <KanbanBoardSkeleton columnCount={4} cardsPerColumn={3} />;
   }
 
+  if (error && data === undefined) {
+    return (
+      <Alert variant="destructive">
+        <XCircle className="h-4 w-4" />
+        <AlertTitle>Tasks unavailable</AlertTitle>
+        <AlertDescription className="flex items-center gap-2">
+          <span>{error.message}</span>
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   // Empty state
   if (tasks.length === 0) {
-    return <EmptyState projectId={projectId} />;
+    return (
+      <div className="space-y-4">
+        {error ? (
+          <Alert>
+            <XCircle className="h-4 w-4" />
+            <AlertTitle>Showing cached tasks</AlertTitle>
+            <AlertDescription className="flex items-center gap-2">
+              <span>{error.message}</span>
+              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <EmptyState projectId={projectId} />
+      </div>
+    );
   }
 
   return (
     <div className={cn('space-y-4', className)}>
+      {error ? (
+        <Alert>
+          <XCircle className="h-4 w-4" />
+          <AlertTitle>Showing cached tasks</AlertTitle>
+          <AlertDescription className="flex items-center gap-2">
+            <span>{error.message}</span>
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

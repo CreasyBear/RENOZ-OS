@@ -16,6 +16,8 @@ import { useCampaigns } from "@/hooks/communications/use-campaigns";
 import { useEmailMetrics } from "@/hooks/communications/use-email-analytics";
 import { MetricCard } from "@/components/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -53,18 +55,29 @@ export default function AnalyticsPage() {
   }, [dateRange]);
 
   // Fetch campaigns filtered by date range for analytics
-  const { data: campaignsData, isLoading: campaignsLoading } = useCampaigns({
+  const {
+    data: campaignsData,
+    isLoading: campaignsLoading,
+    error: campaignsError,
+    refetch: refetchCampaigns,
+  } = useCampaigns({
     dateFrom: dateRangeFilter.dateFrom,
     dateTo: dateRangeFilter.dateTo,
     limit: 1000, // Get all campaigns in date range for analytics
   });
 
   // Fetch email metrics
-  const { data: emailMetricsData, isLoading: metricsLoading } = useEmailMetrics({
+  const {
+    data: emailMetricsData,
+    isLoading: metricsLoading,
+    error: emailMetricsError,
+    refetch: refetchEmailMetrics,
+  } = useEmailMetrics({
     period: dateRange,
   });
 
   const isLoading = campaignsLoading || metricsLoading;
+  const hasAnyData = Boolean(campaignsData || emailMetricsData);
 
   // Calculate campaign analytics
   const analytics = useMemo(() => {
@@ -150,6 +163,29 @@ export default function AnalyticsPage() {
       </div>
 
       <div>
+        {campaignsError || emailMetricsError ? (
+          <Alert className="mb-6" variant={hasAnyData ? "default" : "destructive"}>
+            <AlertTitle>
+              {hasAnyData ? "Showing cached analytics" : "Campaign analytics unavailable"}
+            </AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>
+                {(campaignsError ?? emailMetricsError)?.message ??
+                  "Campaign analytics are temporarily unavailable. Please refresh and try again."}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void refetchCampaigns();
+                  void refetchEmailMetrics();
+                }}
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <ErrorBoundary
           fallback={
             <Card className="border-destructive/50">

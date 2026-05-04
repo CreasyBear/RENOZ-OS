@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { idSchema, paginationSchema, currencySchema } from '../_shared/patterns';
+import { PAYMENT_METHODS } from '../orders/order-payments';
 
 // ============================================================================
 // ENUMS (must match drizzle/schema/enums.ts)
@@ -100,6 +101,9 @@ export type CreatePaymentPlanInput = z.infer<typeof createPaymentPlanSchema>;
 export const recordInstallmentPaymentSchema = z.object({
   installmentId: idSchema,
   paidAmount: currencySchema.positive('Amount must be greater than 0'),
+  paymentMethod: z.enum(PAYMENT_METHODS).default('bank_transfer'),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+  reference: z.string().max(100).optional(),
   paymentReference: z.string().max(100).optional(),
   notes: z.string().max(500).optional(),
 });

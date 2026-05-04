@@ -63,11 +63,16 @@ export function WonLostDialog({
     }),
     [isWon]
   );
-  const { data: reasonsData, isLoading: isReasonsLoading } = useWinLossReasons({
+  const {
+    data: reasonsData,
+    isLoading: isReasonsLoading,
+    error: reasonsError,
+  } = useWinLossReasons({
     filters: reasonFilters,
     enabled: open,
   });
   const reasons = useMemo(() => reasonsData?.reasons ?? [], [reasonsData?.reasons]);
+  const hasUsableReasons = reasons.length > 0;
   const reasonOptions = useMemo(
     () => reasons.map((reason) => ({ value: reason.id, label: reason.name })),
     [reasons]
@@ -137,7 +142,9 @@ export function WonLostDialog({
       submitLabel={isWon ? "Confirm Win" : "Confirm Loss"}
       loadingLabel={isWon ? "Confirming win..." : "Confirming loss..."}
       submitVariant={isWon ? "default" : "destructive"}
-      submitDisabled={reasons.length === 0}
+      submitDisabled={
+        isReasonsLoading || (!hasUsableReasons && !!reasonsError) || reasons.length === 0
+      }
       size="sm"
       className="sm:max-w-[425px]"
       resetOnClose={false}
@@ -155,8 +162,12 @@ export function WonLostDialog({
                   description={
                     isReasonsLoading
                       ? "Loading reasons..."
-                      : reasons.length === 0
-                        ? "No reasons available."
+                      : reasonsError
+                        ? reasonsData
+                          ? "Showing the most recent reasons while refresh is unavailable."
+                          : "Reasons are temporarily unavailable."
+                        : reasons.length === 0
+                          ? "No reasons available."
                         : undefined
                   }
                 />

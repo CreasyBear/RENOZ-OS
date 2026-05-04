@@ -300,6 +300,7 @@ export function CustomerDetailContainer({
         activeItems={detail.activeItems}
         activeItemsLoading={detail.activeItemsLoading}
         extendedDataWarning={detail.extendedDataWarning}
+        orderSummaryState={detail.orderSummaryState}
         headerActions={children ? null : headerActionsEl}
         onLogActivity={onLogActivity}
         onScheduleFollowUp={onScheduleFollowUp}

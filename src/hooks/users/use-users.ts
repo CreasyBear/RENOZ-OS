@@ -10,6 +10,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import {
   listUsers,
@@ -45,11 +46,16 @@ export function useUsers(filters?: UserFilters, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.list(filters),
     queryFn: async () => {
-      const result = await listUsers({
-        data: filters ?? { page: 1, pageSize: 20 } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await listUsers({
+          data: filters ?? { page: 1, pageSize: 20 }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'Users are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 30 * 1000,
@@ -63,11 +69,17 @@ export function useUser(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.detail(userId),
     queryFn: async () => {
-      const result = await getUser({
-        data: { id: userId } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getUser({
+          data: { id: userId }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage: 'User details are temporarily unavailable. Please refresh and try again.',
+          notFoundMessage: 'The requested user could not be found.',
+        });
+      }
     },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
@@ -81,9 +93,14 @@ export function useUserStats(enabled = true) {
   return useQuery({
     queryKey: queryKeys.users.stats(),
     queryFn: async () => {
-      const result = await getUserStats();
-      if (result == null) throw new Error('User stats returned no data');
-      return result;
+      try {
+        return await getUserStats();
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'User metrics are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000,
@@ -211,14 +228,18 @@ export function useUserActivity(userId: string, page = 1, pageSize = 10, enabled
   return useQuery({
     queryKey: queryKeys.users.activity(userId, { page, pageSize }),
     queryFn: async () => {
-      const result = await getUserActivity({
-        data: { userId, page, pageSize } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await getUserActivity({
+          data: { userId, page, pageSize }
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: 'User activity is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000,
   });
 }
-

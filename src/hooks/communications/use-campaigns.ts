@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { QUERY_CONFIG } from '@/lib/constants';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import type {
   CreateCampaignInput,
   UpdateCampaignInput,
@@ -68,15 +69,22 @@ interface CampaignsResponse {
 
 export function useCampaigns(options: UseCampaignsOptions = {}) {
   const { status, search, templateType, dateFrom, dateTo, limit = 50, offset = 0, enabled = true } = options;
+  const getCampaignsFn = useServerFn(getCampaigns);
 
   return useQuery<CampaignsResponse>({
     queryKey: queryKeys.communications.campaignsList({ status, search, templateType, dateFrom, dateTo, limit, offset }),
     queryFn: async () => {
-      const result = await getCampaigns({
-        data: { status, search, templateType, dateFrom, dateTo, limit, offset },
-      });
-      if (result == null) throw new Error('Campaigns list returned no data');
-      return result as CampaignsResponse;
+      try {
+        return await getCampaignsFn({
+          data: { status, search, templateType, dateFrom, dateTo, limit, offset },
+        }) as CampaignsResponse;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Campaign data is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -90,12 +98,21 @@ export interface UseCampaignOptions {
 
 export function useCampaign(options: UseCampaignOptions) {
   const { campaignId, enabled = true } = options;
+  const getCampaignByIdFn = useServerFn(getCampaignById);
 
-  return useQuery<Campaign | undefined>({
+  return useQuery<Campaign | null>({
     queryKey: queryKeys.communications.campaignDetail(campaignId),
     queryFn: async () => {
-      const r = await getCampaignById({ data: { id: campaignId } });
-      return r && typeof r === 'object' && 'id' in r ? (r as Campaign) : undefined;
+      try {
+        const result = await getCampaignByIdFn({ data: { id: campaignId } });
+        return result && typeof result === 'object' && 'id' in result ? (result as Campaign) : null;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'nullable-by-design',
+          fallbackMessage:
+            'Campaign details are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!campaignId,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM,
@@ -112,13 +129,20 @@ export interface UseCampaignRecipientsOptions {
 
 export function useCampaignRecipients(options: UseCampaignRecipientsOptions) {
   const { campaignId, status, limit = 50, offset = 0, enabled = true } = options;
+  const getCampaignRecipientsFn = useServerFn(getCampaignRecipients);
 
   return useQuery({
-    queryKey: queryKeys.communications.campaignRecipients(campaignId, { status, limit }),
+    queryKey: queryKeys.communications.campaignRecipients(campaignId, { status, limit, offset }),
     queryFn: async () => {
-      const result = await getCampaignRecipients({ data: { campaignId, status, limit, offset } });
-      if (result == null) throw new Error('Campaign recipients returned no data');
-      return result;
+      try {
+        return await getCampaignRecipientsFn({ data: { campaignId, status, limit, offset } });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'detail-not-found',
+          fallbackMessage:
+            'Campaign recipients are temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && !!campaignId,
     staleTime: QUERY_CONFIG.STALE_TIME_SHORT,
@@ -140,15 +164,22 @@ export interface UseCampaignPreviewOptions {
 
 export function useCampaignPreview(options: UseCampaignPreviewOptions) {
   const { recipientCriteria, sampleSize = 5, enabled = true } = options;
+  const previewCampaignRecipientsFn = useServerFn(previewCampaignRecipients);
 
   return useQuery<PreviewRecipientsResult>({
-    queryKey: queryKeys.communications.campaignPreview(recipientCriteria),
+    queryKey: queryKeys.communications.campaignPreview({ recipientCriteria, sampleSize }),
     queryFn: async () => {
-      const result = await previewCampaignRecipients({
-        data: { recipientCriteria, sampleSize } 
-      });
-      if (result == null) throw new Error('Query returned no data');
-      return result;
+      try {
+        return await previewCampaignRecipientsFn({
+          data: { recipientCriteria, sampleSize } 
+        });
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Campaign preview is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled: enabled && Object.keys(recipientCriteria).length > 0,
     staleTime: QUERY_CONFIG.STALE_TIME_MEDIUM, // preview data can be cached a bit

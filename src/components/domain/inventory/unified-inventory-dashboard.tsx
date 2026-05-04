@@ -106,6 +106,22 @@ interface DashboardAlert {
   triggeredAt: Date;
 }
 
+function DashboardReadWarning({
+  title,
+  message,
+}: {
+  title: string;
+  message: string;
+}) {
+  return (
+    <Alert className="border-amber-500/30 bg-amber-500/5 text-foreground">
+      <AlertTriangle className="h-4 w-4 text-amber-600" />
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
+  );
+}
+
 // ============================================================================
 // MOVEMENT ICONS & COLORS
 // ============================================================================
@@ -168,6 +184,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   const {
     data: dashboardData,
     isLoading: isDashboardLoading,
+    error: dashboardError,
     refetch: refetchDashboard,
   } = useInventoryDashboard();
 
@@ -190,6 +207,8 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     productsWithInventory: trackedItems,
     setProducts: setTrackedProducts,
     isLoading: isLoadingTracked,
+    trackedProductsWarning,
+    trackedProductsUnavailable,
   } = useTrackedProducts();
 
   const acknowledgeAlertMutation = useAcknowledgeAlert();
@@ -288,10 +307,29 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // Loading & Error States
   // ─────────────────────────────────────────────────────────────────────────
   const isLoading = isWmsLoading || isDashboardLoading;
+  const hasUsableWmsData = !!wmsData;
+  const hasUsableDashboardData = !!dashboardData;
+  const showWmsUnavailable = !!wmsError && !hasUsableWmsData;
+  const showWmsDegraded = !!wmsError && hasUsableWmsData;
+  const showDashboardUnavailable = !!dashboardError && !hasUsableDashboardData;
+  const showDashboardDegraded = !!dashboardError && hasUsableDashboardData;
+  const wmsErrorMessage =
+    typeof wmsError === 'object' &&
+    wmsError !== null &&
+    'message' in wmsError &&
+    typeof (wmsError as { message?: unknown }).message === 'string'
+      ? (wmsError as { message: string }).message
+      : 'Please refresh and try again.';
+  const dashboardErrorMessage =
+    typeof dashboardError === 'object' &&
+    dashboardError !== null &&
+    'message' in dashboardError &&
+    typeof (dashboardError as { message?: unknown }).message === 'string'
+      ? (dashboardError as { message: string }).message
+      : 'Please refresh and try again.';
 
-  if (wmsError) {
-    const errorMessage =
-      wmsError instanceof Error ? wmsError.message : 'Unknown error';
+  if (showWmsUnavailable) {
+    const errorMessage = wmsErrorMessage;
     return (
       <div className="p-8 text-center text-muted-foreground">
         <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
@@ -315,12 +353,25 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   const totals = wmsData?.totals ?? { totalValue: 0, totalUnits: 0, totalSkus: 0 };
   const metrics = dashboardData?.metrics ?? null;
-  const lowStockCount = metrics?.lowStockCount ?? 0;
-  const outOfStockCount = metrics?.outOfStockCount ?? 0;
+  const lowStockCount = metrics?.lowStockCount;
+  const outOfStockCount = metrics?.outOfStockCount;
   const locationsCount = metrics?.locationsCount ?? wmsData?.stockByLocation?.length ?? 0;
 
   return (
     <div className="space-y-6">
+      {showWmsDegraded ? (
+        <DashboardReadWarning
+          title="Showing the most recent inventory dashboard snapshot while refresh is unavailable."
+          message={wmsErrorMessage}
+        />
+      ) : null}
+      {showDashboardDegraded ? (
+        <DashboardReadWarning
+          title="Showing the most recent dashboard metrics while refresh is unavailable."
+          message={dashboardErrorMessage}
+        />
+      ) : null}
+
       {/* ─────────────────────────────────────────────────────────────────────
           Section 1: Search + Quick Actions
       ───────────────────────────────────────────────────────────────────── */}
@@ -485,11 +536,15 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
         />
         <MetricCard
           title="Stock Alerts"
-          value={lowStockCount + outOfStockCount}
-          subtitle={`${lowStockCount} low, ${outOfStockCount} out`}
+          value={showDashboardUnavailable ? '--' : (lowStockCount ?? 0) + (outOfStockCount ?? 0)}
+          subtitle={
+            showDashboardUnavailable
+              ? 'Alert metrics unavailable'
+              : `${lowStockCount ?? 0} low, ${outOfStockCount ?? 0} out`
+          }
           icon={AlertTriangle}
           isLoading={isLoading}
-          alert={lowStockCount + outOfStockCount > 0}
+          alert={!showDashboardUnavailable && ((lowStockCount ?? 0) + (outOfStockCount ?? 0) > 0)}
           delta={
             comparison?.alertsChange !== undefined && comparison.alertsChange !== 0
               ? Math.abs(comparison.alertsChange)
@@ -530,7 +585,15 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             {isLoading ? (
               <CategorySkeleton />
             ) : (
-              <CategoryList categories={wmsData?.stockByCategory ?? []} formatValue={formatValue} />
+              <div className="space-y-4">
+                {showWmsDegraded ? (
+                  <DashboardReadWarning
+                    title="Category breakdown may be stale."
+                    message={wmsErrorMessage}
+                  />
+                ) : null}
+                <CategoryList categories={wmsData?.stockByCategory ?? []} formatValue={formatValue} />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -544,7 +607,15 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             {isLoading ? (
               <LocationSkeleton />
             ) : (
-              <LocationList locations={wmsData?.stockByLocation ?? []} />
+              <div className="space-y-4">
+                {showWmsDegraded ? (
+                  <DashboardReadWarning
+                    title="Location breakdown may be stale."
+                    message={wmsErrorMessage}
+                  />
+                ) : null}
+                <LocationList locations={wmsData?.stockByLocation ?? []} />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -566,11 +637,24 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           <CardContent>
             {isLoadingTracked ? (
               <TrackedItemsSkeleton />
-            ) : (
-              <TrackedItemsList
-                items={trackedItemsWithStatus}
-                onAddItems={() => setIsTrackedDialogOpen(true)}
+            ) : trackedProductsUnavailable && trackedProductsSelection.length > 0 ? (
+              <DashboardReadWarning
+                title="Tracked items are temporarily unavailable."
+                message={trackedProductsUnavailable}
               />
+            ) : (
+              <div className="space-y-4">
+                {trackedProductsWarning ? (
+                  <DashboardReadWarning
+                    title="Tracked items may be stale."
+                    message={trackedProductsWarning}
+                  />
+                ) : null}
+                <TrackedItemsList
+                  items={trackedItemsWithStatus}
+                  onAddItems={() => setIsTrackedDialogOpen(true)}
+                />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -601,8 +685,21 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           <CardContent>
             {isWmsLoading ? (
               <MovementsSkeleton />
+            ) : showWmsUnavailable ? (
+              <DashboardReadWarning
+                title="Recent movements are temporarily unavailable."
+                message={wmsErrorMessage}
+              />
             ) : (
-              <MovementsTimeline groupedMovements={groupedMovements} />
+              <div className="space-y-4">
+                {showWmsDegraded ? (
+                  <DashboardReadWarning
+                    title="Recent movements may be stale."
+                    message={wmsErrorMessage}
+                  />
+                ) : null}
+                <MovementsTimeline groupedMovements={groupedMovements} />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -619,8 +716,21 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           <CardContent>
             {isDashboardLoading ? (
               <TopMoversSkeleton />
+            ) : showDashboardUnavailable ? (
+              <DashboardReadWarning
+                title="Top movers are temporarily unavailable."
+                message={dashboardError?.message ?? 'Please refresh and try again.'}
+              />
             ) : (
-              <TopMoversList movers={topMovers} />
+              <div className="space-y-4">
+                {showDashboardDegraded ? (
+                  <DashboardReadWarning
+                    title="Top movers may be stale."
+                    message={dashboardErrorMessage}
+                  />
+                ) : null}
+                <TopMoversList movers={topMovers} />
+              </div>
             )}
           </CardContent>
         </Card>

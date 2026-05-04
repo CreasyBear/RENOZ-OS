@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -108,6 +109,8 @@ export const ProductSelector = memo(function ProductSelector({
   });
 
   const products = (data?.products ?? []) as Product[];
+  const hasUnavailableProducts = !!error && products.length === 0 && !isLoading;
+  const hasDegradedProducts = !!error && products.length > 0;
 
   // Add product to selection
   const handleAddProduct = useCallback(
@@ -298,6 +301,16 @@ export const ProductSelector = memo(function ProductSelector({
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          {hasDegradedProducts ? (
+            <div className="px-4 pt-4">
+              <Alert>
+                <AlertTitle>Product search unavailable</AlertTitle>
+                <AlertDescription>
+                  Showing the most recent product results while refresh is unavailable.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
           <ScrollArea className="h-[400px]">
             {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
@@ -309,7 +322,7 @@ export const ProductSelector = memo(function ProductSelector({
                   </div>
                 ))}
               </div>
-            ) : error ? (
+            ) : hasUnavailableProducts ? (
               <div className="p-4 text-center text-sm text-destructive">
                 Failed to load products. Please try again.
               </div>

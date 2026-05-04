@@ -78,6 +78,8 @@ interface ApprovalDecisionDialogProps {
       lineTotal?: number | null;
     }>;
   };
+  /** @source useApprovalDetails error state in /approvals/index.tsx */
+  approvalDetailsError?: Error | null;
   /** @source useApprovalDetails loading state in /approvals/index.tsx */
   isLoadingApprovalDetails?: boolean;
 }
@@ -93,6 +95,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   onDecision,
   escalationUsers,
   approvalDetails,
+  approvalDetailsError,
   isLoadingApprovalDetails = false,
 }: ApprovalDecisionDialogProps) {
   const [comments, setComments] = useState('');
@@ -274,7 +277,14 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                         </TableCell>
                       </TableRow>
                     )}
-                    {!isLoadingApprovalDetails && (approvalDetails?.items?.length ?? 0) === 0 && (
+                    {!isLoadingApprovalDetails && approvalDetailsError && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-destructive text-sm">
+                          {approvalDetailsError.message}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!isLoadingApprovalDetails && !approvalDetailsError && (approvalDetails?.items?.length ?? 0) === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-muted-foreground text-sm">
                           No items available.

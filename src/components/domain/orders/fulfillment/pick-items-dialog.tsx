@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { toastSuccess, toastError } from '@/hooks';
 import { useOrderWithCustomer } from '@/hooks/orders/use-order-detail';
 import { usePickOrderItems, useUnpickOrderItems } from '@/hooks/orders/use-picking';
+import { useOrderShipments } from '@/hooks/orders/use-shipments';
 import { useAvailableSerials, useLocations } from '@/hooks/inventory';
 import { SerialPicker } from './serial-picker';
 import {
@@ -47,6 +48,7 @@ import {
   type PickLineState,
   type PickSerialSelectorProps,
 } from '@/lib/schemas/orders/picking';
+import { summarizePendingShipmentReservations } from './shipment-availability';
 
 // ============================================================================
 // TYPES
@@ -57,6 +59,7 @@ export interface PickItemsDialogProps {
   onOpenChange: (open: boolean) => void;
   orderId: string;
   onSuccess?: () => void;
+  onReviewFulfillment?: () => void;
   /** When provided and order becomes picked, opens ShipOrderDialog (auto-open + toast action) */
   onShipOrder?: () => void;
 }
@@ -110,6 +113,7 @@ export const PickItemsDialog = memo(function PickItemsDialog({
   onOpenChange,
   orderId,
   onSuccess,
+  onReviewFulfillment,
   onShipOrder,
 }: PickItemsDialogProps) {
   const [pickLines, setPickLines] = useState<PickLineState[]>([]);
@@ -126,6 +130,7 @@ export const PickItemsDialog = memo(function PickItemsDialog({
     // Disable polling while dialog is open to avoid flashing when user fills the form
     refetchInterval: false,
   });
+  const { data: shipments } = useOrderShipments(orderId, open);
 
   const { locations, isLoading: locationsLoading } = useLocations({
     autoFetch: open,
@@ -271,21 +276,34 @@ export const PickItemsDialog = memo(function PickItemsDialog({
         onSuccess?.();
 
         if (result.orderStatus === 'picked') {
-          if (onShipOrder) {
-            onShipOrder();
-            toastSuccess('All items picked. Ready to ship.', {
-              description: 'Ship Order dialog opened. Create a shipment with carrier and tracking.',
+          const pendingReservations = summarizePendingShipmentReservations(shipments ?? []);
+          const hasPendingShipmentDrafts = pendingReservations.quantitiesByLineItem.size > 0;
+
+          if (hasPendingShipmentDrafts && onReviewFulfillment) {
+            onReviewFulfillment();
+            toastSuccess('All items picked. Review the pending shipment draft.', {
+              description:
+                'Picked stock is already reserved in an existing shipment draft. Review it from Fulfillment instead of creating another shipment.',
               action: {
-                label: 'Ship Order',
+                label: 'Open Fulfillment',
+                onClick: () => onReviewFulfillment(),
+              },
+            });
+          } else if (onShipOrder) {
+            onShipOrder();
+            toastSuccess('All items picked. Fulfillment ready for review.', {
+              description: 'Shipping dialog opened. Create a shipment or review any existing drafts.',
+              action: {
+                label: 'Review Fulfillment',
                 onClick: () => onShipOrder(),
               },
             });
           } else {
-            toastSuccess('All items picked. Ready to ship.', {
-              description: 'Proceed to create a shipment.',
+            toastSuccess('All items picked. Fulfillment ready for review.', {
+              description: 'Open Fulfillment to create a shipment or review draft shipments.',
               action: {
                 label: 'Go to Fulfillment',
-                onClick: () => onSuccess?.(),
+                onClick: () => onReviewFulfillment?.(),
               },
             });
           }

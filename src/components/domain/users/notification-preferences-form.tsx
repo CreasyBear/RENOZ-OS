@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNotificationPreferences } from "@/hooks/profile/use-notification-preferences";
 import type { NotificationPreferencesFormPresenterProps } from "@/lib/schemas/users/profile";
 
@@ -32,6 +33,7 @@ import type { NotificationPreferencesFormPresenterProps } from "@/lib/schemas/us
 export function NotificationPreferencesFormPresenter({
   preferences,
   isLoading,
+  error,
   isPending,
   onToggle,
   onDigestChange,
@@ -65,6 +67,12 @@ export function NotificationPreferencesFormPresenter({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {error ? (
+          <Alert>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Notification Channels */}
         <div className="space-y-4">
           <h4 className="text-sm font-medium flex items-center gap-2">
@@ -288,7 +296,7 @@ export function NotificationPreferencesFormPresenter({
  * @source preferences from useNotificationPreferences hook
  */
 export function NotificationPreferencesForm() {
-  const { preferences, isLoading, isPending, updatePreference } =
+  const { preferences, isLoading, error, isPending, updatePreference } =
     useNotificationPreferences();
 
   const handleToggle = useCallback(
@@ -309,6 +317,7 @@ export function NotificationPreferencesForm() {
     <NotificationPreferencesFormPresenter
       preferences={preferences}
       isLoading={isLoading}
+      error={error instanceof Error ? error.message : null}
       isPending={isPending}
       onToggle={handleToggle}
       onDigestChange={handleDigestChange}

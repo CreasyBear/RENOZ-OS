@@ -216,6 +216,11 @@ async function buildOrderWorkflowOptions(
     (shipment) =>
       shipment.status === 'in_transit' || shipment.status === 'out_for_delivery'
   );
+  const reopenableShipments = shipmentRows.filter((shipment) =>
+    shipment.status === 'in_transit' ||
+    shipment.status === 'out_for_delivery' ||
+    shipment.status === 'failed'
+  );
   const hasPendingShipments = pendingShipmentCount > 0;
   const canCancel = !quantityState.hasShippedQty && !hasPendingShipments;
 
@@ -246,6 +251,15 @@ async function buildOrderWorkflowOptions(
   };
 
   switch (currentStatus) {
+    case 'draft':
+      addAction({
+        key: 'confirm_order',
+        label: 'Confirm Order',
+        category: 'next',
+        description: 'Lock the draft and move it into the fulfillment workflow.',
+      });
+      addCancelAction();
+      break;
     case 'confirmed':
       addAction({
         key: 'open_pick',
@@ -309,6 +323,15 @@ async function buildOrderWorkflowOptions(
           ? 'Open the fulfillment tab to continue the remaining shipment work.'
           : 'Create the next shipment for the unshipped remainder.',
       });
+      reopenableShipments.forEach((shipment) => {
+        addAction({
+          key: 'reopen_shipment',
+          label: `Reopen ${shipment.shipmentNumber}`,
+          category: 'recovery',
+          shipmentId: shipment.id,
+          description: 'Move this shipment back to pending so the shipping details can be corrected.',
+        });
+      });
       addAction({
         key: 'cancel_order',
         label: 'Cancel Order',
@@ -332,6 +355,15 @@ async function buildOrderWorkflowOptions(
         label: 'Manage Shipments',
         category: 'recovery',
         description: 'Review shipment progress, tracking, and delivery confirmations.',
+      });
+      reopenableShipments.forEach((shipment) => {
+        addAction({
+          key: 'reopen_shipment',
+          label: `Reopen ${shipment.shipmentNumber}`,
+          category: 'recovery',
+          shipmentId: shipment.id,
+          description: 'Move this shipment back to pending so the shipping details can be corrected.',
+        });
       });
       addAction({
         key: 'cancel_order',

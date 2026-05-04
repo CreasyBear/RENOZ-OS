@@ -97,18 +97,22 @@ export function useEntityActivityLogging({
           entityId,
           activityType: data.type,
           description: data.description,
+          title: data.title,
+          body: data.body,
+          category: data.category,
+          importance: data.importance,
           outcome: data.outcome,
           scheduledAt: data.scheduledAt,
           isFollowUp: data.isFollowUp,
         });
         const typeLabel = formatActivityType(data.type);
         toastSuccess(`${typeLabel} logged for ${entityLabel}`);
-        handleOpenChange(false);
       } catch (error) {
         toastError(error instanceof Error ? error.message : 'Failed to log activity');
+        throw error;
       }
     },
-    [entityType, entityId, entityLabel, logActivity, handleOpenChange]
+    [entityType, entityId, entityLabel, logActivity]
   );
 
   return {

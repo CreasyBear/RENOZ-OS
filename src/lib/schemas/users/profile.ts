@@ -88,6 +88,7 @@ export interface NotificationPreferencesFormPresenterProps {
     systemAnnouncements: boolean;
   };
   isLoading: boolean;
+  error?: string | null;
   isPending: boolean;
   onToggle: (key: keyof NotificationPreferencesFormPresenterProps["preferences"]) => void;
   onDigestChange: (value: "daily" | "weekly" | "realtime") => void;

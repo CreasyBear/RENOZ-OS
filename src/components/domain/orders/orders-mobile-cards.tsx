@@ -56,7 +56,12 @@ export const OrdersMobileCards = memo(function OrdersMobileCards({
     <div className={cn("space-y-3", className)}>
       {orders.map((order) => {
         const isSelected = selectedIds.has(order.id);
-        const { text: dueText, isOverdue } = formatDueDateRelative(order.dueDate);
+        const { text: dueText, isOverdue } = formatDueDateRelative({
+          dueDate: order.dueDate,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          balanceDue: order.balanceDue,
+        });
 
         return (
           <Card
