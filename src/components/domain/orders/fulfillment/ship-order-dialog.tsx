@@ -14,8 +14,6 @@
 import { memo, useState, useCallback, useEffect, useRef, startTransition } from "react";
 import {
   Truck,
-  Plus,
-  Minus,
   AlertCircle,
   AlertTriangle,
   Loader2,
@@ -68,7 +66,6 @@ import {
   type OrderWithCustomer,
 } from "@/hooks/orders";
 import { AddressPicker, type AddressOption } from "@/components/shared";
-import { SerialPicker } from "./serial-picker";
 import { SerialNumbersList } from "../components/serial-numbers-list";
 import { ValidationError } from "@/lib/server/errors";
 import { ordersLogger } from "@/lib/logger";
@@ -89,9 +86,16 @@ import {
   type ShipOrderFormData,
 } from "@/lib/schemas/orders/ship-order-form";
 import {
-  getLineItemShipmentAvailability,
-  summarizePendingShipmentReservations,
-} from "./shipment-availability";
+  changeShipOrderItemQuantity,
+  changeShipOrderItemSerials,
+  createShipOrderItemSelections,
+  getShipOrderAvailableQtyByLineItem,
+  selectAllShipOrderItems,
+  summarizeShipOrderItemSelection,
+  toggleShipOrderItemSelection,
+  type ShipOrderLineItemSelection,
+} from "./ship-order-item-selection";
+import { ShipOrderItemsTable } from "./ship-order-items-table";
 
 const SELECT_PLACEHOLDER_VALUE = "__placeholder__";
 const FALLBACK_RECIPIENT_NAME = "Recipient";
@@ -136,22 +140,6 @@ export interface ShipOrderDialogProps {
   onViewShipments?: () => void;
 }
 
-interface LineItemSelection {
-  lineItemId: string;
-  productName: string;
-  sku: string | null;
-  availableQty: number;
-  reservedQty: number;
-  pickedQty: number;
-  shippedQty: number;
-  selectedQty: number;
-  selected: boolean;
-  allocatedSerialNumbers: string[];
-  selectedSerials: string[];
-  isSerialized?: boolean;
-  productId?: string | null;
-}
-
 interface ShipmentWorkflowNotice {
   title: string;
   description: string;
@@ -160,10 +148,6 @@ interface ShipmentWorkflowNotice {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function getSelectedItems(selections: LineItemSelection[]): LineItemSelection[] {
-  return selections.filter((item) => item.selected && item.selectedQty > 0);
-}
 
 function hasAnyAddress(
   values: Pick<
@@ -285,7 +269,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   onSuccess,
   onViewShipments,
 }: ShipOrderDialogProps) {
-  const [itemSelections, setItemSelections] = useState<LineItemSelection[]>([]);
+  const [itemSelections, setItemSelections] = useState<ShipOrderLineItemSelection[]>([]);
   const [step, setStep] = useState<"form" | "confirm">("form");
   /** Server ValidationError per lineItemId; keys = orderLineItemId */
   const [serverItemErrors, setServerItemErrors] = useState<Record<string, string>>({});
@@ -310,18 +294,16 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const approveAmendmentMutation = useApproveAmendment();
   const applyAmendmentMutation = useApplyAmendment();
 
-  const selectedItems = getSelectedItems(itemSelections);
-  const totalQtyToShip = selectedItems.reduce((sum, i) => sum + i.selectedQty, 0);
-  const totalAvailableQty = itemSelections.reduce((sum, i) => sum + i.availableQty, 0);
-  const totalReservedQty = itemSelections.reduce((sum, i) => sum + i.reservedQty, 0);
-  const remainingUnfulfilled = totalAvailableQty - totalQtyToShip;
-  const isPartialShipment = remainingUnfulfilled > 0 && totalQtyToShip > 0;
-  const quantitiesChanged = itemSelections.some(
-    (item) =>
-      item.availableQty > 0 &&
-      (item.selectedQty !== item.availableQty || !item.selected)
-  );
-  const needsConfirmation = isPartialShipment || quantitiesChanged;
+  const {
+    selectedItems,
+    totalQtyToShip,
+    totalAvailableQty,
+    totalReservedQty,
+    remainingUnfulfilled,
+    isPartialShipment,
+    needsConfirmation,
+    totalItemsToShip,
+  } = summarizeShipOrderItemSelection(itemSelections);
 
   const form = useTanStackForm<ShipOrderFormData>({
     schema: shipOrderFormSchema,
@@ -382,7 +364,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       )
         return;
       setWorkflowNotice(null);
-      const items = getSelectedItems(itemSelections);
+      const { selectedItems: items } = summarizeShipOrderItemSelection(itemSelections);
       for (const item of items) {
         if (item.isSerialized && item.selectedSerials.length !== item.selectedQty) {
           toastError(
@@ -579,7 +561,6 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   // Initialize item selections and form when order first loads (no address prefill)
   useEffect(() => {
     if (!orderData || shipmentsLoading || initialized) return;
-    const pendingReservations = summarizePendingShipmentReservations(shipments ?? []);
     const formValues: ShipOrderFormData = {
       ...getDefaultFormValues(),
       addressCountry: DEFAULT_COUNTRY,
@@ -593,30 +574,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       setAddressExpanded(false);
       setSaveShipmentAddressToOrder(false);
       setInitialized(true);
-      if (orderData.lineItems) {
-        setItemSelections(
-          orderData.lineItems.map((item) => {
-            const { availableQty, reservedQty, availableSerialNumbers } =
-              getLineItemShipmentAvailability(item, pendingReservations);
-            const initialQty = Math.max(0, availableQty);
-            return {
-              lineItemId: item.id,
-              productName: item.description,
-              sku: item.sku,
-              availableQty,
-              reservedQty,
-              pickedQty: Number(item.qtyPicked ?? 0),
-              shippedQty: Number(item.qtyShipped ?? 0),
-              selectedQty: initialQty,
-              selected: initialQty > 0,
-              allocatedSerialNumbers: availableSerialNumbers,
-              selectedSerials: availableSerialNumbers.slice(0, initialQty),
-              isSerialized: item.product?.isSerialized ?? false,
-              productId: item.productId ?? item.product?.id ?? null,
-            };
-          })
-        );
-      }
+      setItemSelections(createShipOrderItemSelections(orderData, shipments ?? []));
       form.reset(formValues);
     });
   }, [orderData, shipments, shipmentsLoading, initialized, form]);
@@ -624,14 +582,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   // Re-sync when orderData refetches and availableQty decreased (compare orderData only; avoid itemSelections in deps)
   useEffect(() => {
     if (!orderData?.lineItems || shipmentsLoading || !initialized) return;
-    const pendingReservations = summarizePendingShipmentReservations(shipments ?? []);
-    const availableQtyByLineItem = new Map<string, number>();
-    for (const item of orderData.lineItems) {
-      availableQtyByLineItem.set(
-        item.id,
-        getLineItemShipmentAvailability(item, pendingReservations).availableQty
-      );
-    }
+    const availableQtyByLineItem = getShipOrderAvailableQtyByLineItem(orderData, shipments ?? []);
     const prev = prevAvailableQtyRef.current;
     const anyDecreased = Array.from(availableQtyByLineItem.entries()).some(
       ([id, qty]) => (prev.get(id) ?? qty) > qty
@@ -695,34 +646,13 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
   // Handle item selection toggle
   const handleItemToggle = useCallback((lineItemId: string) => {
-    setItemSelections((prev) =>
-      prev.map((item) =>
-        item.lineItemId === lineItemId
-          ? { ...item, selected: !item.selected }
-          : item
-      )
-    );
+    setItemSelections((prev) => toggleShipOrderItemSelection(prev, lineItemId));
   }, []);
 
   // Handle quantity change
   const handleQtyChange = useCallback(
     (lineItemId: string, delta: number) => {
-      setItemSelections((prev) =>
-        prev.map((item) => {
-          if (item.lineItemId !== lineItemId) return item;
-          const newQty = Math.max(0, Math.min(item.availableQty, item.selectedQty + delta));
-          const selectedSerials =
-            item.isSerialized && newQty < item.selectedSerials.length
-              ? item.selectedSerials.slice(0, newQty)
-              : item.selectedSerials;
-          return {
-            ...item,
-            selectedQty: newQty,
-            selected: newQty > 0,
-            selectedSerials,
-          };
-        })
-      );
+      setItemSelections((prev) => changeShipOrderItemQuantity(prev, lineItemId, delta));
     },
     []
   );
@@ -730,33 +660,18 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   // Handle serial number change (for SerialPicker)
   const handleSerialsChange = useCallback(
     (lineItemId: string, serials: string[]) => {
-      setItemSelections((prev) =>
-        prev.map((item) =>
-          item.lineItemId === lineItemId ? { ...item, selectedSerials: serials } : item
-        )
-      );
+      setItemSelections((prev) => changeShipOrderItemSerials(prev, lineItemId, serials));
     },
     []
   );
 
   // Select all items
   const handleSelectAll = useCallback(() => {
-    setItemSelections((prev) =>
-      prev.map((item) => ({
-        ...item,
-        selected: item.availableQty > 0,
-        selectedQty: item.availableQty,
-        selectedSerials:
-          item.isSerialized && item.allocatedSerialNumbers.length > 0
-            ? item.allocatedSerialNumbers.slice(0, item.availableQty)
-            : item.selectedSerials,
-      }))
-    );
+    setItemSelections(selectAllShipOrderItems);
   }, []);
 
   const carrier = form.state.values.carrier ?? "";
   const services = carrier ? (CARRIER_SERVICES[carrier] ?? []) : [];
-  const totalItemsToShip = selectedItems.length;
   const carrierLabel =
     carrier === "other"
       ? resolvedCarrier
@@ -898,154 +813,13 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
                 </Button>
               </div>
 
-              <div className="border rounded-lg overflow-x-auto overflow-y-visible">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-8"></TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right w-24">Available</TableHead>
-                      <TableHead className="text-right w-32">Quantity</TableHead>
-                      <TableHead className="w-44">Serial Numbers</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itemSelections.map((item) => {
-                      const needsPickFirst =
-                        item.isSerialized &&
-                        item.allocatedSerialNumbers.length === 0 &&
-                        item.availableQty > 0;
-                      return (
-                      <TableRow
-                        key={item.lineItemId}
-                        className={cn(
-                          (item.availableQty === 0 || needsPickFirst) && "opacity-50"
-                        )}
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={item.selected}
-                            onCheckedChange={() =>
-                              handleItemToggle(item.lineItemId)
-                            }
-                            disabled={
-                              item.availableQty === 0 ||
-                              (item.isSerialized &&
-                                item.allocatedSerialNumbers.length === 0 &&
-                                item.availableQty > 0)
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{item.productName}</p>
-                            {item.sku && (
-                              <p className="text-xs text-muted-foreground">
-                                SKU: {item.sku}
-                              </p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.availableQty === 0 ? (
-                            item.pickedQty === 0 ? (
-                              <Badge variant="secondary">Pick First</Badge>
-                            ) : item.shippedQty >= item.pickedQty ? (
-                              <Badge variant="secondary">Shipped</Badge>
-                            ) : item.reservedQty > 0 ? (
-                              <Badge variant="secondary">Reserved in Draft</Badge>
-                            ) : (
-                              <Badge variant="secondary">Unavailable</Badge>
-                            )
-                          ) : (
-                            <div className="space-y-1 text-right">
-                              <div>{item.availableQty}</div>
-                              {item.reservedQty > 0 ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {item.reservedQty} in draft
-                                </p>
-                              ) : null}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.availableQty > 0 && (
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 min-h-[44px] min-w-[44px] sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
-                                onClick={() =>
-                                  handleQtyChange(item.lineItemId, -1)
-                                }
-                                disabled={!item.selected || item.selectedQty <= 0}
-                                aria-label={`Decrease quantity for ${item.productName}`}
-                              >
-                                <Minus className="h-3 w-3" aria-hidden />
-                              </Button>
-                              <span className="w-8 text-center text-sm font-medium">
-                                {item.selected ? item.selectedQty : 0}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 min-h-[44px] min-w-[44px] sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
-                                onClick={() =>
-                                  handleQtyChange(item.lineItemId, 1)
-                                }
-                                disabled={
-                                  !item.selected ||
-                                  item.selectedQty >= item.availableQty
-                                }
-                                aria-label={`Increase quantity for ${item.productName}`}
-                              >
-                                <Plus className="h-3 w-3" aria-hidden />
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.availableQty > 0 && item.selected ? (
-                            item.isSerialized && item.allocatedSerialNumbers.length > 0 ? (
-                              <div className="space-y-1">
-                                <SerialPicker
-                                  options={item.allocatedSerialNumbers.map((s) => ({
-                                    serialNumber: s,
-                                    locationName: undefined,
-                                  }))}
-                                  selectedSerials={item.selectedSerials}
-                                  onChange={(serials) =>
-                                    handleSerialsChange(item.lineItemId, serials)
-                                  }
-                                  maxSelections={item.selectedQty}
-                                  disabled={item.selectedQty <= 0}
-                                  ariaLabel={`Select serials for ${item.productName}`}
-                                />
-                                {serverItemErrors[item.lineItemId] && (
-                                  <p className="text-xs text-destructive" role="alert">
-                                    {serverItemErrors[item.lineItemId]}
-                                  </p>
-                                )}
-                              </div>
-                            ) : item.isSerialized && item.allocatedSerialNumbers.length === 0 ? (
-                              <p className="text-xs text-amber-600">
-                                Pick items first
-                              </p>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                No serials required
-                              </span>
-                            )
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+              <ShipOrderItemsTable
+                items={itemSelections}
+                serverItemErrors={serverItemErrors}
+                onItemToggle={handleItemToggle}
+                onQtyChange={handleQtyChange}
+                onSerialsChange={handleSerialsChange}
+              />
 
               {totalItemsToShip > 0 && (
                 <p className="text-sm text-muted-foreground">

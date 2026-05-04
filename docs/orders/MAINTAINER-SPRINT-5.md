@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, 4, and 5 implemented.
+Status: Issues 1, 2, 3, 4, 5, and 6 implemented.
 
 ## Business Value
 
@@ -27,7 +27,7 @@ fulfillment route or order detail fulfillment tab
 - High-risk UI surfaces: `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`
 - Hooks: `src/hooks/orders/use-shipments.ts`, `src/hooks/orders/use-picking.ts`, `src/hooks/orders/order-mutation-client-errors.ts`
 - Cache policy: `src/hooks/orders/_fulfillment-cache.ts`
-- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`
+- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`
 
 ## Triage Findings
 
@@ -227,6 +227,42 @@ Closeout criteria:
 - import dialog UI lives in a focused fulfillment component
 - dashboard remains responsible for opening the import dialog and presenting fulfillment queues
 - focused import workflow tests cover parsing, result CSV escaping, and mutation payload behavior
+- focused tests, lint, typecheck, and full orders suite pass
+
+### 6. Ship Order Item Selection Boundary
+
+Business value: ship-order item selection controls inventory integrity at the point where picked stock becomes shipment reservations or shipped stock. Quantity, pending-draft reservation, and serialized lineage selection rules should be reviewable without reading shipment creation, mark-shipped, address, carrier, amendment, and confirmation code in one dialog.
+
+Workflow invariant: ship order dialog -> order detail and existing shipments -> item availability/reservation summary -> item selection boundary -> create shipment item payload -> shipment server inventory/serial validation.
+
+Affected files:
+
+- `src/components/domain/orders/fulfillment/ship-order-item-selection.ts`
+- `src/components/domain/orders/fulfillment/ship-order-items-table.tsx`
+- `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `tests/unit/orders/ship-order-item-selection.test.ts`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing shipment create or mark-shipped mutation behavior
+- changing pending shipment reservation math in `shipment-availability.ts`
+- changing carrier, address, shipping cost amendment, or confirmation-step behavior
+- browser QA for the full ship-order dialog
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/ship-order-item-selection.test.ts
+```
+
+Closeout criteria:
+
+- item selection availability, selected-quantity, selected-serial, select-all, and summary rules leave `ship-order-dialog.tsx`
+- item selection table UI leaves `ship-order-dialog.tsx`
+- ship-order dialog remains responsible for shipment workflow orchestration and mutation side effects
+- focused tests cover pending-draft reservation exclusion, serialized selection bounds, partial confirmation summary, toggle, and select-all behavior
 - focused tests, lint, typecheck, and full orders suite pass
 
 ## Closeout Log
@@ -435,3 +471,42 @@ Verification:
 Goal adaptation: no standing goal change. This applies the goal's route -> container/page -> hook -> server/schema -> query/cache lens by turning the dashboard import path into an explicit workflow boundary while preserving existing server and cache contracts.
 
 Residual risk: Sprint 5 can either close here with fulfillment operator-safety and modularity gains, or continue into `ship-order-dialog.tsx`, which still combines shipment form state, stock/serial selection, side-effect orchestration, validation, and operator messages in one large workflow surface.
+
+### Issue 6: Ship Order Item Selection Boundary
+
+Touched domains: orders fulfillment UI, ship-order inventory/serial selection boundary, item-selection regression tests.
+
+Workflow protected: ship order dialog -> order detail line items plus existing pending shipments -> availability and serialized selection boundary -> create shipment item payload -> existing shipment server validation and inventory/serial side effects.
+
+Business value: operators still select the same picked items and serials before creating shipments, but the line-item selection logic is now isolated from carrier/address/amendment/mutation code. Future changes to pending-draft reservations or serialized battery lineage selection have a focused review surface.
+
+Standards checked:
+
+- extracted `ship-order-item-selection.ts` for availability-derived line selection, selected item summary, quantity changes, serial changes, select-all, and availability snapshots
+- extracted `ShipOrderItemsTable` for item table rendering, unavailable badges, quantity controls, serial picker wiring, and server line-item error display
+- kept `ShipOrderDialog` responsible for form orchestration, shipment creation, mark-shipped, address handling, shipping cost amendment, and confirmation step
+- kept `shipment-availability.ts`, server functions, schemas, mutation hooks, and cache policy unchanged
+- added focused tests for inventory reservation math at the item-selection boundary
+
+Smells removed:
+
+- `ship-order-dialog.tsx` directly mixed item selection reducers, pending reservation initialization, serialized selection bounds, select-all behavior, table rendering, and shipment mutation orchestration
+- serialized line selection rules were not covered by focused tests at the ship-order boundary
+- item table UI made the already-large dialog harder to review for mutation correctness
+
+Deferred:
+
+- `ship-order-dialog.tsx` still owns address selection, carrier fields, shipping cost amendment orchestration, mark-shipped fallback notices, and confirmation summary
+- `shipment-availability.ts` remains under the fulfillment component directory even though it behaves like domain calculation logic
+- browser QA was skipped because this is a focused extraction with unit coverage and no server behavior change
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/ship-order-item-selection.test.ts`
+- `./node_modules/.bin/eslint src/components/domain/orders/fulfillment/ship-order-dialog.tsx src/components/domain/orders/fulfillment/ship-order-items-table.tsx src/components/domain/orders/fulfillment/ship-order-item-selection.ts src/components/domain/orders/fulfillment/index.ts tests/unit/orders/ship-order-item-selection.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+
+Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making inventory-sensitive ship-order item selection explicit and tested while preserving the mutation/server/cache spine.
+
+Residual risk: the next high-value ship-order slices are address handling and shipping cost amendment orchestration. The latter is business-critical because shipment creation can succeed while order-total amendment sync fails.
