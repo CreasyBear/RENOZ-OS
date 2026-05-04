@@ -642,6 +642,10 @@ export const createPriceAgreement = createServerFn({ method: "POST" })
       })
       .returning();
 
+    if (!result) {
+      throw new ValidationError("Supplier price agreement could not be saved. Refresh and try again.");
+    }
+
     return result;
   });
 
