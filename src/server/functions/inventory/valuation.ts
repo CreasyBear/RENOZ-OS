@@ -1232,6 +1232,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
             AND movement_type IN ('pick', 'ship')
             AND quantity < 0
             AND created_at >= NOW() - INTERVAL '1 day' * ${periodDays}
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
           GROUP BY product_id
         ),
         product_inventory AS (
@@ -1240,6 +1241,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
             COALESCE(SUM(total_value), 0) as inventory_value
           FROM inventory
           WHERE organization_id = ${ctx.organizationId}
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
           GROUP BY product_id
         )
         SELECT
@@ -1260,6 +1262,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
           AND p.deleted_at IS NULL
           AND p.name IS NOT NULL
           AND TRIM(p.name) != ''
+          ${data.productId ? sql`AND p.id = ${data.productId}` : sql``}
           AND (COALESCE(pi.inventory_value, 0) > 0 OR COALESCE(pc.period_cogs, 0) > 0)
         ORDER BY turnover_rate DESC
         LIMIT 20
