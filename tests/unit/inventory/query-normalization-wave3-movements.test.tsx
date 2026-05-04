@@ -25,7 +25,6 @@ vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: (...args: unknown[]) => mockListInventory(...args),
   getInventoryItem: (...args: unknown[]) => mockGetInventoryItem(...args),
   quickSearchInventory: (...args: unknown[]) => mockQuickSearchInventory(...args),
-  getAvailableSerials: (...args: unknown[]) => mockGetAvailableSerials(...args),
 }));
 
 vi.mock('@/server/functions/inventory/dashboard', () => ({
@@ -38,6 +37,10 @@ vi.mock('@/server/functions/inventory/adjustments', () => ({
 
 vi.mock('@/server/functions/inventory/receiving', () => ({
   receiveInventory: (...args: unknown[]) => mockReceiveInventory(...args),
+}));
+
+vi.mock('@/server/functions/inventory/serial-availability', () => ({
+  getAvailableSerials: (...args: unknown[]) => mockGetAvailableSerials(...args),
 }));
 
 vi.mock('@/server/functions/inventory/transfers', () => ({

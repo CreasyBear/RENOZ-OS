@@ -40,7 +40,6 @@ vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
   quickSearchInventory: vi.fn().mockResolvedValue({ items: [] }),
-  getAvailableSerials: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/server/functions/inventory/dashboard', () => ({
@@ -53,6 +52,10 @@ vi.mock('@/server/functions/inventory/adjustments', () => ({
 
 vi.mock('@/server/functions/inventory/receiving', () => ({
   receiveInventory: vi.fn(),
+}));
+
+vi.mock('@/server/functions/inventory/serial-availability', () => ({
+  getAvailableSerials: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/server/functions/inventory/transfers', () => ({

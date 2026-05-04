@@ -21,12 +21,12 @@ import {
   listInventory,
   getInventoryItem,
   quickSearchInventory,
-  getAvailableSerials,
 } from '@/server/functions/inventory/inventory';
 import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
 import { listMovements } from '@/server/functions/inventory/movements';
 import { receiveInventory } from '@/server/functions/inventory/receiving';
+import { getAvailableSerials } from '@/server/functions/inventory/serial-availability';
 import { transferInventory } from '@/server/functions/inventory/transfers';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
