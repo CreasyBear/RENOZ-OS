@@ -163,6 +163,14 @@ const priceImportRowSchema = z.object({
   expiryDate: z.string().optional().transform((val, ctx) => parseOptionalIsoDate(val, 'Expiry date', ctx)),
   status: z.enum(['active', 'inactive']).default('active'),
 }).superRefine((row, ctx) => {
+  if (row.discountType === 'volume') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['discountType'],
+      message: 'Volume discounts are not supported in supplier price imports',
+    });
+  }
+
   if (row.effectiveDate && row.expiryDate && row.expiryDate < row.effectiveDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

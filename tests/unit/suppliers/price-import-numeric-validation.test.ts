@@ -42,6 +42,16 @@ describe('supplier price import numeric validation', () => {
     );
   });
 
+  it('rejects unsupported volume discounts before effective price calculation', () => {
+    expect(() =>
+      parsePriceImportRowData({
+        ...baseRow,
+        discountType: 'volume',
+        discountValue: '10',
+      })
+    ).toThrow(/Volume discounts are not supported in supplier price imports/);
+  });
+
   it('rejects invalid numeric import fields before supplier/product resolution', () => {
     expect(() => parsePriceImportRowData({ ...baseRow, basePrice: 'not-a-price' })).toThrow(
       /Base price must be a valid number/
