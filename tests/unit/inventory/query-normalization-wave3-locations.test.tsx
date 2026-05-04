@@ -8,7 +8,19 @@ const mockGetLocation = vi.fn();
 const mockCreateLocation = vi.fn();
 const mockUpdateLocation = vi.fn();
 const mockDeleteLocation = vi.fn();
+const mockCreateWarehouseLocation = vi.fn();
+const mockUpdateWarehouseLocation = vi.fn();
+const mockDeleteWarehouseLocation = vi.fn();
 const mockListInventory = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@/server/functions/inventory/locations', () => ({
   listLocations: (...args: unknown[]) => mockListLocations(...args),
@@ -16,6 +28,10 @@ vi.mock('@/server/functions/inventory/locations', () => ({
   createLocation: (...args: unknown[]) => mockCreateLocation(...args),
   updateLocation: (...args: unknown[]) => mockUpdateLocation(...args),
   deleteLocation: (...args: unknown[]) => mockDeleteLocation(...args),
+  getWarehouseLocationHierarchy: vi.fn().mockResolvedValue({ hierarchy: [] }),
+  createWarehouseLocation: (...args: unknown[]) => mockCreateWarehouseLocation(...args),
+  updateWarehouseLocation: (...args: unknown[]) => mockUpdateWarehouseLocation(...args),
+  deleteWarehouseLocation: (...args: unknown[]) => mockDeleteWarehouseLocation(...args),
 }));
 
 vi.mock('@/server/functions/inventory/inventory', () => ({
@@ -135,5 +151,51 @@ describe('inventory locations query normalization wave 3', () => {
       utilization: 0,
     });
     expect(result.current.contentsError).toBeNull();
+  });
+
+  it('uses safe mutation fallback copy instead of raw composite location errors', async () => {
+    mockCreateLocation.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint warehouse_locations_location_code_key')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useLocations } = await import('@/hooks/inventory/use-locations');
+
+    const { result } = renderHook(() => useLocations(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.createNewLocation({
+          code: 'MAIN',
+          name: 'Main Warehouse',
+          locationType: 'warehouse',
+        })
+      ).rejects.toThrow('warehouse_locations_location_code_key');
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create location');
+  });
+
+  it('uses safe mutation fallback copy instead of raw warehouse-location errors', async () => {
+    mockDeleteWarehouseLocation.mockRejectedValue(
+      new Error('violates foreign key constraint inventory_location_id_fkey')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useDeleteWarehouseLocation } = await import('@/hooks/inventory/use-locations');
+
+    const { result } = renderHook(() => useDeleteWarehouseLocation(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync('loc-1')).rejects.toThrow(
+        'inventory_location_id_fkey'
+      );
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to delete location');
   });
 });

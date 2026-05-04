@@ -513,7 +513,13 @@ export default function LocationsPage() {
         parentLocation={formParent}
         onSubmit={handleFormSubmit}
         isSubmitting={isSubmitting}
-        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitError={
+          createMutation.error instanceof Error
+            ? createMutation.error.message
+            : updateMutation.error instanceof Error
+              ? updateMutation.error.message
+              : null
+        }
       />
 
       {/* Delete Confirmation */}

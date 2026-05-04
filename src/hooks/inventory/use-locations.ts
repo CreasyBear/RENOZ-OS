@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
+import { formatInventoryMutationError } from './_mutation-errors';
 import {
   listLocations,
   getLocation,
@@ -249,8 +250,8 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
         queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message ?? 'Failed to create location');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to create location'));
     },
   });
 
@@ -287,8 +288,8 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       toast.success('Location updated');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message ?? 'Failed to update location');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update location'));
     },
   });
 
@@ -316,8 +317,10 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       toast.success('Location deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message ?? 'Failed to delete location. Ensure it is empty.');
+    onError: (error: unknown) => {
+      toast.error(
+        formatInventoryMutationError(error, 'Failed to delete location. Ensure it is empty.')
+      );
     },
   });
 
@@ -659,8 +662,8 @@ export function useCreateWarehouseLocation() {
       toast.success('Location created');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create location');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to create location'));
     },
   });
 }
@@ -679,8 +682,8 @@ export function useUpdateWarehouseLocation() {
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.detail(variables.id) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update location');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to update location'));
     },
   });
 }
@@ -698,8 +701,8 @@ export function useDeleteWarehouseLocation() {
       toast.success('Location deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete location');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to delete location'));
     },
   });
 }
