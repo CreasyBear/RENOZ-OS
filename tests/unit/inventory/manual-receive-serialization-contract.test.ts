@@ -66,7 +66,9 @@ describe('manual receive serialization contract', () => {
 
     expect(receivingSchema).toContain('export const manualReceiptReasonValues');
     expect(receivingSchema).toContain('export const manualReceiptReasonSchema');
+    expect(receivingSchema).toContain('export interface InventoryReceiving');
     expect(inventorySchema).not.toContain('manualReceiptReasonValues');
     expect(inventorySchema).not.toContain('manualReceiptReasonSchema');
+    expect(inventorySchema).not.toContain('export interface InventoryReceiving');
   });
 });

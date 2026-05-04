@@ -41,6 +41,17 @@ export interface ManualReceiveSerializationInput {
   serialNumber?: string | null;
 }
 
+/**
+ * Inventory receiving input for hook-facing callers.
+ */
+export interface InventoryReceiving {
+  inventoryId: string;
+  quantity: number;
+  unitCost?: number;
+  reference?: string;
+  notes?: string;
+}
+
 export function getManualReceiveSerializationIssues({
   isSerialized,
   quantity,

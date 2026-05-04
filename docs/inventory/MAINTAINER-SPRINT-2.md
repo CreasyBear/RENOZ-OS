@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1 and 2 implemented.
+Status: Issues 1, 2, and 3 implemented.
 
 ## Business Value
 
@@ -100,6 +100,39 @@ Closeout criteria:
 - location-focused tests pass
 - lint/typecheck evidence is recorded
 
+### 3. Receiving Input Schema Ownership
+
+Business value: receiving hook-facing input contracts should live with receiving workflow ownership so future stock-in changes do not require touching the generic inventory schema file.
+
+Workflow invariant: manual stock-in hooks, receiving route context, and receive-location policy must keep importing through the public inventory schema barrel while the source of truth moves to `src/lib/schemas/inventory/receiving.ts`.
+
+Affected files:
+
+- `src/lib/schemas/inventory/receiving.ts`
+- `src/lib/schemas/inventory/inventory.ts`
+- `tests/unit/inventory/manual-receive-serialization-contract.test.ts`
+
+Out of scope:
+
+- changing receiveInventory server behavior
+- changing manual receive form validation
+- changing receive cache invalidation
+- extracting core inventory read/list schemas
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/manual-receive-serialization-contract.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx
+```
+
+Closeout criteria:
+
+- `InventoryReceiving` is exported from `receiving.ts`
+- `inventory.ts` no longer owns receiving input types
+- public `@/lib/schemas/inventory` imports remain compatible
+- receiving-focused tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -179,3 +212,41 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
 
 Residual risk: `inventory.ts` still owns core inventory read/list, quality, inventory item, adjustment, transfer, and receiving hook-facing misc types.
+
+### Issue 3: Receiving Input Schema Ownership
+
+Touched domains: inventory schema contracts, manual receiving schema helpers, receive hook public input compatibility.
+
+Workflow protected: manual stock-in input contract -> receiving hook/server workflow -> receiving page context and receive-location availability.
+
+Business value: receiving input ownership is easier to maintain because the public hook-facing input type now lives beside manual receiving validation helpers instead of the generic inventory schema file.
+
+Standards checked:
+
+- moved `InventoryReceiving` into `src/lib/schemas/inventory/receiving.ts`
+- removed receiving input type ownership from `src/lib/schemas/inventory/inventory.ts`
+- preserved public `@/lib/schemas/inventory` barrel compatibility
+- extended the manual receiving ownership guard to prevent receiving input types from drifting back into `inventory.ts`
+- kept receive server behavior, form validation, and cache invalidation unchanged
+
+Smells removed:
+
+- `InventoryReceiving` lived in the generic inventory schema file even though receiving already had a dedicated schema owner
+
+Deferred:
+
+- the local `ReceiveInventoryInput` hook/server mutation contract remains in `use-inventory.ts`; a later behavior slice should decide whether to centralize the live mutation input type
+- core inventory read/list schemas still live in `src/lib/schemas/inventory/inventory.ts`
+- database-backed receiving integration coverage remains outside this public type-ownership slice
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/manual-receive-serialization-contract.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/receiving.ts src/lib/schemas/inventory/inventory.ts tests/unit/inventory/manual-receive-serialization-contract.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md src/lib/schemas/inventory/receiving.ts src/lib/schemas/inventory/inventory.ts tests/unit/inventory/manual-receive-serialization-contract.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
+
+Residual risk: `inventory.ts` still owns core inventory read/list, quality, and inventory item hook-facing misc types; the live receive mutation input remains local to `use-inventory.ts`.

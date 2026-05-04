@@ -165,17 +165,6 @@ export interface InventoryItem {
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstocked';
 }
 
-/**
- * Inventory receiving input for hooks
- */
-export interface InventoryReceiving {
-  inventoryId: string;
-  quantity: number;
-  unitCost?: number;
-  reference?: string;
-  notes?: string;
-}
-
 // ============================================================================
 // QUALITY RECORD
 // ============================================================================
