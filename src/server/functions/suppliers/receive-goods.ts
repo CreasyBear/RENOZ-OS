@@ -844,9 +844,17 @@ export const listPurchaseOrderReceipts = createServerFn({ method: 'GET' })
           .from(purchaseOrderReceiptItems)
           .leftJoin(
             purchaseOrderItems,
-            eq(purchaseOrderReceiptItems.purchaseOrderItemId, purchaseOrderItems.id)
+            and(
+              eq(purchaseOrderReceiptItems.purchaseOrderItemId, purchaseOrderItems.id),
+              eq(purchaseOrderItems.organizationId, ctx.organizationId)
+            )
           )
-          .where(inArray(purchaseOrderReceiptItems.receiptId, receiptIds))
+          .where(
+            and(
+              inArray(purchaseOrderReceiptItems.receiptId, receiptIds),
+              eq(purchaseOrderReceiptItems.organizationId, ctx.organizationId)
+            )
+          )
           .orderBy(asc(purchaseOrderReceiptItems.lineNumber))
       : [];
 

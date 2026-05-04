@@ -126,4 +126,21 @@ describe('receive goods tenant-scope contract', () => {
       'update(inventory).set({quantityOnHand:sql`${inventory.quantityOnHand}+${quantityAccepted}`,unitCost:newWeightedAvgCost,updatedBy:ctx.user.id,}).where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,ctx.organizationId))).returning({id:inventory.id})'
     );
   });
+
+  it('keeps receipt history item reads and PO item joins organization-scoped', () => {
+    const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
+
+    expect(source).toContain(
+      'leftJoin(purchaseOrderItems,and(eq(purchaseOrderReceiptItems.purchaseOrderItemId,purchaseOrderItems.id),eq(purchaseOrderItems.organizationId,ctx.organizationId)))'
+    );
+    expect(source).toContain(
+      'where(and(inArray(purchaseOrderReceiptItems.receiptId,receiptIds),eq(purchaseOrderReceiptItems.organizationId,ctx.organizationId)))'
+    );
+    expect(source).not.toContain(
+      'leftJoin(purchaseOrderItems,eq(purchaseOrderReceiptItems.purchaseOrderItemId,purchaseOrderItems.id))'
+    );
+    expect(source).not.toContain(
+      '.where(inArray(purchaseOrderReceiptItems.receiptId,receiptIds))'
+    );
+  });
 });
