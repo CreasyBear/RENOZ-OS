@@ -24,4 +24,23 @@ describe('inventory mutation error formatter', () => {
       'Failed to update inventory'
     );
   });
+
+  it('supports custom domain codes from serialized lineage validation details', () => {
+    const error = {
+      details: {
+        validationErrors: {
+          code: ['shipped_status_conflict'],
+        },
+      },
+    };
+
+    expect(
+      formatInventoryMutationError(error, 'Failed to update serial', {
+        codeMessages: {
+          shipped_status_conflict:
+            'This serial has shipment history and cannot be mutated in this way.',
+        },
+      })
+    ).toBe('This serial has shipment history and cannot be mutated in this way.');
+  });
 });

@@ -20,7 +20,7 @@ const DEFAULT_CODE_MESSAGES: Record<InventoryMutationErrorCode, string> = {
 };
 
 interface FormatInventoryMutationErrorOptions {
-  codeMessages?: Partial<Record<InventoryMutationErrorCode, string>>;
+  codeMessages?: Record<string, string>;
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -59,6 +59,11 @@ function extractValidationCode(error: unknown): string | null {
     ['cause', 'errors', 'code'],
     ['cause', 'data', 'errors', 'code'],
     ['response', 'data', 'errors', 'code'],
+    ['details', 'validationErrors', 'code'],
+    ['data', 'details', 'validationErrors', 'code'],
+    ['cause', 'details', 'validationErrors', 'code'],
+    ['cause', 'data', 'details', 'validationErrors', 'code'],
+    ['response', 'data', 'details', 'validationErrors', 'code'],
   ];
 
   for (const path of codePaths) {
@@ -97,8 +102,13 @@ export function formatInventoryMutationError(
   const code = extractValidationCode(error);
   const fieldMessage = extractFieldErrorMessage(error);
 
-  if (code && isInventoryMutationErrorCode(code)) {
-    return fieldMessage ?? options.codeMessages?.[code] ?? DEFAULT_CODE_MESSAGES[code];
+  if (code) {
+    if (isInventoryMutationErrorCode(code)) {
+      return fieldMessage ?? options.codeMessages?.[code] ?? DEFAULT_CODE_MESSAGES[code];
+    }
+    if (options.codeMessages?.[code]) {
+      return fieldMessage ?? options.codeMessages[code];
+    }
   }
 
   return fieldMessage ?? fallback;

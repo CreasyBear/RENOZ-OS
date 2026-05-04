@@ -24,49 +24,26 @@ import type {
   CreateSerializedItemInput,
   DeleteSerializedItemInput,
   SerializedItemListQuery,
-  SerializedMutationErrorCode,
   UpdateSerializedItemInput,
 } from '@/lib/schemas/inventory';
+import { formatInventoryMutationError } from './_mutation-errors';
 
 export interface UseSerializedItemsOptions extends Partial<SerializedItemListQuery> {
   enabled?: boolean;
 }
 
-function getSerializedErrorCode(error: unknown): SerializedMutationErrorCode | null {
-  const candidate = (error as { details?: { validationErrors?: { code?: string[] } } })?.details
-    ?.validationErrors?.code?.[0];
-  if (
-    candidate === 'allocation_conflict' ||
-    candidate === 'shipped_status_conflict' ||
-    candidate === 'invalid_serial_state' ||
-    candidate === 'transition_blocked' ||
-    candidate === 'notification_failed'
-  ) {
-    return candidate;
-  }
-  return null;
-}
+const SERIALIZED_MUTATION_ERROR_MESSAGES: Record<string, string> = {
+  allocation_conflict: 'This serial conflicts with an existing allocation or identity record.',
+  shipped_status_conflict: 'This serial has shipment history and cannot be mutated in this way.',
+  invalid_serial_state: 'This serial is in an invalid state for the requested action.',
+  transition_blocked: 'This transition is blocked by current workflow state.',
+  notification_failed: 'The operation succeeded but downstream notification failed.',
+};
 
 function mapSerializedErrorMessage(error: unknown, fallback: string): string {
-  const code = getSerializedErrorCode(error);
-  if (!code) {
-    return error instanceof Error ? error.message || fallback : fallback;
-  }
-
-  switch (code) {
-    case 'allocation_conflict':
-      return 'This serial conflicts with an existing allocation or identity record.';
-    case 'shipped_status_conflict':
-      return 'This serial has shipment history and cannot be mutated in this way.';
-    case 'invalid_serial_state':
-      return 'This serial is in an invalid state for the requested action.';
-    case 'transition_blocked':
-      return 'This transition is blocked by current workflow state.';
-    case 'notification_failed':
-      return 'The operation succeeded but downstream notification failed.';
-    default:
-      return fallback;
-  }
+  return formatInventoryMutationError(error, fallback, {
+    codeMessages: SERIALIZED_MUTATION_ERROR_MESSAGES,
+  });
 }
 
 export function useSerializedItems(options: UseSerializedItemsOptions = {}) {
