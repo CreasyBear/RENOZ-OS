@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  WMS_DASHBOARD_STOCK_SEMANTICS,
   categoryStockSchema,
   dashboardComparisonSchema,
   locationStockSchema,
   recentMovementSchema,
+  wmsDashboardStockSemanticsSchema,
   wmsDashboardDataSchema,
 } from '@/lib/schemas/inventory';
 
@@ -23,11 +25,13 @@ describe('inventory dashboard schema ownership', () => {
     expect(dashboardSchema).toContain('export const categoryStockSchema');
     expect(dashboardSchema).toContain('export const locationStockSchema');
     expect(dashboardSchema).toContain('export const recentMovementSchema');
+    expect(dashboardSchema).toContain('export const wmsDashboardStockSemanticsSchema');
     expect(dashboardSchema).toContain('export const wmsDashboardDataSchema');
     expect(dashboardSchema).toContain('export interface DashboardTopMovingItem');
     expect(inventorySchema).not.toContain('export const categoryStockSchema');
     expect(inventorySchema).not.toContain('export const locationStockSchema');
     expect(inventorySchema).not.toContain('export const recentMovementSchema');
+    expect(inventorySchema).not.toContain('export const wmsDashboardStockSemanticsSchema');
     expect(inventorySchema).not.toContain('export const wmsDashboardDataSchema');
     expect(inventorySchema).not.toContain('export interface DashboardTopMovingItem');
   });
@@ -91,7 +95,15 @@ describe('inventory dashboard schema ownership', () => {
       totalSkusChange: 3,
     });
     expect(
+      wmsDashboardStockSemanticsSchema.parse(WMS_DASHBOARD_STOCK_SEMANTICS)
+    ).toMatchObject({
+      totals: 'physical_on_hand',
+      currentAlerts: 'allocatable_available',
+      previousPeriodComparison: 'movement_reconstructed_quantity',
+    });
+    expect(
       wmsDashboardDataSchema.parse({
+        stockSemantics: WMS_DASHBOARD_STOCK_SEMANTICS,
         totals: {
           totalValue: 100,
           totalUnits: 2,

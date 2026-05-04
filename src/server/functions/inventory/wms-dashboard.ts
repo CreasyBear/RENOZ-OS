@@ -15,6 +15,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   DEFAULT_LOW_STOCK_THRESHOLD,
+  WMS_DASHBOARD_STOCK_SEMANTICS,
   type CategoryStock,
   type LocationStock,
   type RecentMovement,
@@ -298,7 +299,9 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
           .from(inventory)
           .where(eq(inventory.organizationId, ctx.organizationId)),
 
-        // Previous period alerts count (reconstructed from movements using CTE)
+        // Previous period alerts are movement-reconstructed quantity signals.
+        // Movement rows do not preserve inventory-row status, so current alerts
+        // remain the only allocatable-availability alert contract in this query.
         db
           .with(historicalQuantity)
           .select({
@@ -464,6 +467,7 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
       });
 
       const result = {
+        stockSemantics: WMS_DASHBOARD_STOCK_SEMANTICS,
         totals: {
           totalValue: currentTotalValue,
           totalUnits: currentTotalUnits,

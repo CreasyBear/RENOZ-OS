@@ -165,14 +165,14 @@ export const ValuationReport = memo(function ValuationReport({
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-blue-600" aria-hidden="true" />
               <span className="text-sm font-medium text-muted-foreground">
-                Total Units
+                On-Hand Units
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
               {summary.totalUnits.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Across all locations
+              Physical stock
             </p>
           </CardContent>
         </Card>
@@ -278,7 +278,7 @@ export const ValuationReport = memo(function ValuationReport({
           <CardHeader>
             <CardTitle>Value by Category</CardTitle>
             <CardDescription>
-              Inventory value distribution across product categories
+              Physical on-hand value across product categories
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -293,7 +293,7 @@ export const ValuationReport = memo(function ValuationReport({
                     <TableRow>
                       <TableHead>Category</TableHead>
                       <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right">Units</TableHead>
+                      <TableHead className="text-right">On Hand</TableHead>
                       <TableHead>% of Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -337,7 +337,7 @@ export const ValuationReport = memo(function ValuationReport({
           <CardHeader>
             <CardTitle>Value by Location</CardTitle>
             <CardDescription>
-              Inventory value distribution across warehouse locations
+              Physical on-hand value across warehouse locations
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -352,7 +352,7 @@ export const ValuationReport = memo(function ValuationReport({
                     <TableRow>
                       <TableHead>Location</TableHead>
                       <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right">Units</TableHead>
+                      <TableHead className="text-right">On Hand</TableHead>
                       <TableHead>Utilization</TableHead>
                     </TableRow>
                   </TableHeader>

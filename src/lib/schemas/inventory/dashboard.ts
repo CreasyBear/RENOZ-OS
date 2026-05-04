@@ -67,10 +67,31 @@ export const dashboardComparisonSchema = z.object({
 });
 export type DashboardComparison = z.infer<typeof dashboardComparisonSchema>;
 
+export const WMS_DASHBOARD_STOCK_SEMANTICS = {
+  totals: 'physical_on_hand',
+  breakdowns: 'physical_on_hand',
+  currentAlerts: 'allocatable_available',
+  previousPeriodComparison: 'movement_reconstructed_quantity',
+} as const;
+
+/**
+ * WMS Dashboard stock semantics.
+ * These values keep operator-facing stock cards honest when physical inventory,
+ * saleable availability, and historical movement reconstruction differ.
+ */
+export const wmsDashboardStockSemanticsSchema = z.object({
+  totals: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.totals),
+  breakdowns: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.breakdowns),
+  currentAlerts: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.currentAlerts),
+  previousPeriodComparison: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.previousPeriodComparison),
+});
+export type WMSDashboardStockSemantics = z.infer<typeof wmsDashboardStockSemanticsSchema>;
+
 /**
  * WMS Dashboard complete data structure
  */
 export const wmsDashboardDataSchema = z.object({
+  stockSemantics: wmsDashboardStockSemanticsSchema,
   totals: z.object({
     totalValue: z.number().nonnegative(),
     totalUnits: z.number().int().nonnegative(),

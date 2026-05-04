@@ -526,21 +526,21 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           positive={comparison?.totalValueChange !== undefined ? comparison.totalValueChange > 0 : undefined}
         />
         <MetricCard
-          title="Total Units"
+          title="On-Hand Units"
           value={totals.totalUnits.toLocaleString()}
-          subtitle="In stock"
+          subtitle="Physical stock"
           icon={Package}
           isLoading={isLoading}
           delta={comparison?.totalUnitsChange !== undefined ? Math.abs(comparison.totalUnitsChange) : undefined}
           positive={comparison?.totalUnitsChange !== undefined ? comparison.totalUnitsChange > 0 : undefined}
         />
         <MetricCard
-          title="Stock Alerts"
+          title="Allocatable Alerts"
           value={showDashboardUnavailable ? '--' : (lowStockCount ?? 0) + (outOfStockCount ?? 0)}
           subtitle={
             showDashboardUnavailable
               ? 'Alert metrics unavailable'
-              : `${lowStockCount ?? 0} low, ${outOfStockCount ?? 0} out`
+              : `${lowStockCount ?? 0} low, ${outOfStockCount ?? 0} out available`
           }
           icon={AlertTriangle}
           isLoading={isLoading}
@@ -579,7 +579,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
         {/* Stock by Category */}
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Stock by Category</CardTitle>
+            <CardTitle className="text-base">On-Hand by Category</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -601,7 +601,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
         {/* Stock by Location */}
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Stock by Location</CardTitle>
+            <CardTitle className="text-base">On-Hand by Location</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (

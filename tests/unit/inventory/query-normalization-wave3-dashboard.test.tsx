@@ -331,6 +331,21 @@ describe('inventory dashboard query normalization wave 3', () => {
     expect(await screen.findByText('Failed to load inventory data')).toBeInTheDocument();
   });
 
+  it('labels dashboard stock semantics explicitly', async () => {
+    const { UnifiedInventoryDashboard } = await import(
+      '@/components/domain/inventory/unified-inventory-dashboard'
+    );
+
+    render(<UnifiedInventoryDashboard />);
+
+    expect(await screen.findByText('On-Hand Units')).toBeInTheDocument();
+    expect(screen.getByText('Physical stock')).toBeInTheDocument();
+    expect(screen.getByText('Allocatable Alerts')).toBeInTheDocument();
+    expect(screen.getByText('0 low, 0 out available')).toBeInTheDocument();
+    expect(screen.getByText('On-Hand by Category')).toBeInTheDocument();
+    expect(screen.getByText('On-Hand by Location')).toBeInTheDocument();
+  });
+
   it('keeps dashboard panels visible with degraded warnings when stale data exists', async () => {
     mockUseWMSDashboard.mockReturnValueOnce({
       data: {
