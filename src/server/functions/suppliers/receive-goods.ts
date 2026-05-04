@@ -332,6 +332,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      if (!receipt) {
+        throw new ValidationError('Purchase order receipt could not be created. Refresh and try again.');
+      }
+
       // -----------------------------------------------------------------------
       // 5. Create receipt line items + inventory updates
       // -----------------------------------------------------------------------
@@ -375,6 +379,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           serialNumbers: normalizedSerials,
           qualityNotes: receiptItem.notes,
         }).returning({ id: purchaseOrderReceiptItems.id });
+
+        if (!createdReceiptItem) {
+          throw new ValidationError('Purchase order receipt item could not be saved. Refresh and try again.');
+        }
 
         // Update PO item quantities
         const newReceived = poItem.quantityReceived + receiptItem.quantityReceived;

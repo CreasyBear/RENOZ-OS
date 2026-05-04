@@ -71,4 +71,21 @@ describe('receive goods tenant-scope contract', () => {
     );
     expect(source).not.toContain('.where(eq(purchaseOrders.id,data.purchaseOrderId))');
   });
+
+  it('guards receipt header and line-item insert results before dependent writes', () => {
+    const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
+
+    expect(source).toContain(
+      "if(!receipt){thrownewValidationError('Purchaseorderreceiptcouldnotbecreated.Refreshandtryagain.');}"
+    );
+    expect(source.indexOf("if(!receipt){thrownewValidationError('Purchaseorderreceiptcouldnotbecreated.Refreshandtryagain.');}")).toBeLessThan(
+      source.indexOf('constcreatedMovements:string[]=[]')
+    );
+    expect(source).toContain(
+      "if(!createdReceiptItem){thrownewValidationError('Purchaseorderreceiptitemcouldnotbesaved.Refreshandtryagain.');}"
+    );
+    expect(source.indexOf("if(!createdReceiptItem){thrownewValidationError('Purchaseorderreceiptitemcouldnotbesaved.Refreshandtryagain.');}")).toBeLessThan(
+      source.indexOf('purchaseOrderReceiptItemId:createdReceiptItem.id')
+    );
+  });
 });
