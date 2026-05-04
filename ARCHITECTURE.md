@@ -1,6 +1,6 @@
 # Architecture
 
-Renoz CRM v3 is a multi-tenant operations platform for renovation, warranty, service, support, and return-management workflows.
+RENOZ-V3 is a multi-tenant lithium-ion battery OEM operations platform for RENOZ Energy.
 
 This file is the public engineering overview. For deeper rules and operational detail, use the linked docs rather than treating this file as the single source of truth.
 
@@ -8,11 +8,14 @@ This file is the public engineering overview. For deeper rules and operational d
 
 The app is organized around a few major domains:
 
+- `orders / fulfillment`: commercial order truth, delivery state, shipment history, and operational closeout
+- `products / serialized assets`: SKU, product, serial number, and battery asset lifecycle tracking
+- `procurement / receiving / warehouse`: supplier intake, purchase orders, receiving, locations, transfers, and stock movement
+- `inventory`: serialized stock, FIFO valuation, receiving, transfers, returns, and warehouse integrity
 - `support`: issue intake, issue resolution, RMAs, remedy execution
 - `warranty`: entitlements, warranties, claims, claimant-aware flows
-- `service`: service owners, service systems, linkage reviews, system history
-- `orders / fulfillment / finance`: commercial order truth, payments, credit notes, inventory-linked outcomes
-- `inventory`: serialized stock, FIFO valuation, receiving, transfers, returns
+- `finance / documents / communications`: operational finance artifacts, customer communications, and workflow records
+- `service / projects`: secondary workflows for occasional service or project work
 
 ## Technical Stack
 
@@ -41,6 +44,7 @@ High-signal areas:
 Start here depending on your goal:
 
 - [docs/README.md](./docs/README.md): canonical docs index
+- [docs/reference/maintainer-sprint-process.md](./docs/reference/maintainer-sprint-process.md): repo-maintainer sprint process and closeout model
 - [docs/reference/repo-standards.md](./docs/reference/repo-standards.md): repo conventions and architectural standards
 - [docs/reference/schema-trace.md](./docs/reference/schema-trace.md): data-flow and schema trace-through methodology
 - [docs/operations/deployment.md](./docs/operations/deployment.md): deployment, migration, and rollback guide

@@ -17,6 +17,8 @@ If a doc does not help explain current operational behavior, evergreen engineeri
 
 ### Engineering reference
 
+- [reference/maintainer-sprint-process.md](./reference/maintainer-sprint-process.md)
+  Repo-maintainer sprint process for triage, issue slicing, architecture, implementation, remediation, verification, and closeout.
 - [reference/repo-standards.md](./reference/repo-standards.md)
   Codebase conventions and architectural standards.
 - [reference/schema-trace.md](./reference/schema-trace.md)
@@ -83,8 +85,9 @@ Specification-grade traces of critical workflows. These are useful for debugging
 1. [../README.md](../README.md)
 2. [../ARCHITECTURE.md](../ARCHITECTURE.md)
 3. [reference/repo-standards.md](./reference/repo-standards.md)
-4. [workflows/warranty-support-phase2-workflows.md](./workflows/warranty-support-phase2-workflows.md)
-5. [architecture/support-issue-rma-b2b2c.md](./architecture/support-issue-rma-b2b2c.md)
+4. [reference/maintainer-sprint-process.md](./reference/maintainer-sprint-process.md)
+5. [workflows/warranty-support-phase2-workflows.md](./workflows/warranty-support-phase2-workflows.md)
+6. [architecture/support-issue-rma-b2b2c.md](./architecture/support-issue-rma-b2b2c.md)
 
 ### For support / RMA work
 

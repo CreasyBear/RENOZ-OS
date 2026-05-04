@@ -9,7 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Renoz v3 is a multi-tenant CRM application for renovation/construction businesses built with TanStack Start (React 19), Drizzle ORM, and Supabase.
+RENOZ-V3 is a multi-tenant lithium-ion battery OEM operations platform for RENOZ Energy, built with TanStack Start (React 19), Drizzle ORM, and Supabase. It supports internal workflows across ordering, customers and partners, products and serial numbers, procurement, inventory, warehouse management, warranties, support, RMAs, documents, communications, and finance. Services and projects exist, but they are secondary workflows.
+
+Maintainer posture: treat the repo as a product-engineering system and strategic business asset, not a feature pile. Code quality is in service of making RENOZ Energy easier to sell, fulfill, support, warranty, recover, report, and improve. Work through the sprint process in `docs/reference/maintainer-sprint-process.md`: triage, raise a domain slice, architect, implement, remediate, verify, and close out with touched domains, business value protected, standards checked, smells removed/deferred, gates run/skipped, goal adaptations, and residual risk.
 
 ## Commands
 

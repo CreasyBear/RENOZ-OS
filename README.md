@@ -1,17 +1,22 @@
-# Renoz CRM v3
+# RENOZ-V3
 
-Renoz CRM v3 is a multi-tenant CRM and operations platform for renovation, warranty, service, and return-management workflows.
+RENOZ-V3 is a multi-tenant lithium-ion battery OEM operations platform for RENOZ Energy.
 
-It is built with TanStack Start, React 19, Supabase, and Drizzle ORM, and the current codebase includes substantial support, warranty, service-system, inventory, and RMA workflow infrastructure.
+It is built with TanStack Start, React 19, Supabase, and Drizzle ORM. The current codebase supports RENOZ Energy workflows across ordering, customers and partners, products and serial numbers, procurement, inventory, warehouse management, warranties, support, RMAs, documents, communications, and finance.
+
+Services and projects exist, but they are secondary workflows. The center of gravity is battery OEM operations.
 
 ## What This Repo Contains
 
 The product currently centers on a few major workflow areas:
 
+- `orders / fulfillment`: commercial order truth, delivery state, shipment history, and operational closeout
+- `products / serialized assets`: SKU, product, serial number, and battery asset lifecycle tracking
+- `procurement / receiving / warehouse`: supplier intake, purchase orders, receiving, locations, transfers, and stock movement
+- `inventory / valuation`: serialized inventory, reservations, FIFO cost layers, returns, and warehouse integrity
 - `support / issues / RMAs`: issue intake, diagnosis, RMA creation handoff, remedy execution, and operator closeout
 - `warranty / entitlements / claims`: entitlement activation, claimant-aware warranty claims, and warranty-first support context
-- `service systems`: bounded service-owner and service-system tracking used by warranty and support flows
-- `inventory / fulfillment / finance`: serialized inventory, FIFO cost layers, shipments, returns, and operational finance contracts
+- `finance / documents / communications`: operational finance artifacts, customer communications, and workflow records
 
 ## Tech Stack
 
@@ -112,6 +117,7 @@ tests/
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md): public engineering overview for the app and repo
 - [docs/README.md](./docs/README.md): curated documentation index
+- [docs/reference/maintainer-sprint-process.md](./docs/reference/maintainer-sprint-process.md): repo-maintainer process for triage, issue slicing, architecture, implementation, remediation, verification, and closeout
 - [CLAUDE.md](./CLAUDE.md): local contributor/agent operating guidance used in this repo
 - [SECURITY.md](./SECURITY.md): security reporting guidance
 

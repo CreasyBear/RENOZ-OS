@@ -15,6 +15,12 @@ Important: older domain sections are historical audit snapshots, not automatical
 
 **Operator stance:** Treat RenOz v3 as a production system owned by a meticulous repo SWE/operator. Passing gates is only tripwire evidence; it is not proof of quality. Closeout must include judgment about smell removed or deferred, ownership clarified, complexity reduced, failure modes handled, and whether future changes became easier.
 
+**Product truth correction:** RENOZ-V3 is a lithium-ion battery OEM operations platform for RENOZ Energy, not a renovation/service CRM. The repo-maintainer goal should protect the battery OEM operations spine across ordering, customers and partners, serialized products, procurement, inventory, warehouse management, warranties, support, RMAs, documents, communications, finance, and operator closeout. Services and projects are secondary workflows.
+
+**Business asset correction:** repo maintenance is not cleanup for cleanup's sake. The standard is whether RENOZ-V3 becomes a value-producing system for RENOZ Energy: less operational drag, fewer broken workflows, clearer UI/UX, stronger warehouse and financial truth, faster support/RMA handling, and a codebase that compounds instead of getting left behind.
+
+**Sprint process:** use [maintainer-sprint-process.md](./maintainer-sprint-process.md) as the standing workflow for triage, issue slicing, architecture, implementation, remediation, verification, and closeout.
+
 **Branch context:** `codex/cross-phase-closeout` is the right integration branch for this work; `master` is well behind. The large diff against `master` (`808 files changed`, `327949 insertions`, `22729 deletions`) is context, not an indictment of the branch. The repo-owner rule is that follow-up quality work on top of this branch should stay small and domain-sliced unless a cross-domain invariant genuinely requires a wider change.
 
 **Tripwire status:** Direct reliability guards pass:
