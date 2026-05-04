@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -219,6 +219,25 @@ Out of scope:
 - redesigning the receiving form
 - changing PO receive serialization rules
 
+### 8. Manual Receive Schema Ownership
+
+Business value: manual receiving rules should live with the manual receiving workflow, not in the large generic inventory schema file.
+
+Evidence:
+
+- Issue 7 created `src/lib/schemas/inventory/receiving.ts`, but `manualReceiptReasonValues`, `manualReceiptReasonSchema`, and `ManualReceiptReason` still lived in `src/lib/schemas/inventory/inventory.ts`.
+- Manual receive form, mobile receiving, receive hook, and receive server all consume the receipt reason contract through the inventory schema barrel.
+
+Proposed slice:
+
+> Move manual receipt reason schema ownership into `src/lib/schemas/inventory/receiving.ts` while preserving the public `@/lib/schemas/inventory` export surface.
+
+Out of scope:
+
+- extracting unrelated inventory schemas
+- changing receipt reason values or labels
+- changing receive behavior
+
 ## Recommended First Implementation Slice
 
 Start with Issue 1: Manual Receive Cache Contract.
@@ -301,10 +320,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes seven bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes eight bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, and manual receive serialization parity. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, and manual receive schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -325,6 +344,7 @@ Sprint standards checked:
 - product receive wrappers cannot reintroduce a separate product bulk-receive path without failing the trace guard
 - RMA return-to-stock location selection is explicit and trace guarded
 - manual receive serialized/non-serialized rules now have one shared schema helper used by UI and server validation
+- manual receipt reason schema ownership now lives with the receiving workflow schema helper
 
 Sprint smells removed:
 
@@ -336,10 +356,11 @@ Sprint smells removed:
 - under-described manual receive cache contract
 - duplicated manual receive serialized validation between form and server
 - non-serialized products could carry serial input through the receive form until server rejection
+- manual receipt reason schema lived in the generic inventory schema monolith instead of the receiving schema owner
 
 Deferred backlog:
 
-- `src/lib/schemas/inventory/inventory.ts` remains large and should be decomposed by workflow schema ownership
+- `src/lib/schemas/inventory/inventory.ts` remains large and should continue to be decomposed by workflow schema ownership
 - legacy read consumers still import through the inventory compatibility barrel in places
 - database-backed integration coverage is still needed for receive/RMA quantity, movement, cost-layer, valuation, transition, and serialized-lineage invariants
 - fixed `AUD` currency in RMA return cost layers remains a finance/inventory valuation slice
@@ -351,6 +372,7 @@ Sprint verification evidence:
 
 - focused receive, serialized availability, stock-in, RMA receive, and inventory mutation-error tests recorded in issue closeouts
 - manual receive serialization parity contract recorded in Issue 7
+- manual receive schema ownership extraction recorded in Issue 8
 - broad inventory sweeps recorded in Issues 3, 4, and 5
 - support RMA receive location/dialog/mutation tests recorded in Issue 6
 - direct guards recorded where run: `check-route-casts`, `check-pending-dialog-guards`, `check-read-path-query-guards`, `git diff --check`
@@ -850,3 +872,40 @@ Verification:
 Goal adaptation: no goal change; this follows the existing sprint process by closing a small workflow-contract smell exposed by Issue 5.
 
 Residual risk: this aligns pre-submit and server validation for manual receive serialization, but it does not prove the DB transaction path for duplicate serial inventory rows. That remains a future integration or reliability slice.
+
+### Issue 8: Manual Receive Schema Ownership
+
+Touched domains: inventory schema exports, manual receiving form, mobile receiving route, receive hook, inventory receiving server function.
+
+Workflow protected: manual non-PO receive -> receipt reason selection -> form/mobile payload -> `useReceiveInventory` -> `receiveInventory` schema validation.
+
+Business value: manual receiving contracts are easier to find and evolve because the receipt reason enum now lives with the receiving workflow rules instead of the broad inventory schema monolith.
+
+Standards checked:
+
+- moved `manualReceiptReasonValues`, `manualReceiptReasonSchema`, and `ManualReceiptReason` to `src/lib/schemas/inventory/receiving.ts`
+- preserved the public `@/lib/schemas/inventory` barrel export used by desktop receive, mobile receive, hooks, and server functions
+- added a guard that prevents manual receipt reason ownership from drifting back into `src/lib/schemas/inventory/inventory.ts`
+- kept receipt reason values and labels unchanged
+
+Smells removed:
+
+- receiving-specific enum/schema lived in the generic inventory schema monolith
+- Issue 7's receiving schema helper did not yet own the full manual receive validation contract
+
+Deferred:
+
+- broader `src/lib/schemas/inventory/inventory.ts` decomposition by location, movement, quality, reads, and count schemas
+- any behavior change to receipt reason values or labels
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/manual-receive-serialization-contract.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/receiving.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/manual-receive-serialization-contract.test.ts`
+- `git diff --check`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a small architecture-cleanliness slice under the existing inventory sprint.
+
+Residual risk: the main inventory schema file is still large; this only extracts the manual receive schema owner.
