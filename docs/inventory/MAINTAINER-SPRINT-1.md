@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issue 1 implemented; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; Issue 3 started with first extraction boundary; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -315,3 +315,70 @@ Verification:
 Goal adaptation: no goal change; the slice followed the product-owner goal by prioritizing architecture cleanliness inside a domain workflow.
 
 Residual risk: manual receive now refreshes the intended operator-visible cache prefixes, but this does not prove the server transaction itself preserves every inventory, cost-layer, and serialized-lineage invariant. Those remain covered by existing reliability SQL and later inventory/RMA slices.
+
+### Issue 2: Serialized Availability Prefix Drift
+
+Touched domains: inventory serialized items, order status, order picking, shared query keys.
+
+Workflow protected: serialized item creation/update/delete and order pick/unpick/cancellation -> available serial selectors.
+
+Business value: operators should not see stale serial choices after serial inventory changes or allocation state changes.
+
+Standards checked:
+
+- available serials prefix is centralized through `queryKeys.inventory.availableSerialsAll()`
+- availability prefix is centralized through `queryKeys.inventory.availabilityAll()`
+- WMS prefix is centralized through `queryKeys.inventory.wmsAll()`
+- cross-domain order hooks no longer hand-build inventory cache prefixes
+
+Smells removed:
+
+- literal `availableSerials` prefix invalidations in inventory serialized-item hooks
+- literal `availableSerials` prefix invalidations in order status and picking hooks
+
+Deferred:
+
+- picking behavior changes
+- allocation rule changes
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/shared/query-key-integrity.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/orders/order-status-contract.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this was the exposed cross-domain smell from Issue 1 and matched the centralized query-key standard.
+
+Residual risk: cache-prefix centralization does not prove every allocation mutation refreshes every downstream consumer; future picking and allocation slices should keep this contract in scope.
+
+### Issue 3: Inventory Server Concentration
+
+Touched domains: inventory server functions, inventory activity logging.
+
+Workflow protected: all inventory mutations that write movement activity records.
+
+Business value: inventory mutations are safer to change when cross-cutting activity logging is outside the monolithic workflow file.
+
+Standards checked:
+
+- extracted one safe helper boundary before moving larger workflow code
+- kept transaction-scoped activity logging behavior unchanged
+- kept existing public server-function imports unchanged
+
+Smells removed:
+
+- local activity logging helper and activity-table dependency inside `src/server/functions/inventory/inventory.ts`
+
+Deferred:
+
+- extracting `receiveInventory` into a receiving-specific server module
+- extracting adjustment, transfer, allocation, and WMS/dashboard workflows
+- extracting inventory schema sections
+
+Verification:
+
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is the first strict-modularity step for the inventory server concentration issue.
+
+Residual risk: the main inventory server file remains large and mixed-concern; this slice only establishes and proves the first low-risk extraction boundary.

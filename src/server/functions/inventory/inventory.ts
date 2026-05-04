@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, isNull, isNotNull, gte, lte, inArray, lt, ilike, or } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, isNull, gte, lte, inArray, lt, ilike, or } from 'drizzle-orm';
 import { cache } from 'react';
 import { z } from 'zod';
 import { db } from '@/lib/db';
@@ -22,7 +22,6 @@ import {
   inventoryCostLayers,
   purchaseOrders,
   orders,
-  activities,
   orderLineSerialAllocations,
   serializedItems,
 } from 'drizzle/schema';
@@ -61,6 +60,10 @@ import {
   createReceiptLayersWithCostComponents,
   recomputeInventoryValueFromLayers,
 } from '@/server/functions/_shared/inventory-finance';
+import {
+  checkActivityExists,
+  logActivityInTransaction,
+} from '@/server/functions/inventory/_activity';
 
 // ============================================================================
 // TYPES
@@ -101,69 +104,6 @@ async function retryWithBackoff<T>(
   }
   inventoryLogger.error(`[${label}] All ${RETRY_MAX_ATTEMPTS} attempts failed`);
   throw lastError;
-}
-
-// Type alias for Drizzle transaction parameter
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * Safely check if an activity with the given movementId already exists.
- * Uses safe JSON extraction with NULL checks to prevent errors.
- */
-async function checkActivityExists(
-  tx: DbTransaction,
-  organizationId: string,
-  movementId: string
-): Promise<boolean> {
-  // RAW SQL (Phase 11 Keep): JSONB extract, historical CTEs, complex EXISTS. Drizzle cannot express. See PHASE11-RAW-SQL-AUDIT.md
-  const [existing] = await tx
-    .select({ id: activities.id })
-    .from(activities)
-    .where(
-      and(
-        eq(activities.organizationId, organizationId),
-        isNotNull(activities.metadata),
-        sql`${activities.metadata}->>'movementId' = ${movementId}`
-      )
-    )
-    .limit(1);
-  return !!existing;
-}
-
-/**
- * Log activity inside transaction with safe error handling.
- * If logging fails, transaction continues (activity logging is non-critical).
- */
-async function logActivityInTransaction(
-  tx: DbTransaction,
-  ctx: Awaited<ReturnType<typeof withAuth>>,
-  params: {
-    entityType: 'product' | 'inventory';
-    entityId: string;
-    action: 'created' | 'updated' | 'deleted';
-    description: string;
-    metadata: Record<string, unknown>;
-  }
-): Promise<void> {
-  try {
-    await tx.insert(activities).values({
-      organizationId: ctx.organizationId,
-      userId: ctx.user.id,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      action: params.action,
-      description: params.description,
-      metadata: params.metadata as Record<string, unknown>,
-      createdBy: ctx.user.id,
-    });
-  } catch (error) {
-    // Log error but don't fail transaction - activity logging is non-critical
-    inventoryLogger.error('[logActivityInTransaction] Failed to log activity', error, {
-      entityType: params.entityType,
-      entityId: params.entityId,
-      action: params.action,
-    });
-  }
 }
 
 // ============================================================================
