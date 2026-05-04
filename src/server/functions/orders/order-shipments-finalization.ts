@@ -34,6 +34,8 @@ import {
 import { hasProcessedIdempotencyKey } from '@/server/functions/_shared/idempotency';
 import { fulfillmentImportSchema } from '@/lib/schemas/orders/shipments';
 import { markShippedSchema, reopenShipmentSchema } from '@/lib/schemas';
+import type { FulfillmentInventoryMutationIdentity } from '@/lib/schemas/orders';
+import { withFulfillmentInventoryMutationIdentity } from '@/lib/server/fulfillment-mutation-contract';
 import { generateTrackingUrl } from './order-shipments-shared';
 import type { OrderShipment } from './order-shipment-types';
 import { recomputeOrderFulfillmentStatus } from './order-fulfillment-status';
@@ -48,16 +50,10 @@ import {
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
 
-interface ShipmentInventoryMutationResult {
-  affectedInventoryIds: string[];
-  affectedProductIds: string[];
-  touchesSerializedInventory: boolean;
-}
-
 export async function markShipmentAsShipped(
   ctx: Awaited<ReturnType<typeof withAuth>>,
   data: MarkShippedInput
-): Promise<OrderShipment & ShipmentInventoryMutationResult> {
+): Promise<OrderShipment & FulfillmentInventoryMutationIdentity> {
   const [existing] = await db
     .select()
     .from(orderShipments)
@@ -482,12 +478,11 @@ export async function markShipmentAsShipped(
       createdBy: ctx.user.id,
     });
 
-    return {
-      ...updatedShipment,
+    return withFulfillmentInventoryMutationIdentity(updatedShipment, {
       affectedInventoryIds: Array.from(affectedInventoryIds),
       affectedProductIds: Array.from(affectedProductIds),
       touchesSerializedInventory,
-    };
+    });
   });
 }
 
@@ -578,7 +573,7 @@ export async function reopenShipmentHandler({
     };
   }
 
-  const shipment = await db.transaction(async (tx): Promise<OrderShipment & ShipmentInventoryMutationResult> => {
+  const shipment = await db.transaction(async (tx): Promise<OrderShipment & FulfillmentInventoryMutationIdentity> => {
     await tx.execute(
       sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
@@ -901,12 +896,11 @@ export async function reopenShipmentHandler({
       createdBy: ctx.user.id,
     });
 
-    return {
-      ...updatedShipment,
+    return withFulfillmentInventoryMutationIdentity(updatedShipment, {
       affectedInventoryIds: Array.from(affectedInventoryIds),
       affectedProductIds: Array.from(affectedProductIds),
       touchesSerializedInventory,
-    };
+    });
   });
 
   return {

@@ -25,7 +25,8 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { pickOrderItemsSchema, unpickOrderItemsSchema } from '@/lib/schemas/orders/picking';
-import type { OrderStatus } from '@/lib/schemas/orders';
+import type { FulfillmentInventoryMutationIdentity, OrderStatus } from '@/lib/schemas/orders';
+import { withFulfillmentInventoryMutationIdentity } from '@/lib/server/fulfillment-mutation-contract';
 import { findDuplicateSerials, normalizeSerial } from '@/lib/serials';
 import {
   addSerializedItemEvent,
@@ -52,12 +53,6 @@ const PICK_UNPICK_ALLOWED_STATUSES: OrderStatus[] = [
   'partially_shipped',
   'shipped',
 ];
-
-interface PickingMutationAffectedInventory {
-  affectedInventoryIds: string[];
-  affectedProductIds: string[];
-  touchesSerializedInventory: boolean;
-}
 
 /**
  * Pick items from an order.
@@ -491,16 +486,20 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
           .where(eq(orders.id, data.orderId));
       }
 
-      return {
-        lineItems: updatedLineItems,
-        orderStatus: newOrderStatus,
-        affectedInventoryIds: Array.from(affectedInventoryIds),
-        affectedProductIds: Array.from(affectedProductIds),
-        touchesSerializedInventory,
-      } satisfies {
+      return withFulfillmentInventoryMutationIdentity(
+        {
+          lineItems: updatedLineItems,
+          orderStatus: newOrderStatus,
+        },
+        {
+          affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedProductIds: Array.from(affectedProductIds),
+          touchesSerializedInventory,
+        }
+      ) satisfies {
         lineItems: typeof updatedLineItems;
         orderStatus: OrderStatus;
-      } & PickingMutationAffectedInventory;
+      } & FulfillmentInventoryMutationIdentity;
     });
 
     return result;
@@ -838,16 +837,20 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
           .where(eq(orders.id, data.orderId));
       }
 
-      return {
-        lineItems: updatedLineItems,
-        orderStatus: newOrderStatus,
-        affectedInventoryIds: Array.from(affectedInventoryIds),
-        affectedProductIds: Array.from(affectedProductIds),
-        touchesSerializedInventory,
-      } satisfies {
+      return withFulfillmentInventoryMutationIdentity(
+        {
+          lineItems: updatedLineItems,
+          orderStatus: newOrderStatus,
+        },
+        {
+          affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedProductIds: Array.from(affectedProductIds),
+          touchesSerializedInventory,
+        }
+      ) satisfies {
         lineItems: typeof updatedLineItems;
         orderStatus: OrderStatus;
-      } & PickingMutationAffectedInventory;
+      } & FulfillmentInventoryMutationIdentity;
     });
 
     return result;

@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
+import type { FulfillmentInventoryMutationCacheResult } from '@/lib/schemas/orders';
 import { queryKeys } from '@/lib/query-keys';
 
 export interface InvalidateShipmentMutationOptions {
@@ -8,12 +9,7 @@ export interface InvalidateShipmentMutationOptions {
   includeFulfillment?: boolean;
 }
 
-export interface FulfillmentInventoryMutationResult {
-  affectedIds?: string[] | null;
-  affectedInventoryIds?: string[] | null;
-  affectedProductIds?: string[] | null;
-  touchesSerializedInventory?: boolean | null;
-}
+type FulfillmentInventoryMutationResult = FulfillmentInventoryMutationCacheResult;
 
 function uniqueIds(ids?: string[] | null): string[] {
   return Array.from(new Set((ids ?? []).filter(Boolean)));

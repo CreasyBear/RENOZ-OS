@@ -2,7 +2,7 @@
 
 Sprint 4 moves from inventory-owned stock mutations into the orders/fulfillment seam where shipments consume, restore, reserve, and expose battery stock.
 
-Status: Issues 1, 2, 3, and 4 implemented.
+Status: Issues 1, 2, 3, 4, and 5 implemented. Sprint closeout audit complete.
 
 ## Business Value
 
@@ -189,6 +189,45 @@ Closeout criteria:
 - focused order mutation invalidation tests pass
 - lint/typecheck evidence is recorded
 
+### 5. Formal Fulfillment Mutation Identity Contract
+
+Business value: the result identity driving fulfillment inventory cache refreshes should be a first-class domain contract, not an inferred shape copied between server functions and hooks. This keeps future fulfillment work from silently dropping the IDs needed for fresh stock, product, valuation, and serialized views.
+
+Workflow invariant: picking, unpicking, shipment finalization, and shipment reopen server functions must emit schema-owned inventory/product/serialized-touch identity when the transaction knows it; hook cache policy must consume the schema-owned fallback result shape for replay or unknown identity.
+
+Affected files:
+
+- `src/lib/schemas/orders/fulfillment-mutation-contract.ts`
+- `src/lib/server/fulfillment-mutation-contract.ts`
+- `src/lib/schemas/orders/index.ts`
+- `src/server/functions/orders/order-picking.ts`
+- `src/server/functions/orders/order-shipments-finalization.ts`
+- `src/hooks/orders/_fulfillment-cache.ts`
+- `tests/unit/orders/order-write-contracts.test.ts`
+- `docs/orders/MAINTAINER-SPRINT-4.md`
+
+Out of scope:
+
+- changing picking, unpicking, shipment finalization, or reopen transaction behavior
+- adding historical inventory/product identity to idempotency replay branches
+- formalizing every shipment or picking output field as a full response schema
+- adding database-backed transaction integration tests
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/order-write-contracts.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx
+```
+
+Closeout criteria:
+
+- fulfillment inventory mutation identity lives in orders schemas
+- server functions use a shared server helper to attach validated fulfillment identity
+- hook cache policy imports the schema-owned cache result type instead of declaring a local copy
+- contract tests reject malformed inventory/product identity and allow unknown replay identity
+- focused mutation invalidation behavior remains unchanged
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Shipment Finalization Inventory Cache Contract
@@ -361,4 +400,89 @@ Verification:
 
 Goal adaptation: no standing goal change. This closes the main Sprint 4 residual risk by making both picking and shipment finalization result-aware where server identity is available.
 
-Residual risk: Sprint 4 still needs a sprint-level closeout audit. The remaining technical deferral is whether these fulfillment mutation envelopes should be promoted into formal schemas instead of inferred server result types.
+Residual risk at Issue 4 close: Sprint 4 still needed a sprint-level closeout audit, and the remaining technical question was whether fulfillment mutation envelopes should be promoted into formal schemas instead of inferred server result types. Issue 5 and the sprint closeout below address that question.
+
+### Issue 5: Formal Fulfillment Mutation Identity Contract
+
+Touched domains: orders fulfillment mutation schemas, picking server functions, shipment finalization server functions, fulfillment cache policy, order write contract tests.
+
+Workflow protected: pick/unpick/ship/reopen transaction -> schema-owned affected inventory/product/serialized identity -> hook cache policy -> exact inventory detail, cost-layer, product stock, and serialized cache refresh.
+
+Business value: fulfillment cache correctness is now easier to maintain because the inventory identity contract is named, exported, tested, and reused instead of being implicit in separate server and hook interfaces.
+
+Standards checked:
+
+- added `fulfillmentInventoryMutationIdentitySchema` for known transaction identity
+- added `fulfillmentInventoryMutationCacheResultSchema` for cache fallback/replay identity
+- added `withFulfillmentInventoryMutationIdentity` so server functions attach validated identity through one helper
+- exported the contract from orders schemas instead of leaving it as a hook-local type
+- kept idempotency replay behavior honest by allowing unknown inventory/product identity to fall back to broad cache refresh
+
+Smells removed:
+
+- picking and shipment finalization carried separate local result interfaces with the same meaning
+- fulfillment cache policy declared its own copy of the server result shape
+- Sprint 4 result-aware cache identity had no formal schema boundary
+
+Deferred:
+
+- idempotency replay still cannot expose affected inventory/product identity without historical side-effect lookup
+- full picking and shipment response schemas remain out of scope; this slice formalized the cache-critical identity contract only
+- database-backed transaction tests remain a future hardening step
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/order-write-contracts.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/orders/fulfillment-mutation-contract.ts src/lib/server/fulfillment-mutation-contract.ts src/lib/schemas/orders/index.ts src/hooks/orders/_fulfillment-cache.ts src/server/functions/orders/order-picking.ts src/server/functions/orders/order-shipments-finalization.ts tests/unit/orders/order-write-contracts.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+- `git diff --check -- docs/orders/MAINTAINER-SPRINT-4.md src/lib/schemas/orders/fulfillment-mutation-contract.ts src/lib/server/fulfillment-mutation-contract.ts src/lib/schemas/orders/index.ts src/hooks/orders/_fulfillment-cache.ts src/server/functions/orders/order-picking.ts src/server/functions/orders/order-shipments-finalization.ts tests/unit/orders/order-write-contracts.test.ts`
+
+Goal adaptation: no standing goal change. This is a direct application of the goal's route -> hook -> server function -> schema -> cache policy spine, closing the last Sprint 4 architecture-smell question before sprint closeout.
+
+Residual risk: replay branches still fall back broadly because idempotency records do not store inventory/product identity. That is acceptable until replay behavior becomes a user-visible performance problem or a broader idempotency-result persistence contract is introduced.
+
+## Sprint Closeout Audit
+
+Touched domains: orders fulfillment, inventory reservation/stock, serialized lineage, product stock caches, valuation cost-layer caches, fulfillment dashboard/kanban cache policy.
+
+Workflow protected: fulfillment dashboard/order detail -> picking and shipment hooks -> picking/finalization server functions -> order line, shipment, inventory, movement, cost-layer, serialized allocation/lineage writes -> centralized query key/cache policy -> operator-visible fulfillment and stock truth.
+
+Business value protected: operators should not overtrust stale stock, stale serial availability, stale fulfillment stage data, or stale product inventory after picking, unpicking, shipping, or reopening shipments. The repo now expresses those mutation/cache contracts in one fulfillment-owned place.
+
+Architecture standards checked:
+
+- domain ownership: order fulfillment owns picking/shipment cache policy in `src/hooks/orders/_fulfillment-cache.ts`
+- server function boundary: picking and shipment finalization return affected inventory/product/serialized identity
+- schema boundary: cache-critical fulfillment identity is formalized in orders schemas
+- query/cache contract: mutation hooks use centralized `queryKeys` and exact affected-row/product invalidation where identity is known
+- tenant isolation: changed server functions keep existing `withAuth`, organization filters, and transaction RLS `set_config` usage
+- data integrity: shipment finalization/reopen and picking/unpicking transaction behavior was not widened beyond cache identity and contract hardening
+- UI honesty: no UI state was changed; stale operator surfaces were addressed through cache contracts
+
+Smells removed:
+
+- shipment and picking hooks had scattered, inconsistent invalidation
+- shipment finalization initially did not refresh inventory/valuation/serialized/product side-effect surfaces
+- picking allocation initially did not refresh all fulfillment and stock reservation surfaces
+- picking/shipment cache policy initially relied on broad detail/product invalidation even when affected identity was known
+- fulfillment mutation identity was inferred rather than owned by an orders schema contract
+
+Smells deferred:
+
+- idempotency replay cannot return affected inventory/product identity without storing or re-reading historical side effects
+- broad summary/filter invalidation remains for inventory lists, movements, WMS/dashboard, valuation reports, availability, available serials, and fulfillment surfaces
+- large fulfillment UI containers remain monolithic and need a separate UI/product-readiness sprint
+- database-backed integration tests for picking/shipment inventory transactions remain a future hardening step
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/order-write-contracts.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/orders/fulfillment-mutation-contract.ts src/lib/server/fulfillment-mutation-contract.ts src/lib/schemas/orders/index.ts src/hooks/orders/_fulfillment-cache.ts src/server/functions/orders/order-picking.ts src/server/functions/orders/order-shipments-finalization.ts tests/unit/orders/order-write-contracts.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+- `git diff --check -- docs/orders/MAINTAINER-SPRINT-4.md src/lib/schemas/orders/fulfillment-mutation-contract.ts src/lib/server/fulfillment-mutation-contract.ts src/lib/schemas/orders/index.ts src/hooks/orders/_fulfillment-cache.ts src/server/functions/orders/order-picking.ts src/server/functions/orders/order-shipments-finalization.ts tests/unit/orders/order-write-contracts.test.ts`
+
+Goal adaptations made or declined: no standing goal change. Sprint 4 confirms the goal should keep treating fulfillment as a high-risk integration spine where cache policy, transaction identity, serialized lineage, and valuation integrity must be explicit.
+
+Residual risk: Sprint 4 improved the fulfillment mutation/cache contract, but it did not address large UI ergonomics, operator error copy, or database-backed workflow tests. The next sprint should move from fulfillment cache integrity into either fulfillment UI/operator safety or the next cross-domain business workflow with high user frustration.

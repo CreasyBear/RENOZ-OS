@@ -4,6 +4,8 @@ import {
   confirmDeliverySchema,
   createOrderSchema,
   deleteOrderLineItemInputSchema,
+  fulfillmentInventoryMutationCacheResultSchema,
+  fulfillmentInventoryMutationIdentitySchema,
   markShippedSchema,
   updateOrderLineItemInputSchema,
   updateOrderSchema,
@@ -130,5 +132,36 @@ describe('order write contracts', () => {
         id: '11111111-1111-4111-8111-111111111111',
       }).success
     ).toBe(false);
+  });
+
+  it('formalizes fulfillment inventory mutation identity', () => {
+    const identity = fulfillmentInventoryMutationIdentitySchema.parse({
+      affectedInventoryIds: ['11111111-1111-4111-8111-111111111111'],
+      affectedProductIds: ['22222222-2222-4222-8222-222222222222'],
+      touchesSerializedInventory: true,
+    });
+
+    expect(identity.affectedInventoryIds).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(identity.affectedProductIds).toEqual(['22222222-2222-4222-8222-222222222222']);
+    expect(identity.touchesSerializedInventory).toBe(true);
+
+    expect(
+      fulfillmentInventoryMutationIdentitySchema.safeParse({
+        affectedInventoryIds: ['inventory-row-a'],
+        affectedProductIds: ['22222222-2222-4222-8222-222222222222'],
+        touchesSerializedInventory: false,
+      }).success
+    ).toBe(false);
+  });
+
+  it('allows cache fallback identity to be unknown for replay results', () => {
+    const result = fulfillmentInventoryMutationCacheResultSchema.parse({
+      affectedIds: ['11111111-1111-4111-8111-111111111111'],
+    });
+
+    expect(result.affectedIds).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(result.affectedInventoryIds).toBeUndefined();
+    expect(result.affectedProductIds).toBeUndefined();
+    expect(result.touchesSerializedInventory).toBeUndefined();
   });
 });

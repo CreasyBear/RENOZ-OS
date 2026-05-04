@@ -15,6 +15,7 @@ export type { OrderCreationFormValues, OrderSubmitData } from './order-creation-
 export * from './order-amendments';
 export * from './order-payments';
 export * from './order-templates';
+export * from './fulfillment-mutation-contract';
 export * from './picking';
 export * from './shipments';
 
