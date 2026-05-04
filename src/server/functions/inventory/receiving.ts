@@ -219,7 +219,12 @@ export const receiveInventory = createServerFn({ method: 'POST' })
       const [costLayer] = await tx
         .select()
         .from(inventoryCostLayers)
-        .where(eq(inventoryCostLayers.id, costLayerId))
+        .where(
+          and(
+            eq(inventoryCostLayers.id, costLayerId),
+            eq(inventoryCostLayers.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
 
       if (product.isSerialized && normalizedSerialNumber) {

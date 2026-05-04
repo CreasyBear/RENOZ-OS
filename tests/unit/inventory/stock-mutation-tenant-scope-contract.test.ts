@@ -50,6 +50,15 @@ describe('inventory stock mutation tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
   });
 
+  it('keeps manual receive cost-layer response reads organization-scoped', () => {
+    const source = compact(read('src/server/functions/inventory/receiving.ts'));
+
+    expect(source).toContain(
+      'where(and(eq(inventoryCostLayers.id,costLayerId),eq(inventoryCostLayers.organizationId,ctx.organizationId)))'
+    );
+    expect(source).not.toContain('.where(eq(inventoryCostLayers.id,costLayerId))');
+  });
+
   it('preserves inventory finance and serialized-lineage continuity references', () => {
     const adjustmentSource = read('src/server/functions/inventory/adjustments.ts');
     const receivingSource = read('src/server/functions/inventory/receiving.ts');
