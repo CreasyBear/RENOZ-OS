@@ -24,6 +24,11 @@ import type { SortDirection } from "@/components/shared/data-table/server-sortin
 import { AlertsTablePresenter } from "./alerts-table-presenter";
 import { AlertsMobileCards } from "./alerts-mobile-cards";
 import type { AlertTableItem } from "./alert-columns";
+import {
+  ALERT_RULES_UNAVAILABLE_MESSAGE,
+  ALERT_RULES_UNAVAILABLE_TITLE,
+  getAlertRulesReadErrorMessage,
+} from "./alert-list-error-messages";
 
 export interface AlertsListPresenterProps {
   /** Alerts to display */
@@ -138,6 +143,7 @@ export const AlertsListPresenter = memo(function AlertsListPresenter({
   className,
 }: AlertsListPresenterProps) {
   const activeCount = alerts.filter((a) => a.isActive).length;
+  const errorMessage = getAlertRulesReadErrorMessage(error);
 
   // Error state
   if (error) {
@@ -149,8 +155,8 @@ export const AlertsListPresenter = memo(function AlertsListPresenter({
         <CardContent>
           <DataTableEmpty
             variant="error"
-            title="Failed to load alerts"
-            description={error.message ?? "An unexpected error occurred"}
+            title={ALERT_RULES_UNAVAILABLE_TITLE}
+            description={errorMessage ?? ALERT_RULES_UNAVAILABLE_MESSAGE}
           />
         </CardContent>
       </Card>

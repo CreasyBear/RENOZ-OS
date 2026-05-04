@@ -182,6 +182,36 @@ describe('inventory alerts query normalization wave 3', () => {
     expect(screen.queryByText('No Alert Rules')).not.toBeInTheDocument();
   });
 
+  it('renders alert presenter failures as unavailable instead of raw errors', async () => {
+    const { AlertsListPresenter } = await import('@/components/domain/inventory/alerts/alerts-list-presenter');
+
+    render(
+      <AlertsListPresenter
+        alerts={[]}
+        isLoading={false}
+        error={new Error('select from inventory_alerts violates row-level security policy')}
+        sortField="severity"
+        sortDirection="desc"
+        onSort={vi.fn()}
+        selectedIds={new Set()}
+        isAllSelected={false}
+        isPartiallySelected={false}
+        onSelect={vi.fn()}
+        onSelectAll={vi.fn()}
+        onShiftClickRange={vi.fn()}
+        isSelected={() => false}
+      />
+    );
+
+    expect(screen.getByText('Inventory alert rules are temporarily unavailable.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Inventory alert rules are temporarily unavailable. Please refresh and try again.')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('select from inventory_alerts violates row-level security policy')
+    ).not.toBeInTheDocument();
+  });
+
   it('uses safe mutation fallback copy instead of raw alert create errors', async () => {
     mockCreateAlert.mockRejectedValue(
       new Error('duplicate key value violates unique constraint inventory_alerts_rule_key')

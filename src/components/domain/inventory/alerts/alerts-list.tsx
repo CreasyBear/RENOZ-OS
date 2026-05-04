@@ -52,6 +52,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StatusCell } from "@/components/shared/data-table";
 import { ALERT_ACTIVE_STATUS_CONFIG } from "../inventory-status-config";
+import {
+  ALERT_RULES_UNAVAILABLE_MESSAGE,
+  ALERT_RULES_UNAVAILABLE_TITLE,
+} from "./alert-list-error-messages";
 
 // ============================================================================
 // TYPES
@@ -294,12 +298,12 @@ export const AlertsList = memo(function AlertsList({
       <Card className={className}>
         <CardHeader>
           <CardTitle>Alert Rules</CardTitle>
-          <CardDescription>Inventory alert rules are temporarily unavailable.</CardDescription>
+          <CardDescription>{ALERT_RULES_UNAVAILABLE_TITLE}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
             <p className="text-sm text-foreground">
-              {errorMessage ?? 'Inventory alert rules are temporarily unavailable. Please refresh and try again.'}
+              {errorMessage ?? ALERT_RULES_UNAVAILABLE_MESSAGE}
             </p>
             {onRetry ? (
               <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
