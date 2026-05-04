@@ -2,7 +2,7 @@
 
 This sprint follows Sprint 2's schema-ownership closeout. The focus shifts from contract placement to stock-changing behavior that can mislead operators after mutations.
 
-Status: Issues 1, 2, and 3 implemented.
+Status: Issues 1, 2, 3, and 4 implemented.
 
 ## Business Value
 
@@ -136,6 +136,44 @@ Closeout criteria:
 - focused adjustment tests pass
 - lint/typecheck evidence is recorded
 
+### 4. Stock Mutation Result-Aware Invalidation Contract
+
+Business value: after receive, transfer, or adjustment, warehouse operators should not keep looking at stale dashboard, WMS, valuation, availability, serialized picking, or product stock surfaces. Detail refreshes should be precise when the server already reports which inventory rows changed.
+
+Workflow invariant: stock-changing hooks must use one shared cache invalidation contract that follows the mutation result envelope (`affectedInventoryIds`, item identity, source/destination identity) for row detail/cost-layer caches while refreshing the broader operational prefixes that cannot be safely narrowed by client filters.
+
+Affected files:
+
+- `src/hooks/inventory/use-inventory.ts`
+- `tests/unit/inventory/use-receive-inventory.test.tsx`
+- `tests/unit/inventory/use-adjust-inventory.test.tsx`
+- `tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `docs/inventory/MAINTAINER-SPRINT-3.md`
+
+Out of scope:
+
+- changing receive, transfer, or adjustment server transaction behavior
+- changing mutation result schemas
+- changing query key names or global query-key architecture
+- implementing allocation/deallocation UI or cache behavior where no active frontend call site exists
+- narrowing dashboard, WMS, valuation, availability, or product prefixes without filter-aware server/cache contracts
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx
+```
+
+Closeout criteria:
+
+- receive, transfer, and adjustment hooks share one stock mutation invalidation helper
+- mutation results with affected inventory identity invalidate exact `inventory.detail(id)` caches instead of the broad details prefix
+- affected inventory rows also invalidate their cost-layer detail caches
+- transfer and adjustment now refresh the same dashboard, WMS, valuation, availability, available-serial, and product stock surfaces as receive
+- serialized receive/transfer paths continue to refresh serialized inventory caches
+- focused mutation cache tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Receive Optimistic Patch Lot/Serial Scope
@@ -257,4 +295,48 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 3 continues removing unsafe optimistic cache behavior from stock-changing flows.
 
-Residual risk: allocation/deallocation cache behavior still needs targeted review; receive, transfer, and adjustment invalidation remain broad rather than result-aware.
+Residual risk: allocation/deallocation cache behavior still needs targeted review; receive, transfer, and adjustment invalidation remain broad rather than result-aware until Issue 4.
+
+### Issue 4: Stock Mutation Result-Aware Invalidation Contract
+
+Touched domains: inventory receive, transfer, and adjustment hooks; inventory detail and valuation cost-layer cache contracts; product stock cache contracts; stock mutation regression coverage.
+
+Workflow protected: stock-changing hook mutation -> transactional server write -> result-aware cache invalidation -> operator-visible inventory, warehouse, product, valuation, availability, serialized, and movement views.
+
+Business value: after stock is received, transferred, or adjusted, RENOZ operators get fresh operational stock surfaces and exact changed-row details instead of stale dashboard/product/valuation views or unnecessarily broad detail invalidation when the server already reports affected rows.
+
+Standards checked:
+
+- added a shared `invalidateInventoryStockMutationQueries` helper for receive, transfer, and adjustment
+- centralized affected inventory row collection from `affectedInventoryIds`, `item`, `sourceItem`, and `destinationItem`
+- exact inventory detail and cost-layer detail caches are invalidated when row identity is available
+- broad detail invalidation remains only as the fallback when mutation result identity is unavailable
+- transfer and adjustment now refresh dashboard, WMS, valuation, availability, available-serial, and product inventory surfaces instead of only list/detail/low-stock
+- serialized receive and serial-number transfer paths continue to refresh serialized inventory caches
+- movement invalidation behavior is preserved on transfer/adjust settle and included in receive settle
+
+Smells removed:
+
+- receive, transfer, and adjustment had separate invalidation logic with different operational surfaces
+- transfer and adjustment could leave dashboard, WMS, valuation, availability, available-serial, and product stock caches stale after successful mutations
+- stock mutation invalidation ignored the server's finance mutation envelope and invalidated the entire inventory detail prefix even when affected rows were known
+
+Deferred:
+
+- dashboard, WMS, valuation, availability, and product stock caches remain prefix-broad because their filter spaces cannot be safely narrowed from the current mutation result
+- receive, transfer, and adjustment server transactions are unchanged
+- query-key architecture is unchanged outside the hook-level stock mutation helper
+- allocation/deallocation frontend cache behavior was searched but not changed; the active app has server functions exported, but no current route, component, hook, or test call sites for `allocateStock`, `deallocateStock`, `allocateInventory`, or `deallocateInventory`
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `rg -n "allocateStock|deallocateStock|allocateInventory|deallocateInventory" src/hooks src/components src/routes tests`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-3.md src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 3 now has a reusable stock mutation cache contract instead of per-hook invalidation drift.
+
+Residual risk: broad operational prefixes still trade precision for correctness; allocation/deallocation should adopt the same helper if an active frontend mutation path is introduced.
