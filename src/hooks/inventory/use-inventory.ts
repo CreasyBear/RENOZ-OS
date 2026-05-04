@@ -19,6 +19,7 @@ import {
 } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import { formatInventoryMutationError } from './_mutation-errors';
+import { invalidateInventoryStockMutationQueries } from './_stock-mutation-cache';
 import {
   listInventory,
   getInventoryItem,
@@ -57,18 +58,6 @@ interface ReceivePatchCandidate {
   serialNumber?: string | null;
 }
 
-interface InventoryMutationItemIdentity {
-  id?: string | null;
-  serialNumber?: string | null;
-}
-
-interface InventoryStockMutationResult {
-  affectedInventoryIds?: string[] | null;
-  item?: InventoryMutationItemIdentity | null;
-  sourceItem?: InventoryMutationItemIdentity | null;
-  destinationItem?: InventoryMutationItemIdentity | null;
-}
-
 function normalizeReceiveScopeValue(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -99,101 +88,6 @@ function matchesReceiveInventoryScope(
   const itemLot = normalizeReceiveScopeValue(item.lotNumber);
   const receiveLot = normalizeReceiveScopeValue(variables.lotNumber);
   return itemLot === receiveLot;
-}
-
-function collectAffectedInventoryIds(result?: InventoryStockMutationResult | null): string[] {
-  const ids = new Set<string>();
-
-  result?.affectedInventoryIds?.forEach((id) => {
-    if (id) ids.add(id);
-  });
-
-  [result?.item, result?.sourceItem, result?.destinationItem].forEach((item) => {
-    if (item?.id) ids.add(item.id);
-  });
-
-  return Array.from(ids);
-}
-
-function mutationResultTouchesSerializedInventory(
-  result?: InventoryStockMutationResult | null
-): boolean {
-  return [result?.item, result?.sourceItem, result?.destinationItem].some((item) =>
-    Boolean(normalizeReceiveScopeValue(item?.serialNumber))
-  );
-}
-
-function invalidateAffectedInventoryDetails(
-  queryClient: ReturnType<typeof useQueryClient>,
-  result?: InventoryStockMutationResult | null
-) {
-  const affectedInventoryIds = collectAffectedInventoryIds(result);
-
-  if (affectedInventoryIds.length === 0) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
-    return;
-  }
-
-  affectedInventoryIds.forEach((inventoryId) => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.detail(inventoryId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.costLayersDetail(inventoryId) });
-  });
-}
-
-function invalidateProductInventoryQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  productId: string
-) {
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.detail(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventory(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.inventoryStats(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.stockAlerts(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsForProduct(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.movementsAggregatedForProduct(productId),
-  });
-}
-
-function invalidateInventoryStockMutationQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  {
-    productId,
-    result,
-    touchesSerializedInventory = false,
-    includeMovements = false,
-  }: {
-    productId: string;
-    result?: InventoryStockMutationResult | null;
-    touchesSerializedInventory?: boolean;
-    includeMovements?: boolean;
-  }
-) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-  invalidateAffectedInventoryDetails(queryClient, result);
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
-  if (includeMovements) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
-  }
-  if (touchesSerializedInventory || mutationResultTouchesSerializedInventory(result)) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
-  }
-
-  invalidateProductInventoryQueries(queryClient, productId);
 }
 
 /**

@@ -2,7 +2,7 @@
 
 This sprint follows Sprint 2's schema-ownership closeout. The focus shifts from contract placement to stock-changing behavior that can mislead operators after mutations.
 
-Status: Issues 1, 2, 3, and 4 implemented.
+Status: Issues 1, 2, 3, 4, and 5 implemented.
 
 ## Business Value
 
@@ -174,6 +174,39 @@ Closeout criteria:
 - focused mutation cache tests pass
 - lint/typecheck evidence is recorded
 
+### 5. Stock Mutation Cache Module Boundary
+
+Business value: the stock mutation cache policy should be a reusable inventory-domain contract, not hidden inside an already-large inventory hook file. Future stock-changing workflows should be able to adopt the same policy without copying hook internals.
+
+Workflow invariant: inventory mutation hooks may orchestrate mutations and local optimistic patches, but shared invalidation policy belongs in an inventory-owned cache helper that depends on centralized query keys and the mutation result envelope.
+
+Affected files:
+
+- `src/hooks/inventory/use-inventory.ts`
+- `src/hooks/inventory/_stock-mutation-cache.ts`
+- `docs/inventory/MAINTAINER-SPRINT-3.md`
+
+Out of scope:
+
+- changing receive, transfer, or adjustment behavior
+- changing test assertions already covering the stock mutation cache contract
+- moving receive optimistic patch scope logic, which is still local to the receive hook behavior
+- changing allocation/deallocation server functions without an active frontend mutation path
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx
+```
+
+Closeout criteria:
+
+- shared stock mutation invalidation logic is extracted from `use-inventory.ts`
+- extracted helper remains inventory-domain owned and uses centralized query keys
+- receive, transfer, and adjustment hooks consume the helper without behavior drift
+- existing mutation cache regression tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Receive Optimistic Patch Lot/Serial Scope
@@ -340,3 +373,42 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 3 now has a reusable stock mutation cache contract instead of per-hook invalidation drift.
 
 Residual risk: broad operational prefixes still trade precision for correctness; allocation/deallocation should adopt the same helper if an active frontend mutation path is introduced.
+
+### Issue 5: Stock Mutation Cache Module Boundary
+
+Touched domains: inventory mutation hook architecture, stock mutation cache policy, inventory query-key/cache contract documentation.
+
+Workflow protected: stock-changing hook mutation -> shared inventory cache helper -> centralized query keys -> operator-visible inventory, warehouse, product, valuation, availability, serialized, and movement views.
+
+Business value: the cache policy from Issue 4 is now a reusable inventory-domain contract instead of more logic embedded in a monolithic hook. That makes future stock-changing work easier to review and less likely to reintroduce per-hook invalidation drift.
+
+Standards checked:
+
+- extracted `invalidateInventoryStockMutationQueries` into `src/hooks/inventory/_stock-mutation-cache.ts`
+- kept query-key usage centralized through `queryKeys`
+- kept mutation-result identity handling in the cache helper instead of the hook
+- kept receive lot/serial optimistic patch scope local to `use-inventory.ts`, where the receive-specific optimistic behavior belongs
+- receive, transfer, and adjustment hooks now call the helper rather than owning shared invalidation internals
+
+Smells removed:
+
+- `use-inventory.ts` was accumulating shared cache-policy machinery unrelated to hook orchestration
+- future stock-changing hooks would have had to copy or reach into hook-local invalidation logic
+
+Deferred:
+
+- `use-inventory.ts` remains large and still mixes several inventory queries and mutations
+- receive optimistic patch scope logic is still local to the hook because it is receive-specific behavior
+- stock count commit invalidation remains separate and should be reviewed as its own workflow spine before adopting this helper
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts src/hooks/inventory/_stock-mutation-cache.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/use-adjust-inventory.test.tsx tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-3.md src/hooks/inventory/use-inventory.ts src/hooks/inventory/_stock-mutation-cache.ts`
+
+Goal adaptation: no standing goal change. This is direct execution of the existing architecture-cleanliness posture: convert a proven behavior fix into a reusable domain boundary before starting the next workflow spine.
+
+Residual risk: the extracted helper is still hook-layer infrastructure. If stock mutation cache policy is needed by non-hook code later, it may belong under a broader inventory cache contract module outside `src/hooks`.
