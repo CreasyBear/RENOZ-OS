@@ -8,7 +8,7 @@ RENOZ-V3 should become a strategic business asset, not a maintenance burden. Rep
 
 ## Product Truth
 
-RENOZ-V3 is a lithium-ion battery OEM operations platform built around RENOZ Energy's internal workflows.
+RENOZ-V3 is a multi-tenant lithium-ion battery OEM operations platform built around RENOZ Energy's internal workflows.
 
 Primary workflows:
 
@@ -68,8 +68,9 @@ Demand:
 - honest UI states
 - explicit workflow contracts
 - centralized query keys and cache invalidation
-- tenant-safe server functions
-- inventory and finance integrity
+- tenant isolation in server functions, database queries, cache keys, and UI assumptions
+- transactional inventory and finance integrity
+- serialized lineage continuity for battery assets
 - tests that protect real operator workflows
 - business-value judgment in each sprint
 - closeout notes that explain judgment, not only commands
@@ -154,6 +155,7 @@ Issue output:
 - domain
 - workflow
 - invariant to protect
+- business value protected or unlocked
 - files likely touched
 - tests expected
 - out-of-scope boundaries
@@ -179,8 +181,10 @@ Architecture checks:
 - Are query keys centralized in `src/lib/query-keys.ts`?
 - Does every mutation state its invalidation and rollback behavior?
 - Does every server function enforce organization/tenant scope?
+- Are tenant IDs, organization IDs, or user-scoped assumptions explicit at every data boundary?
 - Does the UI distinguish empty, loading, stale, failed, blocked, and degraded states?
 - Are inventory, warranty, RMA, and finance side effects traceable?
+- Do inventory mutations preserve quantity, movement, cost-layer, valuation, and serialized lineage continuity in one coherent transaction?
 
 Architect output:
 
@@ -289,10 +293,26 @@ Residual risk:
 The current highest-leverage slices are:
 
 1. Product truth: update top-level docs and agent guidance away from renovation/service framing and toward battery OEM operations.
-2. Inventory and warehouse: audit serialized stock, receiving, product movement query keys, mutation invalidation, and operator error states.
+2. Inventory and warehouse: audit serialized stock, receiving, product movement query keys, mutation invalidation, and operator error states. Active sprint artifact: `docs/inventory/MAINTAINER-SPRINT-1.md`.
 3. Support/RMA/warranty: clarify support-owned UX versus order-owned RMA orchestration.
 4. Error handling: standardize high-traffic operator error states.
 5. Large-file risk: pick one workflow-heavy file and extract by responsibility with behavior tests.
+
+## Sprint Artifact Rule
+
+Each concerted sprint should leave an artifact in the owning domain docs before implementation starts. That artifact should include:
+
+- business value
+- workflow spine
+- pattern map
+- source references
+- triage findings
+- issue ledger
+- recommended first implementation slice
+- focused gates
+- closeout criteria
+
+The artifact is allowed to evolve as code reality disproves assumptions. Any meaningful adaptation should be recorded in the slice closeout.
 
 ## Standing Rule
 
