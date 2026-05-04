@@ -13,12 +13,21 @@ const mockReconcileInventoryFinanceIntegrity = vi.fn();
 const mockCalculateCOGS = vi.fn();
 const mockGetInventoryAging = vi.fn();
 const mockGetInventoryTurnover = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
 
 const mockUseInventoryValuation = vi.fn();
 const mockUseInventoryAging = vi.fn();
 const mockUseInventoryTurnover = vi.fn();
 const mockUseMovements = vi.fn();
 const mockUseReconcileInventoryFinance = vi.fn();
+
+vi.mock('@/hooks/_shared/use-toast', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
 
 vi.mock('@/server/functions/inventory', () => ({
   listCostLayers: (...args: unknown[]) => mockListCostLayers(...args),
@@ -365,6 +374,76 @@ describe('inventory analytics query normalization wave 3', () => {
       message:
         'COGS preview is temporarily unavailable for the requested quantity. Please adjust the quantity or try again.',
     });
+  });
+
+  it('uses safe mutation fallback copy instead of raw cost layer create errors', async () => {
+    mockCreateCostLayer.mockRejectedValue(
+      new Error('insert into inventory_cost_layers violates row-level security policy')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCreateCostLayer } = await import('@/hooks/inventory/use-valuation');
+
+    const { result } = renderHook(() => useCreateCostLayer(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        inventoryId: '11111111-1111-4111-8111-111111111111',
+        receivedAt: new Date('2026-01-01T00:00:00.000Z'),
+        quantityReceived: 1,
+        quantityRemaining: 1,
+        unitCost: 10,
+      })
+    ).rejects.toThrow('row-level security');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create cost layer');
+  });
+
+  it('keeps manual COGS apply disabled with explicit operator guidance', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useCalculateCOGS } = await import('@/hooks/inventory/use-valuation');
+
+    const { result } = renderHook(() => useCalculateCOGS(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        inventoryId: 'inventory-1',
+        quantity: 1,
+      })
+    ).rejects.toThrow(
+      'Manual COGS apply is disabled. Use shipment and RMA workflows to post canonical COGS.'
+    );
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Manual COGS apply is disabled. Use shipment and RMA workflows to post canonical COGS.'
+    );
+  });
+
+  it('uses safe mutation fallback copy instead of raw finance reconciliation errors', async () => {
+    mockReconcileInventoryFinanceIntegrity.mockRejectedValue(
+      new Error('function reconcile_inventory_finance_integrity failed with stack detail')
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useReconcileInventoryFinance } = await import('@/hooks/inventory/use-valuation');
+
+    const { result } = renderHook(() => useReconcileInventoryFinance(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        dryRun: true,
+      })
+    ).rejects.toThrow('stack detail');
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Failed to reconcile inventory finance integrity'
+    );
   });
 
   it('renders an unavailable valuation state when the headline read fails without data', async () => {

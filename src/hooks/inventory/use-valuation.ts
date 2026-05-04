@@ -27,6 +27,7 @@ import {
   getInventoryAging,
   getInventoryTurnover,
 } from '@/server/functions/inventory';
+import { formatInventoryMutationError } from './_mutation-errors';
 
 // ============================================================================
 // TYPES
@@ -219,6 +220,9 @@ export function useInventoryTurnover(filters: TurnoverFilters = {}, enabled = tr
 // MUTATION HOOKS
 // ============================================================================
 
+const MANUAL_COGS_APPLY_DISABLED_MESSAGE =
+  'Manual COGS apply is disabled. Use shipment and RMA workflows to post canonical COGS.';
+
 /**
  * Create a cost layer manually
  */
@@ -235,8 +239,8 @@ export function useCreateCostLayer() {
         queryKey: queryKeys.inventory.costLayersDetail(variables.inventoryId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create cost layer');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, 'Failed to create cost layer'));
     },
   });
 }
@@ -249,9 +253,7 @@ export function useCalculateCOGS() {
 
   return useMutation({
     mutationFn: async (_data: { inventoryId: string; quantity: number }) => {
-      throw new Error(
-        'Manual COGS apply is disabled. Use shipment and RMA workflows to post canonical COGS.'
-      );
+      throw new Error(MANUAL_COGS_APPLY_DISABLED_MESSAGE);
     },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
@@ -260,8 +262,8 @@ export function useCalculateCOGS() {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to calculate COGS');
+    onError: (error: unknown) => {
+      toast.error(formatInventoryMutationError(error, MANUAL_COGS_APPLY_DISABLED_MESSAGE));
     },
   });
 }
@@ -284,8 +286,10 @@ export function useReconcileInventoryFinance() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to reconcile inventory finance integrity');
+    onError: (error: unknown) => {
+      toast.error(
+        formatInventoryMutationError(error, 'Failed to reconcile inventory finance integrity')
+      );
     },
   });
 }
