@@ -598,27 +598,38 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      if (!newPo) {
+        throw new ValidationError('Purchase order could not be created. Refresh and try again.');
+      }
+
       // Create the line items
-      await tx.insert(purchaseOrderItems).values(
-        itemsWithTotals.map((item) => ({
-          organizationId: ctx.organizationId,
-          purchaseOrderId: newPo.id,
-          lineNumber: item.lineNumber,
-          productId: item.productId,
-          productName: item.productName,
-          productSku: item.productSku,
-          description: item.description,
-          quantity: item.quantity,
-          unitOfMeasure: item.unitOfMeasure,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent,
-          taxRate: item.taxRate,
-          lineTotal: item.lineTotal,
-          quantityPending: item.quantity,
-          expectedDeliveryDate: item.expectedDeliveryDate,
-          notes: item.notes,
-        }))
-      );
+      const createdItems = await tx
+        .insert(purchaseOrderItems)
+        .values(
+          itemsWithTotals.map((item) => ({
+            organizationId: ctx.organizationId,
+            purchaseOrderId: newPo.id,
+            lineNumber: item.lineNumber,
+            productId: item.productId,
+            productName: item.productName,
+            productSku: item.productSku,
+            description: item.description,
+            quantity: item.quantity,
+            unitOfMeasure: item.unitOfMeasure,
+            unitPrice: item.unitPrice,
+            discountPercent: item.discountPercent,
+            taxRate: item.taxRate,
+            lineTotal: item.lineTotal,
+            quantityPending: item.quantity,
+            expectedDeliveryDate: item.expectedDeliveryDate,
+            notes: item.notes,
+          }))
+        )
+        .returning({ id: purchaseOrderItems.id });
+
+      if (createdItems.length !== itemsWithTotals.length) {
+        throw new ValidationError('Purchase order items could not be saved. Refresh and try again.');
+      }
 
       return newPo;
     });

@@ -35,4 +35,23 @@ describe('purchase order create tenant-scope contract', () => {
     expect(block).toContain('supplierName:supplier.name');
     expect(block).not.toContain('supplierName:supplier?.name');
   });
+
+  it('verifies purchase order and line-item inserts inside the create transaction', () => {
+    const source = compact(read('src/server/functions/suppliers/purchase-orders.ts'));
+    const block = exportedFunctionBlock(source, 'createPurchaseOrder');
+
+    expect(block).toContain(
+      "if(!newPo){thrownewValidationError('Purchaseordercouldnotbecreated.Refreshandtryagain.');}"
+    );
+    expect(block.indexOf("if(!newPo){thrownewValidationError('Purchaseordercouldnotbecreated.Refreshandtryagain.');}")).toBeLessThan(
+      block.indexOf('insert(purchaseOrderItems)')
+    );
+    expect(block).toContain(
+      'constcreatedItems=awaittx.insert(purchaseOrderItems).values(itemsWithTotals.map((item)=>({'
+    );
+    expect(block).toContain('.returning({id:purchaseOrderItems.id})');
+    expect(block).toContain(
+      "if(createdItems.length!==itemsWithTotals.length){thrownewValidationError('Purchaseorderitemscouldnotbesaved.Refreshandtryagain.');}"
+    );
+  });
 });
