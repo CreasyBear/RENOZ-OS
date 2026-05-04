@@ -96,6 +96,7 @@ function verifyApproverAuthorization(
  */
 async function checkAndUpdateFinalApprovalStatus(
   purchaseOrderId: string,
+  organizationId: string,
   currentLevel: number,
   userId: string
 ): Promise<boolean> {
@@ -105,6 +106,7 @@ async function checkAndUpdateFinalApprovalStatus(
     .where(
       and(
         eq(purchaseOrderApprovals.purchaseOrderId, purchaseOrderId),
+        eq(purchaseOrderApprovals.organizationId, organizationId),
         inArray(purchaseOrderApprovals.status, [...ACTIONABLE_APPROVAL_STATUSES]),
         gt(purchaseOrderApprovals.level, currentLevel)
       )
@@ -115,7 +117,9 @@ async function checkAndUpdateFinalApprovalStatus(
     await db
       .update(purchaseOrders)
       .set({ status: APPROVAL_STATUS.APPROVED, updatedBy: userId })
-      .where(eq(purchaseOrders.id, purchaseOrderId));
+      .where(
+        and(eq(purchaseOrders.id, purchaseOrderId), eq(purchaseOrders.organizationId, organizationId))
+      );
     return true;
   }
   return false;
@@ -176,6 +180,7 @@ async function approveApprovalRecord(params: {
 
   await checkAndUpdateFinalApprovalStatus(
     approval.purchaseOrderId,
+    params.organizationId,
     approval.level,
     params.userId
   );
@@ -737,7 +742,12 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
         status: 'draft',
         updatedBy: ctx.user.id,
       })
-      .where(eq(purchaseOrders.id, approval.purchaseOrderId));
+      .where(
+        and(
+          eq(purchaseOrders.id, approval.purchaseOrderId),
+          eq(purchaseOrders.organizationId, ctx.organizationId)
+        )
+      );
 
     return { approval: updatedApproval };
   });
@@ -1171,7 +1181,12 @@ export const evaluateApprovalRules = createServerFn({ method: 'POST' })
       await db
         .update(purchaseOrders)
         .set({ status: APPROVAL_STATUS.APPROVED, updatedBy: ctx.user.id })
-        .where(eq(purchaseOrders.id, data.purchaseOrderId));
+        .where(
+          and(
+            eq(purchaseOrders.id, data.purchaseOrderId),
+            eq(purchaseOrders.organizationId, ctx.organizationId)
+          )
+        );
 
       return {
         autoApproved: true,
@@ -1243,7 +1258,12 @@ export const evaluateApprovalRules = createServerFn({ method: 'POST' })
       await db
         .update(purchaseOrders)
         .set({ status: 'pending_approval', updatedBy: ctx.user.id })
-        .where(eq(purchaseOrders.id, data.purchaseOrderId));
+        .where(
+          and(
+            eq(purchaseOrders.id, data.purchaseOrderId),
+            eq(purchaseOrders.organizationId, ctx.organizationId)
+          )
+        );
     }
 
     return {
