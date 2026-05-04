@@ -1442,6 +1442,24 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [draftPo] = await tx
+        .select({ id: purchaseOrders.id })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.id, data.purchaseOrderId),
+            eq(purchaseOrders.organizationId, ctx.organizationId),
+            eq(purchaseOrders.status, 'draft'),
+            isNull(purchaseOrders.deletedAt)
+          )
+        )
+        .limit(1)
+        .for('update');
+      if (!draftPo) {
+        throw new ValidationError('Can only add items to draft purchase orders');
+      }
+
       // Get the next line number with row lock to prevent duplicate line numbers
       const lastItem = await tx
         .select({ lineNumber: purchaseOrderItems.lineNumber })
@@ -1479,6 +1497,10 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
           notes: data.item.notes,
         })
         .returning();
+
+      if (!item) {
+        throw new ValidationError('Purchase order item could not be saved. Refresh and try again.');
+      }
 
       // Update PO totals
       await recalculatePurchaseOrderTotals(
@@ -1565,9 +1587,27 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+      const [draftPo] = await tx
+        .select({ id: purchaseOrders.id })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.id, item.purchaseOrderId),
+            eq(purchaseOrders.organizationId, ctx.organizationId),
+            eq(purchaseOrders.status, 'draft'),
+            isNull(purchaseOrders.deletedAt)
+          )
+        )
+        .limit(1)
+        .for('update');
+      if (!draftPo) {
+        throw new ValidationError('Can only remove items from draft purchase orders');
+      }
+
       const deletedItems = await tx.delete(purchaseOrderItems).where(
         and(
           eq(purchaseOrderItems.id, data.itemId),
+          eq(purchaseOrderItems.purchaseOrderId, item.purchaseOrderId),
           eq(purchaseOrderItems.organizationId, ctx.organizationId)
         )
       ).returning();
