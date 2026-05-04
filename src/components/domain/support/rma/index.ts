@@ -5,6 +5,7 @@ export { RmaCreateDialog } from './rma-create-dialog';
 export { RmaDetailCard } from './rma-detail-card';
 export { RmaDetailContainer } from './rma-detail-container';
 export { RmaDetailView } from './rma-detail-view';
+export { RmaExecutionSummary } from './rma-execution-summary';
 export { RmaList } from './rma-list';
 export { RmasListContainer } from './rmas-list-container';
 export { RmaStatusBadge, RMA_STATUS_CONFIG } from './rma-status-badge';
