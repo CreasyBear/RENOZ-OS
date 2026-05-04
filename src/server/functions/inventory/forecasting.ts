@@ -232,7 +232,12 @@ export const upsertForecast = createServerFn({ method: 'POST' })
           recommendedOrderQuantity: data.recommendedOrderQuantity,
           calculatedAt: new Date(),
         })
-        .where(eq(inventoryForecasts.id, existing.id))
+        .where(
+          and(
+            eq(inventoryForecasts.id, existing.id),
+            eq(inventoryForecasts.organizationId, ctx.organizationId)
+          )
+        )
         .returning();
 
       return { forecast, created: false };
@@ -270,6 +275,18 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.forecast });
+
+    const productIds = Array.from(new Set(data.forecasts.map((forecast) => forecast.productId)));
+    const ownedProducts = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(eq(products.organizationId, ctx.organizationId), inArray(products.id, productIds))
+      );
+
+    if (ownedProducts.length !== productIds.length) {
+      throw new NotFoundError('One or more products not found', 'product');
+    }
 
     // Build all values upfront
     const forecastValues = data.forecasts.map((forecastData) => ({
@@ -437,11 +454,10 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     // Get products with forecasts and current stock
-    // Pattern: Match listProducts exactly (products.ts:125-137)
-    // Start FROM products, LEFT JOIN inventory on productId only (no orgId filter in JOIN)
+    // Pattern: Start FROM tenant products and keep inventory joins organization-bounded.
     // OPTIMIZED: Use CTEs with DISTINCT ON and JOINs instead of correlated subqueries
     // This eliminates N+1 pattern - single query instead of 4 subqueries per product
-    
+
     // Create CTE for latest forecast per product using DISTINCT ON (PostgreSQL optimization)
     const latestForecasts = db.$with('latest_forecasts').as(
       db
@@ -486,7 +502,10 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
         avgDailyDemand: sql<number>`COALESCE(${latestDailyForecasts.avgDailyDemand}::numeric, 0)`,
       })
       .from(products)
-      .leftJoin(inventory, eq(inventory.productId, products.id))
+      .leftJoin(
+        inventory,
+        and(eq(inventory.productId, products.id), eq(inventory.organizationId, ctx.organizationId))
+      )
       .leftJoin(latestForecasts, eq(latestForecasts.productId, products.id))
       .leftJoin(latestDailyForecasts, eq(latestDailyForecasts.productId, products.id))
       .where(and(eq(products.organizationId, ctx.organizationId), eq(products.isActive, true)))
@@ -514,7 +533,13 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
             quantityAvailable: allocatableQuantitySumSql(),
           })
           .from(inventory)
-          .leftJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
+          .leftJoin(
+            warehouseLocations,
+            and(
+              eq(inventory.locationId, warehouseLocations.id),
+              eq(warehouseLocations.organizationId, ctx.organizationId)
+            )
+          )
           .where(
             and(
               eq(inventory.organizationId, ctx.organizationId),
