@@ -46,7 +46,7 @@ type AlertRecord = typeof inventoryAlerts.$inferSelect;
 export const listAlerts = createServerFn({ method: 'GET' })
   .inputValidator(alertListQuerySchema)
   .handler(async ({ data }): Promise<ListAlertsResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page = 1, pageSize = 20, ...filters } = data;
     const limit = pageSize;
 
@@ -135,7 +135,7 @@ export const listAlerts = createServerFn({ method: 'GET' })
 export const getAlert = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }): Promise<AlertWithDetails> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const [alert] = await db
       .select()
@@ -155,7 +155,9 @@ export const getAlert = createServerFn({ method: 'GET' })
         ? db
             .select()
             .from(products)
-            .where(eq(products.id, alert.productId))
+            .where(
+              and(eq(products.id, alert.productId), eq(products.organizationId, ctx.organizationId))
+            )
             .limit(1)
             .then((r) => r[0] || null)
         : Promise.resolve(null),
@@ -163,7 +165,12 @@ export const getAlert = createServerFn({ method: 'GET' })
         ? db
             .select()
             .from(warehouseLocations)
-            .where(eq(warehouseLocations.id, alert.locationId))
+            .where(
+              and(
+                eq(warehouseLocations.id, alert.locationId),
+                eq(warehouseLocations.organizationId, ctx.organizationId)
+              )
+            )
             .limit(1)
             .then((r) => r[0] || null)
         : Promise.resolve(null),
@@ -304,7 +311,7 @@ export const deleteAlert = createServerFn({ method: 'POST' })
  */
 export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ alerts: TriggeredAlert[]; count: number }> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     // Get all active alerts
     const activeAlerts = await db
@@ -594,7 +601,7 @@ export const acknowledgeAlert = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Check if this is a fallback alert (IDs starting with '00000000-0000-4000-8000-')
     // Fallback alerts cannot be acknowledged as they don't exist in the database
@@ -659,7 +666,7 @@ export const getAlertAnalytics = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - data.days);
@@ -1014,7 +1021,9 @@ async function checkAlertTriggered(
       ? db
           .select()
           .from(products)
-          .where(eq(products.id, alert.productId))
+          .where(
+            and(eq(products.id, alert.productId), eq(products.organizationId, organizationId))
+          )
           .limit(1)
           .then((r) => r[0] || null)
       : Promise.resolve(null),
@@ -1022,7 +1031,12 @@ async function checkAlertTriggered(
       ? db
           .select()
           .from(warehouseLocations)
-          .where(eq(warehouseLocations.id, alert.locationId))
+          .where(
+            and(
+              eq(warehouseLocations.id, alert.locationId),
+              eq(warehouseLocations.organizationId, organizationId)
+            )
+          )
           .limit(1)
           .then((r) => r[0] || null)
       : Promise.resolve(null),
