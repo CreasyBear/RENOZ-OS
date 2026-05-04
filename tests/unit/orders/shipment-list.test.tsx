@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUseOrderShipments = vi.fn();
 const mockMarkShippedMutateAsync = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
 
 vi.mock('resend', () => ({
   Resend: class MockResend {},
@@ -14,6 +16,11 @@ vi.mock('@/hooks/orders', () => ({
     mutateAsync: mockMarkShippedMutateAsync,
     isPending: false,
   }),
+}));
+
+vi.mock('@/hooks', () => ({
+  toastError: (...args: unknown[]) => mockToastError(...args),
+  toastSuccess: (...args: unknown[]) => mockToastSuccess(...args),
 }));
 
 vi.mock('@/hooks/documents', () => ({
@@ -32,6 +39,10 @@ vi.mock('@/hooks/documents', () => ({
 }));
 
 describe('shipment list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('lets users mark an existing pending shipment draft as shipped', async () => {
     mockUseOrderShipments.mockReturnValue({
       data: [
@@ -92,5 +103,57 @@ describe('shipment list', () => {
       trackingNumber: 'TRACK-123',
       shippingCost: 1250,
     });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Shipment ORD-20260407-S01 marked as shipped.');
+  }, 20000);
+
+  it('shows action fallback text for unknown mark-shipped failures', async () => {
+    mockUseOrderShipments.mockReturnValue({
+      data: [
+        {
+          id: '5c646761-ef6c-45c8-a150-c41f8ab37708',
+          shipmentNumber: 'ORD-20260407-S01',
+          status: 'pending',
+          carrier: 'DHL',
+          carrierService: null,
+          trackingNumber: null,
+          trackingUrl: null,
+          shippingCost: null,
+          shippedAt: null,
+          estimatedDeliveryAt: null,
+          deliveredAt: null,
+          deliveryConfirmation: null,
+          trackingEvents: [],
+          canGenerateDispatchNote: true,
+          dispatchNoteBlockedReason: null,
+          canGenerateDeliveryNote: false,
+          deliveryNoteBlockedReason: 'Confirm delivery first.',
+          items: [
+            {
+              id: 'item-1',
+              orderLineItemId: 'line-1',
+              quantity: 1,
+              serialNumbers: null,
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    mockMarkShippedMutateAsync.mockRejectedValue(new Error('database driver stack leaked'));
+
+    const { ShipmentList } = await import('@/components/domain/orders/fulfillment/shipment-list');
+
+    render(<ShipmentList orderId="order-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mark Shipped' })[0]);
+
+    const dialog = screen.getByRole('dialog');
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getAllByRole('button', { name: 'Mark Shipped' })[0]);
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith('Unable to mark shipment as shipped.');
   }, 20000);
 });

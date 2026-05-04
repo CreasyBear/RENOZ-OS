@@ -64,6 +64,10 @@ import {
   useGenerateShipmentPackingSlip,
 } from "@/hooks/documents";
 import { toastError, toastSuccess } from "@/hooks";
+import {
+  getClientErrorMessage,
+  normalizeShipmentMutationError,
+} from "@/hooks/orders/order-mutation-client-errors";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 import { SerialNumbersList } from "../components/serial-numbers-list";
 
@@ -82,6 +86,13 @@ interface PendingShipmentCompletionForm {
   carrierService: string;
   trackingNumber: string;
   shippingCost: string;
+}
+
+function getShipmentActionErrorMessage(error: unknown, fallbackMessage: string): string {
+  return getClientErrorMessage(
+    normalizeShipmentMutationError(error, fallbackMessage),
+    fallbackMessage
+  );
 }
 
 // ============================================================================
@@ -213,9 +224,7 @@ export const ShipmentList = memo(function ShipmentList({
       toastSuccess(`Shipment ${pendingShipment.shipmentNumber} marked as shipped.`);
       setPendingShipmentId(null);
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to mark shipment as shipped"
-      );
+      toastError(getShipmentActionErrorMessage(error, "Unable to mark shipment as shipped."));
     }
   };
 
@@ -365,11 +374,7 @@ export const ShipmentList = memo(function ShipmentList({
                       toastSuccess('Packing slip generated');
                       window.open(result.url, "_blank", "noopener,noreferrer");
                     } catch (error) {
-                      toastError(
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to generate packing slip"
-                      );
+                      toastError(getShipmentActionErrorMessage(error, "Unable to generate packing slip."));
                     }
                   }}
                 >
@@ -387,11 +392,7 @@ export const ShipmentList = memo(function ShipmentList({
                       toastSuccess('Dispatch note generated');
                       window.open(result.url, "_blank", "noopener,noreferrer");
                     } catch (error) {
-                      toastError(
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to generate dispatch note"
-                      );
+                      toastError(getShipmentActionErrorMessage(error, "Unable to generate dispatch note."));
                     }
                   }}
                 >
@@ -409,11 +410,7 @@ export const ShipmentList = memo(function ShipmentList({
                       toastSuccess('Delivery note generated');
                       window.open(result.url, "_blank", "noopener,noreferrer");
                     } catch (error) {
-                      toastError(
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to generate delivery note"
-                      );
+                      toastError(getShipmentActionErrorMessage(error, "Unable to generate delivery note."));
                     }
                   }}
                 >

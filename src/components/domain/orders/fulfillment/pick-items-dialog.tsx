@@ -38,6 +38,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { toastSuccess, toastError } from '@/hooks';
+import {
+  getClientErrorMessage,
+  normalizeOrderMutationError,
+} from '@/hooks/orders/order-mutation-client-errors';
 import { useOrderWithCustomer } from '@/hooks/orders/use-order-detail';
 import { usePickOrderItems, useUnpickOrderItems } from '@/hooks/orders/use-picking';
 import { useOrderShipments } from '@/hooks/orders/use-shipments';
@@ -317,9 +321,9 @@ export const PickItemsDialog = memo(function PickItemsDialog({
         onOpenChange(false);
       }
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : 'Failed to pick or unpick items'
-      );
+      const fallbackMessage = 'Unable to pick or unpick items.';
+      const normalized = normalizeOrderMutationError(error, fallbackMessage);
+      toastError(getClientErrorMessage(normalized, fallbackMessage));
     }
   };
 

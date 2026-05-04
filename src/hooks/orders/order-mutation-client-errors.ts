@@ -243,5 +243,9 @@ export function getClientErrorMessage(
     return error.message || `${fallbackMessage} The record could not be found.`;
   }
 
+  if (error.kind === 'unknown') {
+    return fallbackMessage;
+  }
+
   return error.message || fallbackMessage;
 }

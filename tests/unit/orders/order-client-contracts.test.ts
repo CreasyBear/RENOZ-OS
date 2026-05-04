@@ -32,6 +32,15 @@ describe('order client contracts', () => {
     expect(error.fieldErrors?.code).toEqual(['transition_blocked']);
   });
 
+  it('uses action fallback text for unknown mutation errors', () => {
+    const error = normalizeShipmentMutationError(new Error('database driver stack leaked'));
+
+    expect(error.kind).toBe('unknown');
+    expect(getClientErrorMessage(error, 'Unable to mark shipment as shipped.')).toBe(
+      'Unable to mark shipment as shipped.'
+    );
+  });
+
   it('preserves server-owned order fields during optimistic patching', () => {
     const patched = applyOptimisticOrderPatch(
       {
