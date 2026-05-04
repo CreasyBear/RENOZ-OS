@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, 3, 4, 5, and 6 implemented.
+Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented.
 
 ## Business Value
 
@@ -243,6 +243,44 @@ Closeout criteria:
 - focused cache/read tests pass
 - lint/typecheck evidence is recorded
 
+### 7. Receive Inventory Mutation Schema Ownership
+
+Business value: manual stock-in should have one receiving-owned mutation contract so warehouse operators do not lose trust in receiving when server validation, hook input typing, and trace docs drift apart.
+
+Workflow invariant: receiving route/form, `useReceiveInventory`, `receiveInventory` server function, manual serialization helper, transaction-backed inventory/finance writes, and receiving trace docs must share receiving schema ownership for the live mutation input.
+
+Affected files:
+
+- `src/lib/schemas/inventory/receiving.ts`
+- `src/server/functions/inventory/receiving.ts`
+- `src/hooks/inventory/use-inventory.ts`
+- `tests/unit/inventory/receive-inventory-schema-ownership.test.ts`
+- `docs/code-traces/02-inventory-stock-in.md`
+- `docs/inventory/MAINTAINER-SPRINT-2.md`
+
+Out of scope:
+
+- changing receiving form UI validation
+- changing receive transaction behavior
+- changing serialized lineage behavior
+- changing inventory finance/cost-layer behavior
+- changing optimistic cache patch or invalidation behavior
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/receive-inventory-schema-ownership.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/stock-in-workflow-trace.test.ts tests/unit/inventory/receiving-page-context.test.tsx
+```
+
+Closeout criteria:
+
+- `receiveInventorySchema` and `ReceiveInventoryInput` are exported from `receiving.ts`
+- `receiveInventory` server function imports its validator from the receiving schema owner
+- `useReceiveInventory` uses the schema-owned input type instead of a local interface
+- stock-in trace points to the schema owner instead of server-inline validation
+- focused receiving tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -479,4 +517,46 @@ Verification:
 
 Goal adaptation: no standing goal change. The slice reinforces the existing cache-contract standard in the maintainer goal.
 
-Residual risk: mutation input ownership and cache invalidation precision for inventory stock-changing flows remain the next high-value maintenance area.
+Residual risk: later Sprint 2 work moved receive mutation input ownership into the receiving schema owner; cache invalidation precision for inventory stock-changing flows remains a later behavior slice.
+
+### Issue 7: Receive Inventory Mutation Schema Ownership
+
+Touched domains: receiving schema contracts, manual receive server validation, inventory receive hook mutation typing, stock-in workflow trace docs.
+
+Workflow protected: receiving route/form -> `useReceiveInventory` -> `receiveInventory` server function -> serialized validation helper -> transactional inventory movement/cost-layer writes.
+
+Business value: manual stock-in now has one receiving-owned mutation contract, reducing drift between warehouse UI payloads, server validation, and stock-in trace docs for lithium battery inventory intake.
+
+Standards checked:
+
+- added `receiveInventorySchema` and `ReceiveInventoryInput` to `src/lib/schemas/inventory/receiving.ts`
+- moved the live `receiveInventory` server validator out of `src/server/functions/inventory/receiving.ts`
+- changed `useReceiveInventory` to use the schema-owned mutation input type instead of a hook-local interface
+- kept the existing `other_exception` notes validation behavior intact
+- updated the stock-in trace to point at the schema owner
+- added a guard that prevents the receive mutation schema/type from drifting back into server-inline or hook-local ownership
+
+Smells removed:
+
+- the receive server function owned inline zod validation despite a dedicated receiving schema owner
+- the receive hook owned a local mutation input interface that could drift from the server validator
+- stock-in trace docs described the server function as the canonical schema location
+
+Deferred:
+
+- receiving form UI schema remains unchanged
+- receive transaction behavior, serialized lineage, inventory finance, and cost-layer behavior are unchanged
+- optimistic cache patch and invalidation behavior are unchanged
+- stock-changing cache invalidation precision remains a later behavior slice
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/receive-inventory-schema-ownership.test.ts tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/stock-in-workflow-trace.test.ts tests/unit/inventory/receiving-page-context.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/receiving.ts src/server/functions/inventory/receiving.ts src/hooks/inventory/use-inventory.ts tests/unit/inventory/receive-inventory-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md docs/code-traces/02-inventory-stock-in.md src/lib/schemas/inventory/receiving.ts src/server/functions/inventory/receiving.ts src/hooks/inventory/use-inventory.ts tests/unit/inventory/receive-inventory-schema-ownership.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. This reinforces the route -> hook -> server function -> schema contract standard for stock-in.
+
+Residual risk: receive cache invalidation remains broad rather than result-aware; product receive wrapper schemas still have inline/delegating input contracts outside this inventory hook/server slice.

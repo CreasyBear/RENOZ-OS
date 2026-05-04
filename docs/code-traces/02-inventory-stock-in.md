@@ -52,7 +52,7 @@ rg -n "bulkReceiveGoods|receiveStock|recordMovement" src/
 
 | Path | Canonical Zod | Export / location |
 |------|-----------------|-------------------|
-| Ad-hoc | `receiveInventorySchema` | [`receiving.ts`](../../src/server/functions/inventory/receiving.ts) (passed to `.inputValidator`) |
+| Ad-hoc | `receiveInventorySchema` | [`receiving.ts`](../../src/lib/schemas/inventory/receiving.ts) (imported by the server function and passed to `.inputValidator`) |
 | PO receipt | `receiveGoodsSchema` | [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) |
 | Product receive wrapper | Inline `z.object({ productId, locationId, quantity, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) delegates to `receiveInventory` |
 
