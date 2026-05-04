@@ -142,74 +142,6 @@ export const locationAttributesSchema = z
 export type LocationAttributes = z.infer<typeof locationAttributesSchema>;
 
 // ============================================================================
-// ============================================================================
-// MOVEMENT RESPONSE TYPES
-// ============================================================================
-
-export interface MovementWithRelations {
-  id: string;
-  organizationId: string;
-  inventoryId: string;
-  productId: string;
-  locationId: string;
-  movementType: string;
-  quantity: number;
-  previousQuantity: number | null;
-  newQuantity: number | null;
-  unitCost: number | null;
-  totalCost: number | null;
-  referenceType: string | null;
-  referenceId: string | null;
-  referenceNumber?: string | null;
-  performedByName?: string | null;
-  metadata: FlexibleJson | null;
-  notes: string | null;
-  createdAt: Date;
-  createdBy: string | null;
-  productName: string | null;
-  productSku: string | null;
-  locationName: string | null;
-  locationCode: string | null;
-}
-
-/**
- * Movement list result
- */
-export interface ListMovementsResult {
-  movements: MovementWithRelations[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-  summary: {
-    totalInbound: number;
-    totalOutbound: number;
-    netChange: number;
-  };
-}
-
-/**
- * Movement type counts for aggregation
- */
-export interface MovementTypeCount {
-  count: number;
-  units: number;
-  value: number;
-}
-
-/**
- * Product movement aggregation for top movers calculation
- */
-export interface ProductMovementAggregation {
-  productId: string;
-  productName: string;
-  productSku: string;
-  unitsIn: number;
-  unitsOut: number;
-  count: number;
-}
-
-// ============================================================================
 // HOOK FILTER TYPES
 // ============================================================================
 
@@ -249,25 +181,6 @@ export interface InventoryItem {
   totalValue: number;
   lastMovementAt: Date | null;
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstocked';
-}
-
-/**
- * Movement record response for hooks
- */
-export interface MovementRecord {
-  id: string;
-  inventoryId: string;
-  movementType: 'receive' | 'issue' | 'transfer' | 'adjustment' | 'return';
-  quantity: number;
-  unitCost: number;
-  previousQuantity: number;
-  newQuantity: number;
-  referenceType?: string;
-  referenceId?: string;
-  reason?: string;
-  notes?: string;
-  performedBy: string;
-  createdAt: Date;
 }
 
 /**

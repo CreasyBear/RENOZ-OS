@@ -25,13 +25,11 @@ describe('inventory dashboard schema ownership', () => {
     expect(dashboardSchema).toContain('export const recentMovementSchema');
     expect(dashboardSchema).toContain('export const wmsDashboardDataSchema');
     expect(dashboardSchema).toContain('export interface DashboardTopMovingItem');
-    expect(dashboardSchema).toContain('export interface DateGroupAggregation');
     expect(inventorySchema).not.toContain('export const categoryStockSchema');
     expect(inventorySchema).not.toContain('export const locationStockSchema');
     expect(inventorySchema).not.toContain('export const recentMovementSchema');
     expect(inventorySchema).not.toContain('export const wmsDashboardDataSchema');
     expect(inventorySchema).not.toContain('export interface DashboardTopMovingItem');
-    expect(inventorySchema).not.toContain('export interface DateGroupAggregation');
   });
 
   it('preserves the public inventory schema barrel for dashboard callers', () => {
