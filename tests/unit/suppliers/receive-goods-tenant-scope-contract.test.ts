@@ -30,7 +30,10 @@ describe('receive goods tenant-scope contract', () => {
     const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
 
     expect(source).toContain(
-      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,productId),eq(products.organizationId,organizationId)))'
+      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).returning({id:products.id})'
+    );
+    expect(source).toContain(
+      "if(!updatedProducts[0]){thrownewValidationError('Productcostpricecouldnotbeupdated.Refreshandtryagain.');}"
     );
     expect(source).not.toContain(
       'update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,productId))'
@@ -67,7 +70,10 @@ describe('receive goods tenant-scope contract', () => {
     const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
 
     expect(source).toContain(
-      'update(purchaseOrders).set({status:newStatus,...(allReceived&&{actualDeliveryDate:newDate().toISOString().split(\'T\')[0]}),updatedBy:ctx.user.id,}).where(and(eq(purchaseOrders.id,data.purchaseOrderId),eq(purchaseOrders.organizationId,ctx.organizationId)))'
+      'update(purchaseOrders).set({status:newStatus,...(allReceived&&{actualDeliveryDate:newDate().toISOString().split(\'T\')[0]}),updatedBy:ctx.user.id,}).where(and(eq(purchaseOrders.id,data.purchaseOrderId),eq(purchaseOrders.organizationId,ctx.organizationId),inArray(purchaseOrders.status,[\'ordered\',\'partial_received\']),isNull(purchaseOrders.deletedAt))).returning({id:purchaseOrders.id})'
+    );
+    expect(source).toContain(
+      "if(!updatedPurchaseOrders[0]){thrownewValidationError('Purchaseorderstatuscouldnotbeupdated.Refreshandtryagain.');}"
     );
     expect(source).not.toContain('.where(eq(purchaseOrders.id,data.purchaseOrderId))');
   });

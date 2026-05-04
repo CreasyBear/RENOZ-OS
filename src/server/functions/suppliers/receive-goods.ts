@@ -749,7 +749,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
       const newStatus = allReceived ? 'received' : anyReceived ? 'partial_received' : po.status;
 
       if (newStatus !== po.status) {
-        await tx
+        const updatedPurchaseOrders = await tx
           .update(purchaseOrders)
           .set({
             status: newStatus,
@@ -759,9 +759,15 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           .where(
             and(
               eq(purchaseOrders.id, data.purchaseOrderId),
-              eq(purchaseOrders.organizationId, ctx.organizationId)
+              eq(purchaseOrders.organizationId, ctx.organizationId),
+              inArray(purchaseOrders.status, ['ordered', 'partial_received']),
+              isNull(purchaseOrders.deletedAt)
             )
-          );
+          )
+          .returning({ id: purchaseOrders.id });
+        if (!updatedPurchaseOrders[0]) {
+          throw new ValidationError('Purchase order status could not be updated. Refresh and try again.');
+        }
       }
 
       // -----------------------------------------------------------------------
@@ -897,8 +903,18 @@ async function updateProductCostPrice(
   );
   const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
 
-  await tx
+  const updatedProducts = await tx
     .update(products)
     .set({ costPrice: weightedAvgCost })
-    .where(and(eq(products.id, productId), eq(products.organizationId, organizationId)));
+    .where(
+      and(
+        eq(products.id, productId),
+        eq(products.organizationId, organizationId),
+        isNull(products.deletedAt)
+      )
+    )
+    .returning({ id: products.id });
+  if (!updatedProducts[0]) {
+    throw new ValidationError('Product cost price could not be updated. Refresh and try again.');
+  }
 }
