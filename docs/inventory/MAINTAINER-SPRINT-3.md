@@ -200,7 +200,7 @@ Smells removed:
 
 Deferred:
 
-- receive invalidation remains broad rather than result-aware
+- receive invalidation remains broad rather than result-aware until the Issue 4 cache contract cleanup
 - receive server transaction behavior and schema validation are unchanged
 - product receive wrapper behavior is unchanged
 - database-backed receive integration coverage remains outside this hook/cache slice
@@ -215,7 +215,7 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 3 continues the maintainer goal by moving from schema ownership into stock-changing cache integrity.
 
-Residual risk: receive invalidation is still prefix-broad; adjust/transfer/allocate optimistic patches need the same lot/serial/row-scope scrutiny in later Sprint 3 slices.
+Residual risk: receive invalidation is still prefix-broad until Issue 4; adjust/transfer/allocate optimistic patches need the same lot/serial/row-scope scrutiny in later Sprint 3 slices.
 
 ### Issue 2: Transfer Optimistic Patch Row Scope
 
@@ -240,7 +240,7 @@ Smells removed:
 
 Deferred:
 
-- transfer invalidation remains prefix-broad
+- transfer invalidation remains prefix-broad until the Issue 4 cache contract cleanup
 - transfer server transaction behavior and schema validation are unchanged
 - transfer destination row matching remains server-owned and database-backed
 - adjustment and allocation optimistic paths still need row-scope scrutiny in later Sprint 3 slices
@@ -255,7 +255,7 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 3 continues stock-changing cache integrity cleanup through bounded hook/cache behavior slices.
 
-Residual risk: adjustment and allocation optimistic patches still need targeted row-scope review; receive/transfer invalidation remains broad rather than result-aware.
+Residual risk: adjustment and allocation optimistic patches still need targeted row-scope review; receive/transfer invalidation remains broad rather than result-aware until Issue 4.
 
 ### Issue 3: Adjustment Optimistic Patch Row Scope
 
