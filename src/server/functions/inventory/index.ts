@@ -7,3 +7,4 @@ export * from './quality';
 export * from './stock-counts';
 export * from './valuation';
 export * from './serialized-items';
+export * from './wms-dashboard';

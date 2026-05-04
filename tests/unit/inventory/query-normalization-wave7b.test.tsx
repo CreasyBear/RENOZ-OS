@@ -18,10 +18,6 @@ const mockGetInventoryTurnover = vi.fn();
 const mockListMovements = vi.fn();
 
 vi.mock('@/server/functions/inventory', () => ({
-  getWMSDashboard: (...args: unknown[]) => mockGetWMSDashboard(...args),
-  getStockByCategory: (...args: unknown[]) => mockGetStockByCategory(...args),
-  getStockByLocation: (...args: unknown[]) => mockGetStockByLocation(...args),
-  getRecentMovementsTimeline: (...args: unknown[]) => mockGetRecentMovementsTimeline(...args),
   listCostLayers: (...args: unknown[]) => mockListCostLayers(...args),
   getInventoryCostLayers: (...args: unknown[]) => mockGetInventoryCostLayers(...args),
   createCostLayer: vi.fn(),
@@ -31,6 +27,13 @@ vi.mock('@/server/functions/inventory', () => ({
   calculateCOGS: (...args: unknown[]) => mockCalculateCOGS(...args),
   getInventoryAging: (...args: unknown[]) => mockGetInventoryAging(...args),
   getInventoryTurnover: (...args: unknown[]) => mockGetInventoryTurnover(...args),
+}));
+
+vi.mock('@/server/functions/inventory/wms-dashboard', () => ({
+  getWMSDashboard: (...args: unknown[]) => mockGetWMSDashboard(...args),
+  getStockByCategory: (...args: unknown[]) => mockGetStockByCategory(...args),
+  getStockByLocation: (...args: unknown[]) => mockGetStockByLocation(...args),
+  getRecentMovementsTimeline: (...args: unknown[]) => mockGetRecentMovementsTimeline(...args),
 }));
 
 vi.mock('@/server/functions/inventory/inventory', () => ({

@@ -18,7 +18,7 @@ const mockUseAcknowledgeAlert = vi.fn();
 const mockUseInventorySearch = vi.fn();
 const mockUseTrackedProducts = vi.fn();
 
-vi.mock('@/server/functions/inventory', () => ({
+vi.mock('@/server/functions/inventory/wms-dashboard', () => ({
   getWMSDashboard: (...args: unknown[]) => mockGetWMSDashboard(...args),
   getStockByCategory: (...args: unknown[]) => mockGetStockByCategory(...args),
   getStockByLocation: (...args: unknown[]) => mockGetStockByLocation(...args),

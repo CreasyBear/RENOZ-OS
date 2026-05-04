@@ -18,7 +18,7 @@ import {
   getStockByCategory,
   getStockByLocation,
   getRecentMovementsTimeline,
-} from '@/server/functions/inventory';
+} from '@/server/functions/inventory/wms-dashboard';
 import type {
   CategoryStock,
   LocationStock,
