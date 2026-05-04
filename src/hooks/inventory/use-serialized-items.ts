@@ -142,7 +142,7 @@ export function useCreateSerializedItem() {
       toast.success(result.message ?? 'Serialized item created');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.inventory.all, 'availableSerials'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
     },
     onError: (error: unknown) => {
       toast.error(mapSerializedErrorMessage(error, 'Failed to create serialized item'));
@@ -160,7 +160,7 @@ export function useUpdateSerializedItem() {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedDetail(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.inventory.all, 'availableSerials'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
     },
     onError: (error: unknown) => {
       toast.error(mapSerializedErrorMessage(error, 'Failed to update serialized item'));
@@ -177,7 +177,7 @@ export function useDeleteSerializedItem() {
       toast.success(result.message ?? 'Serialized item deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.inventory.all, 'availableSerials'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
     },
     onError: (error: unknown) => {
       toast.error(mapSerializedErrorMessage(error, 'Failed to delete serialized item'));

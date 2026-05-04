@@ -25,4 +25,21 @@ describe('query key integrity', () => {
       queryKeys.opportunities.infiniteList(filters)
     )
   })
+
+  it('exposes inventory cache prefixes through centralized helpers', () => {
+    expect(queryKeys.inventory.availability('product-1', 'location-1')).toEqual([
+      ...queryKeys.inventory.availabilityAll(),
+      'product-1',
+      'location-1',
+    ])
+    expect(queryKeys.inventory.availableSerials('product-1', 'location-1')).toEqual([
+      ...queryKeys.inventory.availableSerialsAll(),
+      'product-1',
+      'location-1',
+    ])
+    expect(queryKeys.inventory.stockByLocation()).toEqual([
+      ...queryKeys.inventory.wmsAll(),
+      'byLocation',
+    ])
+  })
 })

@@ -150,6 +150,43 @@ interface ReceiveInventoryInput {
   notes?: string;
 }
 
+function invalidateReceiveInventoryQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  variables: ReceiveInventoryInput
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
+  if (variables.serialNumber) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
+  }
+
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.detail(variables.productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.inventory(variables.productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.inventoryStats(variables.productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.stockAlerts(variables.productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.movementsForProduct(variables.productId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.movementsAggregatedForProduct(variables.productId),
+  });
+}
+
 /**
  * Fetch inventory list with pagination and filtering
  */
@@ -607,32 +644,9 @@ export function useReceiveInventory() {
     },
     onSuccess: () => {
       toast.success('Inventory received successfully');
-
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
     },
     onSettled: (_data, _error, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.inventory(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.inventoryStats(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.stockAlerts(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.movementsForProduct(variables.productId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.movementsAggregatedForProduct(variables.productId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
+      invalidateReceiveInventoryQueries(queryClient, variables);
     },
   });
 }

@@ -100,7 +100,7 @@ export function useUpdateOrderStatus(options: UseUpdateOrderStatusOptions = {}) 
       // Cancellation releases serial allocations — availableSerials must refresh
       if (variables.status === 'cancelled') {
         queryClient.invalidateQueries({
-          queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+          queryKey: queryKeys.inventory.availableSerialsAll(),
         });
       }
       options.onSuccess?.();
@@ -183,7 +183,7 @@ export function useBulkUpdateOrderStatus(options: UseBulkUpdateOrderStatusOption
       // Bulk cancellation releases serial allocations — availableSerials must refresh
       if (variables.status === 'cancelled') {
         queryClient.invalidateQueries({
-          queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+          queryKey: queryKeys.inventory.availableSerialsAll(),
         });
       }
       options.onSuccess?.();

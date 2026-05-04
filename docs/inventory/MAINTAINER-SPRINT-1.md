@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: triage and issue-raising complete; implementation not started.
+Status: Issue 1 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -270,3 +270,48 @@ Do not implement any issue until the slice has:
 4. explicit out-of-scope boundaries,
 5. focused tests,
 6. closeout criteria.
+
+## Closeout Log
+
+### Issue 1: Manual Receive Cache Contract
+
+Touched domains: inventory, warehouse/WMS, product detail, serialized availability, order picking/status cache adjacency.
+
+Workflow protected: manual non-PO stock-in -> inventory quantity -> warehouse dashboards -> valuation/finance visibility -> product stock views -> serial availability selectors.
+
+Business value: warehouse operators should see newly received stock reflected across the surfaces they use to fulfill, pick, value, and inspect serialized battery inventory.
+
+Standards checked:
+
+- centralized query-key prefixes for availability, available serials, and WMS
+- explicit manual receive cache contract
+- product movement/detail invalidation preserved
+- valuation and finance-integrity cache prefix refreshed
+- serialized list cache refreshed when a serial number is received
+
+Smells removed:
+
+- literal `availableSerials` prefix invalidations in inventory serialized-item hooks
+- literal `availableSerials` prefix invalidations in order status and picking hooks
+- scattered manual receive invalidation moved behind a local workflow helper
+
+Deferred:
+
+- server extraction from `src/server/functions/inventory/inventory.ts`
+- schema extraction from `src/lib/schemas/inventory/inventory.ts`
+- mutation error standardization beyond this receive cache slice
+- RMA return-to-stock location revalidation
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/shared/query-key-integrity.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/orders/order-status-contract.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx`
+- `node scripts/check-route-casts.mjs`
+- `node scripts/check-pending-dialog-guards.mjs`
+- `node scripts/check-read-path-query-guards.mjs`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; the slice followed the product-owner goal by prioritizing architecture cleanliness inside a domain workflow.
+
+Residual risk: manual receive now refreshes the intended operator-visible cache prefixes, but this does not prove the server transaction itself preserves every inventory, cost-layer, and serialized-lineage invariant. Those remain covered by existing reliability SQL and later inventory/RMA slices.

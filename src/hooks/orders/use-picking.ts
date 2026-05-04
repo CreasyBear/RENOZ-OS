@@ -43,7 +43,7 @@ export function usePickOrderItems() {
       });
       // Serial availability changes when picking — SerialPicker (useAvailableSerials) must refresh
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+        queryKey: queryKeys.inventory.availableSerialsAll(),
       });
     },
   });
@@ -71,7 +71,7 @@ export function useUnpickOrderItems() {
       });
       // Released serials become available — SerialPicker (useAvailableSerials) must refresh
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.inventory.all, 'availableSerials'],
+        queryKey: queryKeys.inventory.availableSerialsAll(),
       });
     },
   });

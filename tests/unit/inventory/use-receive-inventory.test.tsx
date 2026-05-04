@@ -76,6 +76,21 @@ describe('useReceiveInventory', () => {
       queryKey: queryKeys.inventory.lowStock(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.dashboard(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.wmsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.products.detail('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -95,6 +110,37 @@ describe('useReceiveInventory', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
+    })
+  })
+
+  it('refreshes serialized inventory caches after a serialized manual receive', async () => {
+    mockReceiveInventory.mockResolvedValue({
+      item: { id: 'inventory-1' },
+      movement: { id: 'movement-1' },
+      message: 'Inventory received successfully',
+    })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+
+    const { result } = renderHook(() => useReceiveInventory(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        productId: 'product-1',
+        locationId: 'location-1',
+        quantity: 1,
+        unitCost: 19.95,
+        receiptReason: 'initial_stock',
+        serialNumber: 'SN-001',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
     })
   })
 })

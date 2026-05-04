@@ -765,12 +765,14 @@ export const queryKeys = {
     dashboard: () => [...queryKeys.inventory.all, 'dashboard'] as const,
 
     // Availability
+    availabilityAll: () => [...queryKeys.inventory.all, 'availability'] as const,
     availability: (productId: string, locationId?: string) =>
-      [...queryKeys.inventory.all, 'availability', productId, locationId ?? ''] as const,
+      [...queryKeys.inventory.availabilityAll(), productId, locationId ?? ''] as const,
 
     // Available Serials for Picking
+    availableSerialsAll: () => [...queryKeys.inventory.all, 'availableSerials'] as const,
     availableSerials: (productId: string, locationId?: string) =>
-      [...queryKeys.inventory.all, 'availableSerials', productId, locationId ?? ''] as const,
+      [...queryKeys.inventory.availableSerialsAll(), productId, locationId ?? ''] as const,
 
     // Canonical Serialized Items
     serializedAll: () => [...queryKeys.inventory.all, 'serializedItems'] as const,
@@ -780,11 +782,12 @@ export const queryKeys = {
       [...queryKeys.inventory.serializedAll(), 'detail', id] as const,
 
     // WMS Dashboard
-    wmsDashboard: () => [...queryKeys.inventory.all, 'wms'] as const,
-    stockByCategory: () => [...queryKeys.inventory.all, 'wms', 'byCategory'] as const,
-    stockByLocation: () => [...queryKeys.inventory.all, 'wms', 'byLocation'] as const,
+    wmsAll: () => [...queryKeys.inventory.all, 'wms'] as const,
+    wmsDashboard: () => queryKeys.inventory.wmsAll(),
+    stockByCategory: () => [...queryKeys.inventory.wmsAll(), 'byCategory'] as const,
+    stockByLocation: () => [...queryKeys.inventory.wmsAll(), 'byLocation'] as const,
     recentMovementsTimeline: (limit?: number) =>
-      [...queryKeys.inventory.all, 'wms', 'movements', limit ?? 10] as const,
+      [...queryKeys.inventory.wmsAll(), 'movements', limit ?? 10] as const,
 
     // Forecasting
     forecastingAll: () => [...queryKeys.inventory.all, 'forecasting'] as const,
