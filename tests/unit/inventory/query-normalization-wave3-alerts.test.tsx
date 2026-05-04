@@ -225,4 +225,35 @@ describe('inventory alerts query normalization wave 3', () => {
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to acknowledge alert');
   });
+
+  it('uses safe route submit copy instead of raw alert rule errors', async () => {
+    const { getAlertRuleSubmitError } = await import(
+      '@/routes/_authenticated/inventory/alert-error-messages'
+    );
+
+    expect(
+      getAlertRuleSubmitError(
+        new Error('duplicate key value violates unique constraint inventory_alerts_rule_key')
+      )
+    ).toBe('Failed to save alert rule');
+  });
+
+  it('uses stable unavailable copy instead of raw alert read errors', async () => {
+    const {
+      getAlertRulesReadErrorMessage,
+      getTriggeredAlertsReadErrorMessage,
+    } = await import('@/routes/_authenticated/inventory/alert-error-messages');
+
+    expect(
+      getTriggeredAlertsReadErrorMessage(
+        new Error('select from triggered_inventory_alerts violates row-level security policy')
+      )
+    ).toBe('Triggered inventory alerts are temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      getAlertRulesReadErrorMessage(
+        new Error('select from inventory_alerts violates row-level security policy')
+      )
+    ).toBe('Inventory alert rules are temporarily unavailable. Please refresh and try again.');
+  });
 });

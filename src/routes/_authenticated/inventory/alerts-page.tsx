@@ -42,6 +42,11 @@ import {
 import { useProducts } from "@/hooks/products";
 import type { TriggeredAlertResult, ListTriggeredAlertsResult, CreateAlert, AlertListItem } from "@/lib/schemas/inventory";
 import { logger } from "@/lib/logger";
+import {
+  getAlertRulesReadErrorMessage,
+  getAlertRuleSubmitError,
+  getTriggeredAlertsReadErrorMessage,
+} from "./alert-error-messages";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -312,7 +317,7 @@ export default function AlertsPage() {
               alerts={triggeredAlerts}
               isLoading={isLoadingTriggered}
               isError={isTriggeredError}
-              errorMessage={triggeredError instanceof Error ? triggeredError.message : undefined}
+              errorMessage={getTriggeredAlertsReadErrorMessage(triggeredError)}
               onAcknowledge={handleAcknowledgeAlert}
               onRetry={() => refetchTriggered()}
             />
@@ -323,7 +328,7 @@ export default function AlertsPage() {
               alerts={alertRules}
               isLoading={isLoadingRules}
               isError={isRulesError}
-              errorMessage={rulesError instanceof Error ? rulesError.message : undefined}
+              errorMessage={getAlertRulesReadErrorMessage(rulesError)}
               onEdit={setEditingAlert}
               onDelete={handleDeleteAlert}
               onToggleActive={handleToggleActive}
@@ -340,7 +345,7 @@ export default function AlertsPage() {
               )}
               isLoading={isLoadingTriggered}
               isError={isTriggeredError}
-              errorMessage={triggeredError instanceof Error ? triggeredError.message : undefined}
+              errorMessage={getTriggeredAlertsReadErrorMessage(triggeredError)}
               onRetry={() => refetchTriggered()}
               maxHeight="520px"
             />
@@ -363,11 +368,7 @@ export default function AlertsPage() {
             locations={locations}
             onSubmit={handleCreateAlert}
             onCancel={() => setShowCreateDialog(false)}
-            submitError={
-              createAlertMutation.error instanceof Error
-                ? createAlertMutation.error.message
-                : null
-            }
+            submitError={getAlertRuleSubmitError(createAlertMutation.error)}
           />
         </DialogContent>
       </Dialog>
@@ -402,11 +403,7 @@ export default function AlertsPage() {
               }}
               onSubmit={handleEditAlert}
               onCancel={() => setEditingAlert(null)}
-              submitError={
-                updateAlertMutation.error instanceof Error
-                  ? updateAlertMutation.error.message
-                  : null
-              }
+              submitError={getAlertRuleSubmitError(updateAlertMutation.error)}
             />
           )}
         </DialogContent>
