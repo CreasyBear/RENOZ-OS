@@ -5,7 +5,7 @@
  *
  * Features:
  * - Overall turnover ratio
- * - Turnover by category
+ * - Turnover by product
  * - Days of inventory on hand
  * - Turnover trends
  *
@@ -50,9 +50,9 @@ export interface TurnoverSummary {
   industryBenchmark?: number;
 }
 
-export interface CategoryTurnover {
-  categoryId: string;
-  categoryName: string;
+export interface ProductTurnover {
+  productId: string;
+  productName: string;
   turnoverRatio: number;
   daysOnHand: number;
   cogs: number;
@@ -60,6 +60,12 @@ export interface CategoryTurnover {
   trend: "up" | "down" | "stable";
   trendPercentage: number;
 }
+
+/**
+ * @deprecated Use ProductTurnover. The turnover report renders product-level
+ * server data, not product category aggregates.
+ */
+export type CategoryTurnover = ProductTurnover;
 
 export interface TurnoverTrend {
   period: string;
@@ -69,7 +75,7 @@ export interface TurnoverTrend {
 
 interface TurnoverReportProps {
   summary: TurnoverSummary | null;
-  byCategory: CategoryTurnover[];
+  byProduct: ProductTurnover[];
   trends?: TurnoverTrend[];
   isLoading?: boolean;
   className?: string;
@@ -100,7 +106,7 @@ const RATING_CONFIG = {
 
 export const TurnoverReport = memo(function TurnoverReport({
   summary,
-  byCategory,
+  byProduct,
   trends = [],
   isLoading,
   className,
@@ -268,25 +274,25 @@ export const TurnoverReport = memo(function TurnoverReport({
         </Card>
       )}
 
-      {/* By Category */}
+      {/* By Product */}
       <Card>
         <CardHeader>
-          <CardTitle>Turnover by Category</CardTitle>
+          <CardTitle>Turnover by Product</CardTitle>
           <CardDescription>
-            Performance breakdown by product category
+            Performance breakdown by product
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {byCategory.length === 0 ? (
+          {byProduct.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No category data
+              No product turnover data
             </p>
           ) : (
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Category</TableHead>
+                    <TableHead>Product</TableHead>
                     <TableHead className="text-right">Turnover</TableHead>
                     <TableHead className="text-right">Days on Hand</TableHead>
                     <TableHead className="text-right">COGS</TableHead>
@@ -295,60 +301,60 @@ export const TurnoverReport = memo(function TurnoverReport({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {byCategory.map((cat) => {
-                    const catRating = getTurnoverRating(cat.turnoverRatio);
-                    const catRatingConfig = RATING_CONFIG[catRating];
+                  {byProduct.map((product) => {
+                    const productRating = getTurnoverRating(product.turnoverRatio);
+                    const productRatingConfig = RATING_CONFIG[productRating];
                     const TrendIcon =
-                      cat.trend === "up"
+                      product.trend === "up"
                         ? ArrowUpRight
-                        : cat.trend === "down"
+                        : product.trend === "down"
                           ? ArrowDownRight
                           : Minus;
 
                     return (
-                      <TableRow key={cat.categoryId}>
+                      <TableRow key={product.productId}>
                         <TableCell>
-                          <div className="font-medium">{cat.categoryName}</div>
+                          <div className="font-medium">{product.productName}</div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
                             <span className="tabular-nums font-medium">
-                              {formatRatio(cat.turnoverRatio)}x
+                              {formatRatio(product.turnoverRatio)}x
                             </span>
                             <Badge
                               variant="outline"
                               className={cn(
                                 "text-xs",
-                                catRatingConfig.color,
-                                catRatingConfig.bgColor
+                                productRatingConfig.color,
+                                productRatingConfig.bgColor
                               )}
                             >
-                              {catRatingConfig.label}
+                              {productRatingConfig.label}
                             </Badge>
                           </div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {Math.round(cat.daysOnHand)}d
+                          {Math.round(product.daysOnHand)}d
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrencyDisplay(cat.cogs)}
+                          {formatCurrencyDisplay(product.cogs)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrencyDisplay(cat.averageInventory)}
+                          {formatCurrencyDisplay(product.averageInventory)}
                         </TableCell>
                         <TableCell>
                           <div
                             className={cn(
                               "flex items-center gap-1",
-                              cat.trend === "up" && "text-green-600",
-                              cat.trend === "down" && "text-red-600",
-                              cat.trend === "stable" && "text-muted-foreground"
+                              product.trend === "up" && "text-green-600",
+                              product.trend === "down" && "text-red-600",
+                              product.trend === "stable" && "text-muted-foreground"
                             )}
                           >
                             <TrendIcon className="h-4 w-4" aria-hidden="true" />
                             <span className="text-xs tabular-nums">
-                              {cat.trendPercentage > 0 ? "+" : ""}
-                              {cat.trendPercentage.toFixed(1)}%
+                              {product.trendPercentage > 0 ? "+" : ""}
+                              {product.trendPercentage.toFixed(1)}%
                             </span>
                           </div>
                         </TableCell>

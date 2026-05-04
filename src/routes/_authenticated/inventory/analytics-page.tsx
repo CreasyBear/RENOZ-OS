@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { ValuationReport, type ValuationSummary, type CategoryValuation, type LocationValuation } from "@/components/domain/inventory/reports/valuation-report";
 import { AgingReport, type AgingSummary, type AgeBucket, type AgingItem } from "@/components/domain/inventory/reports/aging-report";
-import { TurnoverReport, type TurnoverSummary, type CategoryTurnover, type TurnoverTrend } from "@/components/domain/inventory/reports/turnover-report";
+import { TurnoverReport, type TurnoverSummary, type ProductTurnover, type TurnoverTrend } from "@/components/domain/inventory/reports/turnover-report";
 import {
   MovementAnalytics,
   type MovementSummary,
@@ -254,7 +254,7 @@ export default function AnalyticsPage() {
     };
   }, [turnoverData]);
 
-  const turnoverByCategory: CategoryTurnover[] = useMemo(() => {
+  const turnoverByProduct: ProductTurnover[] = useMemo(() => {
     return (turnoverData?.byProduct ?? [])
       .filter((p) => {
         // Filter out invalid products - must have ID and name
@@ -271,8 +271,8 @@ export default function AnalyticsPage() {
         const daysOnHand = turnoverRate > 0 ? Math.round(365 / turnoverRate) : 0;
 
         return {
-          categoryId: p.productId ?? '',
-          categoryName: p.productName ?? 'Unknown',
+          productId: p.productId ?? '',
+          productName: p.productName ?? 'Unknown',
           turnoverRatio: turnoverRate,
           daysOnHand,
           cogs: periodCOGS,
@@ -614,7 +614,7 @@ export default function AnalyticsPage() {
                 ) : null}
                 <TurnoverReport
                   summary={turnoverSummary}
-                  byCategory={turnoverByCategory}
+                  byProduct={turnoverByProduct}
                   trends={turnoverTrends}
                   isLoading={isLoadingTurnover}
                 />
