@@ -2,7 +2,7 @@
 
 This sprint follows Sprint 2's schema-ownership closeout. The focus shifts from contract placement to stock-changing behavior that can mislead operators after mutations.
 
-Status: Issue 1 implemented.
+Status: Issues 1 and 2 implemented.
 
 ## Business Value
 
@@ -67,6 +67,41 @@ Closeout criteria:
 - focused receive tests pass
 - lint/typecheck evidence is recorded
 
+### 2. Transfer Optimistic Patch Row Scope
+
+Business value: transferring a specific inventory row from the product or item UI should not temporarily move every cached row for the same product/location while the server refetch is pending.
+
+Workflow invariant: `useTransferInventory` must avoid aggregate optimistic math whenever the mutation is scoped by `inventoryId` or explicit serial numbers, because the transfer server uses row/serial-specific source selection and may create or update destination rows.
+
+Affected files:
+
+- `src/hooks/inventory/use-inventory.ts`
+- `tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `docs/inventory/MAINTAINER-SPRINT-3.md`
+
+Out of scope:
+
+- changing transfer server transaction behavior
+- changing transfer schema validation
+- changing broad invalidation prefixes
+- changing transfer dialog UI
+- changing serialized transfer behavior
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/use-transfer-inventory.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts
+```
+
+Closeout criteria:
+
+- row-scoped transfers with `inventoryId` skip aggregate optimistic list/detail math
+- serialized transfers continue to skip aggregate optimistic math
+- aggregate transfer behavior without `inventoryId` remains unchanged
+- rollback and invalidation behavior remain unchanged
+- focused transfer tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Receive Optimistic Patch Lot/Serial Scope
@@ -109,3 +144,43 @@ Verification:
 Goal adaptation: no standing goal change. Sprint 3 continues the maintainer goal by moving from schema ownership into stock-changing cache integrity.
 
 Residual risk: receive invalidation is still prefix-broad; adjust/transfer/allocate optimistic patches need the same lot/serial/row-scope scrutiny in later Sprint 3 slices.
+
+### Issue 2: Transfer Optimistic Patch Row Scope
+
+Touched domains: inventory transfer hook, inventory list/detail optimistic cache patching, stock action regression coverage.
+
+Workflow protected: `useTransferInventory` optimistic patch -> transfer server mutation -> rollback/invalidation -> operator-visible source/destination stock rows.
+
+Business value: transferring a specific inventory row no longer temporarily moves every cached row for the same product/location while the authoritative transfer refetch is pending.
+
+Standards checked:
+
+- row-scoped transfers with `inventoryId` now skip aggregate optimistic list/detail math
+- serialized transfers continue to skip aggregate optimistic math
+- aggregate transfer behavior without `inventoryId` remains unchanged
+- rollback and invalidation behavior remain unchanged
+- added transfer regression coverage for row-scoped and unscoped transfer behavior
+
+Smells removed:
+
+- transfer optimistic patching skipped aggregate math for serial numbers but not for `inventoryId`, despite the UI submitting item-level transfer payloads
+- transfer optimistic behavior had no regression coverage for row-scoped payloads
+
+Deferred:
+
+- transfer invalidation remains prefix-broad
+- transfer server transaction behavior and schema validation are unchanged
+- transfer destination row matching remains server-owned and database-backed
+- adjustment and allocation optimistic paths still need row-scope scrutiny in later Sprint 3 slices
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-transfer-inventory.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts`
+- `./node_modules/.bin/eslint src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-3.md src/hooks/inventory/use-inventory.ts tests/unit/inventory/use-transfer-inventory.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 3 continues stock-changing cache integrity cleanup through bounded hook/cache behavior slices.
+
+Residual risk: adjustment and allocation optimistic patches still need targeted row-scope review; receive/transfer invalidation remains broad rather than result-aware.
