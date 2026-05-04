@@ -64,7 +64,7 @@ export async function consumeLayersFIFO(
     const after = before - consumeQty;
     const unitCost = Number(layer.unitCost);
 
-    await tx
+    const updatedLayer = await tx
       .update(inventoryCostLayers)
       .set({ quantityRemaining: after })
       .where(
@@ -72,7 +72,14 @@ export async function consumeLayersFIFO(
           eq(inventoryCostLayers.id, layer.id),
           eq(inventoryCostLayers.organizationId, params.organizationId)
         )
+      )
+      .returning({ id: inventoryCostLayers.id });
+    if (!updatedLayer[0]) {
+      throw createInventoryFinanceError(
+        'Inventory cost layer could not be consumed. Refresh and try again.',
+        'layer_transfer_mismatch'
       );
+    }
 
     layerDeltas.push({
       layerId: layer.id,
@@ -135,6 +142,12 @@ export async function moveLayersBetweenInventory(
         referenceId: params.referenceId,
       })
       .returning({ id: inventoryCostLayers.id });
+    if (!newLayer) {
+      throw createInventoryFinanceError(
+        'Inventory cost layer could not be moved. Refresh and try again.',
+        'layer_transfer_mismatch'
+      );
+    }
     createdLayerIds.push(newLayer.id);
   }
 
@@ -172,7 +185,7 @@ export async function recomputeInventoryValueFromLayers(
   const totalValue = Number(layerTotals?.totalValue ?? 0);
   const weightedAverageCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
 
-  await tx
+  const updatedInventory = await tx
     .update(inventory)
     .set({
       totalValue,
@@ -181,7 +194,14 @@ export async function recomputeInventoryValueFromLayers(
     })
     .where(
       and(eq(inventory.id, params.inventoryId), eq(inventory.organizationId, params.organizationId))
+    )
+    .returning({ id: inventory.id });
+  if (!updatedInventory[0]) {
+    throw createInventoryFinanceError(
+      'Inventory value could not be recomputed. Refresh and try again.',
+      'inventory_value_drift_detected'
     );
+  }
 
   return { totalValue, weightedAverageCost, totalRemaining };
 }
@@ -224,6 +244,12 @@ export async function createReceiptLayersWithCostComponents(
       referenceId: params.referenceId,
     })
     .returning({ id: inventoryCostLayers.id });
+  if (!layer) {
+    throw createInventoryFinanceError(
+      'Inventory cost layer could not be created. Refresh and try again.',
+      'landed_cost_allocation_conflict'
+    );
+  }
 
   // Compatibility guard during migration rollout: skip insert if table not yet present.
   try {
