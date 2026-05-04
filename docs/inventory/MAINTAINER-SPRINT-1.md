@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1 and 2 implemented; Issue 3 started with first extraction boundary; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; Issue 3 in progress with activity and receiving extraction boundaries; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -353,32 +353,36 @@ Residual risk: cache-prefix centralization does not prove every allocation mutat
 
 ### Issue 3: Inventory Server Concentration
 
-Touched domains: inventory server functions, inventory activity logging.
+Touched domains: inventory server functions, inventory activity logging, manual receiving.
 
-Workflow protected: all inventory mutations that write movement activity records.
+Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in.
 
-Business value: inventory mutations are safer to change when cross-cutting activity logging is outside the monolithic workflow file.
+Business value: inventory mutations are safer to change when cross-cutting activity logging and the manual receive workflow are outside the monolithic workflow file.
 
 Standards checked:
 
 - extracted one safe helper boundary before moving larger workflow code
+- extracted `receiveInventory` into `src/server/functions/inventory/receiving.ts`
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
+- preserved the existing `@/server/functions/inventory/inventory` import path via re-export
 
 Smells removed:
 
 - local activity logging helper and activity-table dependency inside `src/server/functions/inventory/inventory.ts`
+- manual receive server function and schema from `src/server/functions/inventory/inventory.ts`
 
 Deferred:
 
-- extracting `receiveInventory` into a receiving-specific server module
 - extracting adjustment, transfer, allocation, and WMS/dashboard workflows
 - extracting inventory schema sections
+- moving consumers to the more specific receiving module import path
 
 Verification:
 
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
-Goal adaptation: no goal change; this is the first strict-modularity step for the inventory server concentration issue.
+Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
 
-Residual risk: the main inventory server file remains large and mixed-concern; this slice only establishes and proves the first low-risk extraction boundary.
+Residual risk: the main inventory server file remains large and mixed-concern at 2,641 lines; this slice proves a receiving extraction boundary but does not yet extract adjustment, transfer, allocation, movement listing, or WMS/dashboard code.
