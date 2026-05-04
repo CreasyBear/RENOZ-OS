@@ -405,7 +405,13 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
           appliedBy: ctx.user.id,
           appliedAt: new Date(),
         })
-        .where(eq(priceChangeHistory.id, data.id))
+        .where(
+          and(
+            eq(priceChangeHistory.id, data.id),
+            eq(priceChangeHistory.organizationId, ctx.organizationId),
+            eq(priceChangeHistory.status, 'approved')
+          )
+        )
         .returning();
 
       return applied;
