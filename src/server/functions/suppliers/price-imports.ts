@@ -81,6 +81,27 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return normalized || undefined;
 }
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidCalendarDate(value: string): boolean {
+  if (!ISO_DATE_PATTERN.test(value)) {
+    return false;
+  }
+
+  const [yearPart, monthPart, dayPart] = value.split('-');
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const date = new Date(Date.UTC(0, month - 1, day));
+  date.setUTCFullYear(year);
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 function parseOptionalIsoDate(
   value: string | undefined,
   fieldName: string,
@@ -92,10 +113,18 @@ function parseOptionalIsoDate(
     return undefined;
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+  if (!ISO_DATE_PATTERN.test(normalized)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: `${fieldName} must use YYYY-MM-DD format`,
+    });
+    return z.NEVER;
+  }
+
+  if (!isValidCalendarDate(normalized)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must be a valid calendar date`,
     });
     return z.NEVER;
   }

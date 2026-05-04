@@ -39,4 +39,13 @@ describe('supplier price import optional field handling', () => {
       /Expiry date must use YYYY-MM-DD format/
     );
   });
+
+  it('rejects impossible calendar dates before supplier pricing import resolution', () => {
+    expect(() => parsePriceImportRowData({ ...baseRow, effectiveDate: '2026-02-30' })).toThrow(
+      /Effective date must be a valid calendar date/
+    );
+    expect(() => parsePriceImportRowData({ ...baseRow, expiryDate: '2026-13-01' })).toThrow(
+      /Expiry date must be a valid calendar date/
+    );
+  });
 });
