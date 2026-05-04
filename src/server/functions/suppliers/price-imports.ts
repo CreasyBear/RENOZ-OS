@@ -12,7 +12,6 @@ import { priceLists } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/server/errors";
-import { createPriceChangeRequest } from "./price-history";
 import {
   assertResolvedResolution,
   calculateEffectivePrice,
@@ -559,7 +558,6 @@ export const executePriceImport = createServerFn({ method: "POST" })
       resolution: priceImportResolutionSchema,
     })),
     approvalRequired: z.boolean().default(false),
-    importReason: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
@@ -580,7 +578,6 @@ export const executePriceImport = createServerFn({ method: "POST" })
     }
 
     const results = [];
-    const changeRequests = [];
 
     for (const row of data.validatedRows) {
       try {
@@ -661,19 +658,6 @@ export const executePriceImport = createServerFn({ method: "POST" })
           );
         }
 
-        // Create change request for audit trail
-        if (data.approvalRequired) {
-          const changeRequest = await createPriceChangeRequest({
-            data: {
-              priceListId: persistedPrice.id,
-              newPrice: row.data.basePrice,
-              changeReason: `Bulk import: ${data.importReason || 'CSV import'}`,
-              notes: `Imported via CSV for product: ${row.data.productName}`,
-            }
-          });
-          changeRequests.push(changeRequest);
-        }
-
         results.push({
           rowNumber: row.rowNumber,
           status: 'success',
@@ -694,7 +678,6 @@ export const executePriceImport = createServerFn({ method: "POST" })
       successful: results.filter(r => r.status === 'success').length,
       failed: results.filter(r => r.status === 'error').length,
       results,
-      changeRequests,
     };
   });
 

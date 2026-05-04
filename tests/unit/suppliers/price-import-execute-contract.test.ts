@@ -21,7 +21,6 @@ describe('supplier price import execute contract', () => {
     expect(source).toContain(
       'if(!persistedPrice){thrownewValidationError(`Priceimportrow${row.rowNumber}couldnotbesaved.Refreshvalidationandtryagain.`);}'
     );
-    expect(source).toContain('priceListId:persistedPrice.id');
     expect(source).toContain('priceId:persistedPrice.id');
   });
 
@@ -47,5 +46,14 @@ describe('supplier price import execute contract', () => {
     expect(source.indexOf('if(data.approvalRequired){thrownewValidationError(')).toBeLessThan(
       source.indexOf('for(constrowofdata.validatedRows)')
     );
+  });
+
+  it('does not retain unreachable approval change-request writes after the guard', () => {
+    const source = compact(read('src/server/functions/suppliers/price-imports.ts'));
+
+    expect(source).not.toContain('createPriceChangeRequest');
+    expect(source).not.toContain('priceListId:persistedPrice.id');
+    expect(source).not.toContain('importReason');
+    expect(source).not.toContain('changeRequests');
   });
 });
