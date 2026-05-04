@@ -2,7 +2,7 @@
 
 This sprint follows Support Sprint 1's trace/schema/contract hardening into the operator-facing RMA recovery surfaces.
 
-Status: Issue 1 implemented.
+Status: Issues 1 and 2 implemented.
 
 ## Business Value
 
@@ -75,6 +75,39 @@ Closeout criteria:
 - `rma-detail-card.tsx` remains responsible for general RMA detail layout and line items
 - focused tests, lint, typecheck, and support suite pass or skipped gates are recorded
 
+### 2. RMA Detail Related Context Boundary
+
+Business value: remedy artifacts should appear where operators evaluate remedy execution, while the side rail should stay focused on upstream context like the related issue and source order. Duplicating refund, credit, and replacement links in both places makes it harder to know which surface owns recovery truth.
+
+Workflow invariant: RMA detail view -> side rail related context -> source issue/order navigation only; remedy artifact links stay in `RmaExecutionSummary`.
+
+Affected files:
+
+- `src/components/domain/support/rma/rma-detail-view.tsx`
+- `tests/unit/support/rma-detail-view.test.tsx`
+- `docs/support/MAINTAINER-SPRINT-2.md`
+
+Out of scope:
+
+- changing `RmaExecutionSummary`
+- changing RMA read-model hydration
+- changing server remedy execution behavior
+- changing workflow actions or dialogs
+- redesigning the detail page layout
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/support/rma-detail-view.test.tsx
+```
+
+Closeout criteria:
+
+- sidebar/source context still links to related issue and source order
+- sidebar no longer renders credit note, replacement order, or refund payment cards
+- remedy artifact display remains owned by `RmaExecutionSummary`
+- focused tests, lint, typecheck, and support suite pass or skipped gates are recorded
+
 ## Closeout Log
 
 ### Issue 1: RMA Execution Summary Boundary
@@ -115,3 +148,40 @@ Verification:
 Goal adaptation: no standing goal change. This continues the support/RMA maintainer posture by moving artifact-truth UI into a reviewable domain boundary.
 
 Residual risk: detail and sidebar linked-record surfaces can still duplicate credit/replacement/refund access. That may be acceptable because the detail body explains execution while the sidebar supports navigation, but it should be reviewed in a future UX slice before broader RMA polish.
+
+### Issue 2: RMA Detail Related Context Boundary
+
+Touched domains: support/RMA detail view, RMA source-context side rail, support UI tests.
+
+Workflow protected: RMA detail route -> detail view side rail -> source issue/source order navigation, while remedy artifact links remain owned by `RmaExecutionSummary`.
+
+Business value: operators now have a clearer detail page split: the main detail body explains remedy execution and artifact truth, while the side rail links to the upstream issue and source order context. Refund, credit, and replacement artifacts are no longer duplicated in two places on the same page.
+
+Standards checked:
+
+- removed credit note, replacement order, and refund payment cards from `RmaDetailView` side rail
+- kept related issue and related order cards in the side rail
+- kept artifact links in `RmaExecutionSummary`, where they are tied to blocked/completed remedy state
+- kept read-model hydration, route behavior, workflow actions, server behavior, and cache policy unchanged
+
+Smells removed:
+
+- remedy artifact navigation was duplicated in both the execution summary and the detail side rail
+- side rail mixed source context with remedy execution artifacts after Issue 1 gave artifacts a focused owner
+
+Deferred:
+
+- the side rail remains a small local helper inside `rma-detail-view.tsx`; extract only if more source-context cards are added
+- browser QA was skipped because this is a focused presentational ownership cleanup with unit coverage and no behavior change
+- `rma-list.tsx` execution summary/filter behavior remains unchanged
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-detail-view.test.tsx`
+- `./node_modules/.bin/eslint src/components/domain/support/rma/rma-detail-view.tsx tests/unit/support/rma-detail-view.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/support`
+
+Goal adaptation: no standing goal change. This continues the support/RMA operator UX sprint by clarifying which component owns source context versus remedy artifact truth.
+
+Residual risk: RMA list execution summaries may still need a pass for blocked/completed recovery clarity, but the RMA detail page now has a cleaner ownership split.

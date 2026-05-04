@@ -136,43 +136,6 @@ export function RmaDetailView({
               </Link>
             </LinkedRecordCard>
           )}
-          {rma?.execution?.creditNote && (
-            <LinkedRecordCard title="Credit Note">
-              <Link
-                to="/financial/credit-notes/$creditNoteId"
-                params={{ creditNoteId: rma.execution.creditNote.id }}
-                className="text-primary text-sm hover:underline"
-              >
-                {rma.execution.creditNote.label ?? 'View Credit Note'}
-              </Link>
-            </LinkedRecordCard>
-          )}
-          {rma?.execution?.replacementOrder && (
-            <LinkedRecordCard title="Replacement Order">
-              <Link
-                to="/orders/$orderId"
-                params={{ orderId: rma.execution.replacementOrder.id }}
-                className="text-primary text-sm hover:underline"
-              >
-                {rma.execution.replacementOrder.label ?? 'View Replacement Order'}
-              </Link>
-            </LinkedRecordCard>
-          )}
-          {rma?.execution?.refundPayment && rma.orderId && (
-            <LinkedRecordCard
-              title="Refund Payment"
-              description={rma.execution.refundPayment.id}
-              descriptionClassName="font-mono"
-            >
-              <Link
-                to="/orders/$orderId"
-                params={{ orderId: rma.orderId }}
-                className="text-primary text-sm hover:underline"
-              >
-                View on Order
-              </Link>
-            </LinkedRecordCard>
-          )}
         </div>
       </div>
     </div>
@@ -182,14 +145,12 @@ export function RmaDetailView({
 interface LinkedRecordCardProps {
   title: string;
   description?: string | null;
-  descriptionClassName?: string;
   children: React.ReactNode;
 }
 
 function LinkedRecordCard({
   title,
   description,
-  descriptionClassName,
   children,
 }: LinkedRecordCardProps) {
   return (
@@ -199,9 +160,7 @@ function LinkedRecordCard({
       </CardHeader>
       <CardContent className="space-y-2">
         {description ? (
-          <p className={['text-muted-foreground text-sm', descriptionClassName].filter(Boolean).join(' ')}>
-            {description}
-          </p>
+          <p className="text-muted-foreground text-sm">{description}</p>
         ) : null}
         {children}
       </CardContent>
