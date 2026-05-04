@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, adjustment, transfer, allocation, movement, and dashboard extraction boundaries; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, adjustment, transfer, allocation, movement, dashboard, and WMS extraction boundaries; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -353,11 +353,11 @@ Residual risk: cache-prefix centralization does not prove every allocation mutat
 
 ### Issue 3: Inventory Server Concentration
 
-Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation, movement history, inventory dashboard metrics.
+Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation, movement history, inventory dashboard metrics, WMS aggregate reads.
 
-Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity; operator movement history reads for item detail and dashboard movement panels; inventory overview dashboard metrics and top movers.
+Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity; operator movement history reads for item detail and dashboard movement panels; inventory overview dashboard metrics and top movers; WMS stock by category/location and WMS timeline aggregates.
 
-Business value: inventory mutations and operational reads are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, allocation, movement-history, and dashboard workflows are outside the monolithic workflow file.
+Business value: inventory mutations and operational reads are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, allocation, movement-history, dashboard, and WMS aggregate workflows are outside the monolithic workflow file.
 
 Standards checked:
 
@@ -368,6 +368,7 @@ Standards checked:
 - extracted `allocateInventory` and `deallocateInventory` into `src/server/functions/inventory/allocations.ts`
 - extracted `listMovements` into `src/server/functions/inventory/movements.ts`
 - extracted `getInventoryDashboard` into `src/server/functions/inventory/dashboard.ts`
+- extracted WMS aggregate reads into `src/server/functions/inventory/wms-dashboard.ts`
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
@@ -384,15 +385,17 @@ Smells removed:
 - allocation/deallocation server functions and allocation retry helper from `src/server/functions/inventory/inventory.ts`
 - movement-history server function from `src/server/functions/inventory/inventory.ts`
 - standard dashboard metrics server function from `src/server/functions/inventory/inventory.ts`
+- WMS aggregate read functions from `src/server/functions/inventory/inventory.ts`
 - direct receive workflow imports from the monolithic inventory server module
 - direct adjustment workflow imports from the monolithic inventory server module
 - direct transfer workflow imports from the monolithic inventory server module
 - direct movement-history imports from the monolithic inventory server module
 - direct dashboard metric imports from the monolithic inventory server module
+- direct WMS hook imports from the monolithic inventory barrel
 
 Deferred:
 
-- extracting WMS aggregate workflows
+- extracting remaining inventory CRUD/search, bulk status, and serial availability server boundaries
 - extracting inventory schema sections
 
 Verification:
@@ -404,6 +407,7 @@ Verification:
 - `./node_modules/.bin/eslint src/server/functions/inventory/allocations.ts src/server/functions/inventory/inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/movements.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/dashboard.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
+- `./node_modules/.bin/eslint src/server/functions/inventory/wms-dashboard.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-wms-dashboard.ts`
 - `git diff --check`
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
@@ -412,4 +416,4 @@ Verification:
 
 Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
 
-Residual risk: the main inventory server file remains large and mixed-concern at 1,180 lines; this slice proves receiving, adjustment, transfer, allocation, movement-history, and standard dashboard extraction boundaries but does not yet extract WMS aggregate reads.
+Residual risk: the main inventory server file remains mixed-concern at 709 lines; this slice proves receiving, adjustment, transfer, allocation, movement-history, standard dashboard, and WMS aggregate extraction boundaries but does not yet extract remaining CRUD/search, bulk status, serial availability, or inventory schema sections.
