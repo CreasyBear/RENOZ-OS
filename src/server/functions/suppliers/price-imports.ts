@@ -564,6 +564,12 @@ export const executePriceImport = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
+    if (data.approvalRequired) {
+      throw new ValidationError(
+        "Supplier price import approval workflow is not available yet. Run the import without approval or create price change requests separately."
+      );
+    }
+
     const unresolvedRows = data.validatedRows.filter(
       (row) => row.resolution.status !== "resolved" && row.resolution.status !== "duplicate_target"
     );

@@ -37,4 +37,15 @@ describe('supplier price import execute contract', () => {
     expect(source).not.toContain('supplierId:row.resolution.supplierId!');
     expect(source).not.toContain('productId:row.resolution.productId!');
   });
+
+  it('rejects approval-required imports before processing rows', () => {
+    const source = compact(read('src/server/functions/suppliers/price-imports.ts'));
+
+    expect(source).toContain(
+      'if(data.approvalRequired){thrownewValidationError("Supplierpriceimportapprovalworkflowisnotavailableyet.Runtheimportwithoutapprovalorcreatepricechangerequestsseparately.");}'
+    );
+    expect(source.indexOf('if(data.approvalRequired){thrownewValidationError(')).toBeLessThan(
+      source.indexOf('for(constrowofdata.validatedRows)')
+    );
+  });
 });
