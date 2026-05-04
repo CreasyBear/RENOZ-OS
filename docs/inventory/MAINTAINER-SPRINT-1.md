@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, and 5 implemented; remaining issues stay in the ledger.
+Status: Issues 1, 2, 3, 4, 5, and 6 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -73,7 +73,7 @@ Observed inventory paths:
 ### What Needs Revalidation
 
 - `bulkReceiveStock` is not a live export or caller path; stock-in trace drift was corrected and guarded.
-- Whether RMA receive still lands non-serialized returns in the first warehouse location.
+- RMA receive no longer silently lands non-serialized returns in the first warehouse location; explicit location selection is required except for the single-active-location fallback.
 - Whether stock-in traces still match current implementation after cross-phase closeout.
 - Whether operator-facing receive, PO receive, mobile receive, and product-detail launch all preserve the same workflow distinction.
 
@@ -188,7 +188,8 @@ Business value: returned batteries should not land in the wrong warehouse locati
 
 Evidence:
 
-- `docs/code-traces/13-rma-receive-inventory.md` says non-serialized RMA receive may choose the first warehouse location.
+- `docs/code-traces/13-rma-receive-inventory.md` previously said non-serialized RMA receive may choose the first warehouse location.
+- Current code accepts `locationId`, blocks missing selection in the detail hook, validates the selected warehouse location, and only falls back when exactly one active location exists.
 - Trace says RMA receive should preserve cost layers, inventory movements, and optional serialized lineage.
 
 Proposed slice:
@@ -674,3 +675,43 @@ Verification:
 Goal adaptation: no goal change; this closes Issue 5 by using the trace as a living contract and correcting stale workflow memory instead of adding a broader receive refactor.
 
 Residual risk: serialized rule parity remains deferred. PO receive-goods error copy stays in procurement scope unless a future operator QA pass finds stock-in confusion there.
+
+### Issue 6: RMA Return-To-Stock Truth
+
+Touched domains: support RMA detail receive flow, RMA server receive workflow, RMA schema, inventory return-to-stock trace docs.
+
+Workflow protected: approved RMA -> receive dialog location selection -> `useReceiveRma` -> `receiveRma` -> selected non-serialized inventory location or existing serialized inventory row -> movement/cost layer/serialized-lineage updates.
+
+Business value: returned batteries and accessories should not disappear into an arbitrary warehouse bin; the app should force the receiving dock/operator location to be explicit for multi-location operations.
+
+Standards checked:
+
+- verified `receiveRmaSchema` carries `locationId`
+- verified `use-rma-detail` blocks receive before mutation when `locationId` is missing
+- verified `receiveRma` validates selected organization-scoped warehouse location and only permits omitted location when exactly one active location exists
+- verified `bulkReceiveRma` forwards `locationId` into each nested receive
+- refreshed `docs/code-traces/13-rma-receive-inventory.md` to match current implementation
+
+Smells removed:
+
+- RMA return-to-stock trace still claimed non-serialized returns used the first warehouse location
+- trace linked manual receive permission to the old inventory barrel
+- trace did not describe bulk receive location forwarding
+
+Deferred:
+
+- RMA receive integration coverage for real inventory rows, cost layers, serialized-lineage events, and transition failures
+- fixed `AUD` currency in RMA return cost layers remains a finance/inventory valuation slice
+- `createRma` permission asymmetry remains support-domain auth work
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/support/rma-receive-location-contract.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/support/rma-receive-dialog.test.tsx tests/unit/support/use-rma-mutations.test.tsx`
+- `./node_modules/.bin/eslint tests/unit/support/rma-receive-location-contract.test.ts`
+- `git diff --check`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is another trace-first product-ownership slice where the correct action was to close stale risk, not expand implementation.
+
+Residual risk: the trace now matches the location contract, but this is still guarded mostly by source/interaction tests rather than a database-backed receive integration.

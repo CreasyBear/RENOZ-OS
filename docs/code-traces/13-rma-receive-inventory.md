@@ -1,8 +1,8 @@
-a # 13 — RMA receive (restore inventory)
+# 13 — RMA receive (restore inventory)
 
 **Status:** COMPLETE
 **Series order:** 13 (see [README](./README.md))
-**Last updated:** 2026-03-26
+**Last updated:** 2026-05-04
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
@@ -26,9 +26,9 @@ a # 13 — RMA receive (restore inventory)
 | Unit cost for layers | `products.costPrice` |
 | Inspection payload | Optional `inspectionNotes`; handler **merges** server `inspectedAt` (ISO string) and `inspectedBy` (user id), overwriting any client-supplied mirror fields in the stored JSON |
 | Restored inventory **status** | Derived from `inspectionNotes.condition`: `damaged` / `defective` / `missing_parts` ⇒ **`quarantined`**; else **`available`** |
-| Non-serialized **location** | **First** row in `warehouse_locations` for org (`.limit(1)`). **No** `locationId` in `receiveRmaSchema` — operator cannot pick receiving dock in this API |
+| Non-serialized **location** | `locationId` from `receiveRmaSchema`; if omitted, server accepts only the single-active-location case and otherwise throws. The detail hook/dialog require operator selection before mutation |
 
-**Permission:** `withAuth({ permission: PERMISSIONS.inventory.receive })` — aligned with [`receiveInventory`](../../src/server/functions/inventory/inventory.ts) / [`receiveGoods`](../../src/server/functions/suppliers/receive-goods.ts) ([02](./02-inventory-stock-in.md)).
+**Permission:** `withAuth({ permission: PERMISSIONS.inventory.receive })` — aligned with [`receiveInventory`](../../src/server/functions/inventory/receiving.ts) / [`receiveGoods`](../../src/server/functions/suppliers/receive-goods.ts) ([02](./02-inventory-stock-in.md)).
 
 ---
 
@@ -43,7 +43,7 @@ rg -n "useReceiveRma|receiveRma\(" src/
 | Surface | Notes |
 |---------|--------|
 | RMA detail | Primary UX for single receive |
-| `bulkReceiveRma` | Loops `receiveRma({ data: { rmaId, inspectionNotes } })` per id; collects per-id errors |
+| `bulkReceiveRma` | Loops `receiveRma({ data: { rmaId, locationId, inspectionNotes } })` per id; collects per-id errors |
 
 ---
 
@@ -57,14 +57,14 @@ sequenceDiagram
   participant TX as db.transaction
   participant INV as inventory / movements / layers
 
-  UI->>H: mutateAsync({ rmaId, inspectionNotes? })
+  UI->>H: mutateAsync({ rmaId, locationId, inspectionNotes? })
   H->>S: POST RPC
   S->>S: withAuth(inventory.receive)
   S->>TX: set_config org
   TX->>TX: load RMA; assert transition to received
   TX->>TX: update return_authorizations status received + inspectionNotes JSON
   TX->>TX: load lines + products
-  TX->>TX: resolve first warehouse location (non-serial path)
+  TX->>TX: validate explicit receiving location or single active fallback
   loop each line
     TX->>INV: serialized: lock row by serial; or non-serial: upsert by product+location
     TX->>INV: insert movement return + receipt layers + recompute value
@@ -84,7 +84,7 @@ sequenceDiagram
 
 | Layer | Symbol | File |
 |-------|--------|------|
-| RPC input | `receiveRmaSchema`, `ReceiveRmaInput` | [`src/lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts) ~L136 |
+| RPC input | `receiveRmaSchema`, `ReceiveRmaInput` | [`src/lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts) ~L136; includes optional `locationId` with required-selection validation copy |
 | Inspection shape | `rmaInspectionNotesSchema` | same ~L50 (`condition` enum, `notes`, optional `photos` UUIDs) |
 | Bulk | `bulkReceiveRmaSchema` | same ~L159 |
 
@@ -97,7 +97,7 @@ sequenceDiagram
 | Branch | Location selection | Extra rules |
 |--------|-------------------|-------------|
 | **Serialized** | Existing inventory row **by `serialNumber`** + `productId` (`.for('update')`) | Serial required on line; row must exist; `newQty` must not exceed serialized single-unit bound |
-| **Non-serialized** | `firstLocation.id`; match row `(productId, locationId, serial IS NULL)` or insert new | Throws if **no** locations when there are lines to process |
+| **Non-serialized** | selected `locationId`; match row `(productId, locationId, serial IS NULL)` or insert new | Throws if selected location is invalid, if no active fallback exists, or if more than one active fallback candidate exists |
 
 Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValueFromLayers` with `referenceType: 'rma'`, `costType: 'rma_return'`, currency **`AUD` hardcoded** in handler.
 
@@ -122,7 +122,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 |-----------|-----------|--------------|
 | RMA not found | `NotFoundError` | Mutation error |
 | Wrong status | `throw createSerializedMutationError(..., 'transition_blocked')` | Validation-style error |
-| No warehouse location (non-serial lines) | `ValidationError` explicit message | Toast / inline |
+| Missing/invalid receiving location (non-serial lines) | `ValidationError` explicit message; detail hook blocks missing selection before mutation | Toast / inline |
 | Serialized missing serial / bad state | `ValidationError` or `invalid_serial_state` | Same |
 | Success | `serializedMutationSuccess` with message | Success + cache refresh |
 
@@ -142,7 +142,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 |-------|----------|------|
 | **createRma** auth | `withAuth()` without `PERMISSIONS` | Anyone who can hit the fn might create RMAs if UI is exposed — **asymmetric** with receive’s `inventory.receive` |
 | **Fixed AUD** in layers | `currency: 'AUD'` in `createReceiptLayersWithCostComponents` | Wrong for multi-currency orgs |
-| **Arbitrary first location** | `.limit(1)` on `warehouse_locations` | Stock lands in wrong bin; operational confusion |
+| **Single-location fallback** | Server allows omitted `locationId` only when exactly one active location exists | API callers outside the detail dialog must still pass location explicitly in multi-location orgs |
 | **bulkReceiveRma** | Calls nested `receiveRma` server fn in a loop | Each call runs full auth + transaction; `withAuth` at bulk start is redundant with per-receive auth inside `receiveRma` |
 | **Product `continue`** | `if (!productId) continue` | Silent skip of malformed line linkage — could hide data issues |
 
@@ -151,6 +151,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 ## 10. Verification
 
 - Search `receiveRma`, `useReceiveRma`, `bulkReceiveRma` under `tests/`.
+- `tests/unit/support/rma-receive-location-contract.test.ts` guards selected-location schema, detail-hook blocking, server fallback behavior, and bulk forwarding.
 - **Gap:** Integration test: approved RMA → receive → inventory quantity + movement row; serialized path requires pre-existing serial row; transition_blocked from wrong status; bulk partial failure returns `failed[]` with message.
 
 ---
