@@ -1683,7 +1683,7 @@ async function recalculatePurchaseOrderTotals(
       )
     );
 
-  await executor
+  const updatedTotals = await executor
     .update(purchaseOrders)
     .set({
       subtotal: roundCurrency(totals[0]?.subtotal ?? 0),
@@ -1695,7 +1695,14 @@ async function recalculatePurchaseOrderTotals(
     .where(
       and(
         eq(purchaseOrders.id, purchaseOrderId),
-        eq(purchaseOrders.organizationId, organizationId)
+        eq(purchaseOrders.organizationId, organizationId),
+        eq(purchaseOrders.status, 'draft'),
+        isNull(purchaseOrders.deletedAt)
       )
-    );
+    )
+    .returning({ id: purchaseOrders.id });
+
+  if (!updatedTotals[0]) {
+    throw new ValidationError('Purchase order totals could not be recalculated. Refresh and try again.');
+  }
 }

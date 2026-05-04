@@ -32,7 +32,10 @@ describe('purchase order line-item totals tenant-scope contract', () => {
       'where(and(eq(purchaseOrderItems.purchaseOrderId,purchaseOrderId),eq(purchaseOrderItems.organizationId,organizationId)))'
     );
     expect(source).toContain(
-      'where(and(eq(purchaseOrders.id,purchaseOrderId),eq(purchaseOrders.organizationId,organizationId)))'
+      "where(and(eq(purchaseOrders.id,purchaseOrderId),eq(purchaseOrders.organizationId,organizationId),eq(purchaseOrders.status,'draft'),isNull(purchaseOrders.deletedAt))).returning({id:purchaseOrders.id})"
+    );
+    expect(source).toContain(
+      "if(!updatedTotals[0]){thrownewValidationError('Purchaseordertotalscouldnotberecalculated.Refreshandtryagain.');}"
     );
     expect(source).not.toContain('.where(eq(purchaseOrderItems.purchaseOrderId,data.purchaseOrderId))');
     expect(source).not.toContain('.where(eq(purchaseOrderItems.purchaseOrderId,purchaseOrderId))');
