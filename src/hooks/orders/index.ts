@@ -17,6 +17,7 @@ export * from './use-order-amendments';
 export * from './use-order-payments';
 export * from './use-order-templates';
 export * from './use-picking';
+export * from './use-shipment-document-actions';
 
 // Order Calculations (new)
 export {

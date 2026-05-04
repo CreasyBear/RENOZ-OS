@@ -23,6 +23,11 @@ export { SerialPicker } from './serial-picker';
 // LISTS
 // ============================================================================
 export { ShipmentList } from './shipment-list';
+export { ShipmentDocumentActions } from './shipment-document-actions';
+export type {
+  ShipmentDocumentActionShipment,
+  ShipmentDocumentActionsProps,
+} from './shipment-document-actions';
 
 // ============================================================================
 // DASHBOARD - Container

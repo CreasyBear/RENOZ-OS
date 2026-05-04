@@ -58,18 +58,14 @@ import {
 import { fromCents, toCents } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { useMarkShipped, useOrderShipments } from "@/hooks/orders";
-import {
-  useGenerateShipmentDispatchNote,
-  useGenerateShipmentDeliveryNote,
-  useGenerateShipmentPackingSlip,
-} from "@/hooks/documents";
 import { toastError, toastSuccess } from "@/hooks";
 import {
-  getClientErrorMessage,
-  normalizeShipmentMutationError,
-} from "@/hooks/orders/order-mutation-client-errors";
+  getShipmentActionErrorMessage,
+  useShipmentDocumentActions,
+} from "@/hooks/orders/use-shipment-document-actions";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 import { SerialNumbersList } from "../components/serial-numbers-list";
+import { ShipmentDocumentActions } from "./shipment-document-actions";
 
 // ============================================================================
 // TYPES
@@ -86,13 +82,6 @@ interface PendingShipmentCompletionForm {
   carrierService: string;
   trackingNumber: string;
   shippingCost: string;
-}
-
-function getShipmentActionErrorMessage(error: unknown, fallbackMessage: string): string {
-  return getClientErrorMessage(
-    normalizeShipmentMutationError(error, fallbackMessage),
-    fallbackMessage
-  );
 }
 
 // ============================================================================
@@ -150,9 +139,7 @@ export const ShipmentList = memo(function ShipmentList({
 }: ShipmentListProps) {
   const { data: shipments, isLoading, error } = useOrderShipments(orderId);
   const markShippedMutation = useMarkShipped();
-  const generatePackingSlip = useGenerateShipmentPackingSlip();
-  const generateDispatchNote = useGenerateShipmentDispatchNote();
-  const generateDeliveryNote = useGenerateShipmentDeliveryNote();
+  const shipmentDocumentActions = useShipmentDocumentActions();
   const [pendingShipmentId, setPendingShipmentId] = useState<string | null>(null);
   const [completionForm, setCompletionForm] = useState<PendingShipmentCompletionForm>({
     carrier: "",
@@ -283,16 +270,6 @@ export const ShipmentList = memo(function ShipmentList({
         const canConfirmDelivery =
           shipment.status === "in_transit" ||
           shipment.status === "out_for_delivery";
-        const isGeneratingPackingSlip =
-          generatePackingSlip.isPending &&
-          generatePackingSlip.variables?.shipmentId === shipment.id;
-        const isGeneratingDispatchNote =
-          generateDispatchNote.isPending &&
-          generateDispatchNote.variables?.shipmentId === shipment.id;
-        const isGeneratingDeliveryNote =
-          generateDeliveryNote.isPending &&
-          generateDeliveryNote.variables?.shipmentId === shipment.id;
-
         return (
           <Card key={shipment.id}>
             <CardHeader className="pb-2">
@@ -362,71 +339,11 @@ export const ShipmentList = memo(function ShipmentList({
                     Mark Shipped
                   </Button>
                 ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isGeneratingPackingSlip}
-                  onClick={async () => {
-                    try {
-                      const result = await generatePackingSlip.mutateAsync({
-                        shipmentId: shipment.id,
-                      });
-                      toastSuccess('Packing slip generated');
-                      window.open(result.url, "_blank", "noopener,noreferrer");
-                    } catch (error) {
-                      toastError(getShipmentActionErrorMessage(error, "Unable to generate packing slip."));
-                    }
-                  }}
-                >
-                  {isGeneratingPackingSlip ? "Generating..." : "Packing Slip"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isGeneratingDispatchNote || shipment.canGenerateDispatchNote === false}
-                  onClick={async () => {
-                    try {
-                      const result = await generateDispatchNote.mutateAsync({
-                        shipmentId: shipment.id,
-                      });
-                      toastSuccess('Dispatch note generated');
-                      window.open(result.url, "_blank", "noopener,noreferrer");
-                    } catch (error) {
-                      toastError(getShipmentActionErrorMessage(error, "Unable to generate dispatch note."));
-                    }
-                  }}
-                >
-                  {isGeneratingDispatchNote ? "Generating..." : "Dispatch Note"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isGeneratingDeliveryNote || shipment.canGenerateDeliveryNote === false}
-                  onClick={async () => {
-                    try {
-                      const result = await generateDeliveryNote.mutateAsync({
-                        shipmentId: shipment.id,
-                      });
-                      toastSuccess('Delivery note generated');
-                      window.open(result.url, "_blank", "noopener,noreferrer");
-                    } catch (error) {
-                      toastError(getShipmentActionErrorMessage(error, "Unable to generate delivery note."));
-                    }
-                  }}
-                >
-                  {isGeneratingDeliveryNote ? "Generating..." : "Delivery Note"}
-                </Button>
+                <ShipmentDocumentActions
+                  shipment={shipment}
+                  actions={shipmentDocumentActions}
+                />
               </div>
-              {shipment.canGenerateDispatchNote === false && shipment.dispatchNoteBlockedReason ? (
-                <p className="text-xs text-muted-foreground">
-                  {shipment.dispatchNoteBlockedReason}
-                </p>
-              ) : null}
-              {shipment.canGenerateDeliveryNote === false ? (
-                <p className="text-xs text-muted-foreground">
-                  Delivery note becomes available after delivery is confirmed.
-                </p>
-              ) : null}
 
               {/* Dates */}
               <div className="grid grid-cols-3 gap-4 text-sm">

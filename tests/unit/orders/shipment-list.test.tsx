@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockUseOrderShipments = vi.fn();
 const mockMarkShippedMutateAsync = vi.fn();
+const mockGeneratePackingSlipMutateAsync = vi.fn();
+const mockGenerateDispatchNoteMutateAsync = vi.fn();
+const mockGenerateDeliveryNoteMutateAsync = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
 
@@ -25,15 +28,15 @@ vi.mock('@/hooks', () => ({
 
 vi.mock('@/hooks/documents', () => ({
   useGenerateShipmentPackingSlip: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: mockGeneratePackingSlipMutateAsync,
     isPending: false,
   }),
   useGenerateShipmentDispatchNote: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: mockGenerateDispatchNoteMutateAsync,
     isPending: false,
   }),
   useGenerateShipmentDeliveryNote: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: mockGenerateDeliveryNoteMutateAsync,
     isPending: false,
   }),
 }));
@@ -155,5 +158,114 @@ describe('shipment list', () => {
     });
 
     expect(mockToastError).toHaveBeenCalledWith('Unable to mark shipment as shipped.');
+  }, 20000);
+
+  it('generates shipment dispatch notes from the extracted document actions', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    mockUseOrderShipments.mockReturnValue({
+      data: [
+        {
+          id: '5c646761-ef6c-45c8-a150-c41f8ab37708',
+          shipmentNumber: 'ORD-20260407-S01',
+          status: 'in_transit',
+          carrier: 'DHL',
+          carrierService: null,
+          trackingNumber: null,
+          trackingUrl: null,
+          shippingCost: null,
+          shippedAt: null,
+          estimatedDeliveryAt: null,
+          deliveredAt: null,
+          deliveryConfirmation: null,
+          trackingEvents: [],
+          canGenerateDispatchNote: true,
+          dispatchNoteBlockedReason: null,
+          canGenerateDeliveryNote: false,
+          deliveryNoteBlockedReason: 'Confirm delivery first.',
+          items: [
+            {
+              id: 'item-1',
+              orderLineItemId: 'line-1',
+              quantity: 1,
+              serialNumbers: null,
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    mockGenerateDispatchNoteMutateAsync.mockResolvedValue({
+      url: 'https://example.test/dispatch-note.pdf',
+    });
+
+    const { ShipmentList } = await import('@/components/domain/orders/fulfillment/shipment-list');
+
+    render(<ShipmentList orderId="order-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Dispatch Note' }));
+    });
+
+    expect(mockGenerateDispatchNoteMutateAsync).toHaveBeenCalledWith({
+      shipmentId: '5c646761-ef6c-45c8-a150-c41f8ab37708',
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Dispatch note generated');
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.test/dispatch-note.pdf',
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    openSpy.mockRestore();
+  }, 20000);
+
+  it('shows action fallback text for unknown shipment document failures', async () => {
+    mockUseOrderShipments.mockReturnValue({
+      data: [
+        {
+          id: '5c646761-ef6c-45c8-a150-c41f8ab37708',
+          shipmentNumber: 'ORD-20260407-S01',
+          status: 'in_transit',
+          carrier: 'DHL',
+          carrierService: null,
+          trackingNumber: null,
+          trackingUrl: null,
+          shippingCost: null,
+          shippedAt: null,
+          estimatedDeliveryAt: null,
+          deliveredAt: null,
+          deliveryConfirmation: null,
+          trackingEvents: [],
+          canGenerateDispatchNote: true,
+          dispatchNoteBlockedReason: null,
+          canGenerateDeliveryNote: false,
+          deliveryNoteBlockedReason: 'Confirm delivery first.',
+          items: [
+            {
+              id: 'item-1',
+              orderLineItemId: 'line-1',
+              quantity: 1,
+              serialNumbers: null,
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    mockGenerateDispatchNoteMutateAsync.mockRejectedValue(
+      new Error('document renderer stack leaked')
+    );
+
+    const { ShipmentList } = await import('@/components/domain/orders/fulfillment/shipment-list');
+
+    render(<ShipmentList orderId="order-1" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Dispatch Note' }));
+    });
+
+    expect(mockToastError).toHaveBeenCalledWith('Unable to generate dispatch note.');
   }, 20000);
 });
