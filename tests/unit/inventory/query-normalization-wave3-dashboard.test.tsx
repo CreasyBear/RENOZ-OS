@@ -25,7 +25,7 @@ vi.mock('@/server/functions/inventory', () => ({
   getRecentMovementsTimeline: (...args: unknown[]) => mockGetRecentMovementsTimeline(...args),
 }));
 
-vi.mock('@/server/functions/inventory/inventory', () => ({
+vi.mock('@/server/functions/inventory/dashboard', () => ({
   getInventoryDashboard: (...args: unknown[]) => mockGetInventoryDashboard(...args),
 }));
 

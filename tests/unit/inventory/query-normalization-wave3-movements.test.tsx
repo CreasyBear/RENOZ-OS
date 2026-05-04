@@ -24,9 +24,12 @@ const mockUseReconcileInventoryFinance = vi.fn();
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: (...args: unknown[]) => mockListInventory(...args),
   getInventoryItem: (...args: unknown[]) => mockGetInventoryItem(...args),
-  getInventoryDashboard: (...args: unknown[]) => mockGetInventoryDashboard(...args),
   quickSearchInventory: (...args: unknown[]) => mockQuickSearchInventory(...args),
   getAvailableSerials: (...args: unknown[]) => mockGetAvailableSerials(...args),
+}));
+
+vi.mock('@/server/functions/inventory/dashboard', () => ({
+  getInventoryDashboard: (...args: unknown[]) => mockGetInventoryDashboard(...args),
 }));
 
 vi.mock('@/server/functions/inventory/adjustments', () => ({

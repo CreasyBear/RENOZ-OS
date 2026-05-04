@@ -9,9 +9,12 @@ const mockReceiveInventory = vi.fn()
 vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
-  getInventoryDashboard: vi.fn(),
   quickSearchInventory: vi.fn(),
   getAvailableSerials: vi.fn(),
+}))
+
+vi.mock('@/server/functions/inventory/dashboard', () => ({
+  getInventoryDashboard: vi.fn(),
 }))
 
 vi.mock('@/server/functions/inventory/adjustments', () => ({
