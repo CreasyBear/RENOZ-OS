@@ -176,7 +176,8 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             eq(purchaseOrderItems.organizationId, ctx.organizationId)
           )
         )
-        .orderBy(asc(purchaseOrderItems.lineNumber));
+        .orderBy(asc(purchaseOrderItems.lineNumber))
+        .for('update');
 
       const poItemMap = new Map(poItems.map((item) => [item.id, item]));
       const serialsSeenInRequest = new Set<string>();
@@ -389,7 +390,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         const newRejected = poItem.quantityRejected + receiptItem.quantityRejected;
         const newPending = poItem.quantity - newReceived;
 
-        await tx
+        const updatedPoItemRows = await tx
           .update(purchaseOrderItems)
           .set({
             quantityReceived: newReceived,
@@ -402,7 +403,11 @@ export const receiveGoods = createServerFn({ method: 'POST' })
               eq(purchaseOrderItems.organizationId, ctx.organizationId),
               eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId)
             )
-          );
+          )
+          .returning({ id: purchaseOrderItems.id });
+        if (!updatedPoItemRows[0]) {
+          throw new ValidationError('Purchase order item quantities could not be updated. Refresh and try again.');
+        }
 
         // Skip inventory updates if no product linked or nothing accepted
         if (!poItem.productId || quantityAccepted <= 0) continue;

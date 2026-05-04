@@ -58,7 +58,13 @@ describe('receive goods tenant-scope contract', () => {
 
     expect(scopedPoItemReads).toHaveLength(2);
     expect(source).toContain(
-      'where(and(eq(purchaseOrderItems.id,receiptItem.poItemId),eq(purchaseOrderItems.organizationId,ctx.organizationId),eq(purchaseOrderItems.purchaseOrderId,data.purchaseOrderId)))'
+      'from(purchaseOrderItems).where(and(eq(purchaseOrderItems.purchaseOrderId,data.purchaseOrderId),eq(purchaseOrderItems.organizationId,ctx.organizationId))).orderBy(asc(purchaseOrderItems.lineNumber)).for(\'update\')'
+    );
+    expect(source).toContain(
+      'where(and(eq(purchaseOrderItems.id,receiptItem.poItemId),eq(purchaseOrderItems.organizationId,ctx.organizationId),eq(purchaseOrderItems.purchaseOrderId,data.purchaseOrderId))).returning({id:purchaseOrderItems.id})'
+    );
+    expect(source).toContain(
+      "if(!updatedPoItemRows[0]){thrownewValidationError('Purchaseorderitemquantitiescouldnotbeupdated.Refreshandtryagain.');}"
     );
     expect(source).not.toContain('.where(eq(purchaseOrderItems.id,receiptItem.poItemId))');
     expect(source).not.toContain(
