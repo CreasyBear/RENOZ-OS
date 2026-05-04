@@ -165,20 +165,6 @@ export interface InventoryItem {
   status: 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstocked';
 }
 
-// ============================================================================
-// QUALITY RECORD
-// ============================================================================
-
-/** Quality inspection record for inventory item detail view */
-export interface QualityRecord {
-  id: string;
-  inspectionDate: Date;
-  inspectorName: string | null;
-  result: 'pass' | 'fail' | 'conditional' | string;
-  notes?: string;
-  defects?: string[];
-}
-
 /**
  * Inventory list result from listInventory server function
  */

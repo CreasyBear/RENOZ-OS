@@ -12,6 +12,7 @@ export * from './receiving';
 export * from './stock-counts';
 export * from './valuation';
 export * from './forecasting';
+export * from './quality';
 export * from './serialized-items';
 export * from './serialized-mutation-contract';
 export * from './finance-mutation-contract';
@@ -33,8 +34,9 @@ export type {
   Inventory,
   InventoryFilter,
   InventoryListQuery,
-  QualityRecord,
 } from './inventory';
+
+export type { QualityRecord } from './quality';
 
 export type {
   HookWarehouseLocation,

@@ -10,32 +10,14 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc } from "drizzle-orm";
-import { z } from "zod";
 import { db } from "@/lib/db";
-import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { qualityInspections } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-
-// ============================================================================
-// SCHEMAS
-// ============================================================================
-
-const listQualityInspectionsSchema = z.object({
-  inventoryId: z.string().uuid(),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(50),
-});
-
-const createQualityInspectionSchema = z.object({
-  inventoryId: z.string().uuid(),
-  productId: z.string().uuid(),
-  inspectionDate: z.string().datetime().optional(),
-  inspectorName: z.string().min(1).max(255),
-  result: z.enum(["pass", "fail", "conditional"]),
-  notes: z.string().max(1000).optional(),
-  defects: z.array(z.string()).optional(),
-});
+import {
+  createQualityInspectionSchema,
+  listQualityInspectionsSchema,
+} from "@/lib/schemas/inventory";
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -45,7 +27,7 @@ const createQualityInspectionSchema = z.object({
  * List quality inspections for an inventory item
  */
 export const listQualityInspections = createServerFn({ method: "GET" })
-  .inputValidator(normalizeObjectInput(listQualityInspectionsSchema))
+  .inputValidator(listQualityInspectionsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
