@@ -25,12 +25,15 @@ describe('supplier price import execute contract', () => {
     expect(source).toContain('priceId:persistedPrice.id');
   });
 
-  it('asserts resolved supplier and product identities before building write values', () => {
+  it('re-resolves supplier and product identities at execution before building write values', () => {
     const source = compact(read('src/server/functions/suppliers/price-imports.ts'));
 
-    expect(source).toContain('assertResolvedResolution(row.resolution);');
-    expect(source).toContain('supplierId:row.resolution.supplierId');
-    expect(source).toContain('productId:row.resolution.productId');
+    expect(source).toContain('constexecutionResolution=awaitresolveImportRow({organizationId:ctx.organizationId');
+    expect(source).toContain('assertResolvedResolution(executionResolution);');
+    expect(source).toContain('supplierId:executionResolution.supplierId');
+    expect(source).toContain('productId:executionResolution.productId');
+    expect(source).not.toContain('supplierId:row.resolution.supplierId');
+    expect(source).not.toContain('productId:row.resolution.productId');
     expect(source).not.toContain('supplierId:row.resolution.supplierId!');
     expect(source).not.toContain('productId:row.resolution.productId!');
   });

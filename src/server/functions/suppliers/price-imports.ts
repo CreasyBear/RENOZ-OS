@@ -579,20 +579,37 @@ export const executePriceImport = createServerFn({ method: "POST" })
     for (const row of data.validatedRows) {
       try {
         const effectiveDate = row.data.effectiveDate ?? new Date().toISOString().split('T')[0];
+        const executionResolution = await resolveImportRow({
+          organizationId: ctx.organizationId,
+          supplierCode: row.data.supplierCode,
+          productSku: row.data.productSku ?? null,
+          productName: row.data.productName,
+          effectiveDate,
+        });
+        if (
+          executionResolution.status !== "resolved" &&
+          executionResolution.status !== "duplicate_target"
+        ) {
+          throw new ValidationError(
+            executionResolution.message ??
+              `Price import row ${row.rowNumber} could not be resolved. Re-run validation and try again.`
+          );
+        }
+
         const effectivePrice = calculateEffectivePrice({
           basePrice: row.data.basePrice,
           discountType: row.data.discountType,
           discountValue: row.data.discountValue,
         });
-        assertResolvedResolution(row.resolution);
+        assertResolvedResolution(executionResolution);
 
         const priceValues = {
           organizationId: ctx.organizationId,
-          supplierId: row.resolution.supplierId,
-          productId: row.resolution.productId,
-          supplierName: row.resolution.supplierName ?? row.data.supplierName ?? null,
-          productName: row.resolution.productName ?? row.data.productName,
-          productSku: row.resolution.productSku ?? row.data.productSku ?? null,
+          supplierId: executionResolution.supplierId,
+          productId: executionResolution.productId,
+          supplierName: executionResolution.supplierName ?? row.data.supplierName ?? null,
+          productName: executionResolution.productName ?? row.data.productName,
+          productSku: executionResolution.productSku ?? row.data.productSku ?? null,
           basePrice: row.data.basePrice,
           price: row.data.basePrice,
           effectivePrice,
@@ -612,7 +629,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
         };
 
         let persistedPrice;
-        if (row.resolution.existingPriceListId) {
+        if (executionResolution.existingPriceListId) {
           const [updatedPrice] = await db
             .update(priceLists)
             .set({
@@ -621,7 +638,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
             })
             .where(
               and(
-                eq(priceLists.id, row.resolution.existingPriceListId),
+                eq(priceLists.id, executionResolution.existingPriceListId),
                 eq(priceLists.organizationId, ctx.organizationId)
               )
             )
@@ -654,7 +671,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
         results.push({
           rowNumber: row.rowNumber,
           status: 'success',
-          action: row.resolution.existingPriceListId ? 'updated' : 'created',
+          action: executionResolution.existingPriceListId ? 'updated' : 'created',
           priceId: persistedPrice.id,
         });
       } catch (error) {
