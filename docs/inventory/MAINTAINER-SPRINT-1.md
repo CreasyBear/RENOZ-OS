@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1 and 2 implemented; Issue 3 in progress with activity and receiving extraction boundaries; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, and adjustment extraction boundaries; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -353,16 +353,17 @@ Residual risk: cache-prefix centralization does not prove every allocation mutat
 
 ### Issue 3: Inventory Server Concentration
 
-Touched domains: inventory server functions, inventory activity logging, manual receiving.
+Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments.
 
-Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in.
+Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections.
 
-Business value: inventory mutations are safer to change when cross-cutting activity logging and the manual receive workflow are outside the monolithic workflow file.
+Business value: inventory mutations are safer to change when cross-cutting activity logging, manual receive, and stock adjustment workflows are outside the monolithic workflow file.
 
 Standards checked:
 
 - extracted one safe helper boundary before moving larger workflow code
 - extracted `receiveInventory` into `src/server/functions/inventory/receiving.ts`
+- extracted `adjustInventory` into `src/server/functions/inventory/adjustments.ts`
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
@@ -372,19 +373,22 @@ Smells removed:
 
 - local activity logging helper and activity-table dependency inside `src/server/functions/inventory/inventory.ts`
 - manual receive server function and schema from `src/server/functions/inventory/inventory.ts`
+- stock adjustment server function from `src/server/functions/inventory/inventory.ts`
 - direct receive workflow imports from the monolithic inventory server module
 
 Deferred:
 
-- extracting adjustment, transfer, allocation, and WMS/dashboard workflows
+- moving direct `adjustInventory` consumers to the adjustment module
+- extracting transfer, allocation, and WMS/dashboard workflows
 - extracting inventory schema sections
 
 Verification:
 
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
 Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
 
-Residual risk: the main inventory server file remains large and mixed-concern at 2,641 lines; this slice proves a receiving extraction boundary but does not yet extract adjustment, transfer, allocation, movement listing, or WMS/dashboard code.
+Residual risk: the main inventory server file remains large and mixed-concern at 2,296 lines; this slice proves receiving and adjustment extraction boundaries but does not yet extract transfer, allocation, movement listing, or WMS/dashboard code.
