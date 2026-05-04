@@ -17,6 +17,7 @@ import {
   calculateEffectivePrice,
   resolveImportRow,
 } from "./price-resolution";
+import type { PriceImportResolutionStatus } from "./price-resolution";
 
 // ============================================================================
 // IMPORT VALIDATION
@@ -273,6 +274,23 @@ const priceImportResolutionSchema = z.object({
   message: z.string().optional(),
 });
 
+type PriceImportValidationStatus = 'valid' | 'invalid';
+type PriceImportValidationResult = {
+  status: PriceImportValidationStatus;
+};
+
+export function getPriceImportValidationStatus(
+  resolutionStatus: PriceImportResolutionStatus
+): PriceImportValidationStatus {
+  return resolutionStatus === 'resolved' || resolutionStatus === 'duplicate_target' ? 'valid' : 'invalid';
+}
+
+export function countInvalidPriceImportRows(
+  validationResults: readonly PriceImportValidationResult[]
+): number {
+  return validationResults.filter((result) => result.status === 'invalid').length;
+}
+
 // ============================================================================
 // CSV PARSING
 // ============================================================================
@@ -398,7 +416,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
         validRows.push({ rowNumber, data: validatedRow, resolution });
         validationResults.push({
           rowNumber,
-          status: resolution.status === 'resolved' || resolution.status === 'duplicate_target' ? 'valid' : 'invalid',
+          status: getPriceImportValidationStatus(resolution.status),
           data: validatedRow,
           resolution,
         });
@@ -415,7 +433,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
 
         validationResults.push({
           rowNumber,
-          status: 'invalid',
+          status: 'invalid' as const,
           errors: errorMessages,
           rawData: row,
         });
@@ -425,7 +443,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
     return {
       totalRows: dataRows.length,
       validRows: validRows.length,
-      invalidRows: errors.length,
+      invalidRows: countInvalidPriceImportRows(validationResults),
       validationResults,
       summary: {
         errors: errors.slice(0, 10), // Show first 10 errors
