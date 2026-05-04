@@ -76,19 +76,46 @@ function parseOptionalPositiveInteger(
   return parsed;
 }
 
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  const normalized = value?.trim() ?? '';
+  return normalized || undefined;
+}
+
+function parseOptionalIsoDate(
+  value: string | undefined,
+  fieldName: string,
+  ctx: z.RefinementCtx
+): string | undefined {
+  const normalized = normalizeOptionalString(value);
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `${fieldName} must use YYYY-MM-DD format`,
+    });
+    return z.NEVER;
+  }
+
+  return normalized;
+}
+
 const priceImportRowSchema = z.object({
   supplierCode: z.string().min(1),
-  supplierName: z.string().optional(),
+  supplierName: z.string().optional().transform(normalizeOptionalString),
   productName: z.string().min(1),
-  productSku: z.string().optional(),
+  productSku: z.string().optional().transform(normalizeOptionalString),
   basePrice: z.string().transform((val, ctx) => parseNonNegativeDecimal(val, 'Base price', ctx)),
   currency: z.string().default('AUD'),
   discountType: z.enum(['percentage', 'fixed', 'volume']).default('percentage'),
   discountValue: z.string().default('0').transform((val, ctx) => parseNonNegativeDecimal(val || '0', 'Discount value', ctx)),
   minOrderQty: z.string().optional().transform((val, ctx) => parseOptionalPositiveInteger(val, 'Minimum order quantity', ctx)),
   maxOrderQty: z.string().optional().transform((val, ctx) => parseOptionalPositiveInteger(val, 'Maximum order quantity', ctx)),
-  effectiveDate: z.string().optional(),
-  expiryDate: z.string().optional(),
+  effectiveDate: z.string().optional().transform((val, ctx) => parseOptionalIsoDate(val, 'Effective date', ctx)),
+  expiryDate: z.string().optional().transform((val, ctx) => parseOptionalIsoDate(val, 'Expiry date', ctx)),
   status: z.enum(['active', 'inactive']).default('active'),
 });
 type PriceImportColumnKey = keyof z.input<typeof priceImportRowSchema>;
