@@ -246,7 +246,9 @@ async function getFinanceIntegritySummary(
       FROM inventory i
       LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
       LEFT JOIN products p ON p.id = i.product_id
+        AND p.organization_id = ${organizationId}
       LEFT JOIN warehouse_locations l ON l.id = i.location_id
+        AND l.organization_id = ${organizationId}
       WHERE i.organization_id = ${organizationId}
         AND ABS(COALESCE(i.total_value, 0) - COALESCE(lt.layer_value, 0)) > ${valueDriftTolerance}
       ORDER BY absolute_drift DESC
@@ -517,8 +519,20 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         skuCount: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
       })
       .from(inventory)
-      .innerJoin(products, eq(inventory.productId, products.id))
-      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .innerJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        categories,
+        and(
+          eq(products.categoryId, categories.id),
+          eq(categories.organizationId, ctx.organizationId)
+        )
+      )
       .where(and(...invConditions))
       .groupBy(categories.id, categories.name)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`));
@@ -535,7 +549,13 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         capacity: locations.capacity,
       })
       .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(
+        locations,
+        and(
+          eq(inventory.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .where(and(...invConditions))
       .groupBy(locations.id, locations.locationCode, locations.name, locations.capacity)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`));
@@ -548,9 +568,16 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         costLayerCount: sql<number>`COUNT(DISTINCT ${inventoryCostLayers.id})::int`,
       })
       .from(inventoryCostLayers)
-      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .innerJoin(
+        inventory,
+        and(
+          eq(inventoryCostLayers.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
+          eq(inventoryCostLayers.organizationId, ctx.organizationId),
           eq(inventory.organizationId, ctx.organizationId),
           gt(inventoryCostLayers.quantityRemaining, 0),
           data.locationId ? eq(inventory.locationId, data.locationId) : sql`true`
@@ -576,7 +603,13 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         costLayers: sql<number>`COALESCE(${costLayerCounts.costLayerCount}, 0)::int`,
       })
       .from(inventory)
-      .innerJoin(products, eq(inventory.productId, products.id))
+      .innerJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
       .leftJoin(costLayerCounts, eq(costLayerCounts.productId, products.id))
       .where(and(...invConditions))
       .groupBy(products.id, products.sku, products.name, costLayerCounts.costLayerCount)
@@ -911,9 +944,27 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
         ageInDays: sql<number>`EXTRACT(DAY FROM NOW() - ${inventoryCostLayers.receivedAt})::int`,
       })
       .from(inventoryCostLayers)
-      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
-      .innerJoin(products, eq(inventory.productId, products.id))
-      .leftJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(
+        inventory,
+        and(
+          eq(inventoryCostLayers.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
+      .innerJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .leftJoin(
+        locations,
+        and(
+          eq(inventory.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
           ...conditions,
@@ -1443,9 +1494,16 @@ export const getProductCostLayers = createServerFn({ method: 'GET' })
         createdAt: inventoryCostLayers.createdAt,
       })
       .from(inventoryCostLayers)
-      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .innerJoin(
+        inventory,
+        and(
+          eq(inventoryCostLayers.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
+          eq(inventoryCostLayers.organizationId, ctx.organizationId),
           eq(inventory.productId, data.productId),
           eq(inventory.organizationId, ctx.organizationId)
         )
@@ -1492,6 +1550,18 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
+    const [product] = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+      )
+      .limit(1);
+
+    if (!product) {
+      throw new NotFoundError('Product not found', 'product');
+    }
+
     // Get all active cost layers for this product
     const layers = await db
       .select({
@@ -1499,9 +1569,16 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
         unitCost: inventoryCostLayers.unitCost,
       })
       .from(inventoryCostLayers)
-      .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
+      .innerJoin(
+        inventory,
+        and(
+          eq(inventoryCostLayers.inventoryId, inventory.id),
+          eq(inventory.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
+          eq(inventoryCostLayers.organizationId, ctx.organizationId),
           eq(inventory.productId, data.productId),
           eq(inventory.organizationId, ctx.organizationId),
           gt(inventoryCostLayers.quantityRemaining, 0)
@@ -1522,7 +1599,9 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
     await db
       .update(products)
       .set({ costPrice: weightedAvgCost })
-      .where(eq(products.id, data.productId));
+      .where(
+        and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+      );
 
     return { productId: data.productId, costPrice: weightedAvgCost, updated: true };
   });
