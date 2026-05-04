@@ -55,6 +55,7 @@ import { toastSuccess, toastError } from '@/hooks';
 import { useReceiveGoods } from '@/hooks/suppliers';
 import type { PurchaseOrderItem } from '@/lib/schemas/purchase-orders';
 import { SerialNumberBatchEntry } from '@/components/domain/procurement/receiving/serial-number-batch-entry';
+import { findDuplicateReceiptSerials } from './receipt-serial-validation';
 
 // ============================================================================
 // TYPES
@@ -250,9 +251,7 @@ export function GoodsReceiptDialog({
               );
             }
             // Check for duplicates within this item
-            const duplicates = item.serialNumbers.filter(
-              (serial, i) => item.serialNumbers.indexOf(serial.trim().toUpperCase()) !== i
-            );
+            const duplicates = findDuplicateReceiptSerials(item.serialNumbers);
             if (duplicates.length > 0) {
               errors.push(`${item.productName}: Contains duplicate serial numbers: ${duplicates.join(', ')}`);
             }
