@@ -146,6 +146,14 @@ const priceImportRowSchema = z.object({
   effectiveDate: z.string().optional().transform((val, ctx) => parseOptionalIsoDate(val, 'Effective date', ctx)),
   expiryDate: z.string().optional().transform((val, ctx) => parseOptionalIsoDate(val, 'Expiry date', ctx)),
   status: z.enum(['active', 'inactive']).default('active'),
+}).superRefine((row, ctx) => {
+  if (row.effectiveDate && row.expiryDate && row.expiryDate < row.effectiveDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['expiryDate'],
+      message: 'Expiry date must be on or after effective date',
+    });
+  }
 });
 type PriceImportColumnKey = keyof z.input<typeof priceImportRowSchema>;
 type PriceImportRowData = Partial<Record<PriceImportColumnKey, string>>;
