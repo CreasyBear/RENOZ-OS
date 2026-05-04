@@ -62,4 +62,19 @@ describe('inventory valuation tenant-scope contract', () => {
     );
     expect(source).not.toContain('update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,data.productId))');
   });
+
+  it('keeps manual cost-layer writes transactional and value-cache coherent', () => {
+    const source = compact(read('src/server/functions/inventory/valuation.ts'));
+
+    expect(source).toContain(
+      "import{recomputeInventoryValueFromLayers}from'@/server/functions/_shared/inventory-finance'"
+    );
+    expect(source).toContain('exportconstcreateCostLayer=createServerFn({method:\'POST\'})');
+    expect(source).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
+    expect(source).toContain(
+      'const[inv]=awaittx.select({id:inventory.id}).from(inventory).where(and(eq(inventory.id,data.inventoryId),eq(inventory.organizationId,ctx.organizationId))).for(\'update\').limit(1)'
+    );
+    expect(source).toContain('awaitrecomputeInventoryValueFromLayers(tx,{organizationId:ctx.organizationId,inventoryId:data.inventoryId,userId:ctx.user.id,})');
+  });
 });

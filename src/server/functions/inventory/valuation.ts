@@ -44,6 +44,7 @@ import {
   type InventoryCostLayerCostComponent,
 } from '@/lib/schemas/inventory';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
+import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/inventory-finance';
 
 // ============================================================================
 // TYPES
@@ -447,35 +448,48 @@ export const createCostLayer = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
-    // Verify inventory exists
-    const [inv] = await db
-      .select()
-      .from(inventory)
-      .where(
-        and(eq(inventory.id, data.inventoryId), eq(inventory.organizationId, ctx.organizationId))
-      )
-      .limit(1);
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
 
-    if (!inv) {
-      throw new NotFoundError('Inventory item not found', 'inventory');
-    }
+      // Lock the inventory row so the layer insert and derived value cache stay coherent.
+      const [inv] = await tx
+        .select({ id: inventory.id })
+        .from(inventory)
+        .where(
+          and(eq(inventory.id, data.inventoryId), eq(inventory.organizationId, ctx.organizationId))
+        )
+        .for('update')
+        .limit(1);
 
-    const [layer] = await db
-      .insert(inventoryCostLayers)
-      .values({
+      if (!inv) {
+        throw new NotFoundError('Inventory item not found', 'inventory');
+      }
+
+      const [layer] = await tx
+        .insert(inventoryCostLayers)
+        .values({
+          organizationId: ctx.organizationId,
+          inventoryId: data.inventoryId,
+          receivedAt: data.receivedAt,
+          quantityReceived: data.quantityReceived,
+          quantityRemaining: data.quantityRemaining,
+          unitCost: String(data.unitCost),
+          ...(data.referenceType !== undefined && { referenceType: data.referenceType }),
+          ...(data.referenceId !== undefined && { referenceId: data.referenceId }),
+          ...(data.expiryDate !== undefined && { expiryDate: String(data.expiryDate) }),
+        })
+        .returning();
+
+      await recomputeInventoryValueFromLayers(tx, {
         organizationId: ctx.organizationId,
         inventoryId: data.inventoryId,
-        receivedAt: data.receivedAt,
-        quantityReceived: data.quantityReceived,
-        quantityRemaining: data.quantityRemaining,
-        unitCost: String(data.unitCost),
-        ...(data.referenceType !== undefined && { referenceType: data.referenceType }),
-        ...(data.referenceId !== undefined && { referenceId: data.referenceId }),
-        ...(data.expiryDate !== undefined && { expiryDate: String(data.expiryDate) }),
-      })
-      .returning();
+        userId: ctx.user.id,
+      });
 
-    return { layer };
+      return { layer };
+    });
   });
 
 // ============================================================================

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListCostLayers = vi.fn();
 const mockGetInventoryCostLayers = vi.fn();
@@ -399,6 +400,46 @@ describe('inventory analytics query normalization wave 3', () => {
     ).rejects.toThrow('row-level security');
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to create cost layer');
+  });
+
+  it('refreshes inventory value surfaces after manual cost layer creation', async () => {
+    mockCreateCostLayer.mockResolvedValue({ layer: { id: 'layer-1' } });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useCreateCostLayer } = await import('@/hooks/inventory/use-valuation');
+
+    const { result } = renderHook(() => useCreateCostLayer(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await result.current.mutateAsync({
+      inventoryId: '11111111-1111-4111-8111-111111111111',
+      receivedAt: new Date('2026-01-01T00:00:00.000Z'),
+      quantityReceived: 1,
+      quantityRemaining: 1,
+      unitCost: 10,
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith('Cost layer created');
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.lists(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('11111111-1111-4111-8111-111111111111'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.dashboard(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.wmsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('11111111-1111-4111-8111-111111111111'),
+    });
   });
 
   it('keeps manual COGS apply disabled with explicit operator guidance', async () => {

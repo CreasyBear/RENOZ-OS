@@ -234,6 +234,10 @@ export function useCreateCostLayer() {
       createCostLayer({ data }),
     onSuccess: (_, variables) => {
       toast.success('Cost layer created');
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.detail(variables.inventoryId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.inventory.costLayersDetail(variables.inventoryId),
