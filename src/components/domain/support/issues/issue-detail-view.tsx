@@ -54,12 +54,11 @@ import {
 } from './issue-options';
 import { IssueCustomerContextSidebar } from './issue-customer-context-sidebar';
 import { IssueRelatedTab } from './issue-related-tab';
+import { IssueRemedyCard } from './issue-remedy-card';
 import {
   getIssueDetailActionPolicy,
   type IssueDetailActionPolicy,
 } from './issue-detail-action-policy';
-import { IssueRelatedEntityLink } from './issue-related-links';
-import { formatDate } from '@/lib/formatters';
 import type {
   IssueStatus,
   IssuePriority,
@@ -286,7 +285,7 @@ export function IssueDetailView({
                 <ResolutionCard resolution={issue.resolution} />
               )}
               {issue.rmaReadiness && (
-                <RemedyCard
+                <IssueRemedyCard
                   issueId={issue.id}
                   rmaReadiness={issue.rmaReadiness}
                 />
@@ -460,85 +459,6 @@ function ResolutionCard({
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">
               {resolution.diagnosisNotes}
             </p>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function RemedyCard({
-  issueId,
-  rmaReadiness,
-}: {
-  issueId: string;
-  rmaReadiness: NonNullable<IssueDetail['rmaReadiness']>;
-}) {
-  const stateLabel =
-    rmaReadiness.state === 'ready'
-      ? 'RMA Ready'
-      : rmaReadiness.state === 'linked'
-        ? 'RMA Already Linked'
-        : 'RMA Blocked';
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Remedy</CardTitle>
-        <CardDescription>
-          Current return-readiness and prior return context for this issue.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={rmaReadiness.state === 'ready' ? 'default' : 'outline'}>
-            {stateLabel}
-          </Badge>
-          {rmaReadiness.suggestedReason ? (
-            <Badge variant="secondary">
-              Suggested reason: {rmaReadiness.suggestedReason.replaceAll('_', ' ')}
-            </Badge>
-          ) : null}
-        </div>
-        {rmaReadiness.blockedReason ? (
-          <p className="text-sm text-muted-foreground">{rmaReadiness.blockedReason}</p>
-        ) : null}
-        {rmaReadiness.sourceOrder ? (
-          <p className="text-sm text-muted-foreground">
-            Source order:{' '}
-            <Link
-              to="/orders/$orderId"
-              params={{ orderId: rmaReadiness.sourceOrder.id }}
-              search={{ fromIssueId: issueId }}
-              className="text-primary hover:underline"
-            >
-              {rmaReadiness.sourceOrder.orderNumber ?? rmaReadiness.sourceOrder.id}
-            </Link>
-          </p>
-        ) : null}
-        {rmaReadiness.existingRmas.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Prior RMAs</p>
-            <div className="space-y-2">
-              {rmaReadiness.existingRmas.map((rma) => (
-                <IssueRelatedEntityLink
-                  key={rma.id}
-                  to="/support/rmas/$rmaId"
-                  params={{ rmaId: rma.id }}
-                  title={rma.rmaNumber}
-                  subtitle={
-                    rma.creditNoteId
-                      ? `Credit note issued · ${formatDate(rma.createdAt)}`
-                      : rma.replacementOrderId
-                        ? `Replacement created · ${formatDate(rma.createdAt)}`
-                        : rma.refundPaymentId
-                          ? `Refund recorded · ${formatDate(rma.createdAt)}`
-                          : formatDate(rma.createdAt)
-                  }
-                  badge={rma.executionStatus ?? rma.status}
-                />
-              ))}
-            </div>
           </div>
         ) : null}
       </CardContent>
