@@ -2,7 +2,7 @@
 
 **Status:** COMPLETE  
 **Series order:** 02 (see [README](./README.md))  
-**Last updated:** 2026-03-26  
+**Last updated:** 2026-05-04
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
@@ -32,7 +32,7 @@ Client cannot impersonate another org: queries always scoped by `ctx.organizatio
 
 | # | Entry | Route / component | Server function | Permission (handler) |
 |---|-------|-------------------|-----------------|------------------------|
-| A | **Ad-hoc receiving** | [`receiving-page.tsx`](../../src/routes/_authenticated/inventory/receiving-page.tsx) → [`ReceivingForm`](../../src/components/domain/inventory/receiving/receiving-form.tsx); mobile [`-receiving-page.tsx`](../../src/routes/_authenticated/mobile/-receiving-page.tsx) | `receiveInventory` — [`inventory.ts`](../../src/server/functions/inventory/inventory.ts) | `PERMISSIONS.inventory.receive` |
+| A | **Ad-hoc receiving** | [`receiving-page.tsx`](../../src/routes/_authenticated/inventory/receiving-page.tsx) → [`ReceivingForm`](../../src/components/domain/inventory/receiving/receiving-form.tsx); mobile [`-receiving-page.tsx`](../../src/routes/_authenticated/mobile/-receiving-page.tsx); product detail launch via [`inventory-tab-container.tsx`](../../src/components/domain/products/tabs/inventory-tab-container.tsx) | `receiveInventory` — [`receiving.ts`](../../src/server/functions/inventory/receiving.ts) | `PERMISSIONS.inventory.receive` |
 | B | **PO goods receipt** | [`goods-receipt-dialog.tsx`](../../src/components/domain/purchase-orders/receive/goods-receipt-dialog.tsx) (and related PO UI) | `receiveGoods` — [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) | `PERMISSIONS.inventory.receive` |
 | C | **Bulk PO receipts** | Callers of bulk receive | `bulkReceiveGoods` — [`bulk-receive-goods.ts`](../../src/server/functions/suppliers/bulk-receive-goods.ts) | delegates per PO to `receiveGoods` |
 | D | **Bulk receive (products)** | Product inventory surfaces using batch API | `bulkReceiveStock` — [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) | `withAuth()` **only** — no explicit `PERMISSIONS.*` in handler (~L1254) |
@@ -53,7 +53,7 @@ rg -n "bulkReceiveStock|bulkReceiveGoods" src/
 
 | Path | Canonical Zod | Export / location |
 |------|-----------------|-------------------|
-| Ad-hoc | `receiveInventorySchema` | [`inventory.ts`](../../src/server/functions/inventory/inventory.ts) ~L1701 (passed to `.inputValidator`) |
+| Ad-hoc | `receiveInventorySchema` | [`receiving.ts`](../../src/server/functions/inventory/receiving.ts) (passed to `.inputValidator`) |
 | PO receipt | `receiveGoodsSchema` | [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) |
 | Bulk products | Inline `z.object({ locationId, items, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) ~L1238 |
 
@@ -115,16 +115,16 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 |-----------|---------------|----------------------------|--------|
 | Zod reject (bad UUID, qty) | Validation | Depends on caller; form should pre-validate | Server is final gate |
 | Product not found | `NotFoundError` | Generic receive failure toast | `receiveInventory` ~L1730 |
-| Serialized rules | `ValidationError` | Same | serial required, qty ≠ 1, serial on non-serialized |
+| Serialized rules | `ValidationError` | Stable receive failure guidance with field/code guidance where structured | serial required, qty ≠ 1, serial on non-serialized |
 | Location not found | `NotFoundError` | Same | inside tx |
-| Mutation failure after optimistic update | — | `toast.error('Failed to receive inventory')` + **rollback** cached lists | `useReceiveInventory` `onError` |
+| Mutation failure after optimistic update | — | Stable receive failure guidance + **rollback** cached lists | `useReceiveInventory` `onError`; desktop/mobile route surfaces also suppress raw server text |
 | PO wrong status / over-receive | Serialized mutation error envelope | PO UI mapping | `receiveGoods` uses `createSerializedMutationError` in several branches |
 
 ---
 
 ## 7. Cache / read-after-write (`receiveInventory`)
 
-[`useReceiveInventory`](../../src/hooks/inventory/use-inventory.ts): **optimistic** update of `queryKeys.inventory.lists()` and `details()` on mutate; **rollback** on error; **invalidate** lists, details, `lowStock()` on success; **invalidate** `movementsAll()` on settled.
+[`useReceiveInventory`](../../src/hooks/inventory/use-inventory.ts): **optimistic** update of `queryKeys.inventory.lists()` and `details()` on mutate; **rollback** on error; **invalidate** lists, details, `lowStock()`, WMS, valuation, finance-integrity, serialized list, available serials, product detail/inventory/stats/alerts/movements, and movement prefixes according to the manual receive cache contract.
 
 **Stale window:** Brief inconsistency if server rejects after optimistic patch until `onError` restores prior cache.
 
