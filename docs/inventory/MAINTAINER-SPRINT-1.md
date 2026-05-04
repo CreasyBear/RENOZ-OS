@@ -1,0 +1,272 @@
+# Maintainer Sprint 1: Inventory and Warehouse Ownership
+
+This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
+
+Status: triage and issue-raising complete; implementation not started.
+
+## Business Value
+
+Inventory is core to RENOZ Energy's operating truth. If the app lies about stock, serialized batteries, receiving, warehouse location, valuation, or returned units, every downstream workflow becomes harder to trust: fulfillment, support, warranty, RMA, finance, and customer communication.
+
+This sprint should make RENOZ-V3 less of an operational burden by making warehouse truth easier to inspect, maintain, and change safely.
+
+## Workflow Spine
+
+```text
+procurement / receiving
+  -> serialized battery stock
+  -> warehouse location
+  -> inventory movement + cost layer
+  -> fulfillment / warranty / RMA / finance visibility
+```
+
+## Current Pattern Map
+
+Intended flow:
+
+```text
+route
+  -> page/container
+  -> domain component
+  -> hook
+  -> server function
+  -> schema/database
+  -> query key/cache policy
+```
+
+Observed inventory paths:
+
+- Routes: `src/routes/_authenticated/inventory/*`, `src/routes/_authenticated/mobile/*`, `src/routes/_authenticated/procurement/receiving.tsx`, product detail stock actions.
+- Components: `src/components/domain/inventory/*`, `src/components/domain/purchase-orders/receive/*`, order fulfillment and RMA surfaces.
+- Hooks: `src/hooks/inventory/*`, plus adjacent order, support, purchase-order, and supplier hooks.
+- Server: `src/server/functions/inventory/*`, `src/server/functions/suppliers/receive-goods.ts`, `src/server/functions/orders/rma.ts`, order shipment/allocation functions.
+- Schemas: `src/lib/schemas/inventory/*`, `src/lib/schemas/orders/*`, `src/lib/schemas/purchase-orders/*`, `src/lib/schemas/support/rma.ts`.
+- Database: `drizzle/schema/inventory/*`, order shipment/allocation tables, warranty entitlement serial links, support issue serial links.
+- Tests: `tests/unit/inventory/*`, `tests/unit/purchase-orders/*`, `tests/unit/orders/*`, `tests/unit/support/*`.
+
+## Source References
+
+- `docs/inventory/README.md`: inventory valuation, serialized lineage, and operational invariants.
+- `docs/inventory/OPERATOR-STOCK-IN-WORKFLOWS.md`: operator distinction between Receive Inventory, Receive Goods, Adjust Stock, and Order Stock.
+- `docs/code-traces/02-inventory-stock-in.md`: current stock-in trace across manual receive, PO receive, and bulk receive.
+- `docs/code-traces/13-rma-receive-inventory.md`: RMA return-to-stock trace.
+- `docs/reliability/sql/finance-cost-layer-invariants.sql`: cost layer integrity.
+- `docs/reliability/sql/serialized-lineage-invariants.sql`: serialized lineage integrity.
+
+## Triage Findings
+
+### What Is Solid
+
+- Inventory has explicit product docs and workflow docs.
+- Read-path handling is much better than older audit notes imply: many hooks use `resolveReadResult`, `requireReadResult`, or `normalizeReadQueryError`.
+- Manual receiving already distinguishes non-PO stock-in from supplier-backed Receive Goods.
+- Existing tests cover product-context receiving, location read failure, query normalization, WMS/valuation reads, and receive invalidation.
+
+### What Is Fragile
+
+- Core inventory server code is concentrated in `src/server/functions/inventory/inventory.ts` at nearly 3,000 lines.
+- Core inventory schema code is concentrated in `src/lib/schemas/inventory/inventory.ts` at over 1,700 lines.
+- Large UI files such as `unified-inventory-dashboard.tsx` and `inventory-detail-view.tsx` mix multiple operator concerns.
+- Cache invalidation contracts are partly centralized, but some prefix keys are still hand-built in hooks.
+- Mutation error handling is less consistent than read error handling.
+
+### What Needs Revalidation
+
+- Whether `bulkReceiveStock` still has weaker permission posture than manual and PO receiving.
+- Whether RMA receive still lands non-serialized returns in the first warehouse location.
+- Whether stock-in traces still match current implementation after cross-phase closeout.
+- Whether operator-facing receive, PO receive, mobile receive, and product-detail launch all preserve the same workflow distinction.
+
+## Issue Ledger
+
+### 1. Manual Receive Cache Contract
+
+Business value: warehouse operators should see stock-in reflected immediately across inventory, product, serial availability, dashboards, and valuation.
+
+Evidence:
+
+- `useReceiveInventory` invalidates inventory lists/details/low stock, product detail/inventory/stats/alerts/movements, and inventory movements.
+- The cache contract is not explicit about WMS dashboard, valuation, finance integrity, serialized list, available serials, or availability checks.
+- Existing focused test: `tests/unit/inventory/use-receive-inventory.test.tsx`.
+
+Proposed slice:
+
+> Inventory receiving should refresh all operator-visible stock truth after non-PO stock-in.
+
+Likely files:
+
+- `src/hooks/inventory/use-inventory.ts`
+- `src/lib/query-keys.ts`
+- `tests/unit/inventory/use-receive-inventory.test.tsx`
+- `tests/unit/shared/query-key-integrity.test.ts`
+
+Out of scope:
+
+- changing server receive behavior
+- changing the receiving UI
+- extracting large inventory files
+
+### 2. Serialized Availability Prefix Drift
+
+Business value: picking, unpicking, cancellation, and serialized item edits must not leave stale serial selectors.
+
+Evidence:
+
+- Literal available-serial prefix keys appear in:
+  - `src/hooks/inventory/use-serialized-items.ts`
+  - `src/hooks/orders/use-order-status.ts`
+  - `src/hooks/orders/use-picking.ts`
+- This violates the centralized query key standard.
+
+Proposed slice:
+
+> Centralize inventory serial availability prefix keys and use them across inventory and orders.
+
+Out of scope:
+
+- changing picking behavior
+- changing allocation rules
+
+### 3. Inventory Server Concentration
+
+Business value: inventory code should be safe to change because it controls stock, valuation, and serialized battery truth.
+
+Evidence:
+
+- `src/server/functions/inventory/inventory.ts` contains list/detail, adjustment, transfer, receive, movements, dashboard, serial availability, and analytics-adjacent logic.
+
+Proposed slice:
+
+> Map `inventory.ts` into workflow sections and identify one safe extraction boundary with tests before moving code.
+
+Out of scope:
+
+- immediate extraction
+- broad server rewrite
+
+### 4. Inventory Mutation Error Standard
+
+Business value: operators need recovery guidance when warehouse or valuation actions fail.
+
+Evidence:
+
+- Read paths often normalize errors.
+- Mutations still have pockets of raw `error.message` or generic toasts.
+
+Proposed slice:
+
+> Audit inventory mutation errors into validation, blocked workflow, unavailable dependency, and unknown failure categories.
+
+Out of scope:
+
+- whole-app error handling
+
+### 5. Stock-In Workflow Clarity
+
+Business value: operators should not choose the wrong stock-in workflow.
+
+Evidence:
+
+- Docs distinguish:
+  - `Receive Inventory` = non-PO inbound stock
+  - `Receive Goods` = supplier delivery against a PO
+  - `Adjust Stock` = correction
+  - `Order Stock` = start procurement
+- Trace notes multiple stock-in entrypoints and duplicated serialized rules.
+
+Proposed slice:
+
+> Verify manual receive, PO receive, mobile receive, and product-detail launch all preserve the same operator distinction.
+
+Out of scope:
+
+- redesigning the receiving UX
+
+### 6. RMA Return-To-Stock Truth
+
+Business value: returned batteries should not land in the wrong warehouse location or lose serialized/cost-layer continuity.
+
+Evidence:
+
+- `docs/code-traces/13-rma-receive-inventory.md` says non-serialized RMA receive may choose the first warehouse location.
+- Trace says RMA receive should preserve cost layers, inventory movements, and optional serialized lineage.
+
+Proposed slice:
+
+> Refresh the RMA receive inventory trace against current code and decide whether location selection needs a product change.
+
+Out of scope:
+
+- changing RMA receive until the trace is revalidated
+
+## Recommended First Implementation Slice
+
+Start with Issue 1: Manual Receive Cache Contract.
+
+Why:
+
+- It is small and domain-sliced.
+- It protects a real warehouse workflow.
+- It exercises the repo standards without a rewrite.
+- Existing tests already give a narrow place to verify behavior.
+- It can expose whether the query-key contract is mature enough before larger inventory work.
+
+Lifecycle:
+
+```text
+Triage: manual non-PO receive freshness
+Issue: cache contract after receiveInventory
+Architect: route -> form -> hook -> server -> movement/cost layer -> query keys
+Implement: only cache-key and invalidation contract changes
+Remediate: centralize missing query key prefixes exposed by the slice
+Verify: focused receive hook test + query key integrity test
+Closeout: business value, standards, smells, gates, residual risk
+```
+
+## Gates For First Slice
+
+Focused:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx
+./node_modules/.bin/vitest run tests/unit/shared/query-key-integrity.test.ts
+```
+
+Broader if the slice touches cross-domain hooks:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory tests/unit/orders/order-status-contract.test.ts tests/unit/orders/order-mutation-invalidation.test.tsx
+```
+
+Direct reliability guards:
+
+```bash
+node scripts/check-route-casts.mjs
+node scripts/check-pending-dialog-guards.mjs
+node scripts/check-read-path-query-guards.mjs
+```
+
+## Closeout Template
+
+```text
+Touched domains:
+Workflow protected:
+Business value:
+Standards checked:
+Smells removed:
+Deferred:
+Verification:
+Goal adaptation:
+Residual risk:
+```
+
+## Sprint Rule
+
+Do not implement any issue until the slice has:
+
+1. a business value statement,
+2. a workflow invariant,
+3. affected files,
+4. explicit out-of-scope boundaries,
+5. focused tests,
+6. closeout criteria.

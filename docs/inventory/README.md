@@ -23,6 +23,7 @@ Related standards:
 Operator workflow guide:
 
 1. `docs/inventory/OPERATOR-STOCK-IN-WORKFLOWS.md`
+2. `docs/inventory/MAINTAINER-SPRINT-1.md`
 
 ## Canonical Source of Truth
 
