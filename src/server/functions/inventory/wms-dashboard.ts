@@ -27,6 +27,7 @@ import {
   products,
   warehouseLocations as locations,
 } from 'drizzle/schema';
+import { allocatableStockCountSql } from './_allocatable-stock-sql';
 
 /**
  * Get stock aggregated by product category.
@@ -291,12 +292,8 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
         // Current alerts count (low stock + out of stock)
         db
           .select({
-            lowStockCount: sql<number>`
-              COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < ${DEFAULT_LOW_STOCK_THRESHOLD} AND ${inventory.quantityAvailable} > 0 THEN ${inventory.productId} END)::int
-            `,
-            outOfStockCount: sql<number>`
-              COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} <= 0 THEN ${inventory.productId} END)::int
-            `,
+            lowStockCount: allocatableStockCountSql(ctx.organizationId, 'low_stock'),
+            outOfStockCount: allocatableStockCountSql(ctx.organizationId, 'out_of_stock'),
           })
           .from(inventory)
           .where(eq(inventory.organizationId, ctx.organizationId)),

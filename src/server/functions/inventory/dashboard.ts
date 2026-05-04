@@ -11,7 +11,6 @@ import { createServerFn } from '@tanstack/react-start';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { DEFAULT_LOW_STOCK_THRESHOLD } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
 import {
   inventory,
@@ -19,6 +18,7 @@ import {
   products,
   purchaseOrders,
 } from 'drizzle/schema';
+import { allocatableStockCountSql } from './_allocatable-stock-sql';
 
 /**
  * Get inventory dashboard metrics.
@@ -41,12 +41,8 @@ export const getInventoryDashboard = createServerFn({ method: 'POST' }).handler(
       totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
       locationsCount: sql<number>`COUNT(DISTINCT ${inventory.locationId})::int`,
-      lowStockCount: sql<number>`
-        COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < ${DEFAULT_LOW_STOCK_THRESHOLD} THEN ${inventory.productId} END)::int
-      `,
-      outOfStockCount: sql<number>`
-        COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} <= 0 THEN ${inventory.productId} END)::int
-      `,
+      lowStockCount: allocatableStockCountSql(ctx.organizationId, 'low_stock'),
+      outOfStockCount: allocatableStockCountSql(ctx.organizationId, 'out_of_stock'),
       allocatedCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.quantityAllocated} > 0)::int`,
     })
     .from(inventory)

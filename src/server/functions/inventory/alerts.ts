@@ -28,6 +28,7 @@ import {
   type TriggeredAlert,
   type ListAlertsResult,
 } from '@/lib/schemas/inventory';
+import { allocatableQuantitySumSql } from './_allocatable-stock-sql';
 
 // ============================================================================
 // TYPES
@@ -324,14 +325,14 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
       (result): result is TriggeredAlert => result !== null
     );
 
-    // If no alert rules exist, provide fallback low stock alerts based on quantityAvailable < 10
+    // If no alert rules exist, provide fallback low stock alerts based on allocatable availability < 10
     // This ensures consistency with the inventory index page which uses the same threshold
     // Fallback alerts are read-only and cannot be acknowledged (they don't exist in DB)
     if (activeAlerts.length === 0) {
       try {
         // Use SQL GROUP BY for efficient aggregation by SKU (product) + location
         // Inventory table stores individual items (lots, serials), but alerts should be by SKU
-        // Threshold matches inventory index page: SUM(quantityAvailable) < DEFAULT_LOW_STOCK_THRESHOLD
+        // Threshold matches availability semantics: only available-status rows are allocatable.
         const lowStockGroups = await db
           .select({
             productId: inventory.productId,
@@ -340,7 +341,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
             locationId: inventory.locationId,
             locationName: warehouseLocations.name,
             locationCode: warehouseLocations.locationCode,
-            totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::numeric`,
+            totalQuantity: allocatableQuantitySumSql(),
             itemCount: sql<number>`COUNT(*)::int`,
           })
           .from(inventory)
@@ -355,7 +356,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
             warehouseLocations.name,
             warehouseLocations.locationCode
           )
-          .having(sql`COALESCE(SUM(${inventory.quantityAvailable}), 0) < ${DEFAULT_LOW_STOCK_THRESHOLD}`)
+          .having(sql`${allocatableQuantitySumSql()} < ${DEFAULT_LOW_STOCK_THRESHOLD}`)
           .limit(50); // Limit groups to prevent performance issues
 
         if (lowStockGroups.length > 0) {
@@ -402,6 +403,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
               .where(
                 and(
                   eq(inventory.organizationId, ctx.organizationId),
+                  eq(inventory.status, 'available'),
                   or(...pairConditions)
                 )
               )
@@ -761,8 +763,7 @@ async function checkAlertTriggered(
     case 'low_stock':
       if (threshold.minQuantity !== undefined) {
         // Aggregate by product+location (SKU) since inventory table stores individual items
-        // Use quantityAvailable (not quantityOnHand) to match index page logic
-        // quantityAvailable = quantityOnHand - quantityAllocated
+        // Use allocatable availability, not physical on-hand or quarantined stock.
         const aggregated = await db
           .select({
             productId: inventory.productId,
@@ -770,7 +771,7 @@ async function checkAlertTriggered(
             productSku: products.sku,
             locationId: inventory.locationId,
             locationName: warehouseLocations.name,
-            totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::numeric`,
+            totalQuantity: allocatableQuantitySumSql(),
             itemCount: sql<number>`COUNT(*)::int`,
           })
           .from(inventory)
@@ -784,7 +785,7 @@ async function checkAlertTriggered(
             inventory.locationId,
             warehouseLocations.name
           )
-          .having(sql`COALESCE(SUM(${inventory.quantityAvailable}), 0) < ${threshold.minQuantity}`);
+          .having(sql`${allocatableQuantitySumSql()} < ${threshold.minQuantity}`);
 
         if (aggregated.length > 0) {
           triggered = true;
@@ -809,6 +810,7 @@ async function checkAlertTriggered(
               .where(
                 and(
                   eq(inventory.organizationId, organizationId),
+                  eq(inventory.status, 'available'),
                   eq(inventory.productId, firstGroup.productId),
                   eq(inventory.locationId, firstGroup.locationId)
                 )
@@ -827,7 +829,7 @@ async function checkAlertTriggered(
 
     case 'out_of_stock': {
       // Aggregate by product+location (SKU) since inventory table stores individual items
-      // Use quantityAvailable to check if stock is available for new orders
+      // Use allocatable availability to check if stock is available for new orders.
       const outOfStockAggregated = await db
         .select({
           productId: inventory.productId,
@@ -835,7 +837,7 @@ async function checkAlertTriggered(
           productSku: products.sku,
           locationId: inventory.locationId,
           locationName: warehouseLocations.name,
-          totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::numeric`,
+          totalQuantity: allocatableQuantitySumSql(),
           itemCount: sql<number>`COUNT(*)::int`,
         })
         .from(inventory)
@@ -849,7 +851,7 @@ async function checkAlertTriggered(
           inventory.locationId,
           warehouseLocations.name
         )
-        .having(sql`COALESCE(SUM(${inventory.quantityAvailable}), 0) <= 0`);
+        .having(sql`${allocatableQuantitySumSql()} <= 0`);
 
       if (outOfStockAggregated.length > 0) {
         triggered = true;
@@ -871,6 +873,7 @@ async function checkAlertTriggered(
           .where(
             and(
               eq(inventory.organizationId, organizationId),
+              eq(inventory.status, 'available'),
               eq(inventory.productId, firstGroup.productId),
               eq(inventory.locationId, firstGroup.locationId)
             )
