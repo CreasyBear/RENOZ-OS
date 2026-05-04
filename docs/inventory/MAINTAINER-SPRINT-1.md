@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, and 6 implemented; remaining issues stay in the ledger.
+Status: closed for the planned Issue 1-6 ledger; deferred risks are captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -273,6 +273,75 @@ Do not implement any issue until the slice has:
 6. closeout criteria.
 
 ## Closeout Log
+
+## Sprint Closeout Audit
+
+Objective: make Inventory/Warehouse easier to trust and maintain by protecting stock-in, serialized availability, warehouse/RMA return, cache, mutation-error, and server-function ownership contracts through small issue slices.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Evidence |
+|-------------|----------|
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes six bounded issues. |
+| Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
+| Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, and RMA receive. |
+| Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
+| Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
+| Safe mutation/cache contracts | Issues 1, 2, 4, 5, and 6 record mutation invalidation, rollback, and read/error state contracts. |
+| Tenant isolation checked | Server-function slices and traces verify `withAuth`, `ctx.organizationId`, and transaction-scoped RLS where touched. |
+| Transactional inventory/finance integrity checked | Receive, transfer, RMA receive, valuation, cost-layer, and finance-integrity paths were traced or guarded; database-backed integration remains deferred where noted. |
+| Serialized lineage continuity checked | Manual receive, transfer, serialized item mutations, stock-in trace, and RMA receive trace preserve serialized lineage expectations. |
+| Honest UI states and operator-safe errors | Issue 4 standardized inventory-owned read/mutation error presentation and removed raw server/database messages from covered operator surfaces. |
+| Meaningful tests/gates | Each issue closeout records focused tests, broader tests/guards, lint/typecheck where risk justified it. |
+| Reviewable diffs | Work landed as small code/test/doc commits per slice; compatibility barrels kept blast radius contained. |
+
+Sprint standards checked:
+
+- inventory server behavior now has workflow-owned modules instead of a monolithic implementation file
+- manual receive cache policy refreshes operator-visible stock, WMS, valuation, serialized, product, and movement surfaces
+- available-serial cache prefixes are centralized
+- inventory-owned operator errors use stable recovery guidance instead of raw server text
+- stock-in workflow language now distinguishes non-PO receive, PO receive-goods, order-stock, and corrections
+- product receive wrappers cannot reintroduce a separate product bulk-receive path without failing the trace guard
+- RMA return-to-stock location selection is explicit and trace guarded
+
+Sprint smells removed:
+
+- concentrated inventory server-function ownership
+- literal serialized-availability query prefixes in cross-domain hooks
+- stale stock-in trace references to non-existent `bulkReceiveStock`
+- stale RMA trace claim that non-serialized returns silently use the first warehouse location
+- raw inventory-owned operator error rendering across receive, browser, stock actions, locations, alerts, forecasting, valuation, serialized list, and inventory item edit surfaces
+- under-described manual receive cache contract
+
+Deferred backlog:
+
+- `src/lib/schemas/inventory/inventory.ts` remains large and should be decomposed by workflow schema ownership
+- legacy read consumers still import through the inventory compatibility barrel in places
+- database-backed integration coverage is still needed for receive/RMA quantity, movement, cost-layer, valuation, transition, and serialized-lineage invariants
+- duplicated serialized receive rules between UI and server need a dedicated parity contract
+- fixed `AUD` currency in RMA return cost layers remains a finance/inventory valuation slice
+- `createRma` permission asymmetry belongs to support-domain auth work
+- product-domain raw error handling outside inventory-owned surfaces belongs to a product sprint
+- PO `receiveGoods` error copy belongs to procurement unless future operator QA finds stock-in confusion
+
+Sprint verification evidence:
+
+- focused receive, serialized availability, stock-in, RMA receive, and inventory mutation-error tests recorded in issue closeouts
+- broad inventory sweeps recorded in Issues 3, 4, and 5
+- support RMA receive location/dialog/mutation tests recorded in Issue 6
+- direct guards recorded where run: `check-route-casts`, `check-pending-dialog-guards`, `check-read-path-query-guards`, `git diff --check`
+- typecheck recorded on issue closeouts where code/test changes warranted it
+
+Gates skipped:
+
+- full app build and full unit suite were not run as a sprint-level gate because the sprint closed through many small verified slices and the final sprint closeout is documentation-only.
+- browser/manual QA was deferred; this sprint emphasized code contracts, trace correctness, and focused regression coverage.
+
+Goal adaptation: no standing goal change. The sprint validates the domain-sprint operating model: issue slices are the unit of implementation, and sprint closeout is the unit of product-owner progress.
+
+Sprint residual risk: Inventory/Warehouse is materially cleaner, but not "done" as a domain. The next sprint should choose between inventory schema decomposition, database-backed inventory/RMA integration coverage, or a support/RMA auth and remedy closeout slice based on current business risk.
 
 ### Issue 1: Manual Receive Cache Contract
 
