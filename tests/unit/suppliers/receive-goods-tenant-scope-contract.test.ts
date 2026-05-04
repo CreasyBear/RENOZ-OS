@@ -88,4 +88,30 @@ describe('receive goods tenant-scope contract', () => {
       source.indexOf('purchaseOrderReceiptItemId:createdReceiptItem.id')
     );
   });
+
+  it('guards inventory balance, inventory creation, and movement write results', () => {
+    const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
+
+    expect(
+      source.match(
+        /if\(!updatedInventory\[0\]\)\{thrownewValidationError\('Inventorybalancecouldnotbeupdated\.Refreshandtryagain\.'\);\}/g
+      )
+    ).toHaveLength(2);
+    expect(
+      source.match(
+        /if\(!newInv\)\{thrownewValidationError\('Inventoryrecordcouldnotbecreated\.Refreshandtryagain\.'\);\}/g
+      )
+    ).toHaveLength(2);
+    expect(
+      source.match(
+        /if\(!movement\)\{thrownewValidationError\('Inventorymovementcouldnotberecorded\.Refreshandtryagain\.'\);\}/g
+      )
+    ).toHaveLength(2);
+    expect(source).toContain(
+      'update(inventory).set({quantityOnHand:sql`${inventory.quantityOnHand}+1`,unitCost:landedUnitCost,updatedBy:ctx.user.id,}).where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,ctx.organizationId))).returning({id:inventory.id})'
+    );
+    expect(source).toContain(
+      'update(inventory).set({quantityOnHand:sql`${inventory.quantityOnHand}+${quantityAccepted}`,unitCost:newWeightedAvgCost,updatedBy:ctx.user.id,}).where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,ctx.organizationId))).returning({id:inventory.id})'
+    );
+  });
 });

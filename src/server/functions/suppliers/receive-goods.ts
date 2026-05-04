@@ -446,7 +446,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
                   'invalid_serial_state'
                 );
               }
-              await tx
+              const updatedInventory = await tx
                 .update(inventory)
                 .set({
                   quantityOnHand: sql`${inventory.quantityOnHand} + 1`,
@@ -455,7 +455,11 @@ export const receiveGoods = createServerFn({ method: 'POST' })
                 })
                 .where(
                   and(eq(inventory.id, inventoryId), eq(inventory.organizationId, ctx.organizationId))
-                );
+                )
+                .returning({ id: inventory.id });
+              if (!updatedInventory[0]) {
+                throw new ValidationError('Inventory balance could not be updated. Refresh and try again.');
+              }
             } else {
               const [newInv] = await tx
                 .insert(inventory)
@@ -474,6 +478,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
                   updatedBy: ctx.user.id,
                 })
                 .returning();
+              if (!newInv) {
+                throw new ValidationError('Inventory record could not be created. Refresh and try again.');
+              }
               inventoryId = newInv.id;
             }
 
@@ -504,6 +511,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
                 createdBy: ctx.user.id,
               })
               .returning();
+            if (!movement) {
+              throw new ValidationError('Inventory movement could not be recorded. Refresh and try again.');
+            }
             createdMovements.push(movement.id);
             await createReceiptLayersWithCostComponents(tx, {
               organizationId: ctx.organizationId,
@@ -600,7 +610,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
 
           // Atomic increment: Drizzle .set() does not support column + value expressions.
           // sql template is required for race-free concurrent receives (per query-patterns.md).
-          await tx
+          const updatedInventory = await tx
             .update(inventory)
             .set({
               quantityOnHand: sql`${inventory.quantityOnHand} + ${quantityAccepted}`,
@@ -609,7 +619,11 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             })
             .where(
               and(eq(inventory.id, inventoryId), eq(inventory.organizationId, ctx.organizationId))
-            );
+            )
+            .returning({ id: inventory.id });
+          if (!updatedInventory[0]) {
+            throw new ValidationError('Inventory balance could not be updated. Refresh and try again.');
+          }
         } else {
           const [newInv] = await tx
             .insert(inventory)
@@ -627,6 +641,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
               updatedBy: ctx.user.id,
             })
             .returning();
+
+          if (!newInv) {
+            throw new ValidationError('Inventory record could not be created. Refresh and try again.');
+          }
 
           inventoryId = newInv.id;
         }
@@ -663,6 +681,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             createdBy: ctx.user.id,
           })
           .returning();
+
+        if (!movement) {
+          throw new ValidationError('Inventory movement could not be recorded. Refresh and try again.');
+        }
 
         createdMovements.push(movement.id);
         await createReceiptLayersWithCostComponents(tx, {
