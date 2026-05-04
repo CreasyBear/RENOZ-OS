@@ -6,6 +6,7 @@
 
 // --- Core Inventory Types ---
 export * from './inventory';
+export * from './locations';
 export * from './movements';
 export * from './receiving';
 export * from './serialized-items';
@@ -23,11 +24,6 @@ export * from './inventory-item-edit-form';
 
 // --- Re-export key types for convenience ---
 export type {
-  Location,
-  CreateLocation,
-  UpdateLocation,
-  LocationFilter,
-  LocationListQuery,
   Inventory,
   InventoryFilter,
   InventoryListQuery,
@@ -35,6 +31,14 @@ export type {
   HookWarehouseLocation,
   HookLocationHierarchy,
 } from './inventory';
+
+export type {
+  Location,
+  CreateLocation,
+  UpdateLocation,
+  LocationFilter,
+  LocationListQuery,
+} from './locations';
 
 export type {
   Movement,

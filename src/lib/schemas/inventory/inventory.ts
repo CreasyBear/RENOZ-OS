@@ -6,7 +6,6 @@
 
 import { z } from 'zod';
 import {
-  addressSchema,
   currencySchema,
   quantitySchema,
   paginationSchema,
@@ -15,7 +14,25 @@ import {
   normalizeObjectInput,
 } from '../_shared/patterns';
 import type { FlexibleJson, JsonValue } from '../_shared/patterns';
-import { cursorPaginationSchema } from '@/lib/db/pagination';
+import { locationAddressSchema } from './locations';
+
+export {
+  createLocationSchema,
+  locationFilterSchema,
+  locationListCursorQuerySchema,
+  locationListQuerySchema,
+  locationSchema,
+  updateLocationSchema,
+} from './locations';
+export type {
+  CreateLocation,
+  Location,
+  LocationAddress,
+  LocationFilter,
+  LocationListCursorQuery,
+  LocationListQuery,
+  UpdateLocation,
+} from './locations';
 
 // ============================================================================
 // ENUMS (must match canonical-enums.json)
@@ -34,79 +51,6 @@ export const qualityStatusValues = ['good', 'damaged', 'expired', 'quarantined']
 
 export const inventoryStatusSchema = z.enum(inventoryStatusValues);
 export const qualityStatusSchema = z.enum(qualityStatusValues);
-
-// ============================================================================
-// LOCATION ADDRESS
-// ============================================================================
-
-export const locationAddressSchema = addressSchema.partial();
-
-export type LocationAddress = z.infer<typeof locationAddressSchema>;
-
-// ============================================================================
-// CREATE LOCATION
-// ============================================================================
-
-export const createLocationSchema = z.object({
-  code: z.string().min(1, 'Code is required').max(20),
-  name: z.string().min(1, 'Name is required').max(255),
-  description: z.string().max(500).optional(),
-  address: locationAddressSchema.optional(),
-  isActive: z.boolean().default(true),
-  isDefault: z.boolean().default(false),
-  allowNegative: z.boolean().default(false),
-});
-
-export type CreateLocation = z.infer<typeof createLocationSchema>;
-
-// ============================================================================
-// UPDATE LOCATION
-// ============================================================================
-
-export const updateLocationSchema = createLocationSchema.partial();
-
-export type UpdateLocation = z.infer<typeof updateLocationSchema>;
-
-// ============================================================================
-// LOCATION (output)
-// ============================================================================
-
-export const locationSchema = createLocationSchema.extend({
-  id: z.string().uuid(),
-  organizationId: z.string().uuid(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-  createdBy: z.string().uuid().nullable(),
-  updatedBy: z.string().uuid().nullable(),
-});
-
-export type Location = z.infer<typeof locationSchema>;
-
-// ============================================================================
-// LOCATION FILTERS
-// ============================================================================
-
-export const locationFilterSchema = filterSchema.extend({
-  isActive: z.coerce.boolean().optional(),
-});
-
-export type LocationFilter = z.infer<typeof locationFilterSchema>;
-
-// ============================================================================
-// LOCATION LIST QUERY
-// ============================================================================
-
-export const locationListQuerySchema = normalizeObjectInput(
-  paginationSchema.merge(locationFilterSchema)
-);
-
-export type LocationListQuery = z.infer<typeof locationListQuerySchema>;
-
-export const locationListCursorQuerySchema = normalizeObjectInput(
-  cursorPaginationSchema.merge(locationFilterSchema)
-);
-
-export type LocationListCursorQuery = z.infer<typeof locationListCursorQuerySchema>;
 
 // ============================================================================
 // INVENTORY CONSTANTS
