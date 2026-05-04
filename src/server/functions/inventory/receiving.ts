@@ -9,12 +9,11 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { z } from 'zod';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   getManualReceiveSerializationIssues,
-  manualReceiptReasonSchema,
+  receiveInventorySchema,
 } from '@/lib/schemas/inventory';
 import { normalizeSerial } from '@/lib/serials';
 import { withAuth } from '@/lib/server/protected';
@@ -39,29 +38,6 @@ import {
   checkActivityExists,
   logActivityInTransaction,
 } from '@/server/functions/inventory/_activity';
-
-const receiveInventorySchema = z.object({
-  productId: z.string().uuid(),
-  locationId: z.string().uuid(),
-  quantity: z.number().int().positive(),
-  unitCost: z.number().min(0),
-  receiptReason: manualReceiptReasonSchema,
-  serialNumber: z.string().optional(),
-  batchNumber: z.string().optional(),
-  lotNumber: z.string().optional(),
-  expiryDate: z.string().optional(),
-  notes: z.string().optional(),
-  referenceType: z.string().optional(),
-  referenceId: z.string().uuid().optional(),
-}).superRefine((data, ctx) => {
-  if (data.receiptReason === 'other_exception' && !data.notes?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['notes'],
-      message: 'Notes are required when using Other Exception.',
-    });
-  }
-});
 
 /**
  * Receive inventory with cost layer creation.

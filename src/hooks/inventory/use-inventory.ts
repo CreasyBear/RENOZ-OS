@@ -32,8 +32,8 @@ import { transferInventory } from '@/server/functions/inventory/transfers';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,
-  ManualReceiptReason,
   MovementListQuery,
+  ReceiveInventoryInput,
   StockAdjustment,
   StockTransfer,
 } from '@/lib/schemas/inventory';
@@ -48,19 +48,6 @@ export interface UseInventoryListOptions extends Partial<InventoryListQuery> {
 
 type InventoryListResult = Awaited<ReturnType<typeof listInventory>>;
 type InventoryDetailResult = Awaited<ReturnType<typeof getInventoryItem>>;
-
-interface ReceiveInventoryInput {
-  productId: string;
-  quantity: number;
-  unitCost: number;
-  locationId: string;
-  receiptReason: ManualReceiptReason;
-  serialNumber?: string;
-  batchNumber?: string;
-  lotNumber?: string;
-  expiryDate?: string;
-  notes?: string;
-}
 
 function invalidateReceiveInventoryQueries(
   queryClient: ReturnType<typeof useQueryClient>,

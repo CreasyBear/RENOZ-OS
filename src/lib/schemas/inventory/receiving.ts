@@ -52,6 +52,34 @@ export interface InventoryReceiving {
   notes?: string;
 }
 
+/**
+ * Live manual stock-in mutation input for receiveInventory.
+ */
+export const receiveInventorySchema = z.object({
+  productId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  quantity: z.number().int().positive(),
+  unitCost: z.number().min(0),
+  receiptReason: manualReceiptReasonSchema,
+  serialNumber: z.string().optional(),
+  batchNumber: z.string().optional(),
+  lotNumber: z.string().optional(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+  referenceType: z.string().optional(),
+  referenceId: z.string().uuid().optional(),
+}).superRefine((data, ctx) => {
+  if (data.receiptReason === 'other_exception' && !data.notes?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['notes'],
+      message: 'Notes are required when using Other Exception.',
+    });
+  }
+});
+
+export type ReceiveInventoryInput = z.infer<typeof receiveInventorySchema>;
+
 export function getManualReceiveSerializationIssues({
   isSerialized,
   quantity,
