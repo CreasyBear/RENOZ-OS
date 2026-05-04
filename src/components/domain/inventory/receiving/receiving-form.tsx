@@ -37,6 +37,7 @@ import {
   DateStringField,
 } from "@/components/shared/forms";
 import {
+  getManualReceiveSerializationIssues,
   manualReceiptReasonSchema,
   manualReceiptReasonValues,
 } from "@/lib/schemas/inventory";
@@ -63,21 +64,16 @@ type ReceivingFormValues = z.infer<typeof receivingFormBaseSchema>;
 function createReceivingFormSchema(products: { id: string; isSerialized?: boolean }[]) {
   return receivingFormBaseSchema.superRefine((data, ctx) => {
     const product = products.find((p) => p.id === data.productId);
-    if (product?.isSerialized) {
-      if (data.quantity !== 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["quantity"],
-          message: "Serialized products must be received one unit per serial.",
-        });
-      }
-      if (!data.serialNumber?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["serialNumber"],
-          message: "Serial number is required for serialized products.",
-        });
-      }
+    for (const issue of getManualReceiveSerializationIssues({
+      isSerialized: !!product?.isSerialized,
+      quantity: data.quantity,
+      serialNumber: data.serialNumber,
+    })) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [issue.path],
+        message: issue.message,
+      });
     }
     if (data.receiptReason === "other_exception" && !data.notes?.trim()) {
       ctx.addIssue({
@@ -188,6 +184,14 @@ export const ReceivingForm = memo(function ReceivingForm({
     if (!isSerializedProduct) return;
     if (form.getValues().quantity !== 1) {
       form.setFieldValue("quantity", 1);
+    }
+  }, [isSerializedProduct, form]);
+
+  // Serial numbers are only accepted for serialized products.
+  useEffect(() => {
+    if (isSerializedProduct) return;
+    if (form.getValues().serialNumber?.trim()) {
+      form.setFieldValue("serialNumber", "");
     }
   }, [isSerializedProduct, form]);
 
@@ -308,7 +312,7 @@ export const ReceivingForm = memo(function ReceivingForm({
             <div className="space-y-4">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <Hash className="h-4 w-4" aria-hidden="true" />
-                Tracking Information {isSerializedProduct ? "(Serial Required)" : "(Optional)"}
+                Tracking Information {isSerializedProduct ? "(Serial Required)" : "(Lot/Batch Optional)"}
               </h4>
 
               <div className="grid grid-cols-2 gap-4">
@@ -340,6 +344,8 @@ export const ReceivingForm = memo(function ReceivingForm({
                       field={field}
                       label="Serial Number"
                       placeholder="SN-12345"
+                      required={isSerializedProduct}
+                      disabled={!isSerializedProduct}
                     />
                   )}
                 </form.Field>

@@ -6,6 +6,7 @@
 
 // --- Core Inventory Types ---
 export * from './inventory';
+export * from './receiving';
 export * from './serialized-items';
 export * from './serialized-mutation-contract';
 export * from './finance-mutation-contract';

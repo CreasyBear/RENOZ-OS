@@ -12,7 +12,10 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { manualReceiptReasonSchema } from '@/lib/schemas/inventory';
+import {
+  getManualReceiveSerializationIssues,
+  manualReceiptReasonSchema,
+} from '@/lib/schemas/inventory';
 import { normalizeSerial } from '@/lib/serials';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -79,14 +82,17 @@ export const receiveInventory = createServerFn({ method: 'POST' })
       throw new NotFoundError('Product not found', 'product');
     }
     const normalizedSerialNumber = data.serialNumber ? normalizeSerial(data.serialNumber) : undefined;
-    if (product.isSerialized && !normalizedSerialNumber) {
-      throw new ValidationError('Serialized products require a serial number');
-    }
-    if (product.isSerialized && data.quantity !== 1) {
-      throw new ValidationError('Serialized product receive quantity must be 1 per serial');
-    }
-    if (!product.isSerialized && normalizedSerialNumber) {
-      throw new ValidationError('Serial number is only allowed for serialized products');
+    const serializationIssues = getManualReceiveSerializationIssues({
+      isSerialized: product.isSerialized,
+      quantity: data.quantity,
+      serialNumber: normalizedSerialNumber,
+    });
+    if (serializationIssues.length > 0) {
+      const issue = serializationIssues[0];
+      throw new ValidationError(issue.message, {
+        [issue.path]: [issue.message],
+        code: [issue.code],
+      });
     }
 
     return await db.transaction(async (tx) => {
