@@ -59,7 +59,7 @@ Focused tests:
 
 Closeout criteria:
 
-- movement response/helper types, including movement trend aggregation helpers, are exported from `movements.ts`
+- movement response/helper types, including movement trend aggregation helpers and hook-facing adjustment/transfer inputs, are exported from `movements.ts`
 - `inventory.ts` no longer owns movement response/helper types
 - public `@/lib/schemas/inventory` imports remain compatible
 - focused movement tests pass
@@ -120,7 +120,7 @@ Standards checked:
 
 Smells removed:
 
-- `MovementWithRelations`, `ListMovementsResult`, `MovementTypeCount`, `ProductMovementAggregation`, `DateGroupAggregation`, and `MovementRecord` lived outside movement schema ownership
+- `MovementWithRelations`, `ListMovementsResult`, `MovementTypeCount`, `ProductMovementAggregation`, `DateGroupAggregation`, `MovementRecord`, `InventoryAdjustment`, and `InventoryTransfer` lived outside movement schema ownership
 
 Deferred:
 
@@ -131,6 +131,7 @@ Deferred:
 Verification:
 
 - `./node_modules/.bin/vitest run tests/unit/inventory/movement-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/dashboard-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-dashboard.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/movement-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/stock-action-error-messages.test.ts`
 - `./node_modules/.bin/eslint src/lib/schemas/inventory/movements.ts src/lib/schemas/inventory/dashboard.ts src/lib/schemas/inventory/inventory.ts tests/unit/inventory/movement-schema-ownership.test.ts tests/unit/inventory/dashboard-schema-ownership.test.ts`
 - `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md docs/inventory/MAINTAINER-SPRINT-2.md src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/movements.ts src/lib/schemas/inventory/dashboard.ts tests/unit/inventory/movement-schema-ownership.test.ts tests/unit/inventory/dashboard-schema-ownership.test.ts`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`

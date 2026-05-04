@@ -166,28 +166,6 @@ export interface InventoryItem {
 }
 
 /**
- * Inventory adjustment input for hooks
- */
-export interface InventoryAdjustment {
-  inventoryId: string;
-  adjustmentType: 'increase' | 'decrease';
-  quantity: number;
-  reason: string;
-  notes?: string;
-}
-
-/**
- * Inventory transfer input for hooks
- */
-export interface InventoryTransfer {
-  fromInventoryId: string;
-  toInventoryId: string;
-  quantity: number;
-  reason: string;
-  notes?: string;
-}
-
-/**
  * Inventory receiving input for hooks
  */
 export interface InventoryReceiving {

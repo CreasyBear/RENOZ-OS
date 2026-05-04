@@ -30,6 +30,8 @@ describe('inventory movement schema ownership', () => {
     expect(movementSchema).toContain('export interface ProductMovementAggregation');
     expect(movementSchema).toContain('export interface DateGroupAggregation');
     expect(movementSchema).toContain('export interface MovementRecord');
+    expect(movementSchema).toContain('export interface InventoryAdjustment');
+    expect(movementSchema).toContain('export interface InventoryTransfer');
     expect(inventorySchema).not.toContain('export const movementTypeValues');
     expect(inventorySchema).not.toContain('export const createMovementSchema');
     expect(inventorySchema).not.toContain('export const stockAdjustmentSchema');
@@ -40,6 +42,8 @@ describe('inventory movement schema ownership', () => {
     expect(inventorySchema).not.toContain('export interface ProductMovementAggregation');
     expect(inventorySchema).not.toContain('export interface DateGroupAggregation');
     expect(inventorySchema).not.toContain('export interface MovementRecord');
+    expect(inventorySchema).not.toContain('export interface InventoryAdjustment');
+    expect(inventorySchema).not.toContain('export interface InventoryTransfer');
   });
 
   it('preserves the public inventory schema barrel for movement callers', () => {

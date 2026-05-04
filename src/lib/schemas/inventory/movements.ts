@@ -158,6 +158,28 @@ export interface MovementRecord {
   createdAt: Date;
 }
 
+/**
+ * Inventory adjustment input for hook-facing callers.
+ */
+export interface InventoryAdjustment {
+  inventoryId: string;
+  adjustmentType: 'increase' | 'decrease';
+  quantity: number;
+  reason: string;
+  notes?: string;
+}
+
+/**
+ * Inventory transfer input for hook-facing callers.
+ */
+export interface InventoryTransfer {
+  fromInventoryId: string;
+  toInventoryId: string;
+  quantity: number;
+  reason: string;
+  notes?: string;
+}
+
 export const stockAdjustmentSchema = z.object({
   inventoryId: z.string().uuid().optional(),
   productId: z.string().uuid(),
