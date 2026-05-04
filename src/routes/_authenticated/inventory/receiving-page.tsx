@@ -27,7 +27,7 @@ import { useProduct, useProducts } from "@/hooks/products";
 import type { ProductWithInventory } from "@/lib/schemas/products";
 import type { HookWarehouseLocation } from "@/lib/schemas/inventory";
 import type { MovementWithRelations, ListMovementsResult } from "@/lib/schemas/inventory";
-import type { receiveInventory } from "@/server/functions/inventory/inventory";
+import type { receiveInventory } from "@/server/functions/inventory/receiving";
 
 // ============================================================================
 // TYPES

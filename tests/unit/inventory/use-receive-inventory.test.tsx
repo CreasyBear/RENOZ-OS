@@ -11,11 +11,14 @@ vi.mock('@/server/functions/inventory/inventory', () => ({
   getInventoryItem: vi.fn(),
   adjustInventory: vi.fn(),
   transferInventory: vi.fn(),
-  receiveInventory: (...args: unknown[]) => mockReceiveInventory(...args),
   listMovements: vi.fn(),
   getInventoryDashboard: vi.fn(),
   quickSearchInventory: vi.fn(),
   getAvailableSerials: vi.fn(),
+}))
+
+vi.mock('@/server/functions/inventory/receiving', () => ({
+  receiveInventory: (...args: unknown[]) => mockReceiveInventory(...args),
 }))
 
 vi.mock('@/server/functions/inventory/locations', () => ({

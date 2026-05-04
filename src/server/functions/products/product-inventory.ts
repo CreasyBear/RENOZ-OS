@@ -32,9 +32,9 @@ import {
 } from '@/lib/schemas/inventory';
 import {
   adjustInventory,
-  receiveInventory,
   transferInventory,
 } from '@/server/functions/inventory/inventory';
+import { receiveInventory } from '@/server/functions/inventory/receiving';
 
 // ============================================================================
 // TYPES

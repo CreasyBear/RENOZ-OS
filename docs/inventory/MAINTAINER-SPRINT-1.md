@@ -366,21 +366,23 @@ Standards checked:
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
+- moved direct `receiveInventory` consumers to the receiving module
 
 Smells removed:
 
 - local activity logging helper and activity-table dependency inside `src/server/functions/inventory/inventory.ts`
 - manual receive server function and schema from `src/server/functions/inventory/inventory.ts`
+- direct receive workflow imports from the monolithic inventory server module
 
 Deferred:
 
 - extracting adjustment, transfer, allocation, and WMS/dashboard workflows
 - extracting inventory schema sections
-- moving consumers to the more specific receiving module import path
 
 Verification:
 
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
 Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
