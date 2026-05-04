@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented.
 
 ## Business Value
 
@@ -279,6 +279,43 @@ Closeout criteria:
 - `useReceiveInventory` uses the schema-owned input type instead of a local interface
 - stock-in trace points to the schema owner instead of server-inline validation
 - focused receiving tests pass
+- lint/typecheck evidence is recorded
+
+### 8. Product Receive Wrapper Schema Ownership
+
+Business value: product-detail stock-in wrappers should validate through the same receiving schema owner as manual stock-in so legacy product inventory entry points cannot drift away from warehouse receiving rules.
+
+Workflow invariant: product inventory `receiveStock` wrapper -> canonical `receiveInventory` server function -> receiving schema owner -> stock movement/cost-layer transaction must remain delegated and reviewable.
+
+Affected files:
+
+- `src/lib/schemas/inventory/receiving.ts`
+- `src/server/functions/products/product-inventory.ts`
+- `tests/unit/inventory/receive-stock-wrapper-schema-ownership.test.ts`
+- `docs/code-traces/02-inventory-stock-in.md`
+- `docs/inventory/MAINTAINER-SPRINT-2.md`
+
+Out of scope:
+
+- changing receiveStock runtime behavior
+- changing `recordMovement` delegation
+- changing allocate/deallocate/adjust/transfer wrapper schemas
+- changing product inventory UI or hooks
+- changing canonical `receiveInventory` behavior
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/receive-stock-wrapper-schema-ownership.test.ts tests/unit/inventory/stock-in-workflow-trace.test.ts
+```
+
+Closeout criteria:
+
+- `receiveStockSchema` and `ReceiveStockInput` are exported from `receiving.ts`
+- product `receiveStock` imports its wrapper validator from the receiving schema owner
+- product receive wrapper remains delegated to canonical `receiveInventory`
+- stock-in trace points to the receiving-owned wrapper schema
+- focused stock-in wrapper tests pass
 - lint/typecheck evidence is recorded
 
 ## Closeout Log
@@ -559,4 +596,46 @@ Verification:
 
 Goal adaptation: no standing goal change. This reinforces the route -> hook -> server function -> schema contract standard for stock-in.
 
-Residual risk: receive cache invalidation remains broad rather than result-aware; product receive wrapper schemas still have inline/delegating input contracts outside this inventory hook/server slice.
+Residual risk: later Sprint 2 work moved the product receive wrapper input into the receiving schema owner; receive cache invalidation remains broad rather than result-aware.
+
+### Issue 8: Product Receive Wrapper Schema Ownership
+
+Touched domains: receiving schema contracts, product inventory receive wrapper, stock-in workflow trace docs.
+
+Workflow protected: product inventory `receiveStock` wrapper -> receiving-owned wrapper validator -> canonical `receiveInventory` delegation -> manual stock-in transaction.
+
+Business value: product-detail stock-in entry points now validate through the receiving schema owner before delegating to canonical inventory receiving, reducing drift for operators who start stock-in from a product record.
+
+Standards checked:
+
+- added `receiveStockSchema` and `ReceiveStockInput` to `src/lib/schemas/inventory/receiving.ts`
+- changed product `receiveStock` to import its wrapper validator from the receiving schema owner
+- preserved existing wrapper input behavior, including optional `unitCost`
+- preserved canonical delegation to `receiveInventory`
+- updated the stock-in trace to point at the receiving-owned wrapper schema
+- added a guard that prevents `receiveStock` from reintroducing an inline wrapper schema
+
+Smells removed:
+
+- product receive wrapper owned inline zod validation despite delegating to canonical inventory receiving
+- stock-in trace docs still described the product receive wrapper as inline validation
+
+Deferred:
+
+- `recordMovement` delegation remains unchanged
+- allocate/deallocate/adjust/transfer product wrapper schemas remain outside this stock-in slice
+- product inventory UI and hooks are unchanged
+- canonical `receiveInventory` behavior is unchanged
+- receive cache invalidation remains broad rather than result-aware
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/receive-stock-wrapper-schema-ownership.test.ts tests/unit/inventory/stock-in-workflow-trace.test.ts`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/receiving.ts src/server/functions/products/product-inventory.ts tests/unit/inventory/receive-stock-wrapper-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md docs/code-traces/02-inventory-stock-in.md src/lib/schemas/inventory/receiving.ts src/server/functions/products/product-inventory.ts tests/unit/inventory/receive-stock-wrapper-schema-ownership.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. This continues stock-in ownership cleanup under the existing maintainer sprint model.
+
+Residual risk: non-stock-in product inventory wrappers still use their legacy schemas; receive cache invalidation remains broad and should be revisited as a behavior/cache-contract slice.

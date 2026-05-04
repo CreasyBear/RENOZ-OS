@@ -54,7 +54,7 @@ rg -n "bulkReceiveGoods|receiveStock|recordMovement" src/
 |------|-----------------|-------------------|
 | Ad-hoc | `receiveInventorySchema` | [`receiving.ts`](../../src/lib/schemas/inventory/receiving.ts) (imported by the server function and passed to `.inputValidator`) |
 | PO receipt | `receiveGoodsSchema` | [`receive-goods.ts`](../../src/server/functions/suppliers/receive-goods.ts) |
-| Product receive wrapper | Inline `z.object({ productId, locationId, quantity, … })` | [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) delegates to `receiveInventory` |
+| Product receive wrapper | `receiveStockSchema` | [`receiving.ts`](../../src/lib/schemas/inventory/receiving.ts), used by [`product-inventory.ts`](../../src/server/functions/products/product-inventory.ts) before delegating to `receiveInventory` |
 
 **Secondary (UI):** `receivingFormBaseSchema` + `superRefine` in [`receiving-form.tsx`](../../src/components/domain/inventory/receiving/receiving-form.tsx) uses the shared manual receive serialization helper in [`receiving.ts`](../../src/lib/schemas/inventory/receiving.ts), matching server receive validation.
 
