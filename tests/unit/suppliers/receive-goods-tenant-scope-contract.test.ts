@@ -36,4 +36,14 @@ describe('receive goods tenant-scope contract', () => {
       'update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,productId))'
     );
   });
+
+  it('keeps PO receive existing inventory balance updates organization-scoped', () => {
+    const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
+    const scopedInventoryUpdates = source.match(
+      /where\(and\(eq\(inventory\.id,inventoryId\),eq\(inventory\.organizationId,ctx\.organizationId\)\)\)/g
+    );
+
+    expect(scopedInventoryUpdates).toHaveLength(2);
+    expect(source).not.toContain('.where(eq(inventory.id,inventoryId))');
+  });
 });

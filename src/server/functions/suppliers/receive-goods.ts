@@ -434,7 +434,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
                   unitCost: landedUnitCost,
                   updatedBy: ctx.user.id,
                 })
-                .where(eq(inventory.id, inventoryId));
+                .where(
+                  and(eq(inventory.id, inventoryId), eq(inventory.organizationId, ctx.organizationId))
+                );
             } else {
               const [newInv] = await tx
                 .insert(inventory)
@@ -586,7 +588,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
               unitCost: newWeightedAvgCost,
               updatedBy: ctx.user.id,
             })
-            .where(eq(inventory.id, inventoryId));
+            .where(
+              and(eq(inventory.id, inventoryId), eq(inventory.organizationId, ctx.organizationId))
+            );
         } else {
           const [newInv] = await tx
             .insert(inventory)
