@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, and 13 implemented; deferred risks remain captured in the sprint closeout backlog.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, and 14 implemented; deferred risks remain captured in the sprint closeout backlog.
 
 ## Business Value
 
@@ -358,10 +358,10 @@ Prompt-to-artifact checklist:
 
 | Requirement | Evidence |
 |-------------|----------|
-| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes thirteen bounded issues. |
+| Domain sprint, not broad cleanup | This artifact owns the Inventory/Warehouse sprint and closes fourteen bounded issues. |
 | Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
 | Workflow spine mapped | `procurement / receiving -> serialized battery stock -> warehouse location -> inventory movement + cost layer -> fulfillment / warranty / RMA / finance visibility`. |
-| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, and stock-count schema ownership. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Current Pattern Map plus issue closeouts for receive, serialized availability, server extraction, stock-in, RMA receive, manual receive serialization parity, manual receive schema ownership, movement schema ownership, location schema ownership, import boundary, warehouse-location schema ownership, stock-count schema ownership, and valuation schema ownership. |
 | Clear domain ownership | Inventory server functions were extracted to workflow files; RMA receive remains support/order-owned with inventory side effects traced. |
 | Centralized query keys | Issues 1 and 2 centralized manual receive and serialized availability prefixes through `queryKeys.inventory.*`. |
 | Safe mutation/cache contracts | Issues 1, 2, 4, 5, 6, and 7 record mutation invalidation, rollback, validation, and read/error state contracts. |
@@ -387,6 +387,7 @@ Sprint standards checked:
 - location CRUD/list schemas now live with location workflow ownership
 - warehouse location hierarchy/list/create/update schemas now live with warehouse-location workflow ownership
 - stock count and stock count item schemas now live with stock-count workflow ownership
+- valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas now live with valuation workflow ownership
 
 Sprint smells removed:
 
@@ -403,6 +404,7 @@ Sprint smells removed:
 - location CRUD/list schemas lived in the generic inventory schema monolith
 - warehouse location schemas and hook/API response types lived in the generic inventory schema monolith
 - stock count schemas and stock count item schemas lived in the generic inventory schema monolith
+- valuation, COGS, cost-layer, aging, turnover, and finance-integrity schemas lived in the generic inventory schema monolith
 
 Deferred backlog:
 
@@ -1141,7 +1143,7 @@ Smells removed:
 Deferred:
 
 - DB-backed stock count workflow integrity coverage
-- broader decomposition of valuation, forecasting, alert, and dashboard schemas
+- broader decomposition of forecasting, alert, and dashboard schemas
 - UI cleanup for count creation/review flows
 
 Verification:
@@ -1155,3 +1157,43 @@ Verification:
 Goal adaptation: no goal change; this is a schema-boundary cleanup under the inventory sprint architecture lens.
 
 Residual risk: stock count schema ownership is cleaner, but count workflow correctness still depends on server/database behavior covered by future integration tests.
+
+### Issue 14: Valuation Schema Ownership
+
+Touched domains: inventory schema exports, valuation/cost-layer schemas, COGS schemas, finance-integrity schemas, inventory valuation server/hook/analytics consumers.
+
+Workflow protected: cost-layer reads/writes -> valuation and COGS query contracts -> finance-integrity check/reconcile contracts -> inventory analytics UI and valuation hooks.
+
+Business value: inventory value and finance-integrity contracts now live with valuation ownership instead of the generic inventory schema monolith, making stock value, COGS, and reconciliation work easier to change without weakening finance integrity.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/valuation.ts` for cost-layer schemas, valuation/aging/turnover queries, COGS input/result types, finance-integrity query/reconcile contracts, and valuation response types
+- removed valuation, COGS, cost-layer, aging, turnover, and finance-integrity schema ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the valuation owner through the public `@/lib/schemas/inventory` barrel
+- added a guard that prevents valuation schema ownership from drifting back into `inventory.ts`
+- preserved public barrel parse behavior, default valuation method, turnover default, finance-integrity defaults, reconcile defaults, and COGS/cost-layer coercion
+
+Smells removed:
+
+- valuation and finance-integrity schemas lived in the generic inventory schema monolith despite having dedicated valuation server and hook workflows
+- COGS and cost-layer contracts lived apart from the finance-integrity workflow they protect
+- aging/turnover response types were mixed into unrelated movement/dashboard sections
+
+Deferred:
+
+- DB-backed valuation/reconcile integration coverage beyond existing hook/query normalization tests
+- broader decomposition of forecasting, alert, and dashboard schemas
+- UI cleanup for analytics/valuation report surfaces
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/valuation-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-analytics.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/root-input-normalization-sweep.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/valuation.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/valuation-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/valuation.ts tests/unit/inventory/valuation-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no goal change; this is a finance-integrity schema-boundary cleanup under the inventory sprint architecture lens.
+
+Residual risk: valuation schema ownership is cleaner, but database-backed finance reconciliation invariants still need dedicated integration coverage.
