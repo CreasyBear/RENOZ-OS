@@ -12,6 +12,7 @@ export * from './receiving';
 export * from './serialized-items';
 export * from './serialized-mutation-contract';
 export * from './finance-mutation-contract';
+export * from './warehouse-locations';
 
 // --- Alert Schemas ---
 export * from './item-alerts';
@@ -28,9 +29,12 @@ export type {
   InventoryFilter,
   InventoryListQuery,
   QualityRecord,
+} from './inventory';
+
+export type {
   HookWarehouseLocation,
   HookLocationHierarchy,
-} from './inventory';
+} from './warehouse-locations';
 
 export type {
   Location,
