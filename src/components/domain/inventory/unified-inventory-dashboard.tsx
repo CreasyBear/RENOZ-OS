@@ -356,6 +356,8 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   const lowStockCount = metrics?.lowStockCount;
   const outOfStockCount = metrics?.outOfStockCount;
   const locationsCount = metrics?.locationsCount ?? wmsData?.stockByLocation?.length ?? 0;
+  const alertsComparisonIsComparable =
+    wmsData?.stockSemantics?.currentAlerts === wmsData?.stockSemantics?.previousPeriodComparison;
 
   return (
     <div className="space-y-6">
@@ -546,12 +548,14 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           isLoading={isLoading}
           alert={!showDashboardUnavailable && ((lowStockCount ?? 0) + (outOfStockCount ?? 0) > 0)}
           delta={
-            comparison?.alertsChange !== undefined && comparison.alertsChange !== 0
+            alertsComparisonIsComparable &&
+            comparison?.alertsChange !== undefined &&
+            comparison.alertsChange !== 0
               ? Math.abs(comparison.alertsChange)
               : undefined
           }
           positive={
-            comparison?.alertsChange !== undefined
+            alertsComparisonIsComparable && comparison?.alertsChange !== undefined
               ? comparison.alertsChange < 0 // Inverse: fewer alerts is better
               : undefined
           }

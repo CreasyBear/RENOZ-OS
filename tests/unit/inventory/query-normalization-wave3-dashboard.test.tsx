@@ -118,15 +118,18 @@ vi.mock('@/components/shared/metric-card', () => ({
     title,
     value,
     subtitle,
+    delta,
   }: {
     title: string;
     value: ReactNode;
     subtitle?: string;
+    delta?: number;
   }) => (
     <div>
       <span>{title}</span>
       <span>{value}</span>
       {subtitle ? <span>{subtitle}</span> : null}
+      {delta !== undefined ? <span>{title} delta {delta}</span> : null}
     </div>
   ),
 }));
@@ -344,6 +347,63 @@ describe('inventory dashboard query normalization wave 3', () => {
     expect(screen.getByText('0 low, 0 out available')).toBeInTheDocument();
     expect(screen.getByText('On-Hand by Category')).toBeInTheDocument();
     expect(screen.getByText('On-Hand by Location')).toBeInTheDocument();
+  });
+
+  it('does not trend allocatable alerts against movement-reconstructed history', async () => {
+    mockUseWMSDashboard.mockReturnValueOnce({
+      data: {
+        stockSemantics: {
+          totals: 'physical_on_hand',
+          breakdowns: 'physical_on_hand',
+          currentAlerts: 'allocatable_available',
+          previousPeriodComparison: 'movement_reconstructed_quantity',
+        },
+        totals: { totalValue: 1200, totalUnits: 45, totalSkus: 3 },
+        comparison: {
+          totalValueChange: 10,
+          totalUnitsChange: 5,
+          totalSkusChange: 0,
+          alertsChange: 4,
+          locationsChange: 0,
+        },
+        stockByCategory: [],
+        stockByLocation: [],
+        recentMovements: [],
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    mockUseInventoryDashboard.mockReturnValueOnce({
+      data: {
+        metrics: {
+          totalItems: 45,
+          totalSkus: 3,
+          totalUnits: 45,
+          totalValue: 1200,
+          locationsCount: 1,
+          lowStockCount: 2,
+          outOfStockCount: 1,
+          allocatedCount: 0,
+          turnoverRate: 0,
+          pendingReceipts: 0,
+        },
+        recentMovements: [],
+        topMoving: [],
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const { UnifiedInventoryDashboard } = await import(
+      '@/components/domain/inventory/unified-inventory-dashboard'
+    );
+
+    render(<UnifiedInventoryDashboard />);
+
+    expect(await screen.findByText('Total Value delta 10')).toBeInTheDocument();
+    expect(screen.queryByText('Allocatable Alerts delta 4')).not.toBeInTheDocument();
   });
 
   it('keeps dashboard panels visible with degraded warnings when stale data exists', async () => {

@@ -83,7 +83,10 @@ export const wmsDashboardStockSemanticsSchema = z.object({
   totals: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.totals),
   breakdowns: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.breakdowns),
   currentAlerts: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.currentAlerts),
-  previousPeriodComparison: z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.previousPeriodComparison),
+  previousPeriodComparison: z.union([
+    z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.previousPeriodComparison),
+    z.literal(WMS_DASHBOARD_STOCK_SEMANTICS.currentAlerts),
+  ]),
 });
 export type WMSDashboardStockSemantics = z.infer<typeof wmsDashboardStockSemanticsSchema>;
 

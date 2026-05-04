@@ -25,6 +25,17 @@ describe('WMS stock semantics contract', () => {
     expect(wms).toContain('Previous period alerts are movement-reconstructed quantity signals.');
   });
 
+  it('does not show alert trend deltas unless alert semantics are comparable', () => {
+    const dashboard = read('src/components/domain/inventory/unified-inventory-dashboard.tsx');
+
+    expect(dashboard).toContain('const alertsComparisonIsComparable');
+    expect(dashboard).toContain(
+      'wmsData?.stockSemantics?.currentAlerts === wmsData?.stockSemantics?.previousPeriodComparison'
+    );
+    expect(dashboard).toContain('alertsComparisonIsComparable &&');
+    expect(dashboard).toContain('comparison.alertsChange !== 0');
+  });
+
   it('keeps valuation/reporting stock as physical on-hand finance inventory', () => {
     const valuation = read('src/server/functions/inventory/valuation.ts');
     const valuationReport = read('src/components/domain/inventory/reports/valuation-report.tsx');
