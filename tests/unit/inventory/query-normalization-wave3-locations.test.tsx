@@ -198,4 +198,35 @@ describe('inventory locations query normalization wave 3', () => {
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to delete location');
   });
+
+  it('uses safe route submit copy instead of raw warehouse-location errors', async () => {
+    const { getLocationMutationSubmitError } = await import(
+      '@/routes/_authenticated/inventory/location-error-messages'
+    );
+
+    expect(
+      getLocationMutationSubmitError(
+        new Error('duplicate key value violates unique constraint warehouse_locations_location_code_key')
+      )
+    ).toBe('Failed to save location');
+  });
+
+  it('keeps CSV import validation guidance but hides raw server import failures', async () => {
+    const {
+      getLocationImportErrorMessage,
+      LocationImportValidationError,
+    } = await import('@/routes/_authenticated/inventory/location-error-messages');
+
+    expect(
+      getLocationImportErrorMessage(
+        new LocationImportValidationError('Row 2: invalid locationType "drawer"')
+      )
+    ).toBe('Row 2: invalid locationType "drawer"');
+
+    expect(
+      getLocationImportErrorMessage(
+        new Error('insert into warehouse_locations violates row-level security policy')
+      )
+    ).toBe('Failed to import locations');
+  });
 });

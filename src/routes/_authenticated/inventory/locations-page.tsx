@@ -42,6 +42,11 @@ import {
   useDeleteWarehouseLocation,
 } from "@/hooks/inventory";
 import { bulkCreateLocations } from "@/server/functions/inventory/locations";
+import {
+  getLocationImportErrorMessage,
+  getLocationMutationSubmitError,
+  LocationImportValidationError,
+} from "./location-error-messages";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -206,8 +211,8 @@ export default function LocationsPage() {
           await createMutation.mutateAsync(data as CreateWarehouseLocationInput);
         }
         setShowFormDialog(false);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to save location");
+      } catch {
+        // Mutation hooks own operator-safe failure toasts; the dialog gets safe submitError below.
       }
     },
     [formMode, editingLocation, createMutation, updateMutation]
@@ -339,18 +344,24 @@ export default function LocationsPage() {
           const isReceivableRaw = idxReceivable >= 0 ? (row[idxReceivable] ?? "").trim() : "true";
 
           if (!locationCode || !name || !locationTypeRaw) {
-            throw new Error(`Row ${i + 1}: locationCode, name, and locationType are required`);
+            throw new LocationImportValidationError(
+              `Row ${i + 1}: locationCode, name, and locationType are required`
+            );
           }
 
           const typeParse = locationTypeSchema.safeParse(locationTypeRaw);
           if (!typeParse.success) {
-            throw new Error(`Row ${i + 1}: invalid locationType "${locationTypeRaw}"`);
+            throw new LocationImportValidationError(
+              `Row ${i + 1}: invalid locationType "${locationTypeRaw}"`
+            );
           }
 
           const capacity =
             capacityRaw === "" ? null : Number.isFinite(Number(capacityRaw)) ? Number(capacityRaw) : NaN;
           if (Number.isNaN(capacity)) {
-            throw new Error(`Row ${i + 1}: invalid capacity "${capacityRaw}"`);
+            throw new LocationImportValidationError(
+              `Row ${i + 1}: invalid capacity "${capacityRaw}"`
+            );
           }
 
           parsedRows.push({
@@ -374,7 +385,9 @@ export default function LocationsPage() {
         for (const row of parsedRows) {
           const normalized = row.locationCode.toLowerCase();
           if (fileCodeSet.has(normalized)) {
-            throw new Error(`Duplicate locationCode in file: ${row.locationCode}`);
+            throw new LocationImportValidationError(
+              `Duplicate locationCode in file: ${row.locationCode}`
+            );
           }
           fileCodeSet.add(normalized);
         }
@@ -392,7 +405,9 @@ export default function LocationsPage() {
 
           if (creatable.length === 0) {
             const unresolved = pending.map((row) => `${row.locationCode} -> ${row.parentCode}`).slice(0, 10);
-            throw new Error(`Unresolved parentCode references: ${unresolved.join(", ")}`);
+            throw new LocationImportValidationError(
+              `Unresolved parentCode references: ${unresolved.join(", ")}`
+            );
           }
 
           const payload: CreateWarehouseLocationInput[] = creatable.map((row) => ({
@@ -423,7 +438,7 @@ export default function LocationsPage() {
         await refetchHierarchy();
         toast.success(`Imported ${createdCount} location${createdCount === 1 ? "" : "s"}`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to import locations");
+        toast.error(getLocationImportErrorMessage(error));
       } finally {
         setIsImporting(false);
         event.target.value = "";
@@ -514,11 +529,8 @@ export default function LocationsPage() {
         onSubmit={handleFormSubmit}
         isSubmitting={isSubmitting}
         submitError={
-          createMutation.error instanceof Error
-            ? createMutation.error.message
-            : updateMutation.error instanceof Error
-              ? updateMutation.error.message
-              : null
+          getLocationMutationSubmitError(createMutation.error) ??
+          getLocationMutationSubmitError(updateMutation.error)
         }
       />
 
