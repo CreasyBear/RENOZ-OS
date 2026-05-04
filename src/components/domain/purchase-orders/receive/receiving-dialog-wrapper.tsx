@@ -17,13 +17,7 @@ import { ErrorState } from '@/components/shared/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePurchaseOrder } from '@/hooks/suppliers';
 import { useProductSerialization } from '@/hooks/purchase-orders/use-product-serialization';
-
-const PRODUCT_SERIALIZATION_FALLBACK_MESSAGE =
-  'Product serialization requirements are temporarily unavailable. Please refresh and try again.';
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
+import { ProductSerializationErrorState } from './product-serialization-error-state';
 
 // ============================================================================
 // TYPES
@@ -154,26 +148,13 @@ export function ReceivingDialogWrapper({
   }
 
   if (hasProductSerializationErrors) {
-    const errorMessages = productSerializationErrors.map((errorItem) => {
-      const productLabel = productLabels.get(errorItem.productId) ?? errorItem.productId;
-      return `${productLabel}: ${getErrorMessage(
-        errorItem.error,
-        PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
-      )}`;
-    });
-
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
         <div className="rounded-lg border bg-card p-6 shadow-lg max-w-md">
-          <ErrorState
-            title="Product serialization requirements could not be loaded"
-            message={
-              errorMessages.length > 0
-                ? errorMessages.join('; ')
-                : PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
-            }
+          <ProductSerializationErrorState
+            errors={productSerializationErrors}
+            productLabels={productLabels}
             onRetry={refetchErroredProducts}
-            retryLabel="Retry"
           />
         </div>
       </div>

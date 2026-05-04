@@ -14,12 +14,14 @@ import { useProductSerialization } from '@/hooks/purchase-orders/use-product-ser
 import { BulkReceivingDialog } from './bulk-receiving-dialog';
 import { transformPOItemsToReceiptItems, filterItemsWithPendingQuantity } from '@/components/domain/purchase-orders/utils/po-item-transform';
 import { ErrorState } from '@/components/shared/error-state';
+import {
+  PRODUCT_SERIALIZATION_ERROR_TITLE,
+  PRODUCT_SERIALIZATION_FALLBACK_MESSAGE,
+  buildProductSerializationErrorMessages,
+} from '@/components/domain/purchase-orders/receive/product-serialization-error-messages';
 import { isReadQueryError } from '@/lib/read-path-policy';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { BulkReceiptData, PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
-
-const PRODUCT_SERIALIZATION_FALLBACK_MESSAGE =
-  'Product serialization requirements are temporarily unavailable. Please refresh and try again.';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -181,16 +183,10 @@ export function BulkReceivingDialogContainer({
       })
       .filter(Boolean);
 
-    const productErrorMessages = productSerializationErrors
-      .map((errorItem) => {
-        const productLabel = productLabels.get(errorItem.productId) ?? errorItem.productId;
-        const error = getErrorMessage(
-          errorItem.error,
-          PRODUCT_SERIALIZATION_FALLBACK_MESSAGE
-        );
-        return `${productLabel}: ${error}`;
-      })
-      .filter(Boolean);
+    const productErrorMessages = buildProductSerializationErrorMessages(
+      productSerializationErrors,
+      productLabels
+    );
 
     const errorMessages = [...poErrorMessages, ...productErrorMessages];
     const firstError = getErrorMessage(
@@ -204,7 +200,7 @@ export function BulkReceivingDialogContainer({
     );
     const title =
       hasProductErrors && !hasPOErrors
-        ? 'Product serialization requirements could not be loaded'
+        ? PRODUCT_SERIALIZATION_ERROR_TITLE
         : missingPurchaseOrders.length > 0 && missingPurchaseOrders.length === poErrors.length
         ? 'Some purchase orders could not be found'
         : 'Failed to load purchase order details';
