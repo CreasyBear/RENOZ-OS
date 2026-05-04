@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, adjustment, transfer, allocation, movement, dashboard, WMS, serial availability, and bulk status update extraction boundaries; remaining issues stay in the ledger.
+Status: Issues 1, 2, and 3 implemented; inventory server functions now live behind focused ownership modules with `inventory.ts` retained as a compatibility barrel; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -64,7 +64,7 @@ Observed inventory paths:
 
 ### What Is Fragile
 
-- Core inventory server code is concentrated in `src/server/functions/inventory/inventory.ts` at nearly 3,000 lines.
+- Core inventory server code was concentrated in `src/server/functions/inventory/inventory.ts` at nearly 3,000 lines; Issue 3 reduced it to a compatibility barrel.
 - Core inventory schema code is concentrated in `src/lib/schemas/inventory/inventory.ts` at over 1,700 lines.
 - Large UI files such as `unified-inventory-dashboard.tsx` and `inventory-detail-view.tsx` mix multiple operator concerns.
 - Cache invalidation contracts are partly centralized, but some prefix keys are still hand-built in hooks.
@@ -133,7 +133,7 @@ Business value: inventory code should be safe to change because it controls stoc
 
 Evidence:
 
-- `src/server/functions/inventory/inventory.ts` contains list/detail, adjustment, transfer, receive, movements, dashboard, serial availability, bulk status update, and analytics-adjacent logic.
+- `src/server/functions/inventory/inventory.ts` previously contained list/detail, adjustment, transfer, receive, movements, dashboard, serial availability, bulk status update, and analytics-adjacent logic.
 
 Proposed slice:
 
@@ -353,11 +353,11 @@ Residual risk: cache-prefix centralization does not prove every allocation mutat
 
 ### Issue 3: Inventory Server Concentration
 
-Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation, movement history, inventory dashboard metrics, WMS aggregate reads, serialized availability, bulk operator status updates.
+Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation, movement history, inventory dashboard metrics, WMS aggregate reads, serialized availability, bulk operator status updates, inventory list/search/detail reads.
 
-Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity; operator movement history reads for item detail and dashboard movement panels; inventory overview dashboard metrics and top movers; WMS stock by category/location and WMS timeline aggregates; serial selectors for picking/allocation; bulk inventory status changes with movement audit and product activity logs.
+Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity; operator movement history reads for item detail and dashboard movement panels; inventory overview dashboard metrics and top movers; WMS stock by category/location and WMS timeline aggregates; serial selectors for picking/allocation; bulk inventory status changes with movement audit and product activity logs; inventory browsing, low-stock reads, location contents, availability checks, quick search, and item detail reads.
 
-Business value: inventory mutations and operational reads are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, allocation, movement-history, dashboard, WMS aggregate, serialized-availability, and bulk status workflows are outside the monolithic workflow file.
+Business value: inventory mutations and operational reads are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, allocation, movement-history, dashboard, WMS aggregate, serialized-availability, bulk status, and core read workflows are outside the monolithic workflow file.
 
 Standards checked:
 
@@ -371,6 +371,9 @@ Standards checked:
 - extracted WMS aggregate reads into `src/server/functions/inventory/wms-dashboard.ts`
 - extracted `getAvailableSerials` into `src/server/functions/inventory/serial-availability.ts`
 - extracted `bulkUpdateStatus` into `src/server/functions/inventory/status-updates.ts`
+- extracted `listInventory`, `quickSearchInventory`, and `getInventoryItem` into `src/server/functions/inventory/reads.ts`
+- reduced `src/server/functions/inventory/inventory.ts` to a compatibility barrel
+- kept the inventory query-count/join parity regression guard pointed at the read owner file
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
@@ -390,6 +393,8 @@ Smells removed:
 - WMS aggregate read functions from `src/server/functions/inventory/inventory.ts`
 - serialized availability selector server function from `src/server/functions/inventory/inventory.ts`
 - bulk status update server function and schema from `src/server/functions/inventory/inventory.ts`
+- inventory list/search/detail read functions from `src/server/functions/inventory/inventory.ts`
+- empty monolith section comments and local type/helper scaffolding from `src/server/functions/inventory/inventory.ts`
 - direct receive workflow imports from the monolithic inventory server module
 - direct adjustment workflow imports from the monolithic inventory server module
 - direct transfer workflow imports from the monolithic inventory server module
@@ -400,8 +405,8 @@ Smells removed:
 
 Deferred:
 
-- extracting remaining inventory CRUD/search server boundaries
 - extracting inventory schema sections
+- moving legacy read consumers from the compatibility barrel to `src/server/functions/inventory/reads.ts`
 
 Verification:
 
@@ -409,18 +414,20 @@ Verification:
 - `./node_modules/.bin/vitest run tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/receiving-page-context.test.tsx tests/unit/inventory/receiving-location-read-policy.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/query-count-join-parity.test.ts tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/server/functions/inventory/allocations.ts src/server/functions/inventory/inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/movements.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/dashboard.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/wms-dashboard.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-wms-dashboard.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/serial-availability.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
 - `./node_modules/.bin/eslint src/server/functions/inventory/status-updates.ts src/server/functions/inventory/inventory.ts`
+- `./node_modules/.bin/eslint src/server/functions/inventory/reads.ts src/server/functions/inventory/inventory.ts tests/unit/query-count-join-parity.test.ts`
 - `git diff --check`
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
 - `node scripts/check-read-path-query-guards.mjs`
 - `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
 
-Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
+Goal adaptation: no goal change; this closes the original inventory server concentration through strict modularity without changing behavior.
 
-Residual risk: the main inventory server file remains mixed-concern at 450 lines; this slice proves receiving, adjustment, transfer, allocation, movement-history, standard dashboard, WMS aggregate, serial availability, and bulk status extraction boundaries but does not yet extract remaining CRUD/search or inventory schema sections.
+Residual risk: the main inventory server file is now a 29-line compatibility barrel, but legacy read consumers still import through that barrel and the inventory schema file remains concentrated. Issue 3 closes server-function concentration, not schema decomposition or mutation error standardization.
