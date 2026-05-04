@@ -291,6 +291,12 @@ export function countInvalidPriceImportRows(
   return validationResults.filter((result) => result.status === 'invalid').length;
 }
 
+export function countValidPriceImportRows(
+  validationResults: readonly PriceImportValidationResult[]
+): number {
+  return validationResults.filter((result) => result.status === 'valid').length;
+}
+
 // ============================================================================
 // CSV PARSING
 // ============================================================================
@@ -392,7 +398,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
     const dataRows = data.hasHeaders ? rows.slice(1) : rows;
 
     const validationResults = [];
-    const validRows = [];
+    const resolvedCandidateRows = [];
     const errors = [];
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -413,7 +419,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
           effectiveDate,
         });
 
-        validRows.push({ rowNumber, data: validatedRow, resolution });
+        resolvedCandidateRows.push({ rowNumber, data: validatedRow, resolution });
         validationResults.push({
           rowNumber,
           status: getPriceImportValidationStatus(resolution.status),
@@ -442,15 +448,15 @@ export const validatePriceImport = createServerFn({ method: "POST" })
 
     return {
       totalRows: dataRows.length,
-      validRows: validRows.length,
+      validRows: countValidPriceImportRows(validationResults),
       invalidRows: countInvalidPriceImportRows(validationResults),
       validationResults,
       summary: {
         errors: errors.slice(0, 10), // Show first 10 errors
         hasMoreErrors: errors.length > 10,
       },
-      resolvedRows: validRows.filter((row) => row.resolution.status === 'resolved').length,
-      duplicateRows: validRows.filter((row) => row.resolution.status === 'duplicate_target').length,
+      resolvedRows: resolvedCandidateRows.filter((row) => row.resolution.status === 'resolved').length,
+      duplicateRows: resolvedCandidateRows.filter((row) => row.resolution.status === 'duplicate_target').length,
     };
   });
 

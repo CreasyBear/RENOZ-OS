@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countInvalidPriceImportRows,
+  countValidPriceImportRows,
   getPriceImportValidationStatus,
 } from '@/server/functions/suppliers/price-imports';
 
@@ -16,6 +17,17 @@ describe('supplier price import preview summary', () => {
   it('counts invalid rows from validation results rather than only parser errors', () => {
     expect(
       countInvalidPriceImportRows([
+        { status: 'valid' },
+        { status: 'invalid' },
+        { status: 'valid' },
+        { status: 'invalid' },
+      ])
+    ).toBe(2);
+  });
+
+  it('counts valid rows from validation results rather than schema-parsed unresolved rows', () => {
+    expect(
+      countValidPriceImportRows([
         { status: 'valid' },
         { status: 'invalid' },
         { status: 'valid' },
