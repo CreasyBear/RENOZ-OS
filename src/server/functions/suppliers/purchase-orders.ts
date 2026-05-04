@@ -703,7 +703,14 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
     const result = await db
       .update(purchaseOrders)
       .set(updates)
-      .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(purchaseOrders.id, id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'draft'),
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
       .returning();
 
     const updatedPo = result[0];
@@ -777,7 +784,9 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'draft'),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning({ id: purchaseOrders.id });
@@ -917,12 +926,17 @@ export const submitForApproval = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'draft'),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new NotFoundError('Purchase order not found or not in draft status', 'purchaseOrder');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -996,12 +1010,17 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'pending_approval'),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1073,12 +1092,17 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'pending_approval'),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1152,12 +1176,17 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'approved'),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new NotFoundError('Purchase order not found or not approved', 'purchaseOrder');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1231,12 +1260,17 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          not(inArray(purchaseOrders.status, ['received', 'closed', 'cancelled'])),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new ValidationError('Purchase order not found or cannot be cancelled');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);
@@ -1310,12 +1344,17 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId)
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          inArray(purchaseOrders.status, ['received', 'partial_received', 'ordered']),
+          isNull(purchaseOrders.deletedAt)
         )
       )
       .returning();
 
     const updatedPo = result[0];
+    if (!updatedPo) {
+      throw new ValidationError('Purchase order not found or cannot be closed');
+    }
 
     // Activity logging
     const logger = createActivityLoggerWithContext(ctx);

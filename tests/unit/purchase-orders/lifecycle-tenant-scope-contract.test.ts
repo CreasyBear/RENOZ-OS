@@ -29,22 +29,34 @@ function firstPurchaseOrderWriteBlock(functionBlock: string): string {
 }
 
 describe('purchase order lifecycle tenant-scope contract', () => {
-  it('keeps single-order lifecycle writes organization-scoped', () => {
+  it('keeps single-order lifecycle writes scoped to organization and expected state', () => {
     const source = compact(read('src/server/functions/suppliers/purchase-orders.ts'));
 
-    for (const functionName of [
-      'deletePurchaseOrder',
-      'submitForApproval',
-      'approvePurchaseOrder',
-      'rejectPurchaseOrder',
-      'markAsOrdered',
-      'cancelPurchaseOrder',
-      'closePurchaseOrder',
-    ]) {
+    const cases = [
+      ['deletePurchaseOrder', "eq(purchaseOrders.status,'draft')"],
+      ['submitForApproval', "eq(purchaseOrders.status,'draft')"],
+      ['approvePurchaseOrder', "eq(purchaseOrders.status,'pending_approval')"],
+      ['rejectPurchaseOrder', "eq(purchaseOrders.status,'pending_approval')"],
+      ['markAsOrdered', "eq(purchaseOrders.status,'approved')"],
+      [
+        'cancelPurchaseOrder',
+        "not(inArray(purchaseOrders.status,['received','closed','cancelled']))",
+      ],
+      [
+        'closePurchaseOrder',
+        "inArray(purchaseOrders.status,['received','partial_received','ordered'])",
+      ],
+    ] as const;
+
+    for (const [functionName, statePredicate] of cases) {
       const writeBlock = firstPurchaseOrderWriteBlock(exportedFunctionBlock(source, functionName));
 
+      expect(writeBlock).toContain('eq(purchaseOrders.id,data.id)');
+      expect(writeBlock).toContain('eq(purchaseOrders.organizationId,ctx.organizationId)');
+      expect(writeBlock).toContain(statePredicate);
+      expect(writeBlock).toContain('isNull(purchaseOrders.deletedAt)');
       expect(writeBlock).toContain(
-        'where(and(eq(purchaseOrders.id,data.id),eq(purchaseOrders.organizationId,ctx.organizationId)))'
+        `where(and(eq(purchaseOrders.id,data.id),eq(purchaseOrders.organizationId,ctx.organizationId),${statePredicate},isNull(purchaseOrders.deletedAt)))`
       );
       expect(writeBlock).not.toContain('.where(eq(purchaseOrders.id,data.id))');
     }
