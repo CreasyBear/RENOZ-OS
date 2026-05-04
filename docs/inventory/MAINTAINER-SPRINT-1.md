@@ -1271,7 +1271,7 @@ Deferred:
 
 Verification:
 
-- `./node_modules/.bin/vitest run tests/unit/inventory/alert-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-alerts.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory/alert-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-alerts.test.tsx tests/unit/inventory/alert-sorting.test.ts`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/lib/schemas/inventory/alerts.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts tests/unit/inventory/alert-schema-ownership.test.ts`
 - `git diff --check -- docs/inventory/MAINTAINER-SPRINT-1.md src/lib/schemas/inventory/index.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/alerts.ts tests/unit/inventory/alert-schema-ownership.test.ts`
