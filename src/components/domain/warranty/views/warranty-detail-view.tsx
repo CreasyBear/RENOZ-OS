@@ -6,7 +6,8 @@
  * Pure UI component for warranty details, claims, and extensions.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { WarrantyDetailAlertsSection } from '@/components/domain/warranty/views/warranty-detail-alerts-section';
 import { WarrantyDetailDialogs } from '@/components/domain/warranty/views/warranty-detail-dialogs';
 import { WarrantyDetailHeaderSection } from '@/components/domain/warranty/views/warranty-detail-header-section';
 import { WarrantyDetailSidebarContent } from '@/components/domain/warranty/views/warranty-detail-sidebar-content';
@@ -14,10 +15,7 @@ import {
   WarrantyDetailTabs,
   type WarrantyDetailTabValue,
 } from '@/components/domain/warranty/views/warranty-detail-tabs';
-import { WarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts';
-import { buildWarrantyAlerts } from '@/components/domain/warranty/views/warranty-alerts-utils';
 import { WarrantyCoverageSummary } from '@/components/domain/warranty/views/warranty-coverage-summary';
-import { useAlertDismissals } from '@/hooks/_shared/use-alert-dismissals';
 import { getDaysUntilExpiry } from '@/lib/warranty';
 
 // ============================================================================
@@ -99,18 +97,6 @@ export function WarrantyDetailView({
   const [activeTab, setActiveTab] = useState<WarrantyDetailTabValue>('overview');
   const daysUntilExpiry = getDaysUntilExpiry(warranty.expiryDate);
   const approvalClaim = selectedClaimForApproval ?? null;
-  const { dismiss, isAlertDismissed } = useAlertDismissals();
-
-  const alerts = useMemo(() => {
-    return buildWarrantyAlerts({
-      warrantyId: warranty.id,
-      warrantyStatus: warranty.status,
-      daysUntilExpiry,
-      expiryAlertOptOut: warranty.expiryAlertOptOut,
-    });
-  }, [daysUntilExpiry, warranty.expiryAlertOptOut, warranty.id, warranty.status]);
-
-  const visibleAlerts = alerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
 
   const sidebarContent = (
     <WarrantyDetailSidebarContent
@@ -156,12 +142,12 @@ export function WarrantyDetailView({
           isClaimSummaryLoading={isClaimSummaryLoading}
         />
 
-        <WarrantyAlerts
-          alerts={visibleAlerts}
-          onDismiss={dismiss}
-          onExtendWarranty={() => onExtendDialogOpenChange(true)}
+        <WarrantyDetailAlertsSection
+          warranty={warranty}
+          daysUntilExpiry={daysUntilExpiry}
+          onExtendDialogOpenChange={onExtendDialogOpenChange}
           onReviewClaims={() => setActiveTab('claims')}
-          onEnableAlerts={() => onToggleOptOut(false)}
+          onToggleOptOut={onToggleOptOut}
         />
 
         <WarrantyDetailTabs
