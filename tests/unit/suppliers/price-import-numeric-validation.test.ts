@@ -19,10 +19,27 @@ describe('supplier price import numeric validation', () => {
 
     expect(parsePriceImportRowData(rowData)).toMatchObject({
       basePrice: 1250.5,
+      currency: 'AUD',
       discountValue: 25.5,
       minOrderQty: 2,
       maxOrderQty: 100,
     });
+  });
+
+  it('normalizes valid currency codes and rejects malformed currency values', () => {
+    expect(parsePriceImportRowData({ ...baseRow, currency: ' usd ' })).toMatchObject({
+      currency: 'USD',
+    });
+
+    expect(() => parsePriceImportRowData({ ...baseRow, currency: 'AU' })).toThrow(
+      /Currency must use a 3-letter code/
+    );
+    expect(() => parsePriceImportRowData({ ...baseRow, currency: 'AUDD' })).toThrow(
+      /Currency must use a 3-letter code/
+    );
+    expect(() => parsePriceImportRowData({ ...baseRow, currency: '12$' })).toThrow(
+      /Currency must use a 3-letter code/
+    );
   });
 
   it('rejects invalid numeric import fields before supplier/product resolution', () => {

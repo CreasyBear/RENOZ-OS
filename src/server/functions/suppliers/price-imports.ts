@@ -83,6 +83,20 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return normalized || undefined;
 }
 
+function parseCurrencyCode(value: string, ctx: z.RefinementCtx): string {
+  const normalized = value.trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Currency must use a 3-letter code',
+    });
+    return z.NEVER;
+  }
+
+  return normalized;
+}
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidCalendarDate(value: string): boolean {
@@ -140,7 +154,7 @@ const priceImportRowSchema = z.object({
   productName: z.string().min(1),
   productSku: z.string().optional().transform(normalizeOptionalString),
   basePrice: z.string().transform((val, ctx) => parseNonNegativeDecimal(val, 'Base price', ctx)),
-  currency: z.string().default('AUD'),
+  currency: z.string().default('AUD').transform((val, ctx) => parseCurrencyCode(val, ctx)),
   discountType: z.enum(['percentage', 'fixed', 'volume']).default('percentage'),
   discountValue: z.string().default('0').transform((val, ctx) => parseNonNegativeDecimal(val || '0', 'Discount value', ctx)),
   minOrderQty: z.string().optional().transform((val, ctx) => parseOptionalPositiveInteger(val, 'Minimum order quantity', ctx)),
