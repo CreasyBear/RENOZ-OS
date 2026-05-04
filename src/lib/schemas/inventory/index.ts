@@ -16,6 +16,7 @@ export * from './serialized-items';
 export * from './serialized-mutation-contract';
 export * from './finance-mutation-contract';
 export * from './warehouse-locations';
+export * from './alerts';
 
 // --- Alert Schemas ---
 export * from './item-alerts';
