@@ -2,7 +2,7 @@
 
 Sprint 5 follows the Sprint 4 fulfillment cache closeout into the operator-facing workflow surfaces: picking, shipment completion, shipment documents, and recovery actions.
 
-Status: Issues 1, 2, 3, 4, 5, 6, and 7 implemented.
+Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented.
 
 ## Business Value
 
@@ -27,7 +27,7 @@ fulfillment route or order detail fulfillment tab
 - High-risk UI surfaces: `src/components/domain/orders/fulfillment/fulfillment-dashboard.tsx`, `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`, `src/components/domain/orders/fulfillment/shipment-list.tsx`, `src/components/domain/orders/fulfillment/pick-items-dialog.tsx`
 - Hooks: `src/hooks/orders/use-shipments.ts`, `src/hooks/orders/use-picking.ts`, `src/hooks/orders/order-mutation-client-errors.ts`
 - Cache policy: `src/hooks/orders/_fulfillment-cache.ts`
-- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`, `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`
+- Tests: `tests/unit/orders/order-client-contracts.test.ts`, `tests/unit/orders/shipment-list.test.tsx`, `tests/unit/orders/fulfillment-import-workflow.test.tsx`, `tests/unit/orders/ship-order-item-selection.test.ts`, `tests/unit/orders/shipment-shipping-cost-amendment.test.ts`, `tests/unit/orders/ship-order-address.test.ts`
 
 ## Triage Findings
 
@@ -300,6 +300,44 @@ Closeout criteria:
 - useful conflict guidance remains available when the order amendment contract classifies it
 - ship-order dialog remains responsible for shipment workflow orchestration and recovery notice display
 - focused tests cover amendment request shape, request/approve/apply sequencing, unknown fallback copy, and conflict guidance
+- focused tests, lint, typecheck, and full orders suite pass
+
+### 8. Ship Order Address Boundary
+
+Business value: shipping address selection controls where battery shipments are sent and whether a one-off destination is saved back to the order. Address option derivation, address-source selection, field mutation, and one-off override behavior should be reviewable without reading shipment mutation, carrier, item selection, amendment, and confirmation logic.
+
+Workflow invariant: ship order dialog -> order/customer address data -> address workflow boundary -> shipment address payload/addressSource/customerAddressId/saveToOrder flag -> create shipment server validation and order shipping-address side effects.
+
+Affected files:
+
+- `src/components/domain/orders/fulfillment/ship-order-address-workflow.ts`
+- `src/components/domain/orders/fulfillment/ship-order-address.tsx`
+- `src/components/domain/orders/fulfillment/ship-order-dialog.tsx`
+- `src/components/domain/orders/fulfillment/index.ts`
+- `tests/unit/orders/ship-order-address.test.ts`
+- `docs/orders/MAINTAINER-SPRINT-5.md`
+
+Out of scope:
+
+- changing shipment create server behavior
+- changing address schema validation
+- changing carrier, item selection, shipping cost amendment, or confirmation-step behavior
+- redesigning the address picker
+- browser QA for the full ship-order dialog
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/orders/ship-order-address.test.ts
+```
+
+Closeout criteria:
+
+- order/customer address option derivation leaves `ship-order-dialog.tsx`
+- address field mutation, collapsible state, selected address state, and save-to-order state leave `ship-order-dialog.tsx`
+- shipment address payload, addressSource, and customerAddressId helpers are explicit and tested
+- address section UI lives in a focused fulfillment component
+- focused tests cover option ordering, payload construction, source/customer ID resolution, and incomplete-address detection
 - focused tests, lint, typecheck, and full orders suite pass
 
 ## Closeout Log
@@ -586,3 +624,42 @@ Verification:
 Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making a partial-success finance recovery path explicit while preserving the route/container/hook/server/cache spine.
 
 Residual risk: the remaining high-value ship-order extraction is address handling, which still combines address option derivation, field mutation, collapsible UI state, one-off override behavior, and save-to-order behavior inside `ship-order-dialog.tsx`.
+
+### Issue 8: Ship Order Address Boundary
+
+Touched domains: orders fulfillment UI, ship-order address workflow, address payload/source tests.
+
+Workflow protected: ship order dialog -> order/customer address options -> address workflow hook/component -> shipment address payload, addressSource, customerAddressId, save-to-order flag -> create shipment server validation and existing order shipping-address side effects.
+
+Business value: operators still choose an order default, saved customer address, or one-off shipment destination, but the address workflow is now isolated from shipment creation, mark-shipped, shipping cost amendment, item selection, carrier details, and confirmation summary.
+
+Standards checked:
+
+- extracted `ship-order-address-workflow.ts` for address option derivation, any/incomplete address checks, shipment address payload construction, addressSource/customerAddressId resolution, selected-address state, collapsible state, and save-to-order state
+- extracted `ShipOrderAddressSection` for address picker, address fields, incomplete-address alert, collapsible UI, and save-to-order checkbox
+- kept `ShipOrderDialog` responsible for shipment creation flow and confirmation summary
+- kept shipment create server behavior, address schema validation, and cache policy unchanged
+- split workflow helpers from the `.tsx` component file to satisfy fast-refresh boundaries
+
+Smells removed:
+
+- `ship-order-dialog.tsx` directly owned address option derivation, address picker field mutation, collapsible address UI state, selected address state, and save-to-order state
+- addressSource/customerAddressId/payload behavior was implicit in the create shipment callback
+- address behavior lacked focused tests at the ship-order boundary
+
+Deferred:
+
+- `ship-order-dialog.tsx` still owns carrier fields, mark-shipped fallback notices, successful shipment toast copy, and confirmation summary
+- the confirmation address summary remains in the dialog because it is part of the final review step
+- browser QA was skipped because this is a focused extraction with unit coverage and no server behavior change
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/orders/ship-order-address.test.ts`
+- `./node_modules/.bin/eslint src/components/domain/orders/fulfillment/ship-order-dialog.tsx src/components/domain/orders/fulfillment/ship-order-address.tsx src/components/domain/orders/fulfillment/ship-order-address-workflow.ts src/components/domain/orders/fulfillment/index.ts tests/unit/orders/ship-order-address.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+- `./node_modules/.bin/vitest run tests/unit/orders`
+
+Goal adaptation: no standing goal change. This continues the Sprint 5 modularity pass by making the shipment address path explicit and tested while preserving create-shipment server/schema/cache behavior.
+
+Residual risk: `ship-order-dialog.tsx` is much smaller but still owns carrier field rendering, successful shipment toast selection, mark-shipped fallback notices, and final confirmation summary. Sprint 5 can close here or continue with a final carrier/confirmation extraction.

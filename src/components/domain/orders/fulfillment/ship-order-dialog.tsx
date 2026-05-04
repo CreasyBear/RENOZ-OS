@@ -17,8 +17,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Loader2,
-  ChevronDown,
-  ChevronUp,
   MapPin,
   Package,
 } from "lucide-react";
@@ -51,7 +49,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastSuccess, toastError } from "@/hooks";
@@ -61,9 +58,7 @@ import {
   useCreateShipment,
   useMarkShipped,
   useShipmentShippingCostAmendment,
-  type OrderWithCustomer,
 } from "@/hooks/orders";
-import { AddressPicker, type AddressOption } from "@/components/shared";
 import { SerialNumbersList } from "../components/serial-numbers-list";
 import { ValidationError } from "@/lib/server/errors";
 import { ordersLogger } from "@/lib/logger";
@@ -78,7 +73,7 @@ import {
   FormField,
   FormFieldDisplayProvider,
 } from "@/components/shared/forms";
-import { DEFAULT_COUNTRY, toCountryCode } from "@/lib/country";
+import { DEFAULT_COUNTRY } from "@/lib/country";
 import {
   shipOrderFormSchema,
   type ShipOrderFormData,
@@ -93,10 +88,11 @@ import {
   toggleShipOrderItemSelection,
   type ShipOrderLineItemSelection,
 } from "./ship-order-item-selection";
+import { ShipOrderAddressSection } from "./ship-order-address";
+import { useShipOrderAddressWorkflow } from "./ship-order-address-workflow";
 import { ShipOrderItemsTable } from "./ship-order-items-table";
 
 const SELECT_PLACEHOLDER_VALUE = "__placeholder__";
-const FALLBACK_RECIPIENT_NAME = "Recipient";
 const CARRIERS = [
   { value: "australia_post", label: "Australia Post" },
   { value: "chemcouriers", label: "Chemcouriers" },
@@ -123,8 +119,6 @@ const CARRIER_SERVICES: Record<string, readonly string[]> = {
   couriers_please: ["Standard", "Express"],
   other: [],
 };
-const AU_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
-
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -146,68 +140,6 @@ interface ShipmentWorkflowNotice {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function hasAnyAddress(
-  values: Pick<
-    ShipOrderFormData,
-    "addressStreet1" | "addressCity" | "addressState" | "addressPostcode"
-  >
-): boolean {
-  return !!(
-    values.addressStreet1?.trim() ||
-    values.addressCity?.trim() ||
-    values.addressState?.trim() ||
-    values.addressPostcode?.trim()
-  );
-}
-
-/** Build address options for picker: customer addresses + order shipping (if present) */
-function buildAddressOptions(order: OrderWithCustomer | null | undefined): AddressOption[] {
-  const options: AddressOption[] = [];
-  const seen = new Set<string>();
-
-  // Order shipping address first (if present)
-  const orderAddr = order?.shippingAddress;
-  if (orderAddr?.street1) {
-    const key = `order-${orderAddr.street1}-${orderAddr.city}-${orderAddr.postalCode}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      options.push({
-        id: "order-shipping",
-        type: "shipping",
-        street1: orderAddr.street1,
-        street2: orderAddr.street2 ?? null,
-        city: orderAddr.city,
-        state: orderAddr.state ?? null,
-        postalCode: orderAddr.postalCode,
-        country: orderAddr.country ?? null,
-        contactName: orderAddr.contactName ?? null,
-        contactPhone: orderAddr.contactPhone ?? null,
-      });
-    }
-  }
-
-  // Customer addresses (shipping first, then billing)
-  const addrs = order?.customer?.addresses ?? [];
-  for (const a of addrs) {
-    if (!a.street1) continue;
-    const key = `${a.id}-${a.street1}-${a.city}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    options.push({
-      id: a.id,
-      type: a.type as AddressOption["type"],
-      street1: a.street1,
-      street2: a.street2 ?? null,
-      city: a.city,
-      state: a.state ?? null,
-      postcode: a.postcode ?? null,
-      country: a.country ?? null,
-    });
-  }
-
-  return options;
-}
 
 function resolveCarrierValue(values: Pick<ShipOrderFormData, "carrier" | "customCarrier">) {
   return (
@@ -271,11 +203,8 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
   const [step, setStep] = useState<"form" | "confirm">("form");
   /** Server ValidationError per lineItemId; keys = orderLineItemId */
   const [serverItemErrors, setServerItemErrors] = useState<Record<string, string>>({});
-  const [addressExpanded, setAddressExpanded] = useState(false);
-  const [selectedAddress, setSelectedAddress] = useState<AddressOption | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<ShipmentWorkflowNotice | null>(null);
-  const [saveShipmentAddressToOrder, setSaveShipmentAddressToOrder] = useState(false);
   const performCreateShipmentRef = useRef<
     (values: ShipOrderFormData) => Promise<void>
   >(null!);
@@ -336,6 +265,24 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     },
   });
   const resolvedCarrier = resolveCarrierValue(form.state.values);
+  const shipOrderAddress = useShipOrderAddressWorkflow({
+    form,
+    order: orderData,
+  });
+  const {
+    addressOptions,
+    addressSource,
+    customerAddressId,
+    handleAddressSelect,
+    hasAddressForDisplay,
+    isExpanded: addressExpanded,
+    reset: resetAddress,
+    saveToOrder: saveShipmentAddressToOrder,
+    selectedAddress,
+    setIsExpanded: setAddressExpanded,
+    setSaveToOrder: setSaveShipmentAddressToOrder,
+    shippingAddress,
+  } = shipOrderAddress;
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -345,11 +292,11 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         form.reset(getDefaultFormValues());
         setServerItemErrors({});
         setWorkflowNotice(null);
-        setSaveShipmentAddressToOrder(false);
+        resetAddress();
       }
       onOpenChange(nextOpen);
     },
-    [onOpenChange, form]
+    [onOpenChange, form, resetAddress]
   );
 
   const performCreateShipment = useCallback(
@@ -371,37 +318,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
         }
       }
       const carrierToUse = resolveCarrierValue(values);
-      // Field mapping: form addressPostcode -> API postcode; server/order uses postalCode
-      const shippingAddress = hasAnyAddress(values)
-        ? {
-            name: values.addressName?.trim() || FALLBACK_RECIPIENT_NAME,
-            street1: values.addressStreet1!.trim(),
-            street2: values.addressStreet2?.trim() || undefined,
-            city: values.addressCity!.trim(),
-            state: values.addressState!.trim(),
-            postcode: values.addressPostcode!.trim(),
-            country: toCountryCode(values.addressCountry),
-            phone: values.addressPhone?.trim() || undefined,
-          }
-        : undefined;
       const shippingCostCents =
         values.shippingCost != null &&
         typeof values.shippingCost === "number" &&
         Number.isFinite(values.shippingCost) &&
         values.shippingCost >= 0
           ? toCents(values.shippingCost)
-          : undefined;
-      const addressSource =
-        selectedAddress?.id === "order-shipping"
-          ? "order"
-          : selectedAddress
-            ? "customer"
-            : shippingAddress
-              ? "custom"
-              : "order";
-      const customerAddressId =
-        addressSource === "customer" && selectedAddress?.id !== "order-shipping"
-          ? selectedAddress?.id
           : undefined;
 
       try {
@@ -534,7 +456,9 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       markShippedMutation,
       syncShippingCost,
       shippingCostAmendmentPending,
-      selectedAddress,
+      addressSource,
+      customerAddressId,
+      shippingAddress,
       saveShipmentAddressToOrder,
       onSuccess,
       remainingUnfulfilled,
@@ -558,14 +482,12 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       formValues.addressName = orderData.customer.name;
     }
     startTransition(() => {
-      setSelectedAddress(null);
-      setAddressExpanded(false);
-      setSaveShipmentAddressToOrder(false);
+      resetAddress();
       setInitialized(true);
       setItemSelections(createShipOrderItemSelections(orderData, shipments ?? []));
       form.reset(formValues);
     });
-  }, [orderData, shipments, shipmentsLoading, initialized, form]);
+  }, [orderData, shipments, shipmentsLoading, initialized, form, resetAddress]);
 
   // Re-sync when orderData refetches and availableQty decreased (compare orderData only; avoid itemSelections in deps)
   useEffect(() => {
@@ -585,34 +507,6 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     createShipmentMutation.isPending ||
     markShippedMutation.isPending ||
     shippingCostAmendmentPending;
-
-  const handleAddressSelect = useCallback(
-    (addr: AddressOption | null) => {
-      setSelectedAddress(addr);
-      if (addr) {
-        form.setFieldValue("addressStreet1", addr.street1 ?? "");
-        form.setFieldValue("addressStreet2", addr.street2 ?? "");
-        form.setFieldValue("addressCity", addr.city ?? "");
-        form.setFieldValue("addressState", addr.state?.trim() || "N/A");
-        form.setFieldValue("addressPostcode", addr.postcode ?? addr.postalCode ?? "");
-        form.setFieldValue("addressCountry", toCountryCode(addr.country));
-        if (addr.contactName) form.setFieldValue("addressName", addr.contactName);
-        else if (orderData?.customer?.name) form.setFieldValue("addressName", orderData.customer.name);
-        if (addr.contactPhone) form.setFieldValue("addressPhone", addr.contactPhone ?? "");
-        setAddressExpanded(true);
-      } else {
-        form.setFieldValue("addressStreet1", "");
-        form.setFieldValue("addressStreet2", "");
-        form.setFieldValue("addressCity", "");
-        form.setFieldValue("addressState", "");
-        form.setFieldValue("addressPostcode", "");
-        setAddressExpanded(true);
-      }
-    },
-    [form, orderData]
-  );
-
-  const addressOptions = buildAddressOptions(orderData);
 
   const handleFormDialogOpenChange = useCallback(
     (newOpen: boolean) => {
@@ -662,8 +556,6 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
     carrier === "other"
       ? resolvedCarrier
       : CARRIERS.find((c) => c.value === carrier)?.label ?? carrier;
-  const hasAddrForDisplay = hasAnyAddress(form.state.values);
-  const addressIsCollapsible = true;
 
   const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleOpenChange);
 
@@ -817,194 +709,16 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
 
             <Separator />
 
-            {/* Shipping Address */}
-            <div className="space-y-3">
-              {addressIsCollapsible ? (
-                <button
-                  type="button"
-                  onClick={() => setAddressExpanded(!addressExpanded)}
-                  className="flex w-full items-center justify-between text-left cursor-pointer rounded-md transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-base cursor-pointer">
-                      Shipping Address
-                    </Label>
-                    {!addressExpanded &&
-                      (form.state.values.addressStreet1 ? (
-                        <span className="text-sm text-muted-foreground">
-                          — {form.state.values.addressStreet1},{" "}
-                          {form.state.values.addressCity}{" "}
-                          {form.state.values.addressState}{" "}
-                          {form.state.values.addressPostcode}
-                        </span>
-                      ) : addressOptions.length > 0 ? (
-                        <span className="text-sm text-muted-foreground">
-                          — Choose address or enter manually
-                        </span>
-                      ) : null)}
-                  </div>
-                  {addressExpanded ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <Label className="text-base">Shipping Address</Label>
-                </div>
-              )}
-
-              {(addressExpanded || !addressIsCollapsible) && (
-                <div className="space-y-4 rounded-lg border p-4">
-                  {(form.state.values.addressStreet1 ||
-                    form.state.values.addressCity ||
-                    form.state.values.addressState ||
-                    form.state.values.addressPostcode) &&
-                    (!form.state.values.addressName ||
-                      !form.state.values.addressStreet1 ||
-                      !form.state.values.addressCity ||
-                      !form.state.values.addressState ||
-                      !form.state.values.addressPostcode) && (
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Address incomplete. Fill in all required fields to
-                          include a shipping address.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                  {addressOptions.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Choose address</Label>
-                      <AddressPicker
-                        addresses={addressOptions}
-                        selectedAddress={selectedAddress}
-                        onSelect={handleAddressSelect}
-                        placeholder="Choose shipping address"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Choose the order default, a saved customer address, or enter a one-off shipment address below
-                      </p>
-                    </div>
-                  )}
-
-                  <form.Field name="addressName">
-                    {(field) => (
-                      <TextField
-                        field={field}
-                        label="Recipient Name"
-                        placeholder="Recipient name"
-                      />
-                    )}
-                  </form.Field>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <form.Field name="addressStreet1">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="Street"
-                          placeholder="Street address"
-                        />
-                      )}
-                    </form.Field>
-                    <form.Field name="addressStreet2">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="Unit / Suite"
-                          placeholder="Unit, suite, etc."
-                        />
-                      )}
-                    </form.Field>
-                  </div>
-
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-4">
-                    <form.Field name="addressCity">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="City"
-                          placeholder="City"
-                        />
-                      )}
-                    </form.Field>
-                    <form.Field name="addressState">
-                      {(field) => (
-                        <SelectField
-                          field={field}
-                          label="State"
-                          options={AU_STATES.map((s) => ({ value: s, label: s }))}
-                          placeholder="State"
-                        />
-                      )}
-                    </form.Field>
-                    <form.Field name="addressPostcode">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="Postcode"
-                          placeholder="0000"
-                          className="w-[100px]"
-                        />
-                      )}
-                    </form.Field>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <form.Field name="addressCountry">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="Country"
-                          placeholder="AU"
-                          className="w-[80px]"
-                        />
-                      )}
-                    </form.Field>
-                    <form.Field name="addressPhone">
-                      {(field) => (
-                        <TextField
-                          field={field}
-                          label="Phone"
-                          placeholder="Phone number"
-                          type="tel"
-                        />
-                      )}
-                    </form.Field>
-                  </div>
-
-                  {(form.state.values.addressStreet1 || form.state.values.addressCity) && (
-                    <div className="rounded-md border border-dashed p-3">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          id="save-shipment-address"
-                          checked={saveShipmentAddressToOrder}
-                          onCheckedChange={(checked) =>
-                            setSaveShipmentAddressToOrder(checked === true)
-                          }
-                        />
-                        <div className="space-y-1">
-                          <Label
-                            htmlFor="save-shipment-address"
-                            className="text-sm font-medium"
-                          >
-                            Save this as the order shipping address
-                          </Label>
-                          <p className="text-xs text-muted-foreground">
-                            Leave this off to keep the shipment destination as a one-off override.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <ShipOrderAddressSection
+              form={form}
+              addressOptions={addressOptions}
+              selectedAddress={selectedAddress}
+              onAddressSelect={handleAddressSelect}
+              isExpanded={addressExpanded}
+              onExpandedChange={setAddressExpanded}
+              saveToOrder={saveShipmentAddressToOrder}
+              onSaveToOrderChange={setSaveShipmentAddressToOrder}
+            />
 
             <Separator />
 
@@ -1204,7 +918,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
             </div>
 
             {/* Address Summary */}
-            {hasAddrForDisplay && (
+            {hasAddressForDisplay && (
               <>
                 <Separator />
                 <div className="space-y-2">

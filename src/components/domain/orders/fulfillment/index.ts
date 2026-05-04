@@ -27,6 +27,7 @@ export { ShipmentCardDetails } from './shipment-card-details';
 export { ShipmentDocumentActions } from './shipment-document-actions';
 export { PendingShipmentCompletionDialog } from './pending-shipment-completion-dialog';
 export { FulfillmentImportDialog } from './fulfillment-import-dialog';
+export { ShipOrderAddressSection } from './ship-order-address';
 export { ShipOrderItemsTable } from './ship-order-items-table';
 export type { ShipmentCardDetailShipment, ShipmentCardDetailsProps } from './shipment-card-details';
 export type {
@@ -35,6 +36,7 @@ export type {
 } from './shipment-document-actions';
 export type { PendingShipmentCompletionDialogProps } from './pending-shipment-completion-dialog';
 export type { FulfillmentImportDialogProps } from './fulfillment-import-dialog';
+export type { ShipOrderAddressSectionProps } from './ship-order-address';
 export type { ShipOrderItemsTableProps } from './ship-order-items-table';
 export type {
   ShipOrderItemSelectionSummary,
