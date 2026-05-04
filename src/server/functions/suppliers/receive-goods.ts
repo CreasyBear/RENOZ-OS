@@ -170,7 +170,12 @@ export const receiveGoods = createServerFn({ method: 'POST' })
       const poItems = await tx
         .select()
         .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId))
+        .where(
+          and(
+            eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId),
+            eq(purchaseOrderItems.organizationId, ctx.organizationId)
+          )
+        )
         .orderBy(asc(purchaseOrderItems.lineNumber));
 
       const poItemMap = new Map(poItems.map((item) => [item.id, item]));
@@ -383,7 +388,13 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             quantityRejected: newRejected,
             quantityPending: newPending,
           })
-          .where(eq(purchaseOrderItems.id, receiptItem.poItemId));
+          .where(
+            and(
+              eq(purchaseOrderItems.id, receiptItem.poItemId),
+              eq(purchaseOrderItems.organizationId, ctx.organizationId),
+              eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId)
+            )
+          );
 
         // Skip inventory updates if no product linked or nothing accepted
         if (!poItem.productId || quantityAccepted <= 0) continue;
@@ -693,7 +704,12 @@ export const receiveGoods = createServerFn({ method: 'POST' })
           quantityReceived: purchaseOrderItems.quantityReceived,
         })
         .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId));
+        .where(
+          and(
+            eq(purchaseOrderItems.purchaseOrderId, data.purchaseOrderId),
+            eq(purchaseOrderItems.organizationId, ctx.organizationId)
+          )
+        );
 
       const allReceived = updatedPoItems.every(
         (item) => item.quantityReceived >= item.quantity
@@ -710,7 +726,12 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             ...(allReceived && { actualDeliveryDate: new Date().toISOString().split('T')[0] }),
             updatedBy: ctx.user.id,
           })
-          .where(eq(purchaseOrders.id, data.purchaseOrderId));
+          .where(
+            and(
+              eq(purchaseOrders.id, data.purchaseOrderId),
+              eq(purchaseOrders.organizationId, ctx.organizationId)
+            )
+          );
       }
 
       // -----------------------------------------------------------------------
