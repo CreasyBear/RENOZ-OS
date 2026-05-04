@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, 3, 4, and 5 implemented.
+Status: Issues 1, 2, 3, 4, 5, and 6 implemented.
 
 ## Business Value
 
@@ -208,6 +208,41 @@ Closeout criteria:
 - focused read-path tests pass
 - lint/typecheck evidence is recorded
 
+### 6. Inventory Query-Key Read Contract
+
+Business value: inventory list/search cache identity should be typed from the same read-owned schema contracts as server validation so operators do not see stale or cross-filter stock visibility when future filters are added.
+
+Workflow invariant: inventory browser filters, inventory hooks, centralized query keys, read server validators, and cache invalidation prefixes must preserve current key shapes while sharing one read contract.
+
+Affected files:
+
+- `src/lib/query-keys.ts`
+- `tests/unit/inventory/query-key-read-contract.test.ts`
+- `docs/inventory/MAINTAINER-SPRINT-2.md`
+
+Out of scope:
+
+- changing inventory query-key array shapes
+- changing invalidation prefixes
+- changing inventory list/search server behavior
+- changing browser URL search params
+- changing serialized inventory query keys
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/query-key-read-contract.test.ts tests/unit/inventory/query-normalization-wave3-browser.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx
+```
+
+Closeout criteria:
+
+- inventory list query-key filters are typed from `InventoryListQuery`
+- inventory search query-key options are typed from `QuickSearchInventoryInput`
+- unsupported stale fields are removed from the inventory query-key filter type
+- query-key array shapes remain unchanged
+- focused cache/read tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -404,4 +439,44 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 2 continues narrowing ownership and cache-contract risk before behavior work.
 
-Residual risk: query-key filter typing remains a separate cache-contract owner from the read schema; receiving mutation input ownership remains a later receiving hook/server-contract cleanup.
+Residual risk: later Sprint 2 work aligned inventory read query-key typing with read schemas; receiving mutation input ownership remains a later receiving hook/server-contract cleanup.
+
+### Issue 6: Inventory Query-Key Read Contract
+
+Touched domains: centralized query keys, inventory list/search cache identity, inventory read schema contracts, inventory browser/list read hooks.
+
+Workflow protected: inventory browser filters -> `useInventory`/`useInventorySearch` query keys -> centralized inventory list/search cache identity -> read-owned server validators.
+
+Business value: inventory cache typing now follows the read schema contract, reducing the chance that future stock visibility filters validate on the server but drift out of cache identity typing.
+
+Standards checked:
+
+- typed `queryKeys.inventory.list` filters from `Partial<InventoryListQuery>`
+- typed `queryKeys.inventory.search` options from `QuickSearchInventoryInput`
+- removed stale unsupported `category` and `cursor` fields from the inventory query-key filter type
+- preserved existing inventory list/search query-key array shapes
+- added a guard that keeps the inventory query-key contract tied to read-owned schema inputs
+
+Smells removed:
+
+- inventory query-key filters were declared independently from inventory read schemas
+- the query-key filter type omitted active read filters like `locationId`, `qualityStatus`, ranges, and sort fields
+- the query-key filter type advertised unsupported `category` and `cursor` fields
+
+Deferred:
+
+- broader non-inventory query-key type cleanup remains outside this inventory slice
+- inventory serialized, movements, alerts, valuation, WMS, and availability query keys still use their existing contracts
+- receiving mutation input ownership remains local to `use-inventory.ts`
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/query-key-read-contract.test.ts tests/unit/inventory/query-normalization-wave3-browser.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx`
+- `./node_modules/.bin/eslint src/lib/query-keys.ts tests/unit/inventory/query-key-read-contract.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md src/lib/query-keys.ts tests/unit/inventory/query-key-read-contract.test.ts`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. The slice reinforces the existing cache-contract standard in the maintainer goal.
+
+Residual risk: mutation input ownership and cache invalidation precision for inventory stock-changing flows remain the next high-value maintenance area.
