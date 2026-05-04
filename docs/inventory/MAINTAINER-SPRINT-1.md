@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1, 2, and 3 implemented; Issue 4 in progress with manual receive hook/route, inventory browser route, stock adjustment/transfer dialogs, product-inventory adjustment hook, inventory-launched create-PO dialogs, alert list presenter, stock-count, quality-inspection, location, location route/import, alert hook/route, forecasting hook/route, valuation, finance-integrity, serialized-lineage mutation guidance, serialized list read feedback, and inventory item edit dialog submit feedback standardized; remaining issues stay in the ledger.
+Status: Issues 1, 2, 3, and 4 implemented; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -433,6 +433,8 @@ Goal adaptation: no goal change; this closes the original inventory server conce
 Residual risk: the main inventory server file is now a 29-line compatibility barrel, but legacy read consumers still import through that barrel and the inventory schema file remains concentrated. Issue 3 closes server-function concentration, not schema decomposition or mutation error standardization.
 
 ### Issue 4: Inventory Mutation Error Standard
+
+Status: implemented for inventory-owned surfaces after closeout audit. Remaining raw product/pricing/image/bundle error surfaces belong to a product-domain sprint unless they directly touch inventory workflow integrity.
 
 Touched domains: inventory hooks, product inventory hook, inventory browser route, inventory receiving route, inventory locations route, inventory alerts route, inventory forecasting route, inventory item detail edit dialog, stock adjustment dialog, stock transfer dialog, alert list presenter, alert-launched create-PO dialog, recommendation-launched create-PO dialog, manual receive mutation, inventory list route errors, receive form/location route errors, stock adjustment/transfer submit errors, product inventory adjustment errors, stock-count mutations, quality inspection mutation, warehouse location mutations, location form/import route errors, alert-rule/triggered-alert mutations, alert rule read presentation, alert route read/form errors, forecasting mutations, forecasting route read errors, inventory-to-procurement create-PO submit errors, valuation/cost-layer mutations, finance-integrity reconciliation mutation, serialized item create/update/delete/note mutations, serialized item list read feedback, product detail updates launched from inventory, warehouse stock-in, warehouse movement, cycle-count, inspection, location-management, inventory exception, demand-planning, procurement trigger, valuation, and serialized-lineage operator feedback.
 
