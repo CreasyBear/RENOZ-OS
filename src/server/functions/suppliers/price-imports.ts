@@ -37,6 +37,45 @@ const priceImportRowSchema = z.object({
   expiryDate: z.string().optional(),
   status: z.enum(['active', 'inactive']).default('active'),
 });
+type PriceImportColumnKey = keyof z.input<typeof priceImportRowSchema>;
+type PriceImportRowData = Partial<Record<PriceImportColumnKey, string>>;
+
+const PRICE_IMPORT_COLUMN_KEYS = [
+  'supplierCode',
+  'supplierName',
+  'productName',
+  'productSku',
+  'basePrice',
+  'currency',
+  'discountType',
+  'discountValue',
+  'minOrderQty',
+  'maxOrderQty',
+  'effectiveDate',
+  'expiryDate',
+  'status',
+] as const satisfies readonly PriceImportColumnKey[];
+
+const PRICE_IMPORT_HEADER_ALIASES: Record<string, PriceImportColumnKey> = {
+  suppliercode: 'supplierCode',
+  suppliername: 'supplierName',
+  productname: 'productName',
+  productsku: 'productSku',
+  sku: 'productSku',
+  baseprice: 'basePrice',
+  price: 'basePrice',
+  currency: 'currency',
+  discounttype: 'discountType',
+  discountvalue: 'discountValue',
+  minorderqty: 'minOrderQty',
+  minimumorderqty: 'minOrderQty',
+  maxorderqty: 'maxOrderQty',
+  maximumorderqty: 'maxOrderQty',
+  effectivedate: 'effectiveDate',
+  expirydate: 'expiryDate',
+  expirationdate: 'expiryDate',
+  status: 'status',
+};
 
 // Agreement import schema for future bulk agreement imports
 export const agreementImportRowSchema = z.object({
@@ -104,6 +143,38 @@ function parseCSV(csvContent: string): string[][] {
   });
 }
 
+function normalizeImportHeader(header: string): PriceImportColumnKey | null {
+  return PRICE_IMPORT_HEADER_ALIASES[header.trim().toLowerCase().replace(/[^a-z0-9]/g, '')] ?? null;
+}
+
+export function buildPriceImportRowData(
+  row: string[],
+  headers: string[] | null
+): Partial<PriceImportRowData> {
+  const rowData: PriceImportRowData = {};
+
+  if (headers) {
+    headers.forEach((header, index) => {
+      const key = normalizeImportHeader(header);
+      if (key) {
+        rowData[key] = row[index] || '';
+      }
+    });
+    return rowData;
+  }
+
+  PRICE_IMPORT_COLUMN_KEYS.forEach((key, index) => {
+    rowData[key] = row[index] || '';
+  });
+
+  if (!rowData.currency) rowData.currency = 'AUD';
+  if (!rowData.discountType) rowData.discountType = 'percentage';
+  if (!rowData.discountValue) rowData.discountValue = '0';
+  if (!rowData.status) rowData.status = 'active';
+
+  return rowData;
+}
+
 // ============================================================================
 // IMPORT FUNCTIONS
 // ============================================================================
@@ -133,30 +204,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
 
       try {
         // Create object from headers or indexed columns (string values before schema parse)
-        let rowData: Record<string, string> = {};
-
-        if (headers) {
-          headers.forEach((header, index) => {
-            rowData[header.trim().toLowerCase().replace(/\s+/g, '')] = row[index] || '';
-          });
-        } else {
-          // Assume standard column order
-          rowData = {
-            suppliercode: row[0] || '',
-            suppliername: row[1] || '',
-            productname: row[2] || '',
-            productsku: row[3] || '',
-            baseprice: row[4] || '',
-            currency: row[5] || 'AUD',
-            discounttype: row[6] || 'percentage',
-            discountvalue: row[7] || '0',
-            minorderqty: row[8] || '',
-            maxorderqty: row[9] || '',
-            effectivedate: row[10] || '',
-            expirydate: row[11] || '',
-            status: row[12] || 'active',
-          };
-        }
+        const rowData = buildPriceImportRowData(row, headers);
 
         const validatedRow = priceImportRowSchema.parse(rowData);
         const effectiveDate = validatedRow.effectiveDate ?? new Date().toISOString().split('T')[0];
