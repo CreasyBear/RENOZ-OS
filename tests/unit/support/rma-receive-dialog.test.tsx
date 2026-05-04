@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RmaResponse } from '@/lib/schemas/support/rma';
 import { RmaReceiveDialog } from '@/components/domain/support/rma/rma-receive-dialog';
@@ -221,12 +221,19 @@ function createRma(overrides: Partial<RmaResponse> = {}): RmaResponse {
 
 function ReceiveDialogHarness({
   onReceive,
+  locations = [
+    { id: 'loc-1', name: 'Main Warehouse', code: 'MAIN' },
+    { id: 'loc-2', name: 'Overflow', code: 'OVF' },
+  ],
+  locationsLoading = false,
 }: {
   onReceive: (input?: {
     condition?: string;
     notes?: string;
     locationId?: string;
   }) => Promise<void>;
+  locations?: Array<{ id: string; name: string; code: string; isActive?: boolean | null }>;
+  locationsLoading?: boolean;
 }) {
   const [open, setOpen] = useState(true);
 
@@ -240,11 +247,8 @@ function ReceiveDialogHarness({
         onOpenChange={setOpen}
         isPending={false}
         rma={createRma()}
-        locations={[
-          { id: 'loc-1', name: 'Main Warehouse', code: 'MAIN' },
-          { id: 'loc-2', name: 'Overflow', code: 'OVF' },
-        ]}
-        locationsLoading={false}
+        locations={locations}
+        locationsLoading={locationsLoading}
         onReceive={onReceive}
       />
     </div>
@@ -252,6 +256,10 @@ function ReceiveDialogHarness({
 }
 
 describe('RmaReceiveDialog', () => {
+  beforeEach(() => {
+    toastErrorMock.mockClear();
+  });
+
   it('resets inspection fields after close and reopen', () => {
     render(<ReceiveDialogHarness onReceive={vi.fn().mockResolvedValue(undefined)} />);
 
@@ -299,5 +307,71 @@ describe('RmaReceiveDialog', () => {
     });
 
     expect(screen.queryByText('Receive Items')).not.toBeInTheDocument();
+  });
+
+  it('shows only active receiving locations in the selector', () => {
+    render(
+      <ReceiveDialogHarness
+        onReceive={vi.fn().mockResolvedValue(undefined)}
+        locations={[
+          { id: 'loc-1', name: 'Main Warehouse', code: 'MAIN' },
+          { id: 'loc-inactive', name: 'Retired Dock', code: 'OLD', isActive: false },
+          { id: 'loc-2', name: 'Returns Bench', code: 'RET', isActive: true },
+        ]}
+      />
+    );
+
+    const locationSelect = screen.getByLabelText('receivingLocation') as HTMLSelectElement;
+    expect(Array.from(locationSelect.options).map((option) => option.value)).toEqual([
+      '',
+      'loc-1',
+      'loc-2',
+    ]);
+  });
+
+  it('blocks receive attempts while receiving locations are loading', () => {
+    const onReceive = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ReceiveDialogHarness
+        onReceive={onReceive}
+        locations={[]}
+        locationsLoading
+      />
+    );
+
+    expect(screen.getByText('Loading receiving locations...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark Received' })).toBeDisabled();
+    expect(onReceive).not.toHaveBeenCalled();
+  });
+
+  it('shows an unavailable state when no active receiving locations exist', () => {
+    const onReceive = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ReceiveDialogHarness
+        onReceive={onReceive}
+        locations={[
+          { id: 'loc-inactive', name: 'Retired Dock', code: 'OLD', isActive: false },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('No active receiving locations are available.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark Received' })).toBeDisabled();
+    expect(onReceive).not.toHaveBeenCalled();
+  });
+
+  it('keeps missing location validation when locations are available', () => {
+    const onReceive = vi.fn().mockResolvedValue(undefined);
+
+    render(<ReceiveDialogHarness onReceive={onReceive} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Received' }));
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Choose a receiving location before marking the RMA as received'
+    );
+    expect(onReceive).not.toHaveBeenCalled();
   });
 });

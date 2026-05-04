@@ -117,6 +117,9 @@ function RmaReceiveDialogForm({
   );
 
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
+  const activeLocations = locations.filter((location) => location.isActive !== false);
+  const hasActiveLocations = activeLocations.length > 0;
+  const locationSelectionBlocked = locationsLoading || !hasActiveLocations;
 
   const resetForm = () => {
     setInspectionCondition(INITIAL_RECEIVE_FORM_STATE.inspectionCondition);
@@ -195,15 +198,20 @@ function RmaReceiveDialogForm({
               />
             </SelectTrigger>
             <SelectContent>
-              {locations
-                .filter((location) => location.isActive !== false)
-                .map((location) => (
-                  <SelectItem key={location.id} value={location.id}>
-                    {location.name} ({location.code})
-                  </SelectItem>
-                ))}
+              {activeLocations.map((location) => (
+                <SelectItem key={location.id} value={location.id}>
+                  {location.name} ({location.code})
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+          {locationsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading receiving locations...</p>
+          ) : !hasActiveLocations ? (
+            <p className="text-sm text-destructive">
+              No active receiving locations are available.
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="condition">Item Condition</Label>
@@ -234,7 +242,7 @@ function RmaReceiveDialogForm({
         <Button variant="outline" onClick={onClose} disabled={isPending}>
           Cancel
         </Button>
-        <Button onClick={handleReceive} disabled={isPending}>
+        <Button onClick={handleReceive} disabled={isPending || locationSelectionBlocked}>
           {isPending ? 'Processing...' : 'Mark Received'}
         </Button>
       </DialogFooter>
