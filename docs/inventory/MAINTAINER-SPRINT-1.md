@@ -1293,16 +1293,16 @@ Business value: dashboard aggregate contracts now live with dashboard ownership 
 
 Standards checked:
 
-- added `src/lib/schemas/inventory/dashboard.ts` for category/location stock schemas, recent movement schemas, dashboard comparison schema, WMS dashboard data schema, top-mover type, and movement trend aggregation type
+- added `src/lib/schemas/inventory/dashboard.ts` for category/location stock schemas, recent movement schemas, dashboard comparison schema, WMS dashboard data schema, and top-mover type
 - removed dashboard schema/type ownership from `src/lib/schemas/inventory/inventory.ts`
 - exported the dashboard owner through the public `@/lib/schemas/inventory` barrel
 - added a guard that prevents dashboard schema ownership from drifting back into `inventory.ts`
-- preserved public barrel parse behavior for category stock, recent movement timeline items, dashboard comparison, and WMS dashboard data
+- preserved public barrel parse behavior for category stock, location stock, recent movement timeline items, dashboard comparison, and WMS dashboard data
 
 Smells removed:
 
 - WMS dashboard aggregate schemas lived in the generic inventory schema monolith despite dedicated WMS dashboard server and hook workflows
-- dashboard helper types for top movers and movement trends lived apart from dashboard ownership
+- dashboard helper types for top movers lived apart from dashboard ownership
 
 Deferred:
 
