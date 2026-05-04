@@ -368,9 +368,9 @@ export function useTransferInventory() {
         queryKey: queryKeys.inventory.details(),
       });
 
-      // Serialized transfers mutate per-serial rows and are not safely represented
-      // by aggregate optimistic math. Let refetch reconcile authoritative state.
-      if ((variables.serialNumbers?.length ?? 0) > 0) {
+      // Row/serial-scoped transfers are not safely represented by aggregate
+      // product/location optimistic math. Let refetch reconcile exact rows.
+      if (variables.inventoryId || (variables.serialNumbers?.length ?? 0) > 0) {
         return { previousLists, previousDetails };
       }
 
