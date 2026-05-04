@@ -2,7 +2,7 @@
 
 This sprint follows RMA recovery UI ownership into the broader support issue workflow. The aim is to remove operator-facing support debt where workflow state, action affordances, and dashboard/list truth can drift.
 
-Status: Issues 1 and 2 implemented.
+Status: Issues 1, 2, and 3 implemented.
 
 ## Business Value
 
@@ -104,3 +104,37 @@ Closeout:
 - Gates skipped: browser QA skipped because this is workflow guard/routing behavior with focused unit coverage, not layout redesign.
 - Goal adaptation: no standing goal change. This slice strengthens the repo-maintainer rule that workflow-owned state transitions must have a single owned path.
 - Residual risk: `issue-detail-view.tsx` remains the next support cleanliness candidate, but escalation workflow integrity is now protected both at UI and server boundaries.
+
+### 3. Issue Detail Action Policy Boundary
+
+Problem:
+
+- After Issue 2 hardened the server boundary, `issue-detail-view.tsx` still duplicated header/sidebar action rules.
+- Escalated issues could still show generic Resolve or Put On Hold affordances even though those transitions now correctly require de-escalation first.
+- Delete visibility, primary action selection, RMA action visibility, and escalation/de-escalation actions were spread through a large presenter.
+
+Workflow protected:
+
+Issue detail route -> `IssueDetailContainer` -> `useIssueDetail` action handlers -> shared issue-detail action policy -> `IssueDetailView` header/sidebar affordances -> workflow-specific mutation path.
+
+Slice:
+
+- Added `issue-detail-action-policy.ts` as the focused owner of issue detail action availability.
+- Updated the detail header and sidebar actions to read from the same policy.
+- Hid generic hold/resolve/delete/status affordances for escalated issues so operators are steered through de-escalation first.
+- Added focused tests for escalated, active, resolved, and closed action policy states.
+
+Closeout:
+
+- Touched domains: support issue detail UI, issue detail action policy, support UI tests, support sprint evidence.
+- Workflow protected: issue status -> action policy -> header/sidebar actions -> `useIssueDetail` status/escalation handlers -> dedicated workflow mutation path.
+- Business value protected: escalated support work now presents one honest recovery path, avoiding actions that would fail after server validation and preserving escalation audit history.
+- Architecture standards checked: route/container/hook/server boundaries unchanged; UI policy is now a focused pure component-side contract; no schema/database/cache changes.
+- Tenant isolation and data integrity checked: no server query, tenant predicate, or persisted data contract changed in this slice.
+- Query/cache contract checked: no cache behavior changed; policy only controls operator affordances before mutation.
+- Smells removed: duplicated detail header/sidebar status rules, escalated issue actions that contradicted the server transition guard, local delete/RMA visibility derivation inside the sidebar.
+- Smells deferred: `issue-detail-view.tsx` is still large because related context and customer sidebar rendering remain in the same file; direct component rendering tests for the full detail view remain deferred because the pure policy now covers the high-risk action matrix.
+- Verification: focused `issue-detail-action-policy` test passed; targeted lint and typecheck recorded; full support suite recorded after the slice.
+- Gates skipped: browser QA skipped because this is action policy/affordance cleanup with focused tests, not a visual redesign.
+- Goal adaptation: no standing goal change. This continues the maintainer goal by extracting workflow policy before further component splitting.
+- Residual risk: the next support cleanup should extract related context/customer sidebar rendering from `issue-detail-view.tsx`, now that workflow action policy is protected.

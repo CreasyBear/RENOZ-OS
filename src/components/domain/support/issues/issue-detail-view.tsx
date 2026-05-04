@@ -56,6 +56,10 @@ import {
   ISSUE_NEXT_ACTION_LABELS,
   ISSUE_RESOLUTION_CATEGORY_LABELS,
 } from './issue-options';
+import {
+  getIssueDetailActionPolicy,
+  type IssueDetailActionPolicy,
+} from './issue-detail-action-policy';
 import { formatDate } from '@/lib/formatters';
 import type {
   IssueStatus,
@@ -150,23 +154,32 @@ export function IssueDetailView({
         : 'on_track'
     : null;
 
-  const isResolvedOrClosed = issue.status === 'resolved' || issue.status === 'closed';
+  const actionPolicy = getIssueDetailActionPolicy({
+    status: issue.status,
+    hasRmaAnchor: Boolean(
+      customerId ||
+        issue.warrantyId ||
+        issue.warrantyEntitlementId ||
+        issue.orderId ||
+        issue.serialNumber
+    ),
+  });
   const primaryAction =
-    !isResolvedOrClosed && issue.status !== 'in_progress' && issue.status !== 'escalated'
+    actionPolicy.primaryAction === 'start'
       ? {
           label: 'Start Working',
           onClick: () => actions.onStatusChange('in_progress'),
           icon: <Play className="h-4 w-4" aria-hidden="true" />,
           disabled: isUpdatePending,
         }
-      : !isResolvedOrClosed
+      : actionPolicy.primaryAction === 'resolve'
         ? {
             label: 'Resolve',
             onClick: () => actions.onStatusChange('resolved'),
             icon: <CheckCircle className="h-4 w-4" aria-hidden="true" />,
             disabled: isUpdatePending,
           }
-        : issue.status === 'resolved'
+        : actionPolicy.primaryAction === 'close'
           ? {
               label: 'Close Issue',
               onClick: () => actions.onStatusChange('closed'),
@@ -181,7 +194,7 @@ export function IssueDetailView({
       onClick: actions.onBack,
       icon: <ChevronLeft className="h-4 w-4" aria-hidden="true" />,
     },
-    ...(issue.status === 'escalated'
+    ...(actionPolicy.canDeEscalate
       ? [
           {
             label: 'De-escalate',
@@ -191,7 +204,7 @@ export function IssueDetailView({
           },
         ]
       : []),
-    ...(issue.status !== 'on_hold' && !isResolvedOrClosed
+    ...(actionPolicy.canHold
       ? [
           {
             label: 'Put On Hold',
@@ -201,7 +214,7 @@ export function IssueDetailView({
           },
         ]
       : []),
-    ...(issue.status !== 'escalated' && !isResolvedOrClosed
+    ...(actionPolicy.canEscalate
       ? [
           {
             label: 'Escalate',
@@ -213,9 +226,6 @@ export function IssueDetailView({
         ]
       : []),
   ];
-
-  const showDelete =
-    issue.status !== 'in_progress' && issue.status !== 'escalated';
 
   return (
     <div className="space-y-6">
@@ -245,7 +255,7 @@ export function IssueDetailView({
           }
           primaryAction={primaryAction}
           secondaryActions={secondaryActions}
-          onDelete={showDelete ? actions.onDelete : undefined}
+          onDelete={actionPolicy.canDelete ? actions.onDelete : undefined}
         />
 
       {/* Zone 3: Alerts */}
@@ -307,8 +317,8 @@ export function IssueDetailView({
           <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start z-10">
             <ActionsCard
               issue={issue}
-              customerId={customerId ?? null}
               rmaReadiness={issue.rmaReadiness}
+              actionPolicy={actionPolicy}
               onStatusChange={actions.onStatusChange}
               onDelete={actions.onDelete}
               isPending={isUpdatePending || isDeletePending || isDeEscalatePending}
@@ -886,37 +896,26 @@ function RelatedIssuesListCard({
 
 function ActionsCard({
   issue,
-  customerId,
   rmaReadiness,
+  actionPolicy,
   onStatusChange,
   onDelete,
   isPending,
 }: {
   issue: IssueDetail;
-  customerId: string | null;
   rmaReadiness?: IssueDetail['rmaReadiness'];
+  actionPolicy: IssueDetailActionPolicy;
   onStatusChange: (status: IssueStatus) => void;
   onDelete: () => void | Promise<void>;
   isPending: boolean;
 }) {
-  const showRmaSection =
-    issue.status === 'resolved' || issue.status === 'closed'
-      ? Boolean(
-          customerId ||
-            issue.warrantyId ||
-            issue.warrantyEntitlementId ||
-            issue.orderId ||
-            issue.serialNumber
-        )
-      : false;
-
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">Actions</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        {showRmaSection && (
+        {actionPolicy.showRmaSection && (
           <>
             {rmaReadiness?.state === 'ready' && rmaReadiness.sourceOrder ? (
               <Link
@@ -943,9 +942,13 @@ function ActionsCard({
             <Separator className="my-2" />
           </>
         )}
-        {issue.status !== 'closed' && issue.status !== 'resolved' && (
+        {(actionPolicy.canStart ||
+          actionPolicy.canDeEscalate ||
+          actionPolicy.canHold ||
+          actionPolicy.canEscalate ||
+          actionPolicy.canResolve) && (
           <>
-            {issue.status !== 'in_progress' && (
+            {(actionPolicy.canStart || actionPolicy.canDeEscalate) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -953,13 +956,13 @@ function ActionsCard({
                 onClick={() => onStatusChange('in_progress')}
                 disabled={isPending}
               >
-                {issue.status === 'escalated' ? (
+                {actionPolicy.canDeEscalate ? (
                   <ArrowDown className="h-4 w-4" aria-hidden="true" />
                 ) : null}
-                {issue.status === 'escalated' ? 'De-escalate' : 'Start Working'}
+                {actionPolicy.canDeEscalate ? 'De-escalate' : 'Start Working'}
               </Button>
             )}
-            {issue.status !== 'on_hold' && (
+            {actionPolicy.canHold && (
               <Button
                 variant="outline"
                 size="sm"
@@ -969,7 +972,7 @@ function ActionsCard({
                 Put On Hold
               </Button>
             )}
-            {issue.status !== 'escalated' && (
+            {actionPolicy.canEscalate && (
               <Button
                 variant="outline"
                 size="sm"
@@ -980,18 +983,20 @@ function ActionsCard({
                 Escalate
               </Button>
             )}
-            <Button size="sm" onClick={() => onStatusChange('resolved')} disabled={isPending}>
-              Resolve
-            </Button>
+            {actionPolicy.canResolve && (
+              <Button size="sm" onClick={() => onStatusChange('resolved')} disabled={isPending}>
+                Resolve
+              </Button>
+            )}
           </>
         )}
-        {issue.status === 'resolved' && (
+        {actionPolicy.canClose && (
           <Button size="sm" onClick={() => onStatusChange('closed')} disabled={isPending}>
             Close Issue
           </Button>
         )}
 
-        {issue.status !== 'in_progress' && issue.status !== 'escalated' && (
+        {actionPolicy.canDelete && (
           <>
             <Separator className="my-2" />
             <Button
