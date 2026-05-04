@@ -9,16 +9,17 @@
 import { createServerFn } from '@tanstack/react-start';
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { cache } from 'react';
-import { z } from 'zod';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
-import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 import {
   DEFAULT_LOW_STOCK_THRESHOLD,
+  inventoryParamsSchema,
   inventoryListQuerySchema,
+  quickSearchInventorySchema,
+  type InventoryListQuery,
   type InventoryWithRelations,
   type ListInventoryResult,
 } from '@/lib/schemas/inventory';
@@ -40,7 +41,7 @@ type InventoryMovementRecord = typeof inventoryMovements.$inferSelect;
  */
 const _listInventory = cache(
   async (
-    data: z.infer<typeof inventoryListQuerySchema>,
+    data: InventoryListQuery,
     organizationId: string
   ): Promise<ListInventoryResult> => {
     const { page = 1, pageSize = 20, search, sortBy, sortOrder, ...filters } = data;
@@ -227,14 +228,7 @@ export const listInventory = createServerFn({ method: 'GET' })
  * Optimized for autocomplete/typeahead use cases.
  */
 export const quickSearchInventory = createServerFn({ method: 'GET' })
-  .inputValidator(
-    normalizeObjectInput(
-      z.object({
-        q: z.string().min(2),
-        limit: z.number().int().positive().default(10),
-      })
-    )
-  )
+  .inputValidator(quickSearchInventorySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const searchPattern = containsPattern(data.q);
@@ -377,7 +371,7 @@ const _getInventoryItem = cache(
 );
 
 export const getInventoryItem = createServerFn({ method: 'GET' })
-  .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
+  .inputValidator(inventoryParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     return _getInventoryItem(data.id, ctx.organizationId);

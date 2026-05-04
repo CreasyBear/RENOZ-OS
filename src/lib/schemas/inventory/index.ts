@@ -6,6 +6,7 @@
 
 // --- Core Inventory Types ---
 export * from './inventory';
+export * from './reads';
 export * from './locations';
 export * from './movements';
 export * from './receiving';
@@ -32,9 +33,12 @@ export * from './inventory-item-edit-form';
 // --- Re-export key types for convenience ---
 export type {
   Inventory,
+} from './inventory';
+
+export type {
   InventoryFilter,
   InventoryListQuery,
-} from './inventory';
+} from './reads';
 
 export type { QualityRecord } from './quality';
 
