@@ -24,4 +24,14 @@ describe('supplier price import execute contract', () => {
     expect(source).toContain('priceListId:persistedPrice.id');
     expect(source).toContain('priceId:persistedPrice.id');
   });
+
+  it('asserts resolved supplier and product identities before building write values', () => {
+    const source = compact(read('src/server/functions/suppliers/price-imports.ts'));
+
+    expect(source).toContain('assertResolvedResolution(row.resolution);');
+    expect(source).toContain('supplierId:row.resolution.supplierId');
+    expect(source).toContain('productId:row.resolution.productId');
+    expect(source).not.toContain('supplierId:row.resolution.supplierId!');
+    expect(source).not.toContain('productId:row.resolution.productId!');
+  });
 });

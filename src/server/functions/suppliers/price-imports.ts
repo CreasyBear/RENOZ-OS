@@ -14,6 +14,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ValidationError } from "@/lib/server/errors";
 import { createPriceChangeRequest } from "./price-history";
 import {
+  assertResolvedResolution,
   calculateEffectivePrice,
   resolveImportRow,
 } from "./price-resolution";
@@ -496,11 +497,12 @@ export const executePriceImport = createServerFn({ method: "POST" })
           discountType: row.data.discountType,
           discountValue: row.data.discountValue,
         });
+        assertResolvedResolution(row.resolution);
 
         const priceValues = {
           organizationId: ctx.organizationId,
-          supplierId: row.resolution.supplierId!,
-          productId: row.resolution.productId!,
+          supplierId: row.resolution.supplierId,
+          productId: row.resolution.productId,
           supplierName: row.resolution.supplierName ?? row.data.supplierName ?? null,
           productName: row.resolution.productName ?? row.data.productName,
           productSku: row.resolution.productSku ?? row.data.productSku ?? null,
