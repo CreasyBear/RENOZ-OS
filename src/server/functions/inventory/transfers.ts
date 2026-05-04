@@ -168,7 +168,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
               updatedAt: new Date(),
               updatedBy: ctx.user.id,
             })
-            .where(eq(inventory.id, row.id));
+            .where(and(eq(inventory.id, row.id), eq(inventory.organizationId, ctx.organizationId)));
 
           await tx.insert(inventoryMovements).values({
             organizationId: ctx.organizationId,
@@ -242,7 +242,9 @@ export const transferInventory = createServerFn({ method: 'POST' })
                 updatedAt: new Date(),
                 updatedBy: ctx.user.id,
               })
-              .where(eq(inventory.id, destRow.id))
+              .where(
+                and(eq(inventory.id, destRow.id), eq(inventory.organizationId, ctx.organizationId))
+              )
               .returning();
           }
 
@@ -389,7 +391,12 @@ export const transferInventory = createServerFn({ method: 'POST' })
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(inventory.id, sourceInventory.id));
+        .where(
+          and(
+            eq(inventory.id, sourceInventory.id),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        );
 
       // Create outbound movement
       await tx.insert(inventoryMovements).values({
@@ -450,7 +457,12 @@ export const transferInventory = createServerFn({ method: 'POST' })
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(inventory.id, destInventory.id))
+          .where(
+            and(
+              eq(inventory.id, destInventory.id),
+              eq(inventory.organizationId, ctx.organizationId)
+            )
+          )
           .returning();
       }
 
