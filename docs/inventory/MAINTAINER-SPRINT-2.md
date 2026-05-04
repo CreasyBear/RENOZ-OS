@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, and 3 implemented.
+Status: Issues 1, 2, 3, and 4 implemented.
 
 ## Business Value
 
@@ -133,6 +133,42 @@ Closeout criteria:
 - receiving-focused tests pass
 - lint/typecheck evidence is recorded
 
+### 4. Quality Inspection Schema Ownership
+
+Business value: quality inspection contracts should live with quality workflow ownership so operators can trust inspection history and future QA changes do not require editing the generic inventory schema or server-inline validators.
+
+Workflow invariant: quality inspection list/create server functions, quality hooks, inventory detail quality tab, and public inventory schema imports must share the quality schema owner.
+
+Affected files:
+
+- `src/lib/schemas/inventory/quality.ts`
+- `src/lib/schemas/inventory/inventory.ts`
+- `src/lib/schemas/inventory/index.ts`
+- `src/server/functions/inventory/quality.ts`
+- `tests/unit/inventory/quality-schema-ownership.test.ts`
+
+Out of scope:
+
+- changing quality inspection persistence behavior
+- changing quality detail UI behavior
+- changing mutation error copy
+- extracting core inventory read/list schemas
+
+Focused tests:
+
+```bash
+./node_modules/.bin/vitest run tests/unit/inventory/quality-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-quality.test.tsx
+```
+
+Closeout criteria:
+
+- quality list/create schemas are exported from `quality.ts`
+- `QualityRecord` is exported from `quality.ts`
+- quality server functions import validators from the schema owner instead of declaring inline schemas
+- public `@/lib/schemas/inventory` imports remain compatible
+- focused quality tests pass
+- lint/typecheck evidence is recorded
+
 ## Closeout Log
 
 ### Issue 1: Movement Response Schema Ownership
@@ -211,7 +247,7 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
 
-Residual risk: `inventory.ts` still owns core inventory read/list, quality, inventory item, adjustment, transfer, and receiving hook-facing misc types.
+Residual risk: later Sprint 2 slices narrowed more schema ownership; remaining current residual risk is tracked in the latest closeout.
 
 ### Issue 3: Receiving Input Schema Ownership
 
@@ -249,4 +285,43 @@ Verification:
 
 Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
 
-Residual risk: `inventory.ts` still owns core inventory read/list, quality, and inventory item hook-facing misc types; the live receive mutation input remains local to `use-inventory.ts`.
+Residual risk: later Sprint 2 slices narrowed quality schema ownership; the live receive mutation input remains local to `use-inventory.ts`.
+
+### Issue 4: Quality Inspection Schema Ownership
+
+Touched domains: inventory schema contracts, quality inspection server validators, quality hooks, inventory detail quality tab type compatibility.
+
+Workflow protected: quality inspection list/create validators -> quality server functions -> quality hooks -> inventory detail quality history and degraded/unavailable states.
+
+Business value: quality inspection contracts are easier to maintain because validators and display record types now live in a quality schema owner instead of being split between server-inline schemas and the generic inventory schema file.
+
+Standards checked:
+
+- added `src/lib/schemas/inventory/quality.ts` for quality result values, list/create validators, input types, and `QualityRecord`
+- removed `QualityRecord` ownership from `src/lib/schemas/inventory/inventory.ts`
+- exported the quality owner through the public `@/lib/schemas/inventory` barrel
+- moved quality server validators out of `src/server/functions/inventory/quality.ts`
+- added a guard that prevents quality schemas/types from drifting back into `inventory.ts` or server-inline validator declarations
+
+Smells removed:
+
+- quality server functions owned inline zod validators instead of using the schema layer
+- `QualityRecord` lived in the generic inventory schema file despite dedicated quality server and hook workflows
+
+Deferred:
+
+- database-backed quality inspection integration coverage remains outside this schema-ownership slice
+- quality UI polish remains unchanged
+- core inventory read/list schemas still live in `src/lib/schemas/inventory/inventory.ts`
+
+Verification:
+
+- `./node_modules/.bin/vitest run tests/unit/inventory/quality-schema-ownership.test.ts tests/unit/inventory/query-normalization-wave3-quality.test.tsx`
+- `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
+- `./node_modules/.bin/eslint src/lib/schemas/inventory/quality.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/quality.ts tests/unit/inventory/quality-schema-ownership.test.ts`
+- `git diff --check -- docs/inventory/MAINTAINER-SPRINT-2.md src/lib/schemas/inventory/quality.ts src/lib/schemas/inventory/inventory.ts src/lib/schemas/inventory/index.ts src/server/functions/inventory/quality.ts tests/unit/inventory/quality-schema-ownership.test.ts`
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit`
+
+Goal adaptation: no standing goal change. Sprint 2 continues narrowing leftover schema ownership before behavior work.
+
+Residual risk: `inventory.ts` still owns core inventory read/list and inventory item hook-facing misc types.
