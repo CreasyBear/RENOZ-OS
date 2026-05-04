@@ -28,7 +28,6 @@ import {
   FileText,
   Shield,
   Package,
-  ExternalLink,
   PackageSearch,
   Play,
   CheckCircle,
@@ -56,10 +55,16 @@ import {
   ISSUE_NEXT_ACTION_LABELS,
   ISSUE_RESOLUTION_CATEGORY_LABELS,
 } from './issue-options';
+import { IssueCustomerContextSidebar } from './issue-customer-context-sidebar';
 import {
   getIssueDetailActionPolicy,
   type IssueDetailActionPolicy,
 } from './issue-detail-action-policy';
+import {
+  IssueRelatedEntityLink,
+  IssueWarrantyEntityLink,
+} from './issue-related-links';
+import { getWarrantyBadgeVariant } from './issue-warranty-badge-variant';
 import { formatDate } from '@/lib/formatters';
 import type {
   IssueStatus,
@@ -325,7 +330,7 @@ export function IssueDetailView({
             />
             <DetailsCard issue={issue} />
             {customerId && (
-              <CustomerContextSidebar
+              <IssueCustomerContextSidebar
                 customerId={customerId}
                 customerName={issue.customer?.name ?? null}
                 contextData={customerContext}
@@ -522,7 +527,7 @@ function RemedyCard({
             <p className="text-sm font-medium">Prior RMAs</p>
             <div className="space-y-2">
               {rmaReadiness.existingRmas.map((rma) => (
-                <RelatedEntityLink
+                <IssueRelatedEntityLink
                   key={rma.id}
                   to="/support/rmas/$rmaId"
                   params={{ rmaId: rma.id }}
@@ -802,7 +807,7 @@ function RelatedTab({
           <CardContent>
             <div className="space-y-2">
               {relatedContext.linkedRmas.map((rma) => (
-                <RelatedEntityLink
+                <IssueRelatedEntityLink
                   key={rma.id}
                   to="/support/rmas/$rmaId"
                   params={{ rmaId: rma.id }}
@@ -879,7 +884,7 @@ function RelatedIssuesListCard({
       <CardContent>
         <div className="space-y-2">
           {issues.map((relatedIssue) => (
-            <RelatedEntityLink
+            <IssueRelatedEntityLink
               key={relatedIssue.id}
               to="/support/issues/$issueId"
               params={{ issueId: relatedIssue.id }}
@@ -1063,319 +1068,6 @@ function DetailsCard({ issue }: { issue: IssueDetail }) {
   );
 }
 
-function CustomerContextSidebar({
-  customerId,
-  customerName,
-  contextData,
-}: {
-  customerId: string;
-  customerName: string | null | undefined;
-  contextData: CustomerContextData;
-}) {
-  return (
-    <div className="space-y-4">
-      <CustomerInfoCard customerId={customerId} customerName={customerName} />
-      <CustomerOrdersCard
-        data={contextData.orderSummary}
-        isLoading={contextData.isLoading}
-        error={contextData.error}
-      />
-      <CustomerWarrantiesCard
-        warranties={contextData.warranties}
-        isLoading={contextData.isLoading}
-        error={contextData.error}
-      />
-      <CustomerIssuesCard
-        issues={contextData.otherIssues}
-        isLoading={contextData.isLoading}
-        error={contextData.error}
-      />
-    </div>
-  );
-}
-
-function CustomerInfoCard({
-  customerId,
-  customerName,
-}: {
-  customerId: string;
-  customerName: string | null | undefined;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Customer
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <Link
-              to="/customers/$customerId"
-              params={{ customerId }}
-              search={{}}
-              className="font-medium hover:underline text-primary truncate block"
-            >
-              {customerName || 'Unknown Customer'}
-            </Link>
-            <p className="text-xs text-muted-foreground mt-1">ID: {customerId.slice(0, 8)}...</p>
-          </div>
-          <Link
-            to="/customers/$customerId"
-            params={{ customerId }}
-            search={{}}
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'h-11 w-11 shrink-0')}
-            aria-label="View customer details"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomerOrdersCard({
-  data,
-  isLoading,
-  error,
-}: {
-  data: CustomerContextData['orderSummary'];
-  isLoading: boolean;
-  error: Error | null;
-}) {
-  const recentOrders = data?.recentOrders?.slice(0, 3) || [];
-  const totalOrders = data?.totalOrders ?? 0;
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Recent Orders
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex items-center justify-center py-4">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" role="status" aria-label="Loading" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Recent Orders
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm text-red-600 py-2">Failed to load orders</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Recent Orders
-          <Badge variant="secondary" className="text-xs">
-            {totalOrders}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {recentOrders.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No orders found</p>
-        ) : (
-          <div className="space-y-2">
-            {recentOrders.map((order) => (
-              <RelatedEntityLink
-                key={order.id}
-                to="/orders/$orderId"
-                params={{ orderId: order.id }}
-                title={order.orderNumber}
-                subtitle={order.orderDate ? formatDate(order.orderDate) : 'No date'}
-                badge={order.status}
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomerWarrantiesCard({
-  warranties,
-  isLoading,
-  error,
-}: {
-  warranties: CustomerContextData['warranties'];
-  isLoading: boolean;
-  error: Error | null;
-}) {
-  const activeWarranties = warranties.filter(
-    (w) => w.status === 'active' || w.status === 'expiring_soon'
-  );
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Warranties
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex items-center justify-center py-4">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" role="status" aria-label="Loading" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Warranties
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm text-red-600 py-2">Failed to load warranties</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Shield className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Warranties
-          {activeWarranties.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {activeWarranties.length} active
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {warranties.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No warranties found</p>
-        ) : (
-          <div className="space-y-2">
-            {warranties.slice(0, 3).map((warranty) => (
-              <WarrantyEntityLink
-                key={warranty.id}
-                warrantyId={warranty.id}
-                title={warranty.productName || 'Unknown Product'}
-                serialNumber={warranty.productSerial || null}
-                badge={warranty.status}
-                badgeVariant={getWarrantyBadgeVariant(warranty.status)}
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomerIssuesCard({
-  issues,
-  isLoading,
-  error,
-}: {
-  issues: CustomerContextData['otherIssues'];
-  isLoading: boolean;
-  error: Error | null;
-}) {
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <TicketIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Previous Issues
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex items-center justify-center py-4">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" role="status" aria-label="Loading" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <TicketIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Previous Issues
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <p className="text-sm text-red-600 py-2">Failed to load issues</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <TicketIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Previous Issues
-          {issues.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {issues.length}+
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {issues.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No previous issues</p>
-        ) : (
-          <div className="space-y-2">
-            {issues.slice(0, 3).map((issue) => (
-              <RelatedEntityLink
-                key={issue.id}
-                to="/support/issues/$issueId"
-                params={{ issueId: issue.id }}
-                title={issue.title}
-                subtitle={issue.createdAt ? formatDate(issue.createdAt) : ''}
-                badge={issue.status}
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function RelatedOrdersSection({
   data,
   isLoading,
@@ -1437,7 +1129,7 @@ function RelatedOrdersSection({
         ) : (
           <div className="space-y-2">
             {recentOrders.map((order) => (
-              <RelatedEntityLink
+              <IssueRelatedEntityLink
                 key={order.id}
                 to="/orders/$orderId"
                 params={{ orderId: order.id }}
@@ -1511,7 +1203,7 @@ function RelatedWarrantiesSection({
         ) : (
           <div className="space-y-2">
             {warranties.slice(0, 5).map((warranty) => (
-              <WarrantyEntityLink
+              <IssueWarrantyEntityLink
                 key={warranty.id}
                 warrantyId={warranty.id}
                 title={warranty.productName || 'Unknown Product'}
@@ -1585,7 +1277,7 @@ function RelatedIssuesSection({
         ) : (
           <div className="space-y-2">
             {issues.slice(0, 5).map((issue) => (
-              <RelatedEntityLink
+              <IssueRelatedEntityLink
                 key={issue.id}
                 to="/support/issues/$issueId"
                 params={{ issueId: issue.id }}
@@ -1599,107 +1291,4 @@ function RelatedIssuesSection({
       </CardContent>
     </Card>
   );
-}
-
-interface RelatedEntityLinkProps {
-  to: string;
-  params: Record<string, string>;
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  badgeVariant?: 'default' | 'secondary' | 'destructive' | 'outline';
-}
-
-function RelatedEntityLink({
-  to,
-  params,
-  title,
-  subtitle,
-  badge,
-  badgeVariant = 'outline',
-}: RelatedEntityLinkProps) {
-  return (
-    <Link
-      to={to}
-      params={params}
-      className="flex items-center justify-between p-2 rounded-md hover:bg-muted transition-colors group cursor-pointer"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{title}</p>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
-      <div className="flex items-center gap-2">
-        {badge && (
-          <Badge variant={badgeVariant} className="text-xs shrink-0 capitalize">
-            {badge}
-          </Badge>
-        )}
-        <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 motion-safe:transition-opacity" aria-hidden="true" />
-      </div>
-    </Link>
-  );
-}
-
-interface WarrantyEntityLinkProps {
-  warrantyId: string;
-  title: string;
-  serialNumber?: string | null;
-  badge?: string;
-  badgeVariant?: 'default' | 'secondary' | 'destructive' | 'outline';
-}
-
-function WarrantyEntityLink({
-  warrantyId,
-  title,
-  serialNumber,
-  badge,
-  badgeVariant = 'outline',
-}: WarrantyEntityLinkProps) {
-  return (
-    <div className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-muted transition-colors">
-      <div className="min-w-0 flex-1">
-        <Link
-          to="/support/warranties/$warrantyId"
-          params={{ warrantyId }}
-          className="text-sm font-medium truncate hover:underline"
-        >
-          {title}
-        </Link>
-        <p className="text-xs text-muted-foreground">
-          SN: {serialNumber || 'N/A'}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {serialNumber ? (
-          <Link
-            to="/inventory/browser"
-            search={{ view: 'serialized', serializedSearch: serialNumber, page: 1 }}
-            className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] text-primary hover:bg-background"
-            aria-label={`Open serial ${serialNumber} in inventory`}
-          >
-            <PackageSearch className="h-3 w-3" aria-hidden="true" />
-            Serial
-          </Link>
-        ) : null}
-        {badge && (
-          <Badge variant={badgeVariant} className="text-xs shrink-0 capitalize">
-            {badge}
-          </Badge>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function getWarrantyBadgeVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'active':
-      return 'default';
-    case 'expiring_soon':
-      return 'secondary';
-    case 'expired':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
 }
