@@ -389,6 +389,22 @@ function IssuesBoardPage() {
         return;
       }
 
+      if (event.toStatus === 'escalated') {
+        toast.info('Escalate this issue from the detail page so you can capture the escalation reason.');
+        navigate({
+          to: '/support/issues/$issueId',
+          params: { issueId: event.issueId },
+          search: { escalate: 'true' },
+        });
+        return;
+      }
+
+      if (event.fromStatus === 'escalated') {
+        toast.info('De-escalate this issue from the detail page so the escalation history stays complete.');
+        navigate({ to: '/support/issues/$issueId', params: { issueId: event.issueId } });
+        return;
+      }
+
       if (skipStatusPrompt) {
         void (async () => {
           await runStatusTransition({

@@ -2,7 +2,7 @@
 
 This sprint follows RMA recovery UI ownership into the broader support issue workflow. The aim is to remove operator-facing support debt where workflow state, action affordances, and dashboard/list truth can drift.
 
-Status: Issue 1 implemented.
+Status: Issues 1 and 2 implemented.
 
 ## Business Value
 
@@ -70,3 +70,37 @@ Closeout:
 - Gates skipped: browser QA skipped because this slice changes workflow routing and read filters without redesigning the issue detail layout.
 - Goal adaptation: no standing goal change. This is direct execution of the maintainer goal: small support-domain slice, workflow spine protected, cache contract explicit, operator-safe current-state UI.
 - Residual risk: Support Sprint 3 should continue with either a narrower extraction of `issue-detail-view.tsx` around related context/sidebar ownership or a server-side issue status transition contract that prevents future generic status bypasses.
+
+### 2. Generic Issue Status Transition Boundary
+
+Problem:
+
+- Issue 1 fixed the issue detail route, but `updateIssue` still accepted generic transitions into `escalated` or away from `escalated`.
+- The issues board drag/drop route used `useUpdateIssue` directly, so board transitions could still skip escalation/de-escalation reason capture and history writes.
+- Bulk status changes already omitted `escalated`, but server behavior should not rely on one UI omitting a workflow-owned status.
+
+Workflow protected:
+
+Issues board/detail/bulk callers -> `useUpdateIssue` or escalation hooks -> `updateIssue` / `escalateIssue` / `deEscalateIssue` -> `issues.status`, escalation metadata, `escalation_history` -> query invalidation -> current support queue state.
+
+Slice:
+
+- Added a shared support-domain transition helper that rejects generic escalation and generic status changes away from escalated state.
+- Wired `updateIssue` to raise a serialized `transition_blocked` error when generic callers try to cross the escalation workflow boundary.
+- Updated the issues board to route drag/drop escalation to the issue detail escalation dialog and drag/drop de-escalation to issue detail, where the de-escalation workflow captures reason/history.
+- Added focused tests for the pure transition helper and static server/board wiring.
+
+Closeout:
+
+- Touched domains: support issue board, support issue server update path, support issue transition helper, support workflow tests, support sprint evidence.
+- Workflow protected: board/detail/bulk generic status updates -> server transition guard -> dedicated escalation/de-escalation workflows -> escalation metadata/history -> support query state.
+- Business value protected: operators cannot create or clear escalation state without the reason/history path that makes handoffs and priority support review auditable.
+- Architecture standards checked: route behavior now points workflow-owned transitions to detail; hook/server boundary remains explicit; server guard is a shared support-domain helper; no schema/database changes; cache behavior unchanged from Issue 1.
+- Tenant isolation and data integrity checked: existing org-scoped server reads/writes remain unchanged; the new guard runs after org-scoped issue lookup and before mutation.
+- Query/cache contract checked: generic blocked transitions do not mutate caches; dedicated escalation/de-escalation hooks remain the cache invalidation owners.
+- Smells removed: generic status mutation no longer owns escalation workflow state; board drag/drop no longer silently skips escalation/de-escalation evidence.
+- Smells deferred: generic `updateIssue` still accepts ordinary non-escalation status changes; board does not yet open a de-escalation dialog directly and instead routes to detail; DB-backed transition tests remain deferred.
+- Verification: focused `issue-status-transition-contract` test passed; targeted lint and typecheck recorded for the slice; full support suite recorded for the sprint.
+- Gates skipped: browser QA skipped because this is workflow guard/routing behavior with focused unit coverage, not layout redesign.
+- Goal adaptation: no standing goal change. This slice strengthens the repo-maintainer rule that workflow-owned state transitions must have a single owned path.
+- Residual risk: `issue-detail-view.tsx` remains the next support cleanliness candidate, but escalation workflow integrity is now protected both at UI and server boundaries.

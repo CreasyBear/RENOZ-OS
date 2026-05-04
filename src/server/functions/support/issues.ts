@@ -55,6 +55,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
 import { createSerializedMutationError, serializedMutationSuccess } from '@/lib/server/serialized-mutation-contract';
+import { getGenericIssueStatusUpdateBlocker } from '@/lib/support/issue-status-transitions';
 import {
   buildIssueAnchorState,
   assertIssueAnchors,
@@ -791,6 +792,14 @@ export const updateIssue = createServerFn({ method: 'POST' })
 
     if (!existing) {
       throw new NotFoundError('Issue not found', 'issue');
+    }
+
+    const statusUpdateBlocker = getGenericIssueStatusUpdateBlocker({
+      existingStatus: existing.status,
+      nextStatus: updates.status,
+    });
+    if (statusUpdateBlocker) {
+      throw createSerializedMutationError(statusUpdateBlocker.message, 'transition_blocked');
     }
 
     const issueAnchorState = buildIssueAnchorState({
