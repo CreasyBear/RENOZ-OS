@@ -1386,6 +1386,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
                 eq(inventory.organizationId, ctx.organizationId),
                 eq(inventory.productId, productId),
                 eq(inventory.locationId, locationId),
+                eq(inventory.status, targetStatus),
                 isNull(inventory.serialNumber)
               )
             )
@@ -1419,7 +1420,7 @@ export const receiveRma = createServerFn({ method: 'POST' })
                 organizationId: ctx.organizationId,
                 productId,
                 locationId,
-                status: 'available',
+                status: targetStatus,
                 quantityOnHand: qty,
                 quantityAllocated: 0,
                 unitCost: unitCost,

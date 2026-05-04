@@ -398,6 +398,7 @@ export const getProductInventory = createServerFn({ method: 'POST' })
           locationId: inventory.locationId,
           quantityOnHand: sum(inventory.quantityOnHand),
           quantityAllocated: sum(inventory.quantityAllocated),
+          quantityAvailable: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.status} = 'available' THEN ${inventory.quantityAvailable} ELSE 0 END), 0)::numeric`,
           totalValue: sum(inventory.totalValue),
         })
         .from(inventory)
@@ -423,7 +424,7 @@ export const getProductInventory = createServerFn({ method: 'POST' })
       locations: inventoryByLocation.map((inv) => {
         const onHand = Number(inv.quantityOnHand ?? 0);
         const allocated = Number(inv.quantityAllocated ?? 0);
-        const available = onHand - allocated;
+        const available = Number(inv.quantityAvailable ?? 0);
 
         return {
           locationId: inv.locationId,
@@ -442,7 +443,7 @@ export const getProductInventory = createServerFn({ method: 'POST' })
       const allocated = Number(loc.quantityAllocated ?? 0);
       summary.totalOnHand += onHand;
       summary.totalAllocated += allocated;
-      summary.totalAvailable += onHand - allocated;
+      summary.totalAvailable += Number(loc.quantityAvailable ?? 0);
       summary.totalValue += Number(loc.totalValue ?? 0);
     }
 

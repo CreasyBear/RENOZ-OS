@@ -36,6 +36,44 @@ describe('order inventory reservations', () => {
     ]);
   });
 
+  it('does not reserve quarantined or damaged non-serialized stock', () => {
+    const plan = planReservationFromInventoryRows(
+      [
+        {
+          id: 'inv-quarantined',
+          productId: 'product-1',
+          locationId: 'loc-1',
+          status: 'quarantined',
+          quantityOnHand: 5,
+          quantityAllocated: 0,
+          quantityAvailable: 5,
+        },
+        {
+          id: 'inv-damaged',
+          productId: 'product-1',
+          locationId: 'loc-1',
+          status: 'damaged',
+          quantityOnHand: 2,
+          quantityAllocated: 0,
+          quantityAvailable: 2,
+        },
+        {
+          id: 'inv-available',
+          productId: 'product-1',
+          locationId: 'loc-1',
+          status: 'available',
+          quantityOnHand: 8,
+          quantityAllocated: 1,
+          quantityAvailable: 7,
+        },
+      ],
+      3,
+      'Battery'
+    );
+
+    expect(plan).toEqual([{ inventoryId: 'inv-available', quantity: 3 }]);
+  });
+
   it('fails clearly when available stock is short', () => {
     expect(() =>
       planReservationFromInventoryRows(

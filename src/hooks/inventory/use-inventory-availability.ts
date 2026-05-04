@@ -28,6 +28,21 @@ export interface UseInventoryAvailabilityOptions {
   enabled?: boolean;
 }
 
+function getAllocatableAvailableQuantity(items: InventoryWithRelations[]): number {
+  return items.reduce(
+    (sum: number, item) =>
+      item.status === 'available' ? sum + (item.quantityAvailable ?? 0) : sum,
+    0
+  );
+}
+
+function getReservedQuantity(items: InventoryWithRelations[]): number {
+  return items.reduce(
+    (sum: number, item) => sum + (item.quantityAllocated ?? 0),
+    0
+  );
+}
+
 /**
  * Check stock availability for a specific product.
  * Returns availability data including total available and reserved quantities.
@@ -47,15 +62,9 @@ export function useInventoryAvailability(options: UseInventoryAvailabilityOption
         },
       });
 
-      // Sum available quantities across all locations
-      const totalAvailable = (data?.items ?? []).reduce(
-        (sum: number, item: InventoryWithRelations) => sum + (item.quantityAvailable ?? 0),
-        0
-      );
-      const totalReserved = (data?.items ?? []).reduce(
-        (sum: number, item: InventoryWithRelations) => sum + (item.quantityAllocated ?? 0),
-        0
-      );
+      const items = data?.items ?? [];
+      const totalAvailable = getAllocatableAvailableQuantity(items);
+      const totalReserved = getReservedQuantity(items);
 
       return {
         productId,
@@ -96,15 +105,9 @@ export function useCheckInventoryAvailability() {
         },
       });
 
-      // Sum available quantities across all locations
-      const totalAvailable = (data?.items ?? []).reduce(
-        (sum: number, item: InventoryWithRelations) => sum + (item.quantityAvailable ?? 0),
-        0
-      );
-      const totalReserved = (data?.items ?? []).reduce(
-        (sum: number, item: InventoryWithRelations) => sum + (item.quantityAllocated ?? 0),
-        0
-      );
+      const items = data?.items ?? [];
+      const totalAvailable = getAllocatableAvailableQuantity(items);
+      const totalReserved = getReservedQuantity(items);
 
       return {
         productId,
@@ -139,14 +142,9 @@ export function usePrefetchInventoryAvailability() {
           },
         });
 
-        const totalAvailable = (data?.items ?? []).reduce(
-          (sum: number, item: InventoryWithRelations) => sum + (item.quantityAvailable ?? 0),
-          0
-        );
-        const totalReserved = (data?.items ?? []).reduce(
-          (sum: number, item: InventoryWithRelations) => sum + (item.quantityAllocated ?? 0),
-          0
-        );
+        const items = data?.items ?? [];
+        const totalAvailable = getAllocatableAvailableQuantity(items);
+        const totalReserved = getReservedQuantity(items);
 
         return {
           productId,

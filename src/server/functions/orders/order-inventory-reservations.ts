@@ -9,6 +9,7 @@ export interface ReservationInventoryRow {
   id: string;
   productId: string;
   locationId: string;
+  status?: string | null;
   quantityOnHand: number | null | undefined;
   quantityAllocated: number | null | undefined;
   quantityAvailable?: number | string | null | undefined;
@@ -99,6 +100,7 @@ export function planReservationFromInventoryRows(
 
   for (const row of rows) {
     if (remaining <= 0) break;
+    if (row.status && row.status !== 'available') continue;
 
     const available = Math.max(
       0,
@@ -260,6 +262,7 @@ export async function reserveNonSerializedPickInventory(
         eq(inventory.organizationId, params.organizationId),
         eq(inventory.productId, params.productId),
         isNull(inventory.serialNumber),
+        eq(inventory.status, 'available'),
         sql`${inventory.quantityAvailable} > 0`
       )
     )

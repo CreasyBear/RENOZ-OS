@@ -56,6 +56,14 @@ describe('RMA receive location contract', () => {
     expect(server).toContain('touchesSerializedInventory: result.touchesSerializedInventory');
   });
 
+  it('keeps damaged non-serialized returns out of available aggregate rows', () => {
+    const server = read('src/server/functions/orders/rma.ts');
+
+    expect(server).toContain("const targetStatus =");
+    expect(server).toContain("eq(inventory.status, targetStatus)");
+    expect(server).toContain("status: targetStatus");
+  });
+
   it('keeps the RMA receive trace aligned with explicit location selection', () => {
     const trace = read('docs/code-traces/13-rma-receive-inventory.md');
 
