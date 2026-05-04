@@ -2,7 +2,7 @@
 
 This sprint continues the maintainer process from `docs/reference/maintainer-sprint-process.md` after Sprint 1 closed the first Inventory/Warehouse ownership pass.
 
-Status: Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented.
+Status: closed. Issues 1, 2, 3, 4, 5, 6, 7, and 8 implemented; deferred risks moved to Sprint 3.
 
 ## Business Value
 
@@ -319,6 +319,75 @@ Closeout criteria:
 - lint/typecheck evidence is recorded
 
 ## Closeout Log
+
+## Sprint Closeout Audit
+
+Objective: finish the inventory schema-ownership cleanup left by Sprint 1 so core stock visibility, quality, receiving, read/query-key, and product receive wrapper contracts are owned by the workflow they protect.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Evidence |
+|-------------|----------|
+| Domain sprint, not broad cleanup | This artifact owns a bounded Inventory/Warehouse schema-ownership sprint and closes eight issue slices. |
+| Business value stated | Sprint Business Value plus each issue closeout states operator/business value. |
+| Workflow spine mapped | `inventory read/list -> movement history and analytics -> item detail and quality inspection -> warehouse, valuation, support/RMA, and fulfillment visibility`. |
+| Route -> container/page -> hook -> server -> schema/database -> query/cache checked | Issues 4, 5, 6, 7, and 8 explicitly protect quality, read/list/search/detail, query key, receive mutation, and product receive wrapper spines. |
+| Clear domain ownership | Movement, location attributes, receiving input, quality, read schemas, query-key read filters, receive mutation input, and product receive wrapper input now have workflow owners. |
+| Centralized query keys | Issue 6 aligns inventory list/search query-key typing with read-owned schemas while preserving key shapes. |
+| Safe mutation/cache contracts | Issues 6, 7, and 8 narrowed cache and mutation input ownership; behavior-level cache precision is deferred to Sprint 3. |
+| Tenant isolation checked | Server-function slices preserved existing `withAuth` and organization-scoped server behavior without changing database queries. |
+| Transactional inventory/finance integrity checked | Receive schema slices preserve existing transaction, cost-layer, valuation, and serialized-lineage paths without behavior changes. |
+| Serialized lineage continuity checked | Receive schema ownership preserved serialized validation helper usage and product wrapper delegation to canonical receiving. |
+| Honest UI states and operator-safe errors | Query-normalization inventory suites stayed green across each read/schema slice. |
+| Meaningful tests/gates | Each issue closeout records focused tests, broad inventory sweeps, lint, whitespace checks, and typecheck where code changed. |
+| Reviewable diffs | Work landed as small code/test/doc commits per slice with compatibility barrels preserved. |
+
+Sprint standards checked:
+
+- generic `inventory.ts` is now focused on base stock-level entity/enums/default threshold
+- movement response/helper types live with movement schema ownership
+- location attribute contracts live with location schema ownership
+- manual receiving input, receive mutation input, and product receive wrapper input live with receiving schema ownership
+- quality inspection list/create validators and record types live with quality schema ownership
+- inventory read/list/search/detail validators and read response types live with read schema ownership
+- inventory list/search query-key typing follows read-owned schema inputs
+- server-inline zod validators were removed from quality and receive read/mutation paths covered by this sprint
+- stock-in trace docs now point at schema owners instead of stale server-inline validation claims
+
+Sprint smells removed:
+
+- generic inventory schema ownership for movement, location attribute, receiving, quality, and read contracts
+- inline quality list/create server validators
+- inline inventory read quick-search/detail validators
+- stale independent inventory query-key filter typing
+- hook-local live receive mutation input type
+- server-inline live receive mutation validator
+- product receive wrapper inline schema despite canonical receiving delegation
+- stale stock-in trace schema ownership references
+
+Deferred backlog:
+
+- receive optimistic cache patching is still broad by product/location and needs lot/serial-aware behavior coverage
+- receive invalidation remains broad rather than result-aware
+- non-stock-in product inventory wrappers still use legacy schemas
+- database-backed integration coverage is still needed for inventory quantity, movement, cost-layer, valuation, transition, and serialized-lineage invariants
+- broader non-inventory query-key consistency remains outside this inventory sprint
+
+Sprint verification evidence:
+
+- focused ownership tests added for quality, reads, query keys, receive mutation, and product receive wrapper contracts
+- broad inventory sweeps reached `36` inventory/support files and `118` tests by the final issue
+- lint and `git diff --check` ran for every code slice
+- `env NODE_OPTIONS=--max-old-space-size=8192 ./node_modules/.bin/tsc --noEmit` passed on each code slice
+
+Gates skipped:
+
+- full app build and full repository test suite were not run as sprint-level gates because each slice ran focused and broad inventory gates.
+- browser/manual QA was deferred; this sprint emphasized code ownership, trace correctness, and regression guards.
+
+Goal adaptation: no standing goal change. Sprint 2 validates the maintainer operating model by closing schema ownership before moving into behavior/cache correctness.
+
+Sprint residual risk: Inventory schema ownership is materially cleaner, but Inventory/Warehouse is not done. Sprint 3 should focus on stock-changing mutation/cache integrity, starting with receive optimistic patch precision for lot/serial rows.
 
 ### Issue 1: Movement Response Schema Ownership
 
