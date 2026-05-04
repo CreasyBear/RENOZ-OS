@@ -113,7 +113,12 @@ describe('order mutation invalidation', () => {
   })
 
   it('mark shipped refreshes fulfillment and inventory stock side-effect surfaces', async () => {
-    mockMarkShipped.mockResolvedValue({ id: 'shipment-1' })
+    mockMarkShipped.mockResolvedValue({
+      id: 'shipment-1',
+      affectedInventoryIds: ['inventory-ship-1'],
+      affectedProductIds: ['product-ship-1'],
+      touchesSerializedInventory: true,
+    })
 
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
@@ -144,6 +149,12 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.lists(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-ship-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-ship-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.details(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -162,12 +173,23 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.serializedAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-ship-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.movementsForProduct('product-ship-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
     })
   })
 
   it('reopen shipment refreshes fulfillment and inventory stock side-effect surfaces', async () => {
-    mockReopenShipment.mockResolvedValue({ id: 'shipment-1' })
+    mockReopenShipment.mockResolvedValue({
+      id: 'shipment-1',
+      affectedInventoryIds: ['inventory-return-1'],
+      affectedProductIds: ['product-return-1'],
+      touchesSerializedInventory: false,
+    })
 
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
@@ -198,9 +220,18 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.inventory.movementsAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-return-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-return-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.serializedAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-return-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
     })
   })

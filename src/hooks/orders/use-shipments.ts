@@ -16,7 +16,7 @@ import {
   normalizeShipmentMutationError,
 } from './order-mutation-client-errors';
 import {
-  invalidateShipmentInventorySideEffectQueries,
+  invalidateShipmentInventoryMutationQueries,
   invalidateShipmentMutationQueries,
 } from './_fulfillment-cache';
 import {
@@ -289,12 +289,12 @@ export function useMarkShipped() {
         throw normalizeShipmentMutationError(error, 'Unable to mark shipment as shipped.');
       }
     },
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       invalidateShipmentMutationQueries(queryClient, {
         shipmentId: variables.id,
         includeAllOrderDetails: true,
       });
-      invalidateShipmentInventorySideEffectQueries(queryClient);
+      invalidateShipmentInventoryMutationQueries(queryClient, result);
     },
   });
 }
@@ -340,12 +340,12 @@ export function useReopenShipment() {
         throw normalizeShipmentMutationError(error, 'Unable to reopen shipment.');
       }
     },
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       invalidateShipmentMutationQueries(queryClient, {
         shipmentId: variables.id,
         includeAllOrderDetails: true,
       });
-      invalidateShipmentInventorySideEffectQueries(queryClient);
+      invalidateShipmentInventoryMutationQueries(queryClient, result);
     },
   });
 }

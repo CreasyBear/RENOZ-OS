@@ -48,10 +48,16 @@ import {
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
 
+interface ShipmentInventoryMutationResult {
+  affectedInventoryIds: string[];
+  affectedProductIds: string[];
+  touchesSerializedInventory: boolean;
+}
+
 export async function markShipmentAsShipped(
   ctx: Awaited<ReturnType<typeof withAuth>>,
   data: MarkShippedInput
-): Promise<OrderShipment> {
+): Promise<OrderShipment & ShipmentInventoryMutationResult> {
   const [existing] = await db
     .select()
     .from(orderShipments)
@@ -157,6 +163,10 @@ export async function markShipmentAsShipped(
       canonicalAllocationsByLineItem.set(allocation.lineItemId, existingAllocations);
     }
 
+    const affectedInventoryIds = new Set<string>();
+    const affectedProductIds = new Set<string>();
+    let touchesSerializedInventory = false;
+
     for (const item of sortedItems) {
       await tx
         .update(orderLineItems)
@@ -185,6 +195,9 @@ export async function markShipmentAsShipped(
 
       if (!lineItemWithProduct?.productId) {
         continue;
+      }
+      if (Number(item.quantity) > 0) {
+        affectedProductIds.add(lineItemWithProduct.productId);
       }
 
       if (lineItemWithProduct.isSerialized) {
@@ -242,6 +255,9 @@ export async function markShipmentAsShipped(
               inventory: [`Serial "${serial}" could not find its inventory row.`],
             });
           }
+          affectedInventoryIds.add(inventoryItem.id);
+          affectedProductIds.add(inventoryItem.productId);
+          touchesSerializedInventory = true;
 
           const movementCogs = await consumeLayersFIFO(tx, {
             organizationId: ctx.organizationId,
@@ -382,6 +398,8 @@ export async function markShipmentAsShipped(
             inventory: [`Inventory row ${step.inventoryId} is missing for "${lineItemWithProduct.productName}".`],
           });
         }
+        affectedInventoryIds.add(inventoryItem.id);
+        affectedProductIds.add(inventoryItem.productId);
 
         const movementCogs = await consumeLayersFIFO(tx, {
           organizationId: ctx.organizationId,
@@ -464,7 +482,12 @@ export async function markShipmentAsShipped(
       createdBy: ctx.user.id,
     });
 
-    return updatedShipment;
+    return {
+      ...updatedShipment,
+      affectedInventoryIds: Array.from(affectedInventoryIds),
+      affectedProductIds: Array.from(affectedProductIds),
+      touchesSerializedInventory,
+    };
   });
 }
 
@@ -555,7 +578,7 @@ export async function reopenShipmentHandler({
     };
   }
 
-  const shipment = await db.transaction(async (tx) => {
+  const shipment = await db.transaction(async (tx): Promise<OrderShipment & ShipmentInventoryMutationResult> => {
     await tx.execute(
       sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
@@ -627,6 +650,10 @@ export async function reopenShipmentHandler({
       remainingMovementRowsByProduct.set(movement.productId, current);
     }
 
+    const affectedInventoryIds = new Set<string>();
+    const affectedProductIds = new Set<string>();
+    let touchesSerializedInventory = false;
+
     for (const item of items) {
       if (shouldReverseShippedQuantities) {
         await tx
@@ -657,6 +684,9 @@ export async function reopenShipmentHandler({
 
       if (!lineItemWithProduct?.productId || !shouldReverseShippedQuantities) {
         continue;
+      }
+      if (Number(item.quantity) > 0) {
+        affectedProductIds.add(lineItemWithProduct.productId);
       }
 
       const movementRowsForProduct =
@@ -691,6 +721,8 @@ export async function reopenShipmentHandler({
             inventory: [`Inventory row ${step.inventoryId} is missing for shipment reopen.`],
           });
         }
+        affectedInventoryIds.add(inventoryItem.id);
+        affectedProductIds.add(inventoryItem.productId);
 
         await tx
           .update(inventory)
@@ -779,6 +811,7 @@ export async function reopenShipmentHandler({
           source: 'order_shipment_reopen',
         });
         if (!serialRecord) continue;
+        touchesSerializedInventory = true;
 
         await allocateSerializedItemToOrderLine(tx, {
           organizationId: ctx.organizationId,
@@ -868,7 +901,12 @@ export async function reopenShipmentHandler({
       createdBy: ctx.user.id,
     });
 
-    return updatedShipment;
+    return {
+      ...updatedShipment,
+      affectedInventoryIds: Array.from(affectedInventoryIds),
+      affectedProductIds: Array.from(affectedProductIds),
+      touchesSerializedInventory,
+    };
   });
 
   return {

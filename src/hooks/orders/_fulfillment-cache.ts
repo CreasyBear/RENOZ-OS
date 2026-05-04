@@ -9,6 +9,7 @@ export interface InvalidateShipmentMutationOptions {
 }
 
 export interface FulfillmentInventoryMutationResult {
+  affectedIds?: string[] | null;
   affectedInventoryIds?: string[] | null;
   affectedProductIds?: string[] | null;
   touchesSerializedInventory?: boolean | null;
@@ -62,33 +63,37 @@ export function invalidateShipmentMutationQueries(
   }
 }
 
-export function invalidateShipmentInventorySideEffectQueries(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+function hasKnownAffectedInventoryIdentity(
+  result?: FulfillmentInventoryMutationResult | null
+): boolean {
+  return Array.isArray(result?.affectedInventoryIds);
+}
+
+function hasKnownAffectedProductIdentity(
+  result?: FulfillmentInventoryMutationResult | null
+): boolean {
+  return Array.isArray(result?.affectedProductIds);
 }
 
 function invalidateAffectedInventoryDetails(
   queryClient: QueryClient,
-  result?: FulfillmentInventoryMutationResult | null
+  result?: FulfillmentInventoryMutationResult | null,
+  { includeCostLayers = false }: { includeCostLayers?: boolean } = {}
 ) {
   const affectedInventoryIds = uniqueIds(result?.affectedInventoryIds);
 
   if (affectedInventoryIds.length === 0) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+    if (!hasKnownAffectedInventoryIdentity(result)) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.details() });
+    }
     return;
   }
 
   affectedInventoryIds.forEach((inventoryId) => {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.detail(inventoryId) });
+    if (includeCostLayers) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.costLayersDetail(inventoryId) });
+    }
   });
 }
 
@@ -99,7 +104,9 @@ function invalidateAffectedProductStockQueries(
   const affectedProductIds = uniqueIds(result?.affectedProductIds);
 
   if (affectedProductIds.length === 0) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    if (!hasKnownAffectedProductIdentity(result)) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    }
     return;
   }
 
@@ -115,22 +122,40 @@ function invalidateAffectedProductStockQueries(
   });
 }
 
-export function invalidatePickingInventoryReservationQueries(
+function invalidateInventorySideEffectQueries(
   queryClient: QueryClient,
-  result?: FulfillmentInventoryMutationResult | null
+  result?: FulfillmentInventoryMutationResult | null,
+  { includeValuation = false }: { includeValuation?: boolean } = {}
 ) {
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
-  invalidateAffectedInventoryDetails(queryClient, result);
+  invalidateAffectedInventoryDetails(queryClient, result, { includeCostLayers: includeValuation });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lowStock() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.wmsAll() });
+  if (includeValuation) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.valuationAll() });
+  }
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availabilityAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.availableSerialsAll() });
   if (result?.touchesSerializedInventory !== false) {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.serializedAll() });
   }
   invalidateAffectedProductStockQueries(queryClient, result);
+}
+
+export function invalidatePickingInventoryReservationQueries(
+  queryClient: QueryClient,
+  result?: FulfillmentInventoryMutationResult | null
+) {
+  invalidateInventorySideEffectQueries(queryClient, result);
+}
+
+export function invalidateShipmentInventoryMutationQueries(
+  queryClient: QueryClient,
+  result?: FulfillmentInventoryMutationResult | null
+) {
+  invalidateInventorySideEffectQueries(queryClient, result, { includeValuation: true });
 }
 
 export function invalidatePickingMutationQueries(
