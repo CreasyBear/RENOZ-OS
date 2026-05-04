@@ -301,10 +301,21 @@ export const updatePurchaseOrderCost = createServerFn({ method: 'POST' })
 
     const { costId, ...updateFields } = data;
 
-    // Verify cost exists and belongs to org
+    // Verify cost exists, belongs to org, and its parent PO is still mutable.
     const [existing] = await db
-      .select()
+      .select({
+        cost: purchaseOrderCosts,
+        poStatus: purchaseOrders.status,
+      })
       .from(purchaseOrderCosts)
+      .innerJoin(
+        purchaseOrders,
+        and(
+          eq(purchaseOrderCosts.purchaseOrderId, purchaseOrders.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
       .where(
         and(
           eq(purchaseOrderCosts.id, costId),
@@ -317,9 +328,13 @@ export const updatePurchaseOrderCost = createServerFn({ method: 'POST' })
       throw new NotFoundError('Purchase order cost not found', 'purchaseOrderCost');
     }
 
+    if (['cancelled', 'closed'].includes(existing.poStatus)) {
+      throw new ValidationError('Cannot update costs for a cancelled or closed purchase order');
+    }
+
     const updates: Record<string, unknown> = {
       updatedBy: ctx.user.id,
-      version: existing.version + 1,
+      version: existing.cost.version + 1,
     };
 
     if (updateFields.costType !== undefined) updates.costType = updateFields.costType;
@@ -334,7 +349,12 @@ export const updatePurchaseOrderCost = createServerFn({ method: 'POST' })
     const [updated] = await db
       .update(purchaseOrderCosts)
       .set(updates)
-      .where(eq(purchaseOrderCosts.id, costId))
+      .where(
+        and(
+          eq(purchaseOrderCosts.id, costId),
+          eq(purchaseOrderCosts.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return updated;
@@ -348,10 +368,21 @@ export const deletePurchaseOrderCost = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    // Verify cost exists and belongs to org
+    // Verify cost exists, belongs to org, and its parent PO is still mutable.
     const [existing] = await db
-      .select({ id: purchaseOrderCosts.id })
+      .select({
+        id: purchaseOrderCosts.id,
+        poStatus: purchaseOrders.status,
+      })
       .from(purchaseOrderCosts)
+      .innerJoin(
+        purchaseOrders,
+        and(
+          eq(purchaseOrderCosts.purchaseOrderId, purchaseOrders.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
       .where(
         and(
           eq(purchaseOrderCosts.id, data.costId),
@@ -364,7 +395,18 @@ export const deletePurchaseOrderCost = createServerFn({ method: 'POST' })
       throw new NotFoundError('Purchase order cost not found', 'purchaseOrderCost');
     }
 
-    await db.delete(purchaseOrderCosts).where(eq(purchaseOrderCosts.id, data.costId));
+    if (['cancelled', 'closed'].includes(existing.poStatus)) {
+      throw new ValidationError('Cannot delete costs for a cancelled or closed purchase order');
+    }
+
+    await db
+      .delete(purchaseOrderCosts)
+      .where(
+        and(
+          eq(purchaseOrderCosts.id, data.costId),
+          eq(purchaseOrderCosts.organizationId, ctx.organizationId)
+        )
+      );
 
     return { success: true };
   });
