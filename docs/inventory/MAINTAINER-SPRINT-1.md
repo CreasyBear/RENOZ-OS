@@ -2,7 +2,7 @@
 
 This sprint applies the maintainer process from `docs/reference/maintainer-sprint-process.md` to the inventory and warehouse domain.
 
-Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, adjustment, transfer, and allocation extraction boundaries; remaining issues stay in the ledger.
+Status: Issues 1 and 2 implemented; Issue 3 in progress with activity, receiving, adjustment, transfer, allocation, and movement extraction boundaries; remaining issues stay in the ledger.
 
 ## Business Value
 
@@ -353,11 +353,11 @@ Residual risk: cache-prefix centralization does not prove every allocation mutat
 
 ### Issue 3: Inventory Server Concentration
 
-Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation.
+Touched domains: inventory server functions, inventory activity logging, manual receiving, stock adjustments, warehouse transfers, product inventory wrappers, inventory allocation/reservation, movement history.
 
-Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity.
+Workflow protected: all inventory mutations that write movement activity records; manual non-PO stock-in; operator stock corrections; warehouse-to-warehouse stock transfers with cost-layer and serialized lineage continuity; allocation/deallocation reservation state with serialized lineage continuity; operator movement history reads for item detail and dashboard movement panels.
 
-Business value: inventory mutations are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, and allocation workflows are outside the monolithic workflow file.
+Business value: inventory mutations and movement reads are safer to change when cross-cutting activity logging, manual receive, stock adjustment, transfer, allocation, and movement-history workflows are outside the monolithic workflow file.
 
 Standards checked:
 
@@ -366,6 +366,7 @@ Standards checked:
 - extracted `adjustInventory` into `src/server/functions/inventory/adjustments.ts`
 - extracted `transferInventory` into `src/server/functions/inventory/transfers.ts`
 - extracted `allocateInventory` and `deallocateInventory` into `src/server/functions/inventory/allocations.ts`
+- extracted `listMovements` into `src/server/functions/inventory/movements.ts`
 - kept transaction-scoped activity logging behavior unchanged
 - kept existing public server-function imports unchanged
 - preserved the existing `@/server/functions/inventory/inventory` import path via re-export
@@ -380,13 +381,15 @@ Smells removed:
 - stock adjustment server function from `src/server/functions/inventory/inventory.ts`
 - warehouse transfer server function from `src/server/functions/inventory/inventory.ts`
 - allocation/deallocation server functions and allocation retry helper from `src/server/functions/inventory/inventory.ts`
+- movement-history server function from `src/server/functions/inventory/inventory.ts`
 - direct receive workflow imports from the monolithic inventory server module
 - direct adjustment workflow imports from the monolithic inventory server module
 - direct transfer workflow imports from the monolithic inventory server module
+- direct movement-history imports from the monolithic inventory server module
 
 Deferred:
 
-- extracting movement listing and WMS/dashboard workflows
+- extracting WMS/dashboard workflows
 - extracting inventory schema sections
 
 Verification:
@@ -396,6 +399,7 @@ Verification:
 - `./node_modules/.bin/vitest run tests/unit/inventory/query-normalization-wave3-movements.test.tsx tests/unit/inventory/query-normalization-wave7b.test.tsx tests/unit/inventory/use-receive-inventory.test.tsx tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/vitest run tests/unit/inventory tests/unit/inventory-support/query-normalization-wave6g.test.tsx`
 - `./node_modules/.bin/eslint src/server/functions/inventory/allocations.ts src/server/functions/inventory/inventory.ts`
+- `./node_modules/.bin/eslint src/server/functions/inventory/movements.ts src/server/functions/inventory/inventory.ts src/hooks/inventory/use-inventory.ts`
 - `git diff --check`
 - `node scripts/check-route-casts.mjs`
 - `node scripts/check-pending-dialog-guards.mjs`
@@ -404,4 +408,4 @@ Verification:
 
 Goal adaptation: no goal change; this continues strict modularity inside the inventory domain without changing behavior.
 
-Residual risk: the main inventory server file remains large and mixed-concern at 1,451 lines; this slice proves receiving, adjustment, transfer, and allocation extraction boundaries but does not yet extract movement listing or WMS/dashboard code.
+Residual risk: the main inventory server file remains large and mixed-concern at 1,319 lines; this slice proves receiving, adjustment, transfer, allocation, and movement-history extraction boundaries but does not yet extract WMS/dashboard code.
