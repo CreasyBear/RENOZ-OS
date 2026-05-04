@@ -74,7 +74,7 @@ function ensureIsActive(value: boolean | null | undefined): boolean {
 export const listLocations = createServerFn({ method: 'GET' })
   .inputValidator(locationListQuerySchema)
   .handler(async ({ data }): Promise<ListLocationsResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page = 1, pageSize = 20, search, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -140,7 +140,7 @@ export const listLocations = createServerFn({ method: 'GET' })
 export const listLocationsCursor = createServerFn({ method: 'GET' })
   .inputValidator(locationListCursorQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { cursor, pageSize = 20, sortOrder = 'desc', search, isActive } = data;
 
     const conditions = [eq(locations.organizationId, ctx.organizationId)];
@@ -194,7 +194,7 @@ export const listLocationsCursor = createServerFn({ method: 'GET' })
 export const getLocation = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid() })))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const [location] = await db
       .select()
@@ -213,7 +213,10 @@ export const getLocation = createServerFn({ method: 'GET' })
         product: products,
       })
       .from(inventory)
-      .leftJoin(products, eq(inventory.productId, products.id))
+      .leftJoin(
+        products,
+        and(eq(inventory.productId, products.id), eq(products.organizationId, ctx.organizationId))
+      )
       .where(
         and(
           eq(inventory.locationId, data.id),
@@ -461,7 +464,7 @@ export const deleteLocation = createServerFn({ method: 'POST' })
 export const listWarehouseLocations = createServerFn({ method: 'GET' })
   .inputValidator(warehouseLocationListQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const conditions = [eq(warehouseLocations.organizationId, ctx.organizationId)];
 
@@ -507,7 +510,7 @@ export const listWarehouseLocations = createServerFn({ method: 'GET' })
 export const getWarehouseLocationHierarchy = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ id: z.string().uuid().optional() })))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     // Build tree recursively using a CTE
     const hierarchy = await db.execute<WarehouseLocationRecord & { level: number }>(
@@ -742,7 +745,7 @@ export const deleteWarehouseLocation = createServerFn({ method: 'POST' })
  * Get location utilization across all locations.
  */
 export const getLocationUtilization = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
   const utilization = await db
     .select({
@@ -756,7 +759,13 @@ export const getLocationUtilization = createServerFn({ method: 'GET' }).handler(
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
     })
     .from(warehouseLocations)
-    .leftJoin(inventory, eq(inventory.locationId, warehouseLocations.id))
+    .leftJoin(
+      inventory,
+      and(
+        eq(inventory.locationId, warehouseLocations.id),
+        eq(inventory.organizationId, ctx.organizationId)
+      )
+    )
     .where(eq(warehouseLocations.organizationId, ctx.organizationId))
     .groupBy(
       warehouseLocations.id,
