@@ -133,7 +133,12 @@ export const allocateInventory = createServerFn({ method: 'POST' })
               updatedAt: new Date(),
               updatedBy: ctx.user.id,
             })
-            .where(eq(inventory.id, data.inventoryId))
+            .where(
+              and(
+                eq(inventory.id, data.inventoryId),
+                eq(inventory.organizationId, ctx.organizationId)
+              )
+            )
             .returning();
 
           // Create movement
@@ -262,7 +267,12 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(inventory.id, data.inventoryId))
+        .where(
+          and(
+            eq(inventory.id, data.inventoryId),
+            eq(inventory.organizationId, ctx.organizationId)
+          )
+        )
         .returning();
 
       // Create movement

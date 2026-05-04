@@ -170,7 +170,12 @@ export const adjustInventory = createServerFn({ method: 'POST' })
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(inventory.id, inventoryRecord.id))
+          .where(
+            and(
+              eq(inventory.id, inventoryRecord.id),
+              eq(inventory.organizationId, ctx.organizationId)
+            )
+          )
           .returning();
       }
 
@@ -319,7 +324,12 @@ export const adjustInventory = createServerFn({ method: 'POST' })
                   updatedBy: ctx.user.id,
                   updatedAt: new Date(),
                 })
-                .where(eq(serializedItems.id, serializedItem.id));
+                .where(
+                  and(
+                    eq(serializedItems.id, serializedItem.id),
+                    eq(serializedItems.organizationId, ctx.organizationId)
+                  )
+                );
               await addSerializedItemEvent(tx, {
                 organizationId: ctx.organizationId,
                 serializedItemId: serializedItem.id,

@@ -155,7 +155,12 @@ export const receiveInventory = createServerFn({ method: 'POST' })
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(inventory.id, inventoryRecord.id))
+          .where(
+            and(
+              eq(inventory.id, inventoryRecord.id),
+              eq(inventory.organizationId, ctx.organizationId)
+            )
+          )
           .returning();
       }
 
