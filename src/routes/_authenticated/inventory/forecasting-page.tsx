@@ -34,6 +34,10 @@ import {
   useForecastAccuracy,
 } from "@/hooks/inventory";
 import type { getProductForecast } from "@/server/functions/inventory/forecasting";
+import {
+  getForecastDetailsReadErrorMessage,
+  getReorderRecommendationsReadErrorMessage,
+} from "./forecasting-error-messages";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -272,7 +276,7 @@ export default function ForecastingPage() {
               recommendations={recommendations}
               isLoading={isLoadingRecs}
               isError={isRecsError}
-              errorMessage={recsError instanceof Error ? recsError.message : undefined}
+              errorMessage={getReorderRecommendationsReadErrorMessage(recsError)}
               onReorder={handleReorder}
               onReorderAll={handleReorderAll}
               onRetry={() => refetchRecommendations()}
@@ -351,7 +355,7 @@ export default function ForecastingPage() {
                   onPeriodChange={setForecastPeriod}
                   isLoading={isLoadingForecast}
                   isError={isForecastError}
-                  errorMessage={forecastError instanceof Error ? forecastError.message : undefined}
+                  errorMessage={getForecastDetailsReadErrorMessage(forecastError)}
                   onRetry={() => refetchForecast()}
                 />
               ) : (

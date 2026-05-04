@@ -280,4 +280,23 @@ describe('inventory forecasting query normalization wave 3', () => {
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to update forecasts');
   });
+
+  it('uses stable route unavailable copy instead of raw forecasting read errors', async () => {
+    const {
+      getForecastDetailsReadErrorMessage,
+      getReorderRecommendationsReadErrorMessage,
+    } = await import('@/routes/_authenticated/inventory/forecasting-error-messages');
+
+    expect(
+      getReorderRecommendationsReadErrorMessage(
+        new Error('select from inventory_forecasts violates row-level security policy')
+      )
+    ).toBe('Reorder recommendations are temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      getForecastDetailsReadErrorMessage(
+        new Error('forecast calculation failed with stack trace')
+      )
+    ).toBe('Demand forecast details are temporarily unavailable. Please refresh and try again.');
+  });
 });
