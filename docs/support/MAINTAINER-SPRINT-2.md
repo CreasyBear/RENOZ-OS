@@ -2,7 +2,7 @@
 
 This sprint follows Support Sprint 1's trace/schema/contract hardening into the operator-facing RMA recovery surfaces.
 
-Status: Issues 1, 2, and 3 implemented.
+Status: Closed after Issues 1, 2, and 3.
 
 ## Business Value
 
@@ -260,3 +260,53 @@ Verification:
 Goal adaptation: no standing goal change. This continues the support/RMA operator UX sprint by giving list recovery state the same focused ownership as detail execution state.
 
 Residual risk: Support Sprint 2 has now covered RMA detail execution, detail source context, and list execution visibility. The remaining obvious support debt is outside RMA recovery display: either close this sprint or move to the separate `issue-detail-view.tsx` monolith under a new issue/support sprint.
+
+## Sprint Closeout Audit
+
+Completion audit:
+
+- Objective: make RMA recovery operator UI easier to reason about after Support Sprint 1 hardened RMA remedy contracts.
+- Deliverables checked: sprint issue ledger, closeout logs, extracted RMA execution summary component, detail side-rail cleanup, list execution cell boundary, focused UI tests, support suite evidence, typecheck evidence, and residual-risk notes.
+- Evidence inspected: `src/components/domain/support/rma/rma-detail-card.tsx`, `src/components/domain/support/rma/rma-execution-summary.tsx`, `src/components/domain/support/rma/rma-detail-view.tsx`, `src/components/domain/support/rma/rma-list.tsx`, `src/components/domain/support/rma/rma-list-execution-cells.tsx`, `tests/unit/support/rma-execution-summary.test.tsx`, `tests/unit/support/rma-detail-view.test.tsx`, and `tests/unit/support/rma-list-execution-cells.test.tsx`.
+
+Touched domains: support/RMA detail UI, support/RMA list UI, RMA remedy execution display, RMA source-context navigation, support UI tests.
+
+Workflow protected: support/order/warranty context -> RMA detail or list route -> route container/read-model data -> focused RMA execution display boundary -> operator-safe pending, blocked, completed, artifact, source order, and linked issue states.
+
+Business value protected: operators can now distinguish source context from remedy artifact truth. The detail body owns remedy execution and linked artifact evidence, the detail side rail owns source issue/order navigation, and list rows own compact recovery-state scanning through focused cells.
+
+Architecture standards checked:
+
+- domain ownership: RMA recovery display now has focused support-domain components instead of broad card/list ownership
+- route/container boundary: support routes and containers were not changed; existing route data still flows into presentational RMA components
+- hook/server/schema/database boundary: no RMA hooks, server functions, schemas, read-model hydration, or database side effects were changed
+- query/cache contract: no query keys or invalidation behavior changed
+- tenant isolation: no server query or tenant boundary was touched
+- inventory/finance integrity: artifact links remain read-model truth from existing refund, credit, and replacement contract work
+- UI honesty: blocked, pending, completed, refund, credit, replacement, source order, and linked issue states now have focused component coverage
+
+Smells removed:
+
+- `rma-detail-card.tsx` mixed general RMA detail layout with high-stakes remedy execution and artifact links
+- `rma-detail-view.tsx` duplicated remedy artifact navigation in the side rail after artifact display had a focused body owner
+- `rma-list.tsx` mixed filter/table orchestration with remedy and execution-context row rendering
+- blocked/completed/pending RMA recovery display lacked focused UI coverage
+
+Smells deferred:
+
+- `issue-detail-view.tsx` remains a large separate support workflow surface and should be handled under its own sprint/slice
+- `rma-list.tsx` still owns filters, table assembly, selection, pagination, and row actions; extract only if list workflows keep expanding
+- true browser QA of the RMA route was skipped because this sprint was presentational ownership cleanup with unit coverage and no server behavior change
+- DB-backed remedy integration remains a separate infrastructure concern from Support Sprint 1
+
+Verification:
+
+- Issue 1 focused execution-summary test, lint, support suite, and typecheck recorded above
+- Issue 2 focused detail-view test, lint, support suite, and typecheck recorded above
+- Issue 3 focused list-execution-cells test, lint, support suite, and typecheck recorded above
+
+Gates skipped: browser QA was skipped for all slices because this sprint did not change route, server, mutation, schema, or cache behavior. Visual/manual QA remains useful before production release if the RMA detail/list surfaces are redesigned.
+
+Goal adaptations made or declined: no standing goal change. This sprint reinforces the maintainer goal's preference for small domain-sliced UI ownership cleanup before broader feature work.
+
+Residual risk: Support Sprint 2 is closed for RMA recovery display ownership. The next support candidate should be the separate `issue-detail-view.tsx` monolith or DB-backed RMA remedy integration, not further incidental splitting of RMA display components.
