@@ -7,11 +7,11 @@
 
 ## 0. Capability & scope
 
-**User capability:** Patch **non-workflow** fields on an existing RMA header: reason text, customer/internal notes, inspection notes JSON, resolution enum, resolution details — **without** using the dedicated status transitions (`approveRma`, `receiveRma`, `processRma`, etc.).
+**User capability:** Patch **non-workflow** fields on an existing RMA header: reason, reason details, customer notes, and internal notes — without using the dedicated status transitions (`approveRma`, `receiveRma`, `processRma`, etc.).
 
 **In scope:** `updateRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); input = `updateRmaSchema` + `rmaId` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useUpdateRma`](../../src/hooks/support/use-rma.ts).
 
-**Out of scope:** Line item edits (no API in this handler); status changes (schema comment says workflow fns own those — see drift).
+**Out of scope:** Line item edits (no API in this handler); status changes; receipt inspection; remedy resolution/execution.
 
 ---
 
@@ -28,11 +28,16 @@
 
 ---
 
-## 2. Contract vs comment drift
+## 2. Contract
 
-[`updateRmaSchema`](../../src/lib/schemas/support/rma.ts) **includes** `resolution`, `resolutionDetails`, `inspectionNotes` (optional/nullable). The file comment says *“Status changes handled by dedicated functions”* but does **not** explicitly forbid mutating `resolution` here. **Handler spreads `updateData` into Drizzle `set`**, so a client **can** send `resolution` / `resolutionDetails` / `inspectionNotes` via this RPC **in parallel** with `processRma` — risk of **two ways** to write the same conceptual data.
+[`updateRmaSchema`](../../src/lib/schemas/support/rma.ts) is strict and allows only general RMA header fields. Workflow-owned fields rejected here:
 
-**`status` is not** in `updateRmaSchema`, so status cannot be changed through this validator (unless schema regresses).
+- `inspectionNotes` belongs to `receiveRma`
+- `resolution` belongs to `processRma`
+- `resolutionDetails` belongs to `processRma`
+- `status` belongs to dedicated transition RPCs
+
+The handler still spreads validated `updateData` into Drizzle `set`, so strict schema validation is the workflow boundary.
 
 ---
 
@@ -83,7 +88,6 @@ sequenceDiagram
 
 | Issue | Risk |
 |-------|------|
-| Dual paths for resolution/inspection | `updateRma` vs `processRma` / `receiveRma` |
 | No optimistic locking | Concurrent patches last-write-wins |
 | **getRmaByNumber oddity** (separate) | `getRmaByNumber` input schema reuses `orderId` shape for `rmaNumber` — type smell in same file (~L637) |
 
@@ -93,11 +97,12 @@ sequenceDiagram
 
 - Search `updateRma`, `useUpdateRma` under `tests/`.
 - **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies the trace and server stay aligned on `PERMISSIONS.support.update`.
-- **Gap:** Forbid or document `resolution` on `updateRma` if `processRma` is canonical; contract test that `status` cannot be injected.
+- **Guard:** `tests/unit/support/rma-field-update-boundary.test.ts` verifies general updates remain allowed while workflow-owned fields and status are rejected.
+- **Gap:** Add optimistic locking if concurrent RMA header edits become operator-visible.
 
 ---
 
 ## 9. Follow-up traces
 
 - Dedicated “edit RMA line items” if product adds it.
-- Consolidate resolution writes into one RPC + deprecate fields on `updateRma`.
+- Migrate any future direct `updateRma` callers to workflow RPCs if they need inspection or remedy state.

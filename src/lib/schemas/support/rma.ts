@@ -129,18 +129,23 @@ export type CreateRmaInput = z.infer<typeof createRmaSchema>;
 // UPDATE RMA
 // ============================================================================
 
+export const rmaWorkflowOwnedUpdateFieldValues = [
+  'inspectionNotes',
+  'resolution',
+  'resolutionDetails',
+] as const;
+export type RmaWorkflowOwnedUpdateField = (typeof rmaWorkflowOwnedUpdateFieldValues)[number];
+
 export const updateRmaSchema = z.object({
   // Status changes handled by dedicated functions (approve, receive, process, reject)
-  // This schema is for general field updates
+  // Receipt inspection and remedy resolution are handled by receiveRma/processRma.
+  // This strict schema is for general header field updates only.
 
   reason: rmaReasonSchema.optional(),
   reasonDetails: z.string().max(2000).nullable().optional(),
   customerNotes: z.string().max(2000).nullable().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
-  inspectionNotes: rmaInspectionNotesSchema.nullable().optional(),
-  resolution: rmaResolutionSchema.nullable().optional(),
-  resolutionDetails: rmaResolutionDetailsSchema.nullable().optional(),
-});
+}).strict();
 export type UpdateRmaInput = z.infer<typeof updateRmaSchema>;
 
 // ============================================================================

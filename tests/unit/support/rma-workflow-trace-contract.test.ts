@@ -45,15 +45,16 @@ describe('RMA workflow trace contract', () => {
     expect(processTrace).not.toContain('no automatic refund transaction');
   });
 
-  it('keeps updateRma documented as a permissioned non-workflow patch with remaining boundary drift', () => {
+  it('keeps updateRma documented as a permissioned non-workflow patch', () => {
     const schema = read('src/lib/schemas/support/rma.ts');
     const updateTrace = read('docs/code-traces/18-rma-field-update.md');
 
-    expect(schema).toContain('inspectionNotes: rmaInspectionNotesSchema.nullable().optional()');
-    expect(schema).toContain('resolution: rmaResolutionSchema.nullable().optional()');
-    expect(schema).toContain('resolutionDetails: rmaResolutionDetailsSchema.nullable().optional()');
+    expect(schema).toContain('rmaWorkflowOwnedUpdateFieldValues');
+    expect(schema).not.toContain('inspectionNotes: rmaInspectionNotesSchema.nullable().optional()');
+    expect(schema).not.toContain('resolution: rmaResolutionSchema.nullable().optional()');
+    expect(schema).not.toContain('resolutionDetails: rmaResolutionDetailsSchema.nullable().optional()');
 
     expect(updateTrace).toContain('PERMISSIONS.support.update');
-    expect(updateTrace).toContain('Dual paths for resolution/inspection');
+    expect(updateTrace).toContain('Workflow-owned fields rejected');
   });
 });
