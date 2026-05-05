@@ -13,10 +13,12 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating, RatingBadge } from './star-rating';
 import { CsatEntryDialog } from './csat-entry-dialog';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
+import { formatSupportMutationError } from '@/hooks/support';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   MessageSquare,
@@ -36,6 +38,19 @@ const SOURCE_LABELS: Record<string, string> = {
   internal_entry: 'Internal Entry',
   public_form: 'Public Form',
 };
+
+const CSAT_LINK_ERROR_MESSAGES = {
+  NOT_FOUND: 'The support issue could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to generate feedback links.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before generating feedback links.',
+  RATE_LIMIT: 'Too many feedback links were requested. Wait a moment and retry.',
+};
+
+function formatCsatLinkError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: CSAT_LINK_ERROR_MESSAGES,
+  });
+}
 
 interface CsatDisplayCardProps {
   /** Issue ID */
@@ -88,6 +103,19 @@ export function CsatDisplayCard({
 }: CsatDisplayCardProps) {
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [generatedFeedbackUrl, setGeneratedFeedbackUrl] = useState<string | null>(null);
+
+  const copyFeedbackLink = async (feedbackUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(feedbackUrl);
+      setCopiedLink(true);
+      toast.success('Feedback link copied to clipboard.');
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch {
+      setCopiedLink(false);
+      toast.error('Feedback link is ready, but clipboard access was blocked. Copy it manually.');
+    }
+  };
 
   const handleGenerateLink = async () => {
     try {
@@ -96,12 +124,10 @@ export function CsatDisplayCard({
         return;
       }
       const result = await onGenerateFeedbackLink(issueId);
-      await navigator.clipboard.writeText(result.feedbackUrl);
-      setCopiedLink(true);
-      toast.success('Feedback link copied to clipboard!');
-      setTimeout(() => setCopiedLink(false), 3000);
+      setGeneratedFeedbackUrl(result.feedbackUrl);
+      await copyFeedbackLink(result.feedbackUrl);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate link');
+      toast.error(formatCsatLinkError(err, 'Failed to generate feedback link'));
     }
   };
 
@@ -236,6 +262,38 @@ export function CsatDisplayCard({
               Feedback link can be generated once the issue is resolved.
             </p>
           )}
+
+          {generatedFeedbackUrl ? (
+            <div className="bg-muted/40 space-y-2 rounded-md border p-2">
+              <p className="text-muted-foreground text-xs">Feedback link ready</p>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={generatedFeedbackUrl}
+                  className="h-8 text-xs"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copyFeedbackLink(generatedFeedbackUrl)}
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4 text-green-500" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
