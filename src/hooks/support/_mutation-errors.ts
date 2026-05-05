@@ -122,8 +122,13 @@ function extractMessage(error: unknown): string | null {
     ['error'],
     ['data', 'message'],
     ['data', 'error'],
+    ['details', 'summary'],
+    ['data', 'details', 'summary'],
     ['cause', 'message'],
+    ['cause', 'details', 'summary'],
     ['cause', 'data', 'message'],
+    ['cause', 'data', 'details', 'summary'],
+    ['response', 'data', 'details', 'summary'],
     ['response', 'data', 'message'],
     ['response', 'data', 'error'],
   ];

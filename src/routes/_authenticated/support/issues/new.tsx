@@ -12,7 +12,7 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import { RouteErrorFallback } from '@/components/layout';
 import { SupportFormSkeleton } from '@/components/skeletons/support';
 import { PageLayout } from '@/components/layout';
@@ -43,7 +43,7 @@ import {
   useFormFieldDisplay,
 } from '@/components/shared/forms';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { useCreateIssue, useIssueIntakePreview } from '@/hooks/support';
+import { formatSupportMutationError, useCreateIssue, useIssueIntakePreview } from '@/hooks/support';
 import { useCustomer } from '@/hooks/customers';
 import { useWarranty } from '@/hooks/warranty';
 import { useOrder } from '@/hooks/orders/use-orders';
@@ -119,6 +119,15 @@ const newIssueFormSchema = z.object({
 });
 
 type NewIssueFormValues = z.infer<typeof newIssueFormSchema>;
+
+const CREATE_ISSUE_ERROR_MESSAGES = {
+  ISSUE_ANCHOR_CONFLICT:
+    'These selections point to different records. Clear one of the conflicting anchors before creating the issue.',
+  NOT_FOUND: 'One of the selected support records could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to create support issues.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before creating this issue.',
+  RATE_LIMIT: 'Too many issue creation attempts were made. Wait a moment and retry.',
+};
 
 function toNullable(value?: string | null) {
   return value ?? null;
@@ -226,18 +235,9 @@ function NewIssuePage() {
           params: { issueId: result.id },
         });
       } catch (error) {
-        const message =
-          error &&
-          typeof error === 'object' &&
-          'details' in error &&
-          error.details &&
-          typeof error.details === 'object' &&
-          'summary' in error.details &&
-          typeof error.details.summary === 'string'
-            ? error.details.summary
-            : error instanceof Error
-              ? error.message
-              : 'Failed to create issue';
+        const message = formatSupportMutationError(error, 'Failed to create issue', {
+          codeMessages: CREATE_ISSUE_ERROR_MESSAGES,
+        });
         setSubmitError(message);
         toast.error(message);
       }

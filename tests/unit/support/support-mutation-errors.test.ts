@@ -46,6 +46,24 @@ describe('support mutation error formatting', () => {
     ).toBe('The RMA could not be found. Refresh and try again.');
   });
 
+  it('uses safe serialized issue anchor conflict summaries', () => {
+    expect(
+      formatSupportMutationError(
+        {
+          statusCode: 400,
+          code: 'ISSUE_ANCHOR_CONFLICT',
+          details: {
+            summary:
+              'These selections point to different records. Clear one of the conflicting anchors before continuing.',
+          },
+        },
+        'Failed to create issue'
+      )
+    ).toBe(
+      'These selections point to different records. Clear one of the conflicting anchors before continuing.'
+    );
+  });
+
   it('suppresses unsafe infrastructure messages', () => {
     const message = formatSupportMutationError(
       {
