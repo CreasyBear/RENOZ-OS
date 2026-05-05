@@ -13,7 +13,11 @@ import {
   useWarrantyAnalyticsDashboard,
   useExportWarrantyAnalytics,
 } from '@/hooks';
-import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
+import {
+  formatReportsMutationError,
+  useCreateScheduledReport,
+  useGenerateReport,
+} from '@/hooks/reports';
 import { toast } from '@/hooks';
 import {
   WarrantyAnalyticsView,
@@ -63,12 +67,28 @@ const WARRANTY_ANALYTICS_EXPORT_ERROR_MESSAGES = {
   RATE_LIMIT: 'Too many warranty analytics exports were attempted. Wait a moment and retry.',
 };
 
+const WARRANTY_ANALYTICS_GENERATED_REPORT_ERROR_MESSAGES = {
+  PERMISSION_DENIED: 'You do not have permission to generate warranty analytics reports.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before generating warranty analytics reports.',
+  RATE_LIMIT: 'Too many warranty analytics reports were generated. Wait a moment and retry.',
+};
+
 function formatWarrantyAnalyticsExportError(error: unknown): string {
   return formatWarrantyMutationError(
     error,
     'Warranty analytics export is temporarily unavailable. Please refresh and try again.',
     {
       codeMessages: WARRANTY_ANALYTICS_EXPORT_ERROR_MESSAGES,
+    }
+  );
+}
+
+function formatGeneratedWarrantyAnalyticsReportError(error: unknown, format: 'pdf' | 'excel'): string {
+  return formatReportsMutationError(
+    error,
+    `${format.toUpperCase()} warranty analytics report generation is temporarily unavailable. Please refresh and try again.`,
+    {
+      codeMessages: WARRANTY_ANALYTICS_GENERATED_REPORT_ERROR_MESSAGES,
     }
   );
 }
@@ -186,8 +206,8 @@ export function WarrantyAnalyticsPage() {
         .then((result) => {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
         })
-        .catch(() => {
-          // keep UI quiet; caller can toast
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedWarrantyAnalyticsReportError(error, format));
         });
     },
     [generateReport, dateRange]
