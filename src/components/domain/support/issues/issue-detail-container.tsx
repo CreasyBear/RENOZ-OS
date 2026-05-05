@@ -23,6 +23,10 @@ import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
+import {
+  formatSupportReadError,
+  isSupportReadNotFound,
+} from '@/lib/support/read-error-messages';
 import { IssueDetailView } from './issue-detail-view';
 
 interface IssueDetailContainerProps {
@@ -101,10 +105,19 @@ export function IssueDetailContainer({
   }
 
   if (error || !issue) {
+    const isNotFound = !error || isSupportReadNotFound(error);
+
     return (
       <ErrorState
-        title="Failed to load issue"
-        message={error instanceof Error ? error.message : 'Issue not found'}
+        title={isNotFound ? 'Issue not found' : 'Unable to load issue'}
+        message={
+          error
+            ? formatSupportReadError(
+                error,
+                'Issue details are temporarily unavailable. Please refresh and try again.'
+              )
+            : 'The requested issue could not be found.'
+        }
         onRetry={actions.onRefresh}
       />
     );

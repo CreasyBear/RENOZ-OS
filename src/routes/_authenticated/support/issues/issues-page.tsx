@@ -36,6 +36,7 @@ import { SlaBadge } from '@/components/domain/support/sla/sla-badge';
 import { useIssuesWithSlaMetrics } from '@/hooks/support';
 import type { IssueListItem, IssueFiltersState, IssuePriority } from '@/lib/schemas/support/issues';
 import { fromUrlParams, toUrlParams } from '@/lib/utils/issues-filter-url';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import { formatDistanceToNow } from 'date-fns';
 import { DomainFilterBar } from '@/components/shared/filters';
 import {
@@ -324,8 +325,11 @@ export default function IssuesPage({ search }: IssuesPageProps) {
   if (error) {
     return (
       <ErrorState
-        title="Failed to load issues"
-        message={error instanceof Error ? error.message : 'An error occurred'}
+        title="Unable to load issues"
+        message={formatSupportReadError(
+          error,
+          'Issue queue metrics are temporarily unavailable. Please refresh and try again.'
+        )}
         onRetry={refetch}
       />
     );
