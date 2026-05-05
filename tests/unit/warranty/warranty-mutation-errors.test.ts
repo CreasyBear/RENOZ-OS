@@ -62,24 +62,28 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Failed to approve claim');
   });
 
-  it('keeps claim, policy, and core warranty mutation hooks on the formatter contract', () => {
-    const claimSource = read('src/hooks/warranty/claims/use-warranty-claims.ts');
-    const policySource = read('src/hooks/warranty/policies/use-warranty-policies.ts');
-    const coreSource = read('src/hooks/warranty/core/use-warranties.ts');
+  it('keeps warranty mutation hooks on the formatter contract', () => {
+    const sources = {
+      claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
+      policy: read('src/hooks/warranty/policies/use-warranty-policies.ts'),
+      core: read('src/hooks/warranty/core/use-warranties.ts'),
+      entitlement: read('src/hooks/warranty/entitlements/use-warranty-entitlements.ts'),
+      extension: read('src/hooks/warranty/extensions/use-warranty-extensions.ts'),
+      certificate: read('src/hooks/warranty/certificates/use-warranty-certificates.ts'),
+      bulkImport: read('src/hooks/warranty/bulk-import/use-warranty-bulk-import.ts'),
+    };
 
-    expect(claimSource).toContain(
-      "import { formatWarrantyMutationError } from '../_mutation-errors';"
-    );
-    expect(policySource).toContain(
-      "import { formatWarrantyMutationError } from '../_mutation-errors';"
-    );
-    expect(coreSource).toContain(
-      "import { formatWarrantyMutationError } from '../_mutation-errors';"
-    );
-    expect(claimSource).not.toContain('toast.error(error instanceof Error ? error.message');
-    expect(policySource).not.toContain('toast.error(error instanceof Error ? error.message');
-    expect(coreSource).not.toContain('toast.error(error instanceof Error ? error.message');
-    expect(policySource.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
-    expect(coreSource.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(4);
+    for (const source of Object.values(sources)) {
+      expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
+      expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
+    }
+
+    expect(sources.claim.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
+    expect(sources.policy.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
+    expect(sources.core.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(4);
+    expect(sources.entitlement.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
+    expect(sources.extension.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
+    expect(sources.certificate.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
+    expect(sources.bulkImport.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
   });
 });

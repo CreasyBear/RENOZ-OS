@@ -13,6 +13,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import { formatWarrantyMutationError } from '../_mutation-errors';
 import {
   generateWarrantyCertificate,
   getWarrantyCertificate,
@@ -103,7 +104,7 @@ export function useGenerateWarrantyCertificate() {
       }
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to generate certificate');
+      toast.error(formatWarrantyMutationError(error, 'Failed to generate certificate'));
     },
   });
 }
@@ -150,7 +151,7 @@ export function useRegenerateWarrantyCertificate() {
       }
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to regenerate certificate');
+      toast.error(formatWarrantyMutationError(error, 'Failed to regenerate certificate'));
     },
   });
 }

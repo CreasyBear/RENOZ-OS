@@ -9,6 +9,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { formatWarrantyMutationError } from '../_mutation-errors';
 import {
   previewBulkWarrantyImport,
   bulkRegisterWarrantiesFromCsv,
@@ -39,7 +40,7 @@ export function usePreviewWarrantyImport() {
   return useMutation<PreviewResult, Error, PreviewBulkWarrantyImportInput>({
     mutationFn: (data) => previewBulkWarrantyImport({ data }),
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to parse CSV');
+      toast.error(formatWarrantyMutationError(error, 'Failed to parse CSV'));
     },
   });
 }
@@ -63,7 +64,7 @@ export function useBulkRegisterWarranties() {
       toast.success(`Successfully registered ${data.summary.totalCreated} warranties`);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to register warranties');
+      toast.error(formatWarrantyMutationError(error, 'Failed to register warranties'));
     },
   });
 }
