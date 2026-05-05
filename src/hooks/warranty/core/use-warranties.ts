@@ -19,6 +19,7 @@ import {
 } from '@/server/functions/warranty';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import { formatWarrantyMutationError } from '../_mutation-errors';
 import type {
   TransferWarrantyInput,
   WarrantyFilters,
@@ -122,7 +123,7 @@ export function useUpdateWarrantyOptOut() {
       return result;
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to update warranty notification settings');
+      toast.error(formatWarrantyMutationError(error, 'Failed to update warranty notification settings'));
     },
   });
 }
@@ -142,7 +143,7 @@ export function useDeleteWarranty() {
       toast.success('Warranty deleted successfully');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete warranty');
+      toast.error(formatWarrantyMutationError(error, 'Failed to delete warranty'));
     },
   });
 }
@@ -163,7 +164,7 @@ export function useVoidWarranty() {
       toast.success('Warranty voided successfully');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to void warranty');
+      toast.error(formatWarrantyMutationError(error, 'Failed to void warranty'));
     },
   });
 }
@@ -190,7 +191,7 @@ export function useTransferWarranty() {
       toast.success('Warranty ownership transferred successfully');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer warranty ownership');
+      toast.error(formatWarrantyMutationError(error, 'Failed to transfer warranty ownership'));
     },
   });
 }
