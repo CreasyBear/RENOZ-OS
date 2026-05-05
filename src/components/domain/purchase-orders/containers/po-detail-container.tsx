@@ -79,6 +79,7 @@ import {
   type PurchaseOrderStatus,
 } from '@/lib/schemas/purchase-orders';
 import { PODetailView } from '../views/po-detail-view';
+import { getPurchaseOrderDetailErrorMessage } from '../po-detail-error-messages';
 import type {
   PurchaseOrderWithDetails,
   PODetailHeaderConfig,
@@ -520,11 +521,7 @@ export function PODetailContainer({
     const errorContent = (
       <ErrorState
         title={isNotFound || !error ? 'Purchase order not found' : 'Purchase order details are unavailable'}
-        message={
-          error instanceof Error
-            ? error.message
-            : "The purchase order you're looking for doesn't exist or has been deleted."
-        }
+        message={getPurchaseOrderDetailErrorMessage(error)}
         onRetry={() => refetch()}
         retryLabel="Try Again"
       />
