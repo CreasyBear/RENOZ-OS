@@ -55,6 +55,7 @@ export interface BulkReceivingDialogProps {
     processed: number;
     skipped: number;
     failed: number;
+    skippedDetails: Array<{ poId: string; reason: string }>;
     errors: Array<{ poId: string; error: string; code?: string }>;
   }>;
   isLoading?: boolean;
@@ -74,6 +75,11 @@ interface BulkReceivingFailureDetail {
   poId: string;
   error: string;
   code?: string;
+}
+
+interface BulkReceivingSkippedDetail {
+  poId: string;
+  reason: string;
 }
 
 // ============================================================================
@@ -99,6 +105,7 @@ export function BulkReceivingDialog({
   });
   const [attemptTotal, setAttemptTotal] = useState(0);
   const [failureDetails, setFailureDetails] = useState<BulkReceivingFailureDetail[]>([]);
+  const [skippedDetails, setSkippedDetails] = useState<BulkReceivingSkippedDetail[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const wasOpenRef = useRef(false);
 
@@ -118,6 +125,7 @@ export function BulkReceivingDialog({
     setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(0);
     setFailureDetails([]);
+    setSkippedDetails([]);
     setIsProcessing(false);
   }, [open, purchaseOrders]);
 
@@ -251,6 +259,7 @@ export function BulkReceivingDialog({
     setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(targetPOIds.length);
     setFailureDetails([]);
+    setSkippedDetails([]);
 
     try {
       const targetPOSet = new Set(targetPOIds);
@@ -266,6 +275,7 @@ export function BulkReceivingDialog({
       });
       setProcessingProgress(result);
       setFailureDetails(result.errors ?? []);
+      setSkippedDetails(result.skippedDetails ?? []);
 
       if (result.failed === 0) {
         // All succeeded - close dialog
@@ -304,6 +314,7 @@ export function BulkReceivingDialog({
     setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(0);
     setFailureDetails([]);
+    setSkippedDetails([]);
     setStep(failedRequiresSerialReview ? 'serials' : 'review');
   }, [failureDetails]);
 
@@ -548,6 +559,17 @@ export function BulkReceivingDialog({
         reasons,
       };
     });
+    const skippedByPO = Array.from(new Set(skippedDetails.map((entry) => entry.poId))).map((poId) => {
+      const po = purchaseOrders.find((candidate) => candidate.id === poId);
+      const reasons = skippedDetails
+        .filter((entry) => entry.poId === poId)
+        .map((entry) => entry.reason);
+      return {
+        poId,
+        poNumber: po?.poNumber ?? poId,
+        reasons,
+      };
+    });
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -613,6 +635,28 @@ export function BulkReceivingDialog({
               {skipped === 1 ? ' was' : ' were'} skipped without creating receipts.
             </AlertDescription>
           </Alert>
+        )}
+
+        {skippedByPO.length > 0 && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50/60">
+            <div className="border-b border-amber-200 px-3 py-2 text-sm font-medium">
+              Skipped Purchase Orders
+            </div>
+            <ScrollArea className="max-h-[180px]">
+              <div className="divide-y divide-amber-200/70">
+                {skippedByPO.map((entry) => (
+                  <div key={entry.poId} className="px-3 py-2">
+                    <div className="text-sm font-medium">{entry.poNumber}</div>
+                    {entry.reasons.map((reason, idx) => (
+                      <p key={`${entry.poId}-${idx}`} className="text-xs text-muted-foreground mt-1">
+                        {reason}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         )}
 
         {failed > 0 && (

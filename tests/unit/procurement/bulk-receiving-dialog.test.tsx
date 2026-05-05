@@ -124,6 +124,7 @@ describe('BulkReceivingDialog', () => {
       processed: 2,
       skipped: 0,
       failed: 0,
+      skippedDetails: [],
       errors: [],
     })
 
@@ -242,6 +243,7 @@ describe('BulkReceivingDialog', () => {
       processed: 0,
       skipped: 1,
       failed: 0,
+      skippedDetails: [{ poId: 'po-1', reason: 'No pending items to receive.' }],
       errors: [],
     })
 
@@ -286,6 +288,9 @@ describe('BulkReceivingDialog', () => {
     expect(
       screen.getByText('1 purchase order had no pending items and was skipped without creating receipts.')
     ).toBeInTheDocument()
+    expect(screen.getByText('Skipped Purchase Orders')).toBeInTheDocument()
+    expect(screen.getByText('PO-001')).toBeInTheDocument()
+    expect(screen.getByText('No pending items to receive.')).toBeInTheDocument()
   })
 
   it('keeps bulk receiving on the select step while receiving details are loading', async () => {
@@ -331,6 +336,7 @@ describe('BulkReceivingDialog', () => {
       processed: 2,
       skipped: 0,
       failed: 0,
+      skippedDetails: [],
       errors: [],
     })
 
@@ -416,6 +422,7 @@ describe('BulkReceivingDialog', () => {
       processed: 0,
       skipped: 0,
       failed: 1,
+      skippedDetails: [],
       errors: [
         {
           poId: 'po-1',

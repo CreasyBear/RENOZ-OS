@@ -31,6 +31,7 @@ export interface BulkReceiveGoodsResult {
   processed: number;
   skipped: number;
   failed: number;
+  skippedDetails: Array<{ poId: string; reason: string }>;
   errors: Array<{ poId: string; error: string; code?: string }>;
   errorsById?: Record<string, string>;
   partialFailure?: { code: string; message: string };

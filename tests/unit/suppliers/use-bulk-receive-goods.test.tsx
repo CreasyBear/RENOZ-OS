@@ -42,6 +42,7 @@ describe('useBulkReceiveGoods', () => {
       processed: 1,
       skipped: 0,
       failed: 1,
+      skippedDetails: [],
       errors: [{ poId: 'po-2', error: 'Blocked by serialized product validation' }],
       errorsById: { 'po-2': 'Blocked by serialized product validation' },
       partialFailure: {

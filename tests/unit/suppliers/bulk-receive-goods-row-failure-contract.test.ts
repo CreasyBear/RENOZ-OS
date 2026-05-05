@@ -28,9 +28,12 @@ describe('bulk receive goods row failure contract', () => {
     const source = compact('src/server/functions/suppliers/bulk-receive-goods.ts');
 
     expect(source).toContain('skipped:number;');
+    expect(source).toContain('skippedDetails:BulkReceiveSkippedDetail[];');
     expect(source).toContain('skipped:0,');
+    expect(source).toContain('skippedDetails:[]asBulkReceiveSkippedDetail[],');
     expect(source).toContain('if(pendingItems.length===0){');
     expect(source).toContain('results.skipped++;');
+    expect(source).toContain("results.skippedDetails.push({poId,reason:'Nopendingitemstoreceive.',});");
     expect(source).not.toContain('if(pendingItems.length===0){//Nopendingitems-skipthisPOresults.processed++;');
     expect(source).toContain('formatBulkReceiveResultMessage(results)');
     expect(source).toContain('Skipped${skippedLabel}withnopendingitems.');

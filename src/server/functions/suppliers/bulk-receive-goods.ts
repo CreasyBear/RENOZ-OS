@@ -7,7 +7,7 @@
  * Business Rules:
  * - Serialized products require serial numbers before receiving
  * - Receives all pending items with default values (condition: 'new', no rejections)
- * - Returns summary of received/skipped/failed counts
+ * - Returns summary of received/skipped/failed counts and row details
  *
  * @see src/server/functions/suppliers/receive-goods.ts (single PO receiving)
  */
@@ -37,6 +37,11 @@ import {
   buildProductSerializationRequirementMap,
   getUniqueReceiptProductIds,
 } from './receive-goods-serialization';
+
+interface BulkReceiveSkippedDetail {
+  poId: string;
+  reason: string;
+}
 
 // ============================================================================
 // INPUT SCHEMA
@@ -68,7 +73,7 @@ const bulkReceiveGoodsSchema = z.object({
  * - Validates PO exists and has pending items
  * - Validates serial numbers for serialized products (if provided)
  * - Receives all pending items with provided serial numbers or default values
- * - Returns summary of received/skipped/failed counts
+ * - Returns summary of received/skipped/failed counts and row details
  *
  * Business Rules:
  * - Serialized products REQUIRE serial numbers (must match quantity)
@@ -82,6 +87,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       processed: number;
       skipped: number;
       failed: number;
+      skippedDetails: BulkReceiveSkippedDetail[];
       errors: BulkReceiveFailure[];
     }>
   > => {
@@ -91,6 +97,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       processed: 0,
       skipped: 0,
       failed: 0,
+      skippedDetails: [] as BulkReceiveSkippedDetail[],
       errors: [] as BulkReceiveFailure[],
     };
     const preparedReceipts: Array<{
@@ -131,6 +138,10 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         if (pendingItems.length === 0) {
           // No pending items - skip this PO
           results.skipped++;
+          results.skippedDetails.push({
+            poId,
+            reason: 'No pending items to receive.',
+          });
           continue;
         }
 

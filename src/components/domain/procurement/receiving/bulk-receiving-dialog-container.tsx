@@ -39,6 +39,7 @@ export interface BulkReceivingDialogContainerProps {
     processed: number;
     skipped: number;
     failed: number;
+    skippedDetails: Array<{ poId: string; reason: string }>;
     errors: Array<{ poId: string; error: string; code?: string }>;
   }>;
   isLoading?: boolean;
