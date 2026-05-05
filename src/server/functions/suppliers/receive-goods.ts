@@ -48,6 +48,10 @@ import {
   createReceiptLayersWithCostComponents,
   recomputeInventoryValueFromLayers,
 } from '@/server/functions/_shared/inventory-finance';
+import {
+  buildProductSerializationRequirementMap,
+  getUniqueReceiptProductIds,
+} from './receive-goods-serialization';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -181,10 +185,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
 
       const poItemMap = new Map(poItems.map((item) => [item.id, item]));
       const serialsSeenInRequest = new Set<string>();
-      const productIds = poItems
-        .map((item) => item.productId)
-        .filter((id): id is string => id !== null);
-      const productSerializationMap = new Map<string, boolean>();
+      const productIds = getUniqueReceiptProductIds(
+        poItems.map((item) => item.productId)
+      );
+      let productSerializationMap = new Map<string, boolean>();
       if (productIds.length > 0) {
         const productRows = await tx
           .select({ id: products.id, isSerialized: products.isSerialized })
@@ -196,9 +200,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
               isNull(products.deletedAt)
             )
           );
-        productRows.forEach((p) => {
-          productSerializationMap.set(p.id, p.isSerialized);
-        });
+        productSerializationMap = buildProductSerializationRequirementMap(
+          productIds,
+          productRows
+        );
       }
 
       // Validate all receipt items reference valid PO items
@@ -225,7 +230,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
 
         const quantityAccepted = receiptItem.quantityReceived - receiptItem.quantityRejected;
         const isSerialized = poItem.productId
-          ? (productSerializationMap.get(poItem.productId) ?? false)
+          ? productSerializationMap.get(poItem.productId)!
           : false;
         if (isSerialized && quantityAccepted > 0) {
           const normalizedSerials = (receiptItem.serialNumbers ?? []).map((sn) => normalizeSerial(sn));
@@ -360,7 +365,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         const poItem = poItemMap.get(receiptItem.poItemId)!;
         const quantityAccepted = receiptItem.quantityReceived - receiptItem.quantityRejected;
         const isSerialized = poItem.productId
-          ? (productSerializationMap.get(poItem.productId) ?? false)
+          ? productSerializationMap.get(poItem.productId)!
           : false;
         const normalizedSerials = (receiptItem.serialNumbers ?? []).map((sn) => normalizeSerial(sn));
 

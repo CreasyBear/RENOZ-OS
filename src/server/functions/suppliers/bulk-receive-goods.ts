@@ -32,6 +32,10 @@ import {
   type BulkReceiveSerialPreflightLine,
 } from './bulk-receive-serial-preflight';
 import { toBulkReceiveFailure, type BulkReceiveFailure } from './bulk-receive-failure';
+import {
+  buildProductSerializationRequirementMap,
+  getUniqueReceiptProductIds,
+} from './receive-goods-serialization';
 
 // ============================================================================
 // INPUT SCHEMA
@@ -122,11 +126,11 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         }
 
         // Check for serialized products and validate serial numbers
-        const productIds = pendingItems
-          .map((item) => item.productId)
-          .filter((id): id is string => id !== null);
+        const productIds = getUniqueReceiptProductIds(
+          pendingItems.map((item) => item.productId)
+        );
 
-        const productSerializationMap = new Map<string, boolean>();
+        let productSerializationMap = new Map<string, boolean>();
         if (productIds.length > 0) {
           const productData = await db
             .select({
@@ -142,9 +146,10 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
               )
             );
 
-          productData.forEach((p) => {
-            productSerializationMap.set(p.id, p.isSerialized);
-          });
+          productSerializationMap = buildProductSerializationRequirementMap(
+            productIds,
+            productData
+          );
         }
 
         // Get serial numbers for this PO (if provided)
@@ -153,7 +158,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         // Create receipt items with serial numbers for serialized products
         const receiptItems = pendingItems.map((item) => {
           const isSerialized = item.productId
-            ? productSerializationMap.get(item.productId) ?? false
+            ? productSerializationMap.get(item.productId)!
             : false;
 
           const itemSerials = isSerialized ? poSerialNumbers?.[item.id] : undefined;
