@@ -40,6 +40,7 @@ describe('useBulkReceiveGoods', () => {
       success: true,
       message: 'Processed 1 purchase order with 1 failure.',
       processed: 1,
+      skipped: 0,
       failed: 1,
       errors: [{ poId: 'po-2', error: 'Blocked by serialized product validation' }],
       errorsById: { 'po-2': 'Blocked by serialized product validation' },
@@ -72,7 +73,7 @@ describe('useBulkReceiveGoods', () => {
         serialNumbers: undefined,
       },
     })
-    expect(onProgress).toHaveBeenCalledWith(1, 1)
+    expect(onProgress).toHaveBeenCalledWith(1, 0, 1)
 
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.suppliers.purchaseOrdersList(),

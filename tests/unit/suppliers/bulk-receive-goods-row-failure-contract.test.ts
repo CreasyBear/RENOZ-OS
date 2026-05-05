@@ -23,4 +23,16 @@ describe('bulk receive goods row failure contract', () => {
     );
     expect(source).not.toContain("thrownewError('Purchaseordernotfoundorhasnoitems')");
   });
+
+  it('counts no-pending purchase orders as skipped instead of received', () => {
+    const source = compact('src/server/functions/suppliers/bulk-receive-goods.ts');
+
+    expect(source).toContain('skipped:number;');
+    expect(source).toContain('skipped:0,');
+    expect(source).toContain('if(pendingItems.length===0){');
+    expect(source).toContain('results.skipped++;');
+    expect(source).not.toContain('if(pendingItems.length===0){//Nopendingitems-skipthisPOresults.processed++;');
+    expect(source).toContain('formatBulkReceiveResultMessage(results)');
+    expect(source).toContain('Skipped${skippedLabel}withnopendingitems.');
+  });
 });

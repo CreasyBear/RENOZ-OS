@@ -22,13 +22,14 @@ import { toastSuccess, toastError } from '@/hooks';
 export interface BulkReceiveGoodsInput {
   purchaseOrderIds: string[];
   serialNumbers?: Record<string, Record<string, string[]>>; // poId -> poItemId -> serialNumbers[]
-  onProgress?: (processed: number, failed: number, currentPO?: string) => void;
+  onProgress?: (processed: number, skipped: number, failed: number, currentPO?: string) => void;
 }
 
 export interface BulkReceiveGoodsResult {
   success: true;
   message: string;
   processed: number;
+  skipped: number;
   failed: number;
   errors: Array<{ poId: string; error: string; code?: string }>;
   errorsById?: Record<string, string>;
@@ -70,7 +71,7 @@ export function useBulkReceiveGoods() {
       // Note: For true real-time progress tracking, we'd need server-side streaming or polling
       // For now, we report completion after server function returns
       if (onProgress) {
-        onProgress(result.processed, result.failed);
+        onProgress(result.processed, result.skipped, result.failed);
       }
 
       return result;

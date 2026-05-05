@@ -37,6 +37,7 @@ export interface BulkReceivingDialogContainerProps {
   purchaseOrders: PurchaseOrderTableData[];
   onConfirm: (receiptData: BulkReceiptData) => Promise<{
     processed: number;
+    skipped: number;
     failed: number;
     errors: Array<{ poId: string; error: string; code?: string }>;
   }>;

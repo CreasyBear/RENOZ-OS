@@ -7,7 +7,7 @@
  * Business Rules:
  * - Serialized products require serial numbers before receiving
  * - Receives all pending items with default values (condition: 'new', no rejections)
- * - Returns summary of processed/failed counts
+ * - Returns summary of received/skipped/failed counts
  *
  * @see src/server/functions/suppliers/receive-goods.ts (single PO receiving)
  */
@@ -68,7 +68,7 @@ const bulkReceiveGoodsSchema = z.object({
  * - Validates PO exists and has pending items
  * - Validates serial numbers for serialized products (if provided)
  * - Receives all pending items with provided serial numbers or default values
- * - Returns summary of processed/failed counts
+ * - Returns summary of received/skipped/failed counts
  *
  * Business Rules:
  * - Serialized products REQUIRE serial numbers (must match quantity)
@@ -80,6 +80,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<
     SerializedMutationEnvelope<{
       processed: number;
+      skipped: number;
       failed: number;
       errors: BulkReceiveFailure[];
     }>
@@ -88,6 +89,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
 
     const results = {
       processed: 0,
+      skipped: 0,
       failed: 0,
       errors: [] as BulkReceiveFailure[],
     };
@@ -128,7 +130,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
 
         if (pendingItems.length === 0) {
           // No pending items - skip this PO
-          results.processed++;
+          results.skipped++;
           continue;
         }
 
@@ -263,9 +265,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
 
     return serializedMutationSuccess(
       results,
-      results.failed === 0
-        ? `Received goods for ${results.processed} purchase order${results.processed === 1 ? '' : 's'}.`
-        : `Processed ${results.processed} purchase order${results.processed === 1 ? '' : 's'} with ${results.failed} failure${results.failed === 1 ? '' : 's'}.`,
+      formatBulkReceiveResultMessage(results),
       {
         affectedIds: data.purchaseOrderIds,
         errorsById: Object.keys(errorsById).length > 0 ? errorsById : undefined,
@@ -279,3 +279,31 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       }
     );
   });
+
+function formatBulkReceiveResultMessage(results: {
+  processed: number;
+  skipped: number;
+  failed: number;
+}): string {
+  const receivedLabel = `${results.processed} purchase order${results.processed === 1 ? '' : 's'}`;
+  const skippedLabel = `${results.skipped} purchase order${results.skipped === 1 ? '' : 's'}`;
+  const failedLabel = `${results.failed} failure${results.failed === 1 ? '' : 's'}`;
+
+  if (results.failed === 0 && results.skipped === 0) {
+    return `Received goods for ${receivedLabel}.`;
+  }
+
+  if (results.failed === 0 && results.processed === 0) {
+    return `No purchase orders needed receiving. Skipped ${skippedLabel} with no pending items.`;
+  }
+
+  if (results.failed === 0) {
+    return `Received goods for ${receivedLabel}. Skipped ${skippedLabel} with no pending items.`;
+  }
+
+  if (results.skipped > 0) {
+    return `Received goods for ${receivedLabel}, skipped ${skippedLabel} with no pending items, with ${failedLabel}.`;
+  }
+
+  return `Received goods for ${receivedLabel} with ${failedLabel}.`;
+}

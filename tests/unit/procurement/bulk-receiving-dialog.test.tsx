@@ -122,6 +122,7 @@ describe('BulkReceivingDialog', () => {
   it('preselects caller-provided purchase orders and preserves them in the receive payload', async () => {
     const onConfirm = vi.fn().mockResolvedValue({
       processed: 2,
+      skipped: 0,
       failed: 0,
       errors: [],
     })
@@ -236,6 +237,57 @@ describe('BulkReceivingDialog', () => {
     expect(mockToastError).not.toHaveBeenCalledWith('Failed to process bulk receiving')
   })
 
+  it('shows skipped purchase orders separately from received and failed counts', async () => {
+    const onConfirm = vi.fn().mockResolvedValue({
+      processed: 0,
+      skipped: 1,
+      failed: 0,
+      errors: [],
+    })
+
+    const { BulkReceivingDialog } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog'
+    )
+
+    render(
+      <BulkReceivingDialog
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-001',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 100,
+            currency: 'AUD',
+          } as never,
+        ]}
+        poDetailsWithSerials={[
+          {
+            poId: 'po-1',
+            poNumber: 'PO-001',
+            items: [],
+            hasSerializedItems: false,
+            totalSerializedQuantity: 0,
+          },
+        ]}
+        onConfirm={onConfirm}
+      />
+    )
+
+    expect(await screen.findByText('1 of 1 purchase orders selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /receive 1 purchase order/i }))
+
+    expect(await screen.findByText('No purchase orders needed receiving')).toBeInTheDocument()
+    expect(screen.getByText('Received')).toBeInTheDocument()
+    expect(screen.getByText('Skipped')).toBeInTheDocument()
+    expect(
+      screen.getByText('1 purchase order had no pending items and was skipped without creating receipts.')
+    ).toBeInTheDocument()
+  })
+
   it('keeps bulk receiving on the select step while receiving details are loading', async () => {
     const onConfirm = vi.fn()
 
@@ -277,6 +329,7 @@ describe('BulkReceivingDialog', () => {
   it('blocks duplicate same-product serials before bulk receive review', async () => {
     const onConfirm = vi.fn().mockResolvedValue({
       processed: 2,
+      skipped: 0,
       failed: 0,
       errors: [],
     })
@@ -361,6 +414,7 @@ describe('BulkReceivingDialog', () => {
   it('returns failed serialized bulk receipts to serial review instead of retrying immediately', async () => {
     const onConfirm = vi.fn().mockResolvedValue({
       processed: 0,
+      skipped: 0,
       failed: 1,
       errors: [
         {

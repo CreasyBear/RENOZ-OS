@@ -53,6 +53,7 @@ export interface BulkReceivingDialogProps {
     serialNumbers?: Map<string, Map<string, string[]>>;
   }) => Promise<{
     processed: number;
+    skipped: number;
     failed: number;
     errors: Array<{ poId: string; error: string; code?: string }>;
   }>;
@@ -64,6 +65,7 @@ type Step = 'select' | 'serials' | 'review' | 'processing';
 
 interface ProcessingProgress {
   processed: number;
+  skipped: number;
   failed: number;
   currentPO?: string;
 }
@@ -92,6 +94,7 @@ export function BulkReceivingDialog({
   const [serialNumbers, setSerialNumbers] = useState<Map<string, Map<string, string[]>>>(new Map());
   const [processingProgress, setProcessingProgress] = useState<ProcessingProgress>({
     processed: 0,
+    skipped: 0,
     failed: 0,
   });
   const [attemptTotal, setAttemptTotal] = useState(0);
@@ -112,7 +115,7 @@ export function BulkReceivingDialog({
     setStep('select');
     setSelectedPOIds(new Set(purchaseOrders.map((po) => po.id)));
     setSerialNumbers(new Map());
-    setProcessingProgress({ processed: 0, failed: 0 });
+    setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(0);
     setFailureDetails([]);
     setIsProcessing(false);
@@ -245,7 +248,7 @@ export function BulkReceivingDialog({
     if (targetPOIds.length === 0) return;
     setIsProcessing(true);
     setStep('processing');
-    setProcessingProgress({ processed: 0, failed: 0 });
+    setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(targetPOIds.length);
     setFailureDetails([]);
 
@@ -298,7 +301,7 @@ export function BulkReceivingDialog({
     );
 
     setSelectedPOIds(failedPOSet);
-    setProcessingProgress({ processed: 0, failed: 0 });
+    setProcessingProgress({ processed: 0, skipped: 0, failed: 0 });
     setAttemptTotal(0);
     setFailureDetails([]);
     setStep(failedRequiresSerialReview ? 'serials' : 'review');
@@ -530,8 +533,10 @@ export function BulkReceivingDialog({
   const renderProcessingStep = () => {
     const total = attemptTotal;
     const { processed, failed } = processingProgress;
-    const percentage = total > 0 ? Math.round(((processed + failed) / total) * 100) : 0;
-    const isComplete = total > 0 && processed + failed >= total;
+    const skipped = processingProgress.skipped ?? 0;
+    const completed = processed + skipped + failed;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const isComplete = total > 0 && completed >= total;
     const failedByPO = Array.from(new Set(failureDetails.map((f) => f.poId))).map((poId) => {
       const po = purchaseOrders.find((candidate) => candidate.id === poId);
       const reasons = failureDetails
@@ -558,8 +563,12 @@ export function BulkReceivingDialog({
           <h3 className="text-lg font-semibold mb-2">
             {isComplete
               ? failed === 0
-                ? 'All purchase orders received successfully'
-                : `Processed ${processed} of ${total} purchase orders`
+                ? skipped > 0
+                  ? processed > 0
+                    ? `Received ${processed} of ${total} purchase orders`
+                    : 'No purchase orders needed receiving'
+                  : 'All purchase orders received successfully'
+                : `Received ${processed} of ${total} purchase orders`
               : 'Processing purchase orders...'}
           </h3>
           {processingProgress.currentPO && !isComplete && (
@@ -577,20 +586,34 @@ export function BulkReceivingDialog({
           <Progress value={percentage} />
         </div>
 
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold">{total}</div>
             <div className="text-xs text-muted-foreground">Total</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-green-600">{processed}</div>
-            <div className="text-xs text-muted-foreground">Processed</div>
+            <div className="text-xs text-muted-foreground">Received</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-amber-600">{skipped}</div>
+            <div className="text-xs text-muted-foreground">Skipped</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-red-600">{failed}</div>
             <div className="text-xs text-muted-foreground">Failed</div>
           </div>
         </div>
+
+        {skipped > 0 && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {skipped} purchase order{skipped !== 1 ? 's' : ''} had no pending items and
+              {skipped === 1 ? ' was' : ' were'} skipped without creating receipts.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {failed > 0 && (
           <div className="space-y-3">
