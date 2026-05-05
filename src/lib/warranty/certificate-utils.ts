@@ -41,20 +41,13 @@ export function openCertificateWindow(
     const windowRef = window.open(url, '_blank', 'noopener,noreferrer');
     
     if (!windowRef) {
-      const error = new Error('Popup blocked. Please allow popups for this site.');
-      toast.error(
-        options?.errorMessage ?? 'Failed to open certificate',
-        {
-          description: 'Popup blocked. Please allow popups for this site.',
-        }
-      );
-      options?.onError?.(error);
-      throw error;
+      throw new Error('Popup blocked. Please allow popups for this site.');
     }
   } catch (error) {
-    const normalizedError = error instanceof Error 
-      ? error 
-      : new Error('Failed to open certificate');
+    const normalizedError =
+      error instanceof Error && error.message === 'Popup blocked. Please allow popups for this site.'
+        ? error
+        : new Error('Failed to open certificate');
     
     toast.error(
       options?.errorMessage ?? 'Failed to open certificate',

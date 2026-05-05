@@ -13,7 +13,6 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { toast } from 'sonner';
 import {
   useWarranty,
   useWarrantyClaimsByWarranty,
@@ -43,6 +42,10 @@ import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { getSummaryState } from '@/lib/metrics/summary-health';
+import {
+  formatWarrantyCertificateResultError,
+  WARRANTY_CERTIFICATE_GENERATION_FAILED_MESSAGE,
+} from '@/lib/warranty/certificate-result-errors';
 import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
 import type {
   WarrantyClaimListItem,
@@ -166,17 +169,11 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     updateOptOutMutation.mutate(
       { warrantyId: warranty.id, optOut: checked },
       {
-        onSuccess: (result) => {
+        onSuccess: () => {
           setPendingOptOut(null);
-          toast.success(
-            result.optOut
-              ? 'Expiry alerts disabled for this warranty'
-              : 'Expiry alerts enabled for this warranty'
-          );
         },
         onError: () => {
           setPendingOptOut(null);
-          toast.error('Failed to update notification settings');
         },
       }
     );
@@ -193,17 +190,20 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
       });
 
       if (result.success && result.certificateUrl) {
-        openCertificateWindow(result.certificateUrl, {
-          errorMessage: 'Failed to open certificate',
-        });
+        try {
+          openCertificateWindow(result.certificateUrl, {
+            errorMessage: 'Failed to open certificate',
+          });
+        } catch (error) {
+          setCertificateError(
+            error instanceof Error ? error.message : 'Failed to open certificate'
+          );
+        }
       } else {
-        throw new Error('Certificate generation failed');
+        setCertificateError(formatWarrantyCertificateResultError(result.error));
       }
-    } catch (error) {
-      setCertificateError(
-        error instanceof Error ? error.message : 'Failed to generate certificate'
-      );
-      toast.error('Failed to generate certificate');
+    } catch {
+      setCertificateError(WARRANTY_CERTIFICATE_GENERATION_FAILED_MESSAGE);
     }
   };
 
@@ -227,17 +227,20 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
         });
 
         if (result.success && result.certificateUrl) {
-          openCertificateWindow(result.certificateUrl, {
-            errorMessage: 'Failed to open certificate',
-          });
+          try {
+            openCertificateWindow(result.certificateUrl, {
+              errorMessage: 'Failed to open certificate',
+            });
+          } catch (error) {
+            setCertificateError(
+              error instanceof Error ? error.message : 'Failed to open certificate'
+            );
+          }
         } else {
-          throw new Error('Certificate regeneration failed');
+          setCertificateError(formatWarrantyCertificateResultError(result.error));
         }
-      } catch (error) {
-        setCertificateError(
-          error instanceof Error ? error.message : 'Failed to regenerate certificate'
-        );
-        toast.error('Failed to regenerate certificate');
+      } catch {
+        setCertificateError(WARRANTY_CERTIFICATE_GENERATION_FAILED_MESSAGE);
       }
     }
   };
@@ -408,10 +411,9 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     if (confirmed) {
       try {
         await deleteWarrantyMutation.mutateAsync(warranty.id);
-        toast.success('Warranty deleted successfully');
         navigate({ to: '/support/warranties' });
       } catch {
-        toast.error('Failed to delete warranty');
+        // The warranty mutation hook owns the operator-facing error toast.
       }
     }
   };
