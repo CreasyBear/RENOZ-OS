@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { KbCategoryTree } from '@/components/domain/support/knowledge-base/kb-category-tree';
@@ -427,7 +428,10 @@ function KnowledgeBasePage() {
             ) : categoryTreeError ? (
               <ErrorState
                 title="Failed to load categories"
-                message={categoryTreeError.message}
+                message={formatSupportReadError(
+                  categoryTreeError,
+                  'Knowledge base categories are temporarily unavailable. Please refresh and try again.'
+                )}
                 onRetry={() => {
                   void refetchCategories();
                 }}
