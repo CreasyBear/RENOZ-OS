@@ -23,6 +23,7 @@
 import { useState, useCallback } from 'react';
 import { useLogEntityActivity } from './use-activities';
 import { toastSuccess, toastError } from '@/hooks';
+import { formatActivityMutationError } from '@/lib/activities/mutation-error-messages';
 import type { ActivityLogData, ActivityType } from '@/components/shared/activity';
 import type { ActivityEntityType } from '@/lib/schemas/activities';
 
@@ -108,7 +109,7 @@ export function useEntityActivityLogging({
         const typeLabel = formatActivityType(data.type);
         toastSuccess(`${typeLabel} logged for ${entityLabel}`);
       } catch (error) {
-        toastError(error instanceof Error ? error.message : 'Failed to log activity');
+        toastError(formatActivityMutationError(error, 'logEntity'));
         throw error;
       }
     },

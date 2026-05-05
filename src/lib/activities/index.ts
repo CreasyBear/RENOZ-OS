@@ -30,3 +30,8 @@ export {
   ACTIVITY_READ_MESSAGES,
   formatActivityReadError,
 } from './read-error-messages';
+export {
+  ACTIVITY_MUTATION_MESSAGES,
+  formatActivityMutationError,
+  type ActivityMutationAction,
+} from './mutation-error-messages';

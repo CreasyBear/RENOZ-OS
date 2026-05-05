@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ACTIVITY_MUTATION_MESSAGES } from '@/lib/activities/mutation-error-messages';
 
 const mutateAsync = vi.fn();
 const toastSuccess = vi.fn();
@@ -42,8 +43,10 @@ describe('useEntityActivityLogging', () => {
     toastError.mockReset();
   });
 
-  it('rethrows mutation failures after showing an error toast', async () => {
-    mutateAsync.mockRejectedValueOnce(new Error('Save failed'));
+  it('rethrows mutation failures after showing an operator-safe error toast', async () => {
+    mutateAsync.mockRejectedValueOnce(
+      new Error('duplicate key value violates unique constraint activity_audit_pkey')
+    );
 
     const { useEntityActivityLogging } = await import('@/hooks/activities/use-entity-activity-logging');
     const { result } = renderHook(
@@ -64,9 +67,9 @@ describe('useEntityActivityLogging', () => {
         body: 'Configured standby timeout to 1440 minutes.',
         isFollowUp: false,
       })
-    ).rejects.toThrow('Save failed');
+    ).rejects.toThrow('duplicate key value violates unique constraint activity_audit_pkey');
 
-    expect(toastError).toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(ACTIVITY_MUTATION_MESSAGES.logEntity);
   });
 
   it('keeps the dialog open after a successful submit so the success state can render', async () => {
