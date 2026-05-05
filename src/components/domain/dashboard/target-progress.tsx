@@ -90,6 +90,13 @@ const STATUS_CONFIG = {
     progressColor: 'bg-emerald-500',
     icon: Check,
   },
+  unavailable: {
+    label: 'Unavailable',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
+    progressColor: 'bg-muted',
+    icon: AlertTriangle,
+  },
 } as const;
 
 const METRIC_LABELS: Record<TargetMetric, string> = {
@@ -234,7 +241,8 @@ interface TargetItemProps {
 const TargetItem = memo(function TargetItem({ target }: TargetItemProps) {
   const config = STATUS_CONFIG[target.status];
   const StatusIcon = config.icon;
-  const progress = Math.min(target.percentage, 100);
+  const isUnavailable = target.status === 'unavailable';
+  const progress = isUnavailable ? 0 : Math.min(target.percentage, 100);
 
   return (
     <div className="space-y-2">
@@ -251,7 +259,7 @@ const TargetItem = memo(function TargetItem({ target }: TargetItemProps) {
         </div>
         <div className="flex items-center gap-2 text-right flex-shrink-0">
           <span className={cn('text-xs font-medium', config.color)}>
-            {target.percentage.toFixed(0)}%
+            {isUnavailable ? config.label : `${target.percentage.toFixed(0)}%`}
           </span>
         </div>
       </div>
@@ -265,10 +273,14 @@ const TargetItem = memo(function TargetItem({ target }: TargetItemProps) {
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {formatValue(target.currentValue, target.metric)} /{' '}
-          {formatValue(target.targetValue, target.metric)}
-        </span>
+        {isUnavailable ? (
+          <span>Progress temporarily unavailable</span>
+        ) : (
+          <span>
+            {formatValue(target.currentValue, target.metric)} /{' '}
+            {formatValue(target.targetValue, target.metric)}
+          </span>
+        )}
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" aria-hidden="true" />
           <span>
@@ -354,6 +366,7 @@ export const TargetProgressWidget = memo(function TargetProgressWidget({
                 <CardDescription className="text-xs">
                   {progress.overall.achieved} of {progress.overall.total} achieved (
                   {progress.overall.percentage}%)
+                  {progress.overall.unavailable ? ` - ${progress.overall.unavailable} unavailable` : ''}
                 </CardDescription>
               )}
             </div>

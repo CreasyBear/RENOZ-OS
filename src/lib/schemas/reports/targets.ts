@@ -165,7 +165,13 @@ export type Target = z.infer<typeof targetSchema>;
 // TARGET PROGRESS
 // ============================================================================
 
-export const targetProgressStatusValues = ['on_track', 'behind', 'ahead', 'completed'] as const;
+export const targetProgressStatusValues = [
+  'on_track',
+  'behind',
+  'ahead',
+  'completed',
+  'unavailable',
+] as const;
 
 export const targetProgressStatusSchema = z.enum(targetProgressStatusValues);
 
@@ -210,6 +216,7 @@ export const targetProgressResponseSchema = z.object({
     achieved: z.number().int(),
     total: z.number().int(),
     percentage: z.number().min(0).max(100),
+    unavailable: z.number().int().optional(),
   }),
 });
 

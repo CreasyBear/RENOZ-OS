@@ -54,18 +54,13 @@ async function calculateMetricValue(
   endDate: string
 ): Promise<number> {
   // Use centralized aggregator - consistent with all other reports
-  try {
-    const result = await calculateMetric({
-      organizationId,
-      metricId: metric as MetricId,
-      dateFrom: startDate,
-      dateTo: endDate,
-    });
-    return result.value;
-  } catch {
-    // Return 0 for metrics that don't have backing data yet (legacy support)
-    return 0;
-  }
+  const result = await calculateMetric({
+    organizationId,
+    metricId: metric as MetricId,
+    dateFrom: startDate,
+    dateTo: endDate,
+  });
+  return result.value;
 }
 
 /**
@@ -348,9 +343,10 @@ export const getTargetProgress = createServerFn({ method: 'POST' })
         // Drizzle date columns return strings
         const startDate = target.startDate;
 
-        // Calculate actual metric value for the target period
-        // Errors are handled in calculateMetricValue wrapper
+        // Calculate actual metric value for the target period.
+        // Individual failures are marked on the row instead of faking zero progress.
         let currentValue = 0;
+        let metricUnavailable = false;
         try {
           currentValue = await calculateMetricValue(
             target.metric as TargetMetric,
@@ -359,9 +355,9 @@ export const getTargetProgress = createServerFn({ method: 'POST' })
             today // Use today as end date since target is still active
           );
         } catch (error) {
-          // Log error but don't fail entire request - show 0 progress for failed metric
+          // Keep the rest of the target list usable, but do not turn a failed metric into fake progress.
           logger.error(`Failed to calculate progress for target ${target.id} (${target.metric})`, error);
-          currentValue = 0;
+          metricUnavailable = true;
         }
 
         const percentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
@@ -379,7 +375,9 @@ export const getTargetProgress = createServerFn({ method: 'POST' })
           (endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        const status = determineTargetStatus(percentage, daysRemaining, totalDays);
+        const status = metricUnavailable
+          ? 'unavailable'
+          : determineTargetStatus(percentage, daysRemaining, totalDays);
 
         return {
           targetId: target.id,
@@ -398,14 +396,16 @@ export const getTargetProgress = createServerFn({ method: 'POST' })
     );
 
     const achieved = progressItems.filter((p) => p.status === 'completed').length;
+    const unavailable = progressItems.filter((p) => p.status === 'unavailable').length;
+    const availableCount = progressItems.length - unavailable;
 
     return {
       targets: progressItems,
       overall: {
         achieved,
         total: progressItems.length,
-        percentage:
-          progressItems.length > 0 ? Math.round((achieved / progressItems.length) * 100) : 0,
+        percentage: availableCount > 0 ? Math.round((achieved / availableCount) * 100) : 0,
+        unavailable,
       },
     };
   });
