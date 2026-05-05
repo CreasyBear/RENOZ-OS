@@ -64,6 +64,8 @@ import {
   getPurchaseOrderWizardStartingStep,
   getSupplierSelectionValidationError,
   isCustomPurchaseOrderItem,
+  parsePurchaseOrderQuantityInput,
+  parsePurchaseOrderUnitPriceInput,
   type ProductItem,
   type PurchaseOrderFormData,
   type PurchaseOrderItemFormData,
@@ -495,7 +497,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
                   onChange={(e) =>
                     onUpdate({
                       ...item,
-                      quantity: parseInt(e.target.value) || 1,
+                      quantity: parsePurchaseOrderQuantityInput(e.target.value),
                     })
                   }
                 />
@@ -510,7 +512,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
                   onChange={(e) =>
                     onUpdate({
                       ...item,
-                      unitPrice: parseFloat(e.target.value) || 0,
+                      unitPrice: parsePurchaseOrderUnitPriceInput(e.target.value),
                     })
                   }
                 />

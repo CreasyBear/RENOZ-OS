@@ -15,6 +15,8 @@ import {
   getPurchaseOrderWizardStartingStep,
   getSupplierSelectionValidationError,
   isCustomPurchaseOrderItem,
+  parsePurchaseOrderQuantityInput,
+  parsePurchaseOrderUnitPriceInput,
   type PurchaseOrderItemFormData,
 } from '@/components/domain/suppliers/po-creation-wizard-contracts';
 import { GST_RATE, roundCurrency } from '@/lib/order-calculations';
@@ -145,6 +147,17 @@ describe('PO creation wizard contracts', () => {
     ).toBe(false);
   });
 
+  it('parses numeric line-item inputs without hiding invalid quantities', () => {
+    expect(parsePurchaseOrderQuantityInput('12')).toBe(12);
+    expect(parsePurchaseOrderQuantityInput('0')).toBe(0);
+    expect(parsePurchaseOrderQuantityInput('')).toBe(0);
+    expect(parsePurchaseOrderQuantityInput('1.5')).toBe(0);
+
+    expect(parsePurchaseOrderUnitPriceInput('0')).toBe(0);
+    expect(parsePurchaseOrderUnitPriceInput('12.5')).toBe(12.5);
+    expect(parsePurchaseOrderUnitPriceInput('')).toBe(0);
+  });
+
   it('validates supplier selection and line items before submission', () => {
     expect(getSupplierSelectionValidationError('')).toBe('Please select a supplier');
     expect(getSupplierSelectionValidationError('supplier-1')).toBeNull();
@@ -203,6 +216,8 @@ describe('PO creation wizard contracts', () => {
     expect(source).toContain('createPurchaseOrderLineItemKey(');
     expect(source).toContain('getPurchaseOrderProductUnitPrice(product)');
     expect(source).toContain('isCustomPurchaseOrderItem(item)');
+    expect(source).toContain('parsePurchaseOrderQuantityInput(e.target.value)');
+    expect(source).toContain('parsePurchaseOrderUnitPriceInput(e.target.value)');
     expect(source).toContain('placeholder="Freight, sample, surcharge..."');
     expect(source).toContain('setLineItemKeys((prev) => [...prev, lineItemKey])');
     expect(source).toContain('setLineItemKeys((prev) => prev.filter((_, idx) => idx !== index))');
@@ -215,6 +230,8 @@ describe('PO creation wizard contracts', () => {
     expect(source).not.toContain('const taxRate = 0.1');
     expect(source).not.toContain('key={index}');
     expect(source).not.toContain('product.costPrice || product.basePrice || 0');
+    expect(source).not.toContain('parseInt(e.target.value) || 1');
+    expect(source).not.toContain('parseFloat(e.target.value) || 0');
     expect(source).not.toContain('onUpdate({ ...item, productName: "Custom Item" })');
   });
 });

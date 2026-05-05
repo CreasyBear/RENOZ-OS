@@ -116,6 +116,16 @@ export function isCustomPurchaseOrderItem(
   return !item.productId;
 }
 
+export function parsePurchaseOrderQuantityInput(value: string): number {
+  const quantity = Number(value);
+  return Number.isInteger(quantity) ? quantity : 0;
+}
+
+export function parsePurchaseOrderUnitPriceInput(value: string): number {
+  const unitPrice = Number(value);
+  return Number.isFinite(unitPrice) ? unitPrice : 0;
+}
+
 export function buildInitialPurchaseOrderFormData({
   initialSupplierId,
   initialItems,
