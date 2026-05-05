@@ -564,17 +564,23 @@ export const createRma = createServerFn({ method: 'POST' })
               source: 'rma_create',
             }
           );
-          if (serializedItem) {
-            await addSerializedItemEvent(tx, {
-              organizationId: ctx.organizationId,
-              serializedItemId: serializedItem.id,
-              eventType: 'rma_requested',
-              entityType: 'rma_line_item',
-              entityId: li.id,
-              notes: `RMA requested: ${rma.rmaNumber}`,
-              userId: ctx.user.id,
+          if (!serializedItem) {
+            throw new ValidationError('Serialized item record not found', {
+              serialNumbers: [
+                `Serial "${li.serialNumber}" could not be resolved to a serialized item before creating this RMA.`,
+              ],
             });
           }
+
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId: serializedItem.id,
+            eventType: 'rma_requested',
+            entityType: 'rma_line_item',
+            entityId: li.id,
+            notes: `RMA requested: ${rma.rmaNumber}`,
+            userId: ctx.user.id,
+          });
         }
       }
 

@@ -108,4 +108,11 @@ describe('RMA line serialization requirements', () => {
     expect(source).toContain('leftJoin(products,and(eq(orderLineItems.productId,products.id)');
     expect(source).not.toContain('if(!productId)continue');
   });
+
+  it('keeps RMA create from skipping serialized lineage event writes', () => {
+    const source = compact(read('src/server/functions/orders/rma.ts'));
+
+    expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).not.toContain('if(serializedItem){awaitaddSerializedItemEvent');
+  });
 });
