@@ -12,8 +12,8 @@
 
 import { Link } from '@tanstack/react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { buttonVariants } from '@/components/ui/button';
-import { Alert } from '@/components/ui/alert';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StarRating } from './star-rating';
@@ -29,6 +29,10 @@ interface CsatLowRatingAlertsProps {
   isLoading?: boolean;
   /** From route container (useCsatMetrics). */
   error?: unknown;
+  /** Localized degraded-state copy when stale data remains visible. */
+  warningMessage?: string;
+  /** From route container (useCsatMetrics). */
+  onRetry?: () => void;
   /** Maximum number of alerts to show */
   limit?: number;
   /** Custom class name */
@@ -39,6 +43,8 @@ export function CsatLowRatingAlerts({
   metrics,
   isLoading,
   error,
+  warningMessage,
+  onRetry,
   limit = 5,
   className,
 }: CsatLowRatingAlertsProps) {
@@ -69,7 +75,18 @@ export function CsatLowRatingAlerts({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">Unable to load low ratings</p>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Unable to load low ratings</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <span className="block">Low-rating follow-up alerts are temporarily unavailable.</span>
+              {onRetry ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                  Retry
+                </Button>
+              ) : null}
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -89,6 +106,13 @@ export function CsatLowRatingAlerts({
           <CardDescription>No recent low ratings - great work!</CardDescription>
         </CardHeader>
         <CardContent>
+          {warningMessage ? (
+            <Alert className="mb-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Low-rating refresh unavailable</AlertTitle>
+              <AlertDescription>{warningMessage}</AlertDescription>
+            </Alert>
+          ) : null}
           <div className="text-muted-foreground py-6 text-center">
             <MessageSquare className="mx-auto mb-2 h-10 w-10 opacity-50" />
             <p className="text-sm">All customers are satisfied</p>
@@ -111,6 +135,14 @@ export function CsatLowRatingAlerts({
       </CardHeader>
 
       <CardContent className="space-y-3">
+        {warningMessage ? (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Low-rating refresh unavailable</AlertTitle>
+            <AlertDescription>{warningMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {lowRatings.map((feedback) => (
           <Alert
             key={feedback.id}

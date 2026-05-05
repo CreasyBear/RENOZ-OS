@@ -137,7 +137,20 @@ function BreakdownChart({ title, data, loading }: BreakdownChartProps) {
 function SupportDashboardPage() {
   const navigate = useNavigate();
   const { data: metrics, isLoading, error, refetch } = useSupportMetrics();
-  const { data: csatMetrics, isLoading: csatLoading, error: csatError } = useCsatMetrics();
+  const {
+    data: csatMetrics,
+    isLoading: csatLoading,
+    error: csatError,
+    refetch: refetchCsatMetrics,
+  } = useCsatMetrics();
+  const csatHardError = csatError && !csatMetrics ? csatError : null;
+  const csatWarning = csatError && csatMetrics
+    ? 'Showing the most recent CSAT metrics while refresh is unavailable.'
+    : undefined;
+  const handleRefresh = () => {
+    void refetch();
+    void refetchCsatMetrics();
+  };
 
   return (
     <PageLayout variant="full-width">
@@ -146,7 +159,7 @@ function SupportDashboardPage() {
         description="Monitor support performance and team metrics"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
@@ -340,14 +353,22 @@ function SupportDashboardPage() {
         <CsatMetricsWidget
           metrics={csatMetrics}
           isLoading={csatLoading}
-          error={csatError}
+          error={csatHardError}
+          warningMessage={csatWarning}
+          onRetry={() => {
+            void refetchCsatMetrics();
+          }}
           showTrend
           showDistribution
         />
         <CsatLowRatingAlerts
           metrics={csatMetrics}
           isLoading={csatLoading}
-          error={csatError}
+          error={csatHardError}
+          warningMessage={csatWarning}
+          onRetry={() => {
+            void refetchCsatMetrics();
+          }}
           limit={3}
         />
       </div>

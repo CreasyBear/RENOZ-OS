@@ -12,6 +12,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { StarRating, RatingBadge } from './star-rating';
 import type { CsatMetricsResponse } from '@/lib/schemas/support/csat-responses';
 import { TrendingUp, TrendingDown, Minus, Star, BarChart3 } from 'lucide-react';
@@ -25,6 +27,10 @@ interface CsatMetricsWidgetProps {
   isLoading?: boolean;
   /** From route container (useCsatMetrics). */
   error?: unknown;
+  /** Localized degraded-state copy when stale data remains visible. */
+  warningMessage?: string;
+  /** From route container (useCsatMetrics). */
+  onRetry?: () => void;
   /** Whether to show the trend comparison */
   showTrend?: boolean;
   /** Whether to show rating distribution */
@@ -37,6 +43,8 @@ export function CsatMetricsWidget({
   metrics,
   isLoading,
   error,
+  warningMessage,
+  onRetry,
   showTrend = true,
   showDistribution = true,
   className,
@@ -68,7 +76,20 @@ export function CsatMetricsWidget({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">Unable to load CSAT metrics</p>
+          <Alert variant="destructive">
+            <Star className="h-4 w-4" />
+            <AlertTitle>Unable to load CSAT metrics</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <span className="block">
+                Customer satisfaction metrics are temporarily unavailable.
+              </span>
+              {onRetry ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                  Retry
+                </Button>
+              ) : null}
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -120,6 +141,14 @@ export function CsatMetricsWidget({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {warningMessage ? (
+          <Alert>
+            <Star className="h-4 w-4" />
+            <AlertTitle>CSAT refresh unavailable</AlertTitle>
+            <AlertDescription>{warningMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
         {/* Main Score */}
         <div className="flex items-center justify-between">
           <div className="space-y-1">
