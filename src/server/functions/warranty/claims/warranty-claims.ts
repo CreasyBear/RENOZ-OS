@@ -596,6 +596,7 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      let claimForLineage = inserted;
       if (slaConfig) {
         const slaEntry = await startSlaTrackingForClaim(
           ctx.organizationId,
@@ -609,10 +610,37 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
           .set({ slaTrackingId: slaEntry.id })
           .where(eq(warrantyClaims.id, inserted.id))
           .returning();
-        return [updated!];
+        claimForLineage = updated!;
       }
 
-      return [inserted];
+      if (warranty.warranty.productSerial) {
+        const serial = normalizeSerial(warranty.warranty.productSerial);
+        const serializedItem = await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
+          userId: ctx.user.id,
+          productId: warranty.warranty.productId,
+          allowAutoUpsert: false,
+          source: 'warranty_claim_submit',
+        });
+        if (!serializedItem) {
+          throw new ValidationError('Serialized item record not found', {
+            serialNumbers: [
+              `Serial "${serial}" could not be resolved to a serialized item before submitting this warranty claim.`,
+            ],
+          });
+        }
+
+        await addSerializedItemEvent(tx, {
+          organizationId: ctx.organizationId,
+          serializedItemId: serializedItem.id,
+          eventType: 'warranty_claimed',
+          entityType: 'warranty_claim',
+          entityId: claimForLineage.id,
+          notes: `Warranty claim submitted: ${claimForLineage.claimNumber}`,
+          userId: ctx.user.id,
+        });
+      }
+
+      return [claimForLineage];
     });
 
     const commercialCustomerEmail = warranty.customer.email ?? undefined;
@@ -620,30 +648,6 @@ export const createWarrantyClaim = createServerFn({ method: 'POST' })
       claimantSelection.claimantRole === 'channel_partner'
         ? commercialCustomerEmail
         : claimantSelection.claimantSnapshot?.email ?? undefined;
-
-    if (warranty.warranty.productSerial) {
-      const serializedItem = await findSerializedItemBySerial(
-        db,
-        ctx.organizationId,
-        normalizeSerial(warranty.warranty.productSerial),
-        {
-          userId: ctx.user.id,
-          productId: warranty.warranty.productId,
-          source: 'warranty_claim_submit',
-        }
-      );
-      if (serializedItem) {
-        await addSerializedItemEvent(db, {
-          organizationId: ctx.organizationId,
-          serializedItemId: serializedItem.id,
-          eventType: 'warranty_claimed',
-          entityType: 'warranty_claim',
-          entityId: claim.id,
-          notes: `Warranty claim submitted: ${claim.claimNumber}`,
-          userId: ctx.user.id,
-        });
-      }
-    }
 
     // Trigger notification event
     const payload: WarrantyClaimSubmittedPayload = {
