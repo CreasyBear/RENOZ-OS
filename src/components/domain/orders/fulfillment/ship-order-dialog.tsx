@@ -38,6 +38,7 @@ import {
   useMarkShipped,
   useShipmentShippingCostAmendment,
 } from "@/hooks/orders";
+import { getShipmentActionErrorMessage } from "@/hooks/orders/shipment-action-errors";
 import { ValidationError } from "@/lib/server/errors";
 import { ordersLogger } from "@/lib/logger";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
@@ -90,6 +91,8 @@ interface ShipmentWorkflowNotice {
   description: string;
 }
 
+const SHIPMENT_OPERATION_FALLBACK = "Unable to complete shipment operation.";
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -104,9 +107,7 @@ function handleShipmentError(
   }
 ): void {
   ordersLogger.error("Shipment error", error, context);
-  toastError(
-    options?.message ?? (error instanceof Error ? error.message : "Shipment operation failed")
-  );
+  toastError(getShipmentActionErrorMessage(error, options?.message ?? SHIPMENT_OPERATION_FALLBACK));
   options?.setStep?.();
   if (error instanceof ValidationError && error.errors && options?.setItemErrors) {
     const byLineItem: Record<string, string> = {};
