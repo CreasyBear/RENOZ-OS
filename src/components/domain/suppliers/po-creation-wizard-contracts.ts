@@ -75,6 +75,20 @@ export function buildInitialPurchaseOrderLineItemKeys({
   );
 }
 
+function getFiniteCurrencyValue(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function getPurchaseOrderProductUnitPrice(
+  product: Pick<ProductItem, "costPrice" | "basePrice">
+): number {
+  return (
+    getFiniteCurrencyValue(product.costPrice) ??
+    getFiniteCurrencyValue(product.basePrice) ??
+    0
+  );
+}
+
 export function createBlankPurchaseOrderItem(): PurchaseOrderItemFormData {
   return {
     productName: "",

@@ -15,6 +15,7 @@ import {
   type ProductItem,
   type PurchaseOrderItemFormData,
 } from "@/components/domain/suppliers/po-creation-wizard";
+import { getPurchaseOrderProductUnitPrice } from "@/components/domain/suppliers/po-creation-wizard-contracts";
 import { usePriceLists, useSuppliers } from "@/hooks/suppliers";
 import { useProduct, useProducts } from "@/hooks/products";
 import { formatPurchaseOrderMutationError } from "@/hooks/purchase-orders/_mutation-errors";
@@ -153,8 +154,8 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
             name: selectedProduct.name,
             sku: selectedProduct.sku,
             description: selectedProduct.description ?? null,
-            basePrice: selectedProduct.basePrice ? Number(selectedProduct.basePrice) : null,
-            costPrice: selectedProduct.costPrice ? Number(selectedProduct.costPrice) : null,
+            basePrice: selectedProduct.basePrice != null ? Number(selectedProduct.basePrice) : null,
+            costPrice: selectedProduct.costPrice != null ? Number(selectedProduct.costPrice) : null,
             status: selectedProduct.status,
             isActive: selectedProduct.isActive,
           }
@@ -166,8 +167,8 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
     name: product.name,
     sku: product.sku,
     description: product.description ?? null,
-    basePrice: product.basePrice ? Number(product.basePrice) : null,
-    costPrice: product.costPrice ? Number(product.costPrice) : null,
+    basePrice: product.basePrice != null ? Number(product.basePrice) : null,
+    costPrice: product.costPrice != null ? Number(product.costPrice) : null,
     status: product.status,
     isActive: product.isActive,
   }));
@@ -187,7 +188,7 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
               productSku: selectedProductItem.sku ?? undefined,
               description: selectedProductItem.description ?? undefined,
               quantity: 1,
-              unitPrice: selectedProductItem.costPrice ?? selectedProductItem.basePrice ?? 0,
+              unitPrice: getPurchaseOrderProductUnitPrice(selectedProductItem),
             },
           ]
         : [],

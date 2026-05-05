@@ -202,4 +202,52 @@ describe("PurchaseOrderCreatePage contextual launches", () => {
       }),
     ]);
   });
+
+  it("preserves zero cost pricing when seeding the contextual product", async () => {
+    mockUseProduct.mockReturnValue({
+      data: {
+        product: {
+          id: "product-1",
+          name: "Warranty Battery",
+          sku: "WB-1",
+          description: "Zero cost replacement",
+          basePrice: 20,
+          costPrice: 0,
+          status: "active",
+          isActive: true,
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { default: PurchaseOrderCreatePage } = await import(
+      "@/routes/_authenticated/purchase-orders/-create-page"
+    );
+
+    render(
+      <PurchaseOrderCreatePage
+        search={{
+          productId: "product-1",
+          source: "product_detail",
+          returnToProductId: "product-1",
+        }}
+      />
+    );
+
+    expect(lastWizardProps?.initialItems).toEqual([
+      expect.objectContaining({
+        productId: "product-1",
+        productName: "Warranty Battery",
+        unitPrice: 0,
+      }),
+    ]);
+    expect(lastWizardProps?.products).toEqual([
+      expect.objectContaining({
+        id: "product-1",
+        costPrice: 0,
+        basePrice: 20,
+      }),
+    ]);
+  });
 });

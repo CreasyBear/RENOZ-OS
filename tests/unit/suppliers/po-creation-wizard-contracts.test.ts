@@ -8,6 +8,7 @@ import {
   calculatePurchaseOrderReviewTotals,
   createBlankPurchaseOrderItem,
   createPurchaseOrderLineItemKey,
+  getPurchaseOrderProductUnitPrice,
   getLineItemValidationError,
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
@@ -84,6 +85,27 @@ describe('PO creation wizard contracts', () => {
     ).toEqual(['wizard-1-line-0', 'wizard-1-line-1', 'wizard-1-line-2']);
   });
 
+  it('preserves zero cost prices when deriving purchase-order unit prices', () => {
+    expect(
+      getPurchaseOrderProductUnitPrice({
+        costPrice: 0,
+        basePrice: 120,
+      })
+    ).toBe(0);
+    expect(
+      getPurchaseOrderProductUnitPrice({
+        costPrice: null,
+        basePrice: 120,
+      })
+    ).toBe(120);
+    expect(
+      getPurchaseOrderProductUnitPrice({
+        costPrice: Number.NaN,
+        basePrice: 120,
+      })
+    ).toBe(120);
+  });
+
   it('validates supplier selection and line items before submission', () => {
     expect(getSupplierSelectionValidationError('')).toBe('Please select a supplier');
     expect(getSupplierSelectionValidationError('supplier-1')).toBeNull();
@@ -139,6 +161,7 @@ describe('PO creation wizard contracts', () => {
     expect(source).toContain('buildInitialPurchaseOrderFormData({ initialSupplierId, initialItems })');
     expect(source).toContain('buildInitialPurchaseOrderLineItemKeys({');
     expect(source).toContain('createPurchaseOrderLineItemKey(');
+    expect(source).toContain('getPurchaseOrderProductUnitPrice(product)');
     expect(source).toContain('setLineItemKeys((prev) => [...prev, lineItemKey])');
     expect(source).toContain('setLineItemKeys((prev) => prev.filter((_, idx) => idx !== index))');
     expect(source).toContain('key={itemKeys[index] ?? `line-${index}`}');
@@ -149,5 +172,6 @@ describe('PO creation wizard contracts', () => {
     expect(source).toContain('calculatePurchaseOrderReviewTotals(formData.items)');
     expect(source).not.toContain('const taxRate = 0.1');
     expect(source).not.toContain('key={index}');
+    expect(source).not.toContain('product.costPrice || product.basePrice || 0');
   });
 });

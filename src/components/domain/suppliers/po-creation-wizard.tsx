@@ -58,6 +58,7 @@ import {
   createBlankPurchaseOrderItem,
   createPurchaseOrderLineItemKey,
   getLineItemValidationError,
+  getPurchaseOrderProductUnitPrice,
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
   getSupplierSelectionValidationError,
@@ -386,7 +387,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
       productId: product.id,
       productName: product.name,
       productSku: product.sku ?? undefined,
-      unitPrice: product.costPrice || product.basePrice || 0,
+      unitPrice: getPurchaseOrderProductUnitPrice(product),
     });
     setShowProductSearch(false);
   };
@@ -430,7 +431,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
                       </p>
                     )}
                     <p className="text-sm text-muted-foreground">
-                      {formatCurrencyDisplay(product.costPrice || product.basePrice || 0)}
+                      {formatCurrencyDisplay(getPurchaseOrderProductUnitPrice(product))}
                     </p>
                   </button>
                 ))}
