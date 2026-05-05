@@ -35,6 +35,10 @@ import type {
   ActivityEntityType,
   ActivityDateGroup,
 } from "@/lib/schemas/activities";
+import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from "@/lib/activities/read-error-messages";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { useCurrentUser } from "@/hooks/auth/use-current-user";
 
@@ -276,15 +280,15 @@ function EmptyStateComponent({
 }
 
 function ErrorState({ error, onRetry }: { error?: Error | null; onRetry: () => void }) {
+  const message = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.feed);
+
   return (
     <div
       className="flex flex-col items-center justify-center py-12 px-4 text-center"
       role="alert"
     >
-      <p className="text-destructive mb-4">Failed to load activities</p>
-      {error?.message && (
-        <p className="text-sm text-muted-foreground mb-4">{error.message}</p>
-      )}
+      <p className="text-destructive mb-4">Activity feed unavailable</p>
+      <p className="text-sm text-muted-foreground mb-4">{message}</p>
       <Button onClick={onRetry} variant="outline" size="sm">
         <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />
         Try again

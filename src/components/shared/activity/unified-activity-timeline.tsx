@@ -62,6 +62,10 @@ import { ENTITY_ICONS, ENTITY_LABELS } from './activity-config';
 import type { ActivityEntityType } from '@/lib/schemas/activities';
 import { isActivityEntityType } from '@/lib/schemas/activities';
 import { presentActivity, type PresentedActivity } from '@/lib/activities/present-activity';
+import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from '@/lib/activities/read-error-messages';
 
 // ============================================================================
 // ICON MAP
@@ -591,13 +595,15 @@ function EmptyState({ message, description, hasFilters }: EmptyStateProps) {
 // ============================================================================
 
 function ErrorState({ error }: { error: Error }) {
+  const message = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.history);
+
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="rounded-full bg-red-100 p-3 mb-4">
         <AlertCircle className="h-6 w-6 text-red-600" />
       </div>
-      <h3 className="font-medium mb-1">Failed to load activities</h3>
-      <p className="text-sm text-muted-foreground">{error.message}</p>
+      <h3 className="font-medium mb-1">Activity history unavailable</h3>
+      <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   );
 }

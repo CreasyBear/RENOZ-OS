@@ -23,6 +23,7 @@ import { getCustomerEmailActivities } from '@/server/functions/communications/cu
 import { getActivityTimeline } from '@/server/functions/pipeline/pipeline';
 import { queryKeys } from '@/lib/query-keys';
 import { isActivityEntityType, type UseUnifiedActivitiesOptions } from '@/lib/schemas/activities';
+import { ACTIVITY_READ_MESSAGES } from '@/lib/activities/read-error-messages';
 import type { ActivityWithUser } from '@/lib/schemas/activities';
 import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 
@@ -141,8 +142,7 @@ export function useUnifiedActivities({
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity history is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.history,
         });
       }
     },

@@ -26,3 +26,7 @@ export {
 
 export { buildManualActivityLogPresentation } from './build-manual-activity-log';
 export { readAuditNote } from './read-audit-note';
+export {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from './read-error-messages';

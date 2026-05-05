@@ -15,6 +15,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { ACTIVITY_READ_MESSAGES } from '@/lib/activities/read-error-messages';
 import {
   getActivityFeed,
   getEntityActivities,
@@ -118,15 +119,13 @@ export function useActivityFeed(options: UseActivityFeedOptions = {}) {
         return requireReadResult(result, {
           message: 'Activity feed returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity feed is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.feed,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity feed is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.feed,
         });
       }
     },
@@ -177,15 +176,13 @@ export function useEntityActivities(options: UseEntityActivitiesOptions) {
         return requireReadResult(result, {
           message: 'Entity activities returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity history is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.history,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity history is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.history,
         });
       }
     },
