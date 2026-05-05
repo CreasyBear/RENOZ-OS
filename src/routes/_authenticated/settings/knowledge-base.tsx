@@ -21,13 +21,14 @@ import { ErrorState } from '@/components/shared/error-state';
 import { KbCategoryTree } from '@/components/domain/support/knowledge-base/kb-category-tree';
 import { KbCategoryFormDialog, type CategoryFormValues } from '@/components/domain/support/knowledge-base/kb-category-form-dialog';
 import {
+  formatSupportMutationError,
   useKbCategories,
   useDeleteKbCategory,
   useCreateKbCategory,
   useUpdateKbCategory,
 } from '@/hooks';
 import { useConfirmation } from '@/hooks';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
 
 export const Route = createFileRoute('/_authenticated/settings/knowledge-base')({
@@ -44,6 +45,19 @@ export const Route = createFileRoute('/_authenticated/settings/knowledge-base')(
     </PageLayout>
   ),
 });
+
+const KB_CATEGORY_ERROR_MESSAGES = {
+  NOT_FOUND: 'The knowledge base category could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage knowledge base categories.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing categories.',
+  RATE_LIMIT: 'Too many category updates were attempted. Wait a moment and retry.',
+};
+
+function formatKbCategoryMutationError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: KB_CATEGORY_ERROR_MESSAGES,
+  });
+}
 
 function KnowledgeBaseSettingsPage() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
@@ -65,6 +79,13 @@ function KnowledgeBaseSettingsPage() {
   const isCategorySubmitting = createCategoryMutation.isPending || updateCategoryMutation.isPending;
   const categoriesError = error && !categories ? error : null;
   const categoriesWarning = error && categories ? error : null;
+  const categorySubmitError = editingCategory
+    ? updateCategoryMutation.error
+      ? formatKbCategoryMutationError(updateCategoryMutation.error, 'Failed to update category')
+      : null
+    : createCategoryMutation.error
+      ? formatKbCategoryMutationError(createCategoryMutation.error, 'Failed to create category')
+      : null;
 
   const handleCreateCategory = () => {
     setEditingCategory(null);
@@ -104,7 +125,7 @@ function KnowledgeBaseSettingsPage() {
         const result = await deleteCategoryMutation.mutateAsync(category.id);
         toast.success(result.message ?? 'Category deleted successfully');
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete category');
+        toast.error(formatKbCategoryMutationError(error, 'Failed to delete category'));
       }
     }
   };
@@ -129,7 +150,12 @@ function KnowledgeBaseSettingsPage() {
         toast.success('Category created successfully');
       }
     } catch (error) {
-      toast.error(editingCategory ? 'Failed to update category' : 'Failed to create category');
+      toast.error(
+        formatKbCategoryMutationError(
+          error,
+          editingCategory ? 'Failed to update category' : 'Failed to create category'
+        )
+      );
       throw error;
     }
   };
@@ -246,9 +272,7 @@ function KnowledgeBaseSettingsPage() {
         categories={categories ?? []}
         isSubmitting={isCategorySubmitting}
         onSubmit={handleSubmitCategory}
-        submitError={
-          editingCategory ? updateCategoryMutation.error?.message : createCategoryMutation.error?.message
-        }
+        submitError={categorySubmitError}
       />
       </PageLayout.Content>
     </PageLayout>

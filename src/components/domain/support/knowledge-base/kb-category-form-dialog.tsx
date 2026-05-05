@@ -28,8 +28,9 @@ import {
   FormErrorSummary,
 } from '@/components/shared/forms';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import { useConfirmation } from '@/hooks';
+import { formatSupportMutationError } from '@/hooks/support';
 
 // ============================================================================
 // FORM SCHEMA
@@ -98,7 +99,7 @@ export function KbCategoryFormDialog({
         onOpenChange(false);
         form.reset();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to save category';
+        const message = formatSupportMutationError(error, 'Failed to save category');
         if (message.toLowerCase().includes('slug') && message.toLowerCase().includes('exist')) {
           setSlugConflictError(message);
         }
