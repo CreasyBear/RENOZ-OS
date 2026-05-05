@@ -43,13 +43,18 @@ import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { ScheduledReportForm } from "@/components/domain/settings/scheduled-report-form";
 import { ReportFavoriteButton } from "./report-favorite-button";
-import { useCreateScheduledReport, useGenerateReport } from "@/hooks/reports";
+import {
+  formatGeneratedReportError,
+  useCreateScheduledReport,
+  useGenerateReport,
+} from "@/hooks/reports";
 import { useFilterUrlState, type NavigateFn } from "@/hooks/filters";
 import {
   usePipelineForecast,
   usePipelineVelocity,
   useRevenueAttribution,
 } from "@/hooks/pipeline";
+import { toast } from "@/lib/toast";
 import type { ForecastGroupBy } from "@/lib/schemas/pipeline";
 import type { PipelineForecastSearch } from "@/lib/schemas/reports/pipeline-forecast";
 
@@ -285,8 +290,8 @@ export function PipelineForecastPage() {
         .then((result) => {
           window.open(result.reportUrl, "_blank", "noopener,noreferrer");
         })
-        .catch(() => {
-          // keep UI quiet; caller can toast
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedReportError(error, "pipeline forecast report", format));
         });
     },
     [generateReport, startDate, endDate]

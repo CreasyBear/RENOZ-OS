@@ -16,7 +16,12 @@ import type { ProcurementTab } from '@/lib/schemas/reports/procurement';
 import { toast } from '@/lib/toast';
 import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';
 import { useProcurementDashboard } from '@/hooks/suppliers';
-import { useCreateCustomReport, useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
+import {
+  formatGeneratedReportError,
+  useCreateCustomReport,
+  useCreateScheduledReport,
+  useGenerateReport,
+} from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
 
 /**
@@ -156,8 +161,8 @@ export function ProcurementReportsPage() {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
           toast.success(`Report exported as ${format.toUpperCase()}`);
         })
-        .catch(() => {
-          toast.error(`Failed to export ${format.toUpperCase()}`);
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedReportError(error, 'procurement report', format));
         });
     }
   }, [data, dateRange, generateReport]);

@@ -35,10 +35,15 @@ import { ErrorState } from '@/components/shared/error-state';
 import { cn } from '@/lib/utils';
 import { useJobCostingReport } from '@/hooks';
 import { useCustomers } from '@/hooks';
-import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
+import {
+  formatGeneratedReportError,
+  useCreateScheduledReport,
+  useGenerateReport,
+} from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
 import { ReportFavoriteButton } from './report-favorite-button';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import { toast } from '@/lib/toast';
 import type { JobProfitabilityResult } from '@/lib/schemas';
 import type { JobCostingReportSearch } from '@/lib/schemas/reports/job-costing';
 import type { NavigateFn } from '@/hooks/filters';
@@ -378,8 +383,8 @@ export function JobCostingReportPage() {
         .then((result) => {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
         })
-        .catch(() => {
-          // Keep UI quiet; caller can toast
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedReportError(error, 'job costing report', format));
         });
     },
     [reportData, dateFrom, dateTo, generateReport]

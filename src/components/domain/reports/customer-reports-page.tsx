@@ -29,6 +29,7 @@ import {
   useProfitabilitySegments,
 } from '@/hooks'
 import {
+  formatGeneratedReportError,
   useCreateScheduledReport,
   useGenerateReport,
   type CreateScheduledReportInput,
@@ -286,8 +287,8 @@ export function CustomerReportsPage() {
         window.open(result.reportUrl, '_blank', 'noopener,noreferrer')
         toast.success(`Customer report exported as ${format.toUpperCase()}`)
       })
-      .catch(() => {
-        toast.error(`Failed to export ${format.toUpperCase()}`)
+      .catch((error: unknown) => {
+        toast.error(formatGeneratedReportError(error, 'customer report', format))
       })
   }, [activeTab, dashboard, lifecycle, value, dateRange, generateReport])
 

@@ -13,7 +13,11 @@ import {
   useExpiringWarrantiesReport,
   useExpiringWarrantiesFilterOptions,
 } from '@/hooks';
-import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
+import {
+  formatGeneratedReportError,
+  useCreateScheduledReport,
+  useGenerateReport,
+} from '@/hooks/reports';
 import type { ExpiringWarrantyItem } from '@/hooks/warranty/core/use-expiring-warranties';
 import type {
   ExpiringWarrantiesSearchParams,
@@ -159,8 +163,8 @@ export function ExpiringWarrantiesReportContainer({
         .then((result) => {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
         })
-        .catch(() => {
-          toast.error('Failed to generate report. Please try again.');
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedReportError(error, 'expiring warranties report', format));
         });
     },
     [data, search.range, generateReport]

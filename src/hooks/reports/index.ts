@@ -63,6 +63,7 @@ export {
   type BulkDeleteScheduledReportsInput,
   type GenerateReportInput,
 } from './use-scheduled-reports';
+export { formatGeneratedReportError } from './_mutation-errors';
 export { formatReportsMutationError } from './_mutation-errors';
 
 // ============================================================================

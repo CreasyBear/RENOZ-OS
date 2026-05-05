@@ -12,11 +12,17 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useWinLossAnalysis, useCompetitors } from '@/hooks/reports';
-import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
+import {
+  formatGeneratedReportError,
+  useCompetitors,
+  useCreateScheduledReport,
+  useGenerateReport,
+  useWinLossAnalysis,
+} from '@/hooks/reports';
 import { WinLossAnalysis } from './win-loss-analysis';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 
 // ============================================================================
 // HELPERS
@@ -82,8 +88,8 @@ export function WinLossAnalysisContainer() {
         .then((result) => {
           window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
         })
-        .catch(() => {
-          // keep UI quiet; caller can toast
+        .catch((error: unknown) => {
+          toast.error(formatGeneratedReportError(error, 'win/loss analysis report', format));
         });
     },
     [generateReport, dateFrom, dateTo]

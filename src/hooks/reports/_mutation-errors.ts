@@ -7,9 +7,17 @@ const DEFAULT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many report actions were attempted. Wait a moment and retry.',
 };
 
+const GENERATED_REPORT_CODE_MESSAGES: Record<string, string> = {
+  PERMISSION_DENIED: 'You do not have permission to generate reports.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before generating reports.',
+  RATE_LIMIT: 'Too many reports were generated. Wait a moment and retry.',
+};
+
 interface FormatReportsMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
+
+type GeneratedReportFormat = 'csv' | 'excel' | 'pdf' | 'xlsx';
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -183,4 +191,29 @@ export function formatReportsMutationError(
   }
 
   return fallback;
+}
+
+function formatGeneratedReportFormat(format: GeneratedReportFormat): string {
+  if (format === 'xlsx' || format === 'excel') return 'Excel';
+  return format.toUpperCase();
+}
+
+export function formatGeneratedReportError(
+  error: unknown,
+  reportName: string,
+  format?: GeneratedReportFormat
+): string {
+  const trimmedReportName = reportName.trim();
+  const reportLabel = trimmedReportName.length > 0 ? trimmedReportName : 'Report';
+  const target = format
+    ? `${formatGeneratedReportFormat(format)} ${reportLabel}`
+    : reportLabel;
+
+  return formatReportsMutationError(
+    error,
+    `${target} generation is temporarily unavailable. Please refresh and try again.`,
+    {
+      codeMessages: GENERATED_REPORT_CODE_MESSAGES,
+    }
+  );
 }

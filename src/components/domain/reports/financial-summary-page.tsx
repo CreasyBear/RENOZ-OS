@@ -48,6 +48,7 @@ import { toast } from '@/hooks';
 import { FormatAmount } from '@/components/shared/format';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import {
+  formatGeneratedReportError,
   useFinancialSummaryReport,
   useExportFinancialSummaryReport,
   useCreateScheduledReport,
@@ -149,11 +150,11 @@ export function FinancialSummaryPage() {
         },
         {
           onSuccess: (result) => {
-            window.open(result.reportUrl, '_blank');
+            window.open(result.reportUrl, '_blank', 'noopener,noreferrer');
             toast.success('Report exported successfully');
           },
-          onError: () => {
-            toast.error('Failed to export report');
+          onError: (error: unknown) => {
+            toast.error(formatGeneratedReportError(error, 'financial summary report', exportFormat));
           },
         }
       );
