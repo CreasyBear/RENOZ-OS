@@ -23,6 +23,7 @@ import { useSupportMetrics } from '@/hooks/support';
 import { useCsatMetrics } from '@/hooks/support';
 import { CsatMetricsWidget } from '@/components/domain/support/csat/csat-metrics-widget';
 import { CsatLowRatingAlerts } from '@/components/domain/support/csat/csat-low-rating-alerts';
+import { SupportMetricsReadStateAlert } from '@/components/domain/support/support-metrics-read-state-alert';
 import { getMetricValueOrUnavailable, hasMetricValue } from '@/lib/metrics/metric-display';
 import {
   AlertCircle,
@@ -137,6 +138,8 @@ function BreakdownChart({ title, data, loading }: BreakdownChartProps) {
 function SupportDashboardPage() {
   const navigate = useNavigate();
   const { data: metrics, isLoading, error, refetch } = useSupportMetrics();
+  const supportMetricsHardError = error && !metrics ? error : null;
+  const supportMetricsWarning = error && metrics;
   const {
     data: csatMetrics,
     isLoading: csatLoading,
@@ -150,6 +153,9 @@ function SupportDashboardPage() {
   const handleRefresh = () => {
     void refetch();
     void refetchCsatMetrics();
+  };
+  const handleSupportMetricsRetry = () => {
+    void refetch();
   };
 
   return (
@@ -172,206 +178,202 @@ function SupportDashboardPage() {
       />
 
       <PageLayout.Content>
-
-      {/* Error State */}
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="flex items-center gap-4 py-4">
-            <AlertCircle className="text-destructive h-8 w-8" />
-            <div>
-              <p className="font-medium">Failed to load metrics</p>
-              <p className="text-muted-foreground text-sm">
-                {error instanceof Error ? error.message : 'Unknown error'}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Overview Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Open Issues"
-          value={metrics?.overview.openIssues ?? 0}
-          subtitle="Awaiting response"
-          icon={AlertCircle}
-          alert={(metrics?.overview.openIssues ?? 0) > 10}
-          isLoading={isLoading}
-        />
-        <MetricCard
-          title="In Progress"
-          value={metrics?.overview.inProgressIssues ?? 0}
-          subtitle="Being worked on"
-          icon={Activity}
-          isLoading={isLoading}
-        />
-        <MetricCard
-          title="Resolved Today"
-          value={metrics?.overview.resolvedToday ?? 0}
-          subtitle="Closed today"
-          icon={CheckCircle2}
-          iconClassName="text-green-600"
-          isLoading={isLoading}
-        />
-        <MetricCard
-          title="Avg Resolution"
-          value={getMetricValueOrUnavailable(
-            hasMetricValue(metrics?.overview.avgResolutionHours)
-              ? `${metrics.overview.avgResolutionHours}h`
-              : null
-          )}
-          subtitle="Time to resolve"
-          icon={Clock}
-          isLoading={isLoading}
-        />
-      </div>
-
-      {/* SLA Performance */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-              <BarChart3 className="h-4 w-4" />
-              SLA Performance
-            </CardTitle>
-            <CardDescription>
-              {metrics?.sla.complianceRate.toFixed(1)}% compliance rate
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-4 w-full" />
-            ) : (
-              <div className="space-y-3">
-                <Progress
-                  value={metrics?.sla.complianceRate ?? 0}
-                  className={cn(
-                    'h-3',
-                    (metrics?.sla.complianceRate ?? 0) >= 95
-                      ? 'bg-green-500'
-                      : (metrics?.sla.complianceRate ?? 0) >= 80
-                        ? 'bg-amber-500'
-                        : 'bg-red-500'
-                  )}
-                />
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="text-green-500">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      On Track: {metrics?.sla.onTrack ?? 0}
-                    </Badge>
-                    <Badge variant="outline" className="text-amber-500">
-                      <AlertTriangle className="mr-1 h-3 w-3" />
-                      At Risk: {metrics?.sla.atRisk ?? 0}
-                    </Badge>
-                    <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
-                      <Badge variant="outline" className="text-red-500 cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/20">
-                        <AlertCircle className="mr-1 h-3 w-3" />
-                        Breached: {metrics?.sla.breached ?? 0}
-                      </Badge>
-                    </Link>
-                  </div>
-                  <span className="text-muted-foreground">
-                    {metrics?.sla.totalTracked ?? 0} tracked
-                  </span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
-          <MetricCard
-            title="SLA Breaches"
-            value={metrics?.sla.breached ?? 0}
-            subtitle="Issues that missed SLA"
-            icon={AlertCircle}
-            iconClassName={(metrics?.sla.breached ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
-            isLoading={isLoading}
-            className="cursor-pointer hover:bg-muted/50 transition-colors"
+        {supportMetricsHardError ? (
+          <SupportMetricsReadStateAlert
+            state="unavailable"
+            onRetry={handleSupportMetricsRetry}
           />
-        </Link>
+        ) : null}
 
-        <MetricCard
-          title="Weekly Trend"
-          value={Math.abs(metrics?.trend.netChange ?? 0)}
-          subtitle={(metrics?.trend.netChange ?? 0) >= 0 ? 'Net new issues' : 'Net resolved'}
-          icon={ListChecks}
-          delta={metrics?.trend.netChange}
-          positive={(metrics?.trend.netChange ?? 0) < 0}
-          isLoading={isLoading}
-        />
-      </div>
+        {supportMetricsWarning ? (
+          <SupportMetricsReadStateAlert state="stale" onRetry={handleSupportMetricsRetry} />
+        ) : null}
 
-      {/* Breakdown Charts and CSAT */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <BreakdownChart
-          title="Issues by Status"
-          data={
-            metrics?.breakdown.byStatus.map((s) => ({
-              label: s.status,
-              value: s.count,
-            })) ?? []
-          }
-          loading={isLoading}
-        />
-        <BreakdownChart
-          title="Issues by Type"
-          data={
-            metrics?.breakdown.byType.map((t) => ({
-              label: t.type,
-              value: t.count,
-            })) ?? []
-          }
-          loading={isLoading}
-        />
-        <BreakdownChart
-          title="Issues by Priority"
-          data={
-            metrics?.breakdown.byPriority.map((p) => ({
-              label: p.priority,
-              value: p.count,
-              color:
-                p.priority === 'critical'
-                  ? 'bg-red-500'
-                  : p.priority === 'high'
-                    ? 'bg-orange-500'
-                    : p.priority === 'medium'
-                      ? 'bg-amber-500'
-                      : 'bg-slate-400',
-            })) ?? []
-          }
-          loading={isLoading}
-        />
-      </div>
+        {!supportMetricsHardError ? (
+          <>
+            {/* Overview Metrics */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                title="Open Issues"
+                value={metrics?.overview.openIssues ?? 0}
+                subtitle="Awaiting response"
+                icon={AlertCircle}
+                alert={(metrics?.overview.openIssues ?? 0) > 10}
+                isLoading={isLoading}
+              />
+              <MetricCard
+                title="In Progress"
+                value={metrics?.overview.inProgressIssues ?? 0}
+                subtitle="Being worked on"
+                icon={Activity}
+                isLoading={isLoading}
+              />
+              <MetricCard
+                title="Resolved Today"
+                value={metrics?.overview.resolvedToday ?? 0}
+                subtitle="Closed today"
+                icon={CheckCircle2}
+                iconClassName="text-green-600"
+                isLoading={isLoading}
+              />
+              <MetricCard
+                title="Avg Resolution"
+                value={getMetricValueOrUnavailable(
+                  hasMetricValue(metrics?.overview.avgResolutionHours)
+                    ? `${metrics.overview.avgResolutionHours}h`
+                    : null
+                )}
+                subtitle="Time to resolve"
+                icon={Clock}
+                isLoading={isLoading}
+              />
+            </div>
 
-      {/* CSAT Section */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <CsatMetricsWidget
-          metrics={csatMetrics}
-          isLoading={csatLoading}
-          error={csatHardError}
-          warningMessage={csatWarning}
-          onRetry={() => {
-            void refetchCsatMetrics();
-          }}
-          showTrend
-          showDistribution
-        />
-        <CsatLowRatingAlerts
-          metrics={csatMetrics}
-          isLoading={csatLoading}
-          error={csatHardError}
-          warningMessage={csatWarning}
-          onRetry={() => {
-            void refetchCsatMetrics();
-          }}
-          limit={3}
-        />
-      </div>
+            {/* SLA Performance */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <BarChart3 className="h-4 w-4" />
+                    SLA Performance
+                  </CardTitle>
+                  <CardDescription>
+                    {metrics?.sla.complianceRate.toFixed(1)}% compliance rate
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-4 w-full" />
+                  ) : (
+                    <div className="space-y-3">
+                      <Progress
+                        value={metrics?.sla.complianceRate ?? 0}
+                        className={cn(
+                          'h-3',
+                          (metrics?.sla.complianceRate ?? 0) >= 95
+                            ? 'bg-green-500'
+                            : (metrics?.sla.complianceRate ?? 0) >= 80
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                        )}
+                      />
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4">
+                          <Badge variant="outline" className="text-green-500">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            On Track: {metrics?.sla.onTrack ?? 0}
+                          </Badge>
+                          <Badge variant="outline" className="text-amber-500">
+                            <AlertTriangle className="mr-1 h-3 w-3" />
+                            At Risk: {metrics?.sla.atRisk ?? 0}
+                          </Badge>
+                          <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
+                            <Badge variant="outline" className="text-red-500 cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/20">
+                              <AlertCircle className="mr-1 h-3 w-3" />
+                              Breached: {metrics?.sla.breached ?? 0}
+                            </Badge>
+                          </Link>
+                        </div>
+                        <span className="text-muted-foreground">
+                          {metrics?.sla.totalTracked ?? 0} tracked
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Link to="/support/issues" search={{ slaStatus: 'breached' }}>
+                <MetricCard
+                  title="SLA Breaches"
+                  value={metrics?.sla.breached ?? 0}
+                  subtitle="Issues that missed SLA"
+                  icon={AlertCircle}
+                  iconClassName={(metrics?.sla.breached ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
+                  isLoading={isLoading}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                />
+              </Link>
+
+              <MetricCard
+                title="Weekly Trend"
+                value={Math.abs(metrics?.trend.netChange ?? 0)}
+                subtitle={(metrics?.trend.netChange ?? 0) >= 0 ? 'Net new issues' : 'Net resolved'}
+                icon={ListChecks}
+                delta={metrics?.trend.netChange}
+                positive={(metrics?.trend.netChange ?? 0) < 0}
+                isLoading={isLoading}
+              />
+            </div>
+
+            {/* Breakdown Charts and CSAT */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <BreakdownChart
+                title="Issues by Status"
+                data={
+                  metrics?.breakdown.byStatus.map((s) => ({
+                    label: s.status,
+                    value: s.count,
+                  })) ?? []
+                }
+                loading={isLoading}
+              />
+              <BreakdownChart
+                title="Issues by Type"
+                data={
+                  metrics?.breakdown.byType.map((t) => ({
+                    label: t.type,
+                    value: t.count,
+                  })) ?? []
+                }
+                loading={isLoading}
+              />
+              <BreakdownChart
+                title="Issues by Priority"
+                data={
+                  metrics?.breakdown.byPriority.map((p) => ({
+                    label: p.priority,
+                    value: p.count,
+                    color:
+                      p.priority === 'critical'
+                        ? 'bg-red-500'
+                        : p.priority === 'high'
+                          ? 'bg-orange-500'
+                          : p.priority === 'medium'
+                            ? 'bg-amber-500'
+                            : 'bg-slate-400',
+                  })) ?? []
+                }
+                loading={isLoading}
+              />
+            </div>
+          </>
+        ) : null}
+
+        {/* CSAT Section */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <CsatMetricsWidget
+            metrics={csatMetrics}
+            isLoading={csatLoading}
+            error={csatHardError}
+            warningMessage={csatWarning}
+            onRetry={() => {
+              void refetchCsatMetrics();
+            }}
+            showTrend
+            showDistribution
+          />
+          <CsatLowRatingAlerts
+            metrics={csatMetrics}
+            isLoading={csatLoading}
+            error={csatHardError}
+            warningMessage={csatWarning}
+            onRetry={() => {
+              void refetchCsatMetrics();
+            }}
+            limit={3}
+          />
+        </div>
       </PageLayout.Content>
     </PageLayout>
   );

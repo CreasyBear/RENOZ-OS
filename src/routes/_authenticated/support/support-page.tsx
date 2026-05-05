@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSupportMetrics } from '@/hooks/support';
+import { SupportMetricsReadStateAlert } from '@/components/domain/support/support-metrics-read-state-alert';
 import { useAuth } from '@/lib/auth/hooks';
 import {
   LayoutDashboard,
@@ -55,6 +56,11 @@ export default function SupportLandingPage() {
   const { user } = useAuth();
 
   const triage = metrics?.triage ?? { overdueSla: 0, escalated: 0, myIssues: 0 };
+  const supportMetricsHardError = error && !metrics;
+  const supportMetricsWarning = error && metrics;
+  const handleSupportMetricsRetry = () => {
+    void refetch();
+  };
 
   return (
     <PageLayout variant="full-width">
@@ -215,23 +221,16 @@ export default function SupportLandingPage() {
           View full dashboard
         </Link>
 
-        {/* Error State */}
-        {error && (
-          <Card className="border-destructive">
-            <CardContent className="flex items-center gap-4 py-4">
-              <AlertCircle className="text-destructive h-8 w-8" />
-              <div>
-                <p className="font-medium">Failed to load metrics</p>
-                <p className="text-muted-foreground text-sm">
-                  {error instanceof Error ? error.message : 'Unknown error'}
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        {supportMetricsHardError ? (
+          <SupportMetricsReadStateAlert
+            state="unavailable"
+            onRetry={handleSupportMetricsRetry}
+          />
+        ) : null}
+
+        {supportMetricsWarning ? (
+          <SupportMetricsReadStateAlert state="stale" onRetry={handleSupportMetricsRetry} />
+        ) : null}
       </PageLayout.Content>
     </PageLayout>
   );

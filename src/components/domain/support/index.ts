@@ -27,6 +27,9 @@ export * from './csat';
 // --- Knowledge Base ---
 export * from './knowledge-base';
 
+// --- Support Metrics ---
+export { SupportMetricsReadStateAlert } from './support-metrics-read-state-alert';
+
 // --- Analytics ---
 export {
   SummaryMetricsGrid,
