@@ -26,6 +26,7 @@ import {
   DEFAULT_CUSTOMER_FILTERS,
   CUSTOMER_FILTER_CONFIG,
 } from "./customer-filter-config";
+import { getCustomerListReadErrorMessage } from "./customer-read-error-messages";
 import type { SortDirection } from "./customer-sorting";
 
 export interface CustomersListPresenterProps {
@@ -248,7 +249,7 @@ export const CustomersListPresenter = memo(function CustomersListPresenter({
       <DataTableEmpty
         variant="error"
         title="Failed to load customers"
-        description={error.message ?? "An unexpected error occurred"}
+        description={getCustomerListReadErrorMessage(error)}
         action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
