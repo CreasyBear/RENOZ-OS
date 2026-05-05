@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import { formatWarrantyMutationError } from '../_mutation-errors';
 import {
   isWarrantyClaimStatusValue,
   type ListWarrantyClaimsInput,
@@ -272,7 +273,7 @@ export function useCreateWarrantyClaim() {
       showClaimMutationOutcome('submitted', result);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to submit claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to submit claim'));
     },
   });
 }
@@ -303,7 +304,7 @@ export function useUpdateClaimStatus() {
       toast.success(message);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to update status');
+      toast.error(formatWarrantyMutationError(error, 'Failed to update status'));
     },
   });
 }
@@ -331,7 +332,7 @@ export function useApproveClaim() {
       showClaimMutationOutcome('approved', result);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to approve claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to approve claim'));
     },
   });
 }
@@ -359,7 +360,7 @@ export function useDenyClaim() {
       showClaimMutationOutcome('denied', result);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to deny claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to deny claim'));
     },
   });
 }
@@ -390,7 +391,7 @@ export function useResolveClaim() {
       showClaimMutationOutcome('resolved', result);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to resolve claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to resolve claim'));
     },
   });
 }
@@ -415,7 +416,7 @@ export function useAssignClaim() {
       toast.success('Claim assignment updated');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to assign claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to assign claim'));
     },
   });
 }
@@ -441,7 +442,7 @@ export function useCancelWarrantyClaim() {
       showClaimMutationOutcome('cancelled', result as { claimNumber?: string; notificationQueued?: boolean | null });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel claim');
+      toast.error(formatWarrantyMutationError(error, 'Failed to cancel claim'));
     },
   });
 }
