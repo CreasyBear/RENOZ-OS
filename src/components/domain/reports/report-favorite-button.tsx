@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useReportFavorites, useCreateReportFavorite, useDeleteReportFavorite } from '@/hooks/reports';
 import type { PrebuiltReportType } from '@/lib/schemas/reports/report-favorites';
+import { formatReportFavoritesReadError } from './report-favorite-read-errors';
 
 export interface ReportFavoriteButtonProps {
   reportType: PrebuiltReportType;
@@ -33,15 +34,31 @@ export function ReportFavoriteButton({
   reportId = null,
   className,
 }: ReportFavoriteButtonProps) {
-  const { data, isLoading } = useReportFavorites({ reportType });
+  const { data, isLoading, error } = useReportFavorites({ reportType });
   const createFavorite = useCreateReportFavorite();
   const deleteFavorite = useDeleteReportFavorite();
 
-  const isFavorited = data?.items?.some(
+  const isFavorited = Boolean(data?.items?.some(
     (f) => f.reportType === reportType && (reportId ? f.reportId === reportId : !f.reportId)
-  );
+  ));
+
+  const isPending = createFavorite.isPending || deleteFavorite.isPending;
+  const hasReadError = Boolean(error);
+  const buttonDisabled = isLoading || isPending || hasReadError;
+  const unavailableMessage = hasReadError ? formatReportFavoritesReadError(error) : null;
+  const actionLabel = isFavorited ? 'Remove from favorites' : 'Add to favorites';
+  const tooltipLabel = unavailableMessage ?? (isLoading ? 'Loading favorites...' : actionLabel);
+  const ariaLabel = unavailableMessage
+    ? 'Report favorites unavailable'
+    : isLoading
+      ? 'Loading favorites'
+      : actionLabel;
 
   const handleToggle = async () => {
+    if (buttonDisabled) {
+      return;
+    }
+
     if (isFavorited) {
       await deleteFavorite.mutateAsync({
         reportType,
@@ -55,28 +72,26 @@ export function ReportFavoriteButton({
     }
   };
 
-  const isPending = createFavorite.isPending || deleteFavorite.isPending;
-
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggle}
-            disabled={isLoading || isPending}
-            className={className}
-            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Star
-              className={`h-4 w-4 ${isFavorited ? 'fill-amber-400 text-amber-500' : ''}`}
-            />
-          </Button>
+          <span className="inline-flex" title={tooltipLabel}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggle}
+              disabled={buttonDisabled}
+              className={className}
+              aria-label={ariaLabel}
+            >
+              <Star
+                className={`h-4 w-4 ${isFavorited ? 'fill-amber-400 text-amber-500' : ''}`}
+              />
+            </Button>
+          </span>
         </TooltipTrigger>
-        <TooltipContent>
-          {isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-        </TooltipContent>
+        <TooltipContent>{tooltipLabel}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

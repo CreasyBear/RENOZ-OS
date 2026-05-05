@@ -16,14 +16,16 @@ describe('reports landing read feedback contract', () => {
   it('keeps landing favorites and scheduled read failures behind reports formatters', () => {
     const landing = read('src/components/domain/reports/reports-landing-content.tsx');
     const helper = read('src/components/domain/reports/reports-landing-read-errors.ts');
+    const favoriteHelper = read('src/components/domain/reports/report-favorite-read-errors.ts');
     const sharedHelper = read('src/components/domain/reports/report-read-errors.ts');
     const favoritesHook = read('src/hooks/reports/use-report-favorites.ts');
     const scheduledHook = read('src/hooks/reports/use-scheduled-reports.ts');
 
     expect(sharedHelper).toContain('formatReportReadError');
-    expect(helper).toContain('formatReportFavoritesReadError');
+    expect(helper).toContain("export { formatReportFavoritesReadError } from './report-favorite-read-errors';");
+    expect(favoriteHelper).toContain('formatReportFavoritesReadError');
+    expect(favoriteHelper).toContain('Report favorites are temporarily unavailable. Please refresh and try again.');
     expect(helper).toContain('formatScheduledReportsReadError');
-    expect(helper).toContain('Report favorites are temporarily unavailable. Please refresh and try again.');
     expect(helper).toContain('Scheduled reports are temporarily unavailable. Please refresh and try again.');
     expect(landing).toContain('formatReportFavoritesReadError(favoritesError)');
     expect(landing).toContain('formatScheduledReportsReadError(scheduledError)');
