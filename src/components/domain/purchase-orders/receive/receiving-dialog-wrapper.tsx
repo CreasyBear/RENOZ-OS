@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePurchaseOrder } from '@/hooks/suppliers';
 import { useProductSerialization } from '@/hooks/purchase-orders/use-product-serialization';
 import { ProductSerializationErrorState } from './product-serialization-error-state';
+import { isReadQueryError } from '@/lib/read-path-policy';
 
 // ============================================================================
 // TYPES
@@ -133,7 +134,7 @@ export function ReceivingDialogWrapper({
           <ErrorState
             title="Failed to load purchase order"
             message={
-              poDetailsError instanceof Error
+              isReadQueryError(poDetailsError)
                 ? poDetailsError.message
                 : 'Unable to load purchase order details. Please try again.'
             }

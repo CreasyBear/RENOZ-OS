@@ -1,4 +1,5 @@
 import type { ProductSerializationError } from '@/hooks/purchase-orders/use-product-serialization';
+import { isReadQueryError } from '@/lib/read-path-policy';
 
 export const PRODUCT_SERIALIZATION_ERROR_TITLE =
   'Product serialization requirements could not be loaded';
@@ -7,7 +8,7 @@ export const PRODUCT_SERIALIZATION_FALLBACK_MESSAGE =
   'Product serialization requirements are temporarily unavailable. Please refresh and try again.';
 
 export function getSerializationErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  return isReadQueryError(error) ? error.message : fallback;
 }
 
 export function buildProductSerializationErrorMessages(

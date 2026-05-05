@@ -387,6 +387,53 @@ describe('purchase-order consumer normalization wave 3d', () => {
     expect(screen.getByText('PO-100: The requested purchase order could not be found.')).toBeInTheDocument();
   });
 
+  it('does not leak raw bulk receiving purchase-order detail read errors', async () => {
+    mockUseBulkPurchaseOrders.mockReturnValueOnce({
+      queries: [
+        {
+          isError: true,
+          refetch: vi.fn(),
+        },
+      ],
+      isLoading: false,
+      hasErrors: true,
+      errors: [
+        {
+          poId: 'po-1',
+          error: new Error('duplicate key value violates unique constraint purchase_orders_pkey'),
+        },
+      ],
+    });
+
+    const { BulkReceivingDialogContainer } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog-container'
+    );
+
+    render(
+      <BulkReceivingDialogContainer
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-100',
+          } as never,
+        ]}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Failed to load purchase order details')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'PO-100: Purchase order details are temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('duplicate key value violates unique constraint purchase_orders_pkey')
+    ).not.toBeInTheDocument();
+  });
+
   it('blocks bulk receiving when product serialization requirements cannot be loaded safely', async () => {
     const refetchErroredProducts = vi.fn();
     mockUseBulkPurchaseOrders.mockReturnValueOnce({
@@ -523,5 +570,34 @@ describe('purchase-order consumer normalization wave 3d', () => {
 
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(refetchErroredProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not leak raw single receiving purchase-order detail read errors', async () => {
+    mockUsePurchaseOrder.mockReturnValueOnce({
+      data: undefined,
+      isLoading: false,
+      error: new Error('duplicate key value violates unique constraint purchase_orders_pkey'),
+      refetch: vi.fn(),
+    });
+
+    const { ReceivingDialogWrapper } = await import(
+      '@/components/domain/purchase-orders/receive/receiving-dialog-wrapper'
+    );
+
+    render(
+      <ReceivingDialogWrapper
+        open
+        onOpenChange={vi.fn()}
+        poId="po-1"
+      />
+    );
+
+    expect(screen.getByText('Failed to load purchase order')).toBeInTheDocument();
+    expect(
+      screen.getByText('Unable to load purchase order details. Please try again.')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('duplicate key value violates unique constraint purchase_orders_pkey')
+    ).not.toBeInTheDocument();
   });
 });

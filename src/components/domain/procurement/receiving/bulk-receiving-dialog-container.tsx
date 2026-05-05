@@ -24,7 +24,7 @@ import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { BulkReceiptData, PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
 
 function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  return isReadQueryError(error) ? error.message : fallback;
 }
 
 // ============================================================================
