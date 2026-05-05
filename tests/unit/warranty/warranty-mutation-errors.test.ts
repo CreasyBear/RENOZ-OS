@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  formatWarrantyCertificateMutationError,
   formatWarrantyClaimMutationError,
   formatWarrantyCoreMutationError,
   formatWarrantyEntitlementMutationError,
@@ -153,6 +154,27 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Warranty extension is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('formats certificate mutation failures with action-specific unavailable copy', () => {
+    expect(
+      formatWarrantyCertificateMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            warrantyId: ['Warranty is required to generate a certificate.'],
+          },
+        },
+        'generate'
+      )
+    ).toBe('Warranty is required to generate a certificate.');
+
+    expect(
+      formatWarrantyCertificateMutationError(
+        new Error('Supabase storage bucket warranty-certificates does not exist'),
+        'regenerate'
+      )
+    ).toBe('Warranty certificate regeneration is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('keeps warranty mutation hooks on the formatter contract', () => {
     const sources = {
       claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
@@ -203,13 +225,21 @@ describe('warranty mutation error formatter', () => {
     );
     expect(sources.extension).not.toContain('Failed to extend warranty');
 
+    expect(sources.certificate).toContain(
+      "import { formatWarrantyCertificateMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.certificate).not.toContain('Failed to generate certificate');
+    expect(sources.certificate).not.toContain('Failed to regenerate certificate');
+    expect(sources.certificate).toContain('formatWarrantyCertificateResultError(result.error)');
+
     for (const source of Object.values(sources).filter(
       (source) =>
         source !== sources.claim &&
         source !== sources.policy &&
         source !== sources.core &&
         source !== sources.entitlement &&
-        source !== sources.extension
+        source !== sources.extension &&
+        source !== sources.certificate
     )) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
@@ -219,13 +249,14 @@ describe('warranty mutation error formatter', () => {
     expect(sources.core).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.entitlement).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.extension).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(sources.certificate).not.toContain('toast.error(error instanceof Error ? error.message');
 
     expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
     expect(sources.policy.match(/formatWarrantyPolicyMutationError\(error,/g)).toHaveLength(7);
     expect(sources.core.match(/formatWarrantyCoreMutationError\(error,/g)).toHaveLength(4);
     expect(sources.entitlement.match(/formatWarrantyEntitlementMutationError\(error,/g)).toHaveLength(1);
     expect(sources.extension.match(/formatWarrantyExtensionMutationError\(error,/g)).toHaveLength(1);
-    expect(sources.certificate.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
+    expect(sources.certificate.match(/formatWarrantyCertificateMutationError\(error,/g)).toHaveLength(2);
     expect(sources.bulkImport.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
   });
 });

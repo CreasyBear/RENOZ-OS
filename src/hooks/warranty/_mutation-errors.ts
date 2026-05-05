@@ -54,6 +54,13 @@ const WARRANTY_EXTENSION_MUTATION_FALLBACKS = {
   extend: 'Warranty extension is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const WARRANTY_CERTIFICATE_MUTATION_FALLBACKS = {
+  generate:
+    'Warranty certificate generation is temporarily unavailable. Please refresh and try again.',
+  regenerate:
+    'Warranty certificate regeneration is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -65,6 +72,8 @@ export type WarrantyEntitlementMutationAction =
   keyof typeof WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS;
 export type WarrantyExtensionMutationAction =
   keyof typeof WARRANTY_EXTENSION_MUTATION_FALLBACKS;
+export type WarrantyCertificateMutationAction =
+  keyof typeof WARRANTY_CERTIFICATE_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -275,4 +284,11 @@ export function formatWarrantyExtensionMutationError(
   action: WarrantyExtensionMutationAction
 ): string {
   return formatWarrantyMutationError(error, WARRANTY_EXTENSION_MUTATION_FALLBACKS[action]);
+}
+
+export function formatWarrantyCertificateMutationError(
+  error: unknown,
+  action: WarrantyCertificateMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_CERTIFICATE_MUTATION_FALLBACKS[action]);
 }
