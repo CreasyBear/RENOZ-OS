@@ -81,4 +81,14 @@ describe('order picking serialization requirements', () => {
     );
     expect(source).not.toContain('product?.isSerialized??false');
   });
+
+  it('keeps picking from auto-creating or skipping serialized item records', () => {
+    const source = compact(read('src/server/functions/orders/order-picking.ts'));
+
+    expect(source).toContain('allowAutoUpsert:false');
+    expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).not.toContain('upsertSerializedItemForInventory');
+    expect(source).not.toContain('if(!inventoryRecord)continue;');
+    expect(source).not.toContain('if(!serializedItemId)continue;');
+  });
 });

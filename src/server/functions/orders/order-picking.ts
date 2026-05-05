@@ -33,7 +33,6 @@ import {
   allocateSerializedItemToOrderLine,
   findSerializedItemBySerial,
   releaseSerializedItemAllocation,
-  upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
 import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
 import {
@@ -413,38 +412,48 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
               .limit(1)
               .then((rows) => rows[0]);
 
-            if (!inventoryRecord) continue;
+            if (!inventoryRecord) {
+              throw new ValidationError('Invalid serial number', {
+                serialNumbers: [
+                  `Serial number '${serialNumber}' was not found in inventory before picking allocation.`,
+                ],
+              });
+            }
 
             affectedInventoryIds.add(inventoryRecord.id);
             affectedProductIds.add(lineItem.productId);
             touchesSerializedInventory = true;
 
-            const serializedItemId =
-              (await findSerializedItemBySerial(tx, ctx.organizationId, serialNumber, {
+            const serializedItem = await findSerializedItemBySerial(
+              tx,
+              ctx.organizationId,
+              serialNumber,
+              {
                 userId: ctx.user.id,
                 productId: lineItem.productId,
                 inventoryId: inventoryRecord.id,
+                allowAutoUpsert: false,
                 source: 'order_picking',
-              }))?.id ??
-              (await upsertSerializedItemForInventory(tx, {
-                organizationId: ctx.organizationId,
-                productId: lineItem.productId,
-                serialNumber,
-                inventoryId: inventoryRecord.id,
-                userId: ctx.user.id,
-              }));
+              }
+            );
 
-            if (!serializedItemId) continue;
+            if (!serializedItem) {
+              throw new ValidationError('Serialized item record not found', {
+                serialNumbers: [
+                  `Serial "${serialNumber}" could not be resolved to a serialized item before picking allocation.`,
+                ],
+              });
+            }
 
             await allocateSerializedItemToOrderLine(tx, {
               organizationId: ctx.organizationId,
-              serializedItemId,
+              serializedItemId: serializedItem.id,
               orderLineItemId: pickItem.lineItemId,
               userId: ctx.user.id,
             });
             await addSerializedItemEvent(tx, {
               organizationId: ctx.organizationId,
-              serializedItemId,
+              serializedItemId: serializedItem.id,
               eventType: 'allocated',
               entityType: 'order_line_item',
               entityId: pickItem.lineItemId,
