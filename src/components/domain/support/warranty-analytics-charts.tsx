@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, CheckCircle2, Clock, TrendingDown } from 'lucide-react';
 import { MetricCard } from '@/components/shared';
 import type {
@@ -123,22 +124,39 @@ function EmptyChartState({ title, message }: EmptyChartStateProps) {
 // ============================================================================
 
 interface ErrorChartStateProps {
+  title?: string;
+  message?: string;
   onRetry?: () => void;
 }
 
-function ErrorChartState({ onRetry }: ErrorChartStateProps) {
+function ErrorChartState({
+  title = 'Unable to load warranty analytics',
+  message = 'Warranty analytics are temporarily unavailable. Please refresh and try again.',
+  onRetry,
+}: ErrorChartStateProps) {
   return (
     <div className="flex h-[200px] flex-col items-center justify-center p-4 text-center">
       <div className="bg-destructive/10 mb-3 rounded-full p-3">
         <AlertTriangle className="text-destructive h-6 w-6" />
       </div>
-      <p className="text-muted-foreground text-sm font-medium">Failed to load chart</p>
+      <p className="text-muted-foreground text-sm font-medium">{title}</p>
+      <p className="text-muted-foreground mt-1 max-w-sm text-xs">{message}</p>
       {onRetry && (
         <button onClick={onRetry} className="text-primary mt-2 text-xs hover:underline">
           Retry
         </button>
       )}
     </div>
+  );
+}
+
+function AnalyticsStaleWarning({ message }: { message: string }) {
+  return (
+    <Alert>
+      <AlertTriangle className="h-4 w-4" />
+      <AlertTitle>Analytics refresh unavailable</AlertTitle>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -152,9 +170,10 @@ interface SummaryMetricsGridProps {
   data?: WarrantyAnalyticsSummary;
   isLoading?: boolean;
   isError?: boolean;
+  onRetry?: () => void;
 }
 
-export function SummaryMetricsGrid({ data, isLoading, isError }: SummaryMetricsGridProps) {
+export function SummaryMetricsGrid({ data, isLoading, isError, onRetry }: SummaryMetricsGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -165,68 +184,91 @@ export function SummaryMetricsGrid({ data, isLoading, isError }: SummaryMetricsG
     );
   }
 
-  if (isError || !data) {
+  if (isError && !data) {
     return (
       <Card>
         <CardContent className="p-6">
-          <ErrorChartState />
+          <ErrorChartState
+            title="Unable to load warranty summary"
+            message="Warranty analytics summary is temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <ErrorChartState
+            title="Warranty summary unavailable"
+            message="Warranty analytics summary is temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div
-      className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6"
-      role="region"
-      aria-label="Warranty analytics summary"
-    >
-      <MetricCard
-        title="Total Warranties"
-        value={data.totalWarranties.toLocaleString()}
-        delta={data.warrantiesChange}
-        subtitle="vs prev"
-        variant="compact"
-      />
-      <MetricCard
-        title="Active Claims"
-        value={data.activeClaims.toLocaleString()}
-        delta={data.claimsChange}
-        positive={data.claimsChange !== undefined ? data.claimsChange < 0 : undefined}
-        subtitle="vs prev"
-        variant="compact"
-      />
-      <MetricCard
-        title="Claims Rate"
-        value={`${data.claimsRate}%`}
-        delta={data.claimsRateChange}
-        positive={data.claimsRateChange !== undefined ? data.claimsRateChange < 0 : undefined}
-        subtitle="vs prev"
-        variant="compact"
-      />
-      <MetricCard
-        title="Avg Claim Cost"
-        value={`$${data.averageClaimCost.toLocaleString()}`}
-        delta={data.avgCostChange}
-        positive={data.avgCostChange !== undefined ? data.avgCostChange < 0 : undefined}
-        subtitle="vs prev"
-        variant="compact"
-      />
-      <MetricCard
-        title="Total Claims Cost"
-        value={`$${data.totalClaimsCost.toLocaleString()}`}
-        delta={data.totalCostChange}
-        positive={data.totalCostChange !== undefined ? data.totalCostChange < 0 : undefined}
-        subtitle="vs prev"
-        variant="compact"
-      />
-      <MetricCard
-        title="Warranty Revenue"
-        value={`$${data.warrantyRevenue.toLocaleString()}`}
-        delta={data.revenueChange}
-        subtitle="vs prev"
-        variant="compact"
-      />
+    <div className="space-y-3">
+      {isError ? (
+        <AnalyticsStaleWarning message="Showing the most recent warranty summary while refresh is unavailable." />
+      ) : null}
+      <div
+        className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6"
+        role="region"
+        aria-label="Warranty analytics summary"
+      >
+        <MetricCard
+          title="Total Warranties"
+          value={data.totalWarranties.toLocaleString()}
+          delta={data.warrantiesChange}
+          subtitle="vs prev"
+          variant="compact"
+        />
+        <MetricCard
+          title="Active Claims"
+          value={data.activeClaims.toLocaleString()}
+          delta={data.claimsChange}
+          positive={data.claimsChange !== undefined ? data.claimsChange < 0 : undefined}
+          subtitle="vs prev"
+          variant="compact"
+        />
+        <MetricCard
+          title="Claims Rate"
+          value={`${data.claimsRate}%`}
+          delta={data.claimsRateChange}
+          positive={data.claimsRateChange !== undefined ? data.claimsRateChange < 0 : undefined}
+          subtitle="vs prev"
+          variant="compact"
+        />
+        <MetricCard
+          title="Avg Claim Cost"
+          value={`$${data.averageClaimCost.toLocaleString()}`}
+          delta={data.avgCostChange}
+          positive={data.avgCostChange !== undefined ? data.avgCostChange < 0 : undefined}
+          subtitle="vs prev"
+          variant="compact"
+        />
+        <MetricCard
+          title="Total Claims Cost"
+          value={`$${data.totalClaimsCost.toLocaleString()}`}
+          delta={data.totalCostChange}
+          positive={data.totalCostChange !== undefined ? data.totalCostChange < 0 : undefined}
+          subtitle="vs prev"
+          variant="compact"
+        />
+        <MetricCard
+          title="Warranty Revenue"
+          value={`$${data.warrantyRevenue.toLocaleString()}`}
+          delta={data.revenueChange}
+          subtitle="vs prev"
+          variant="compact"
+        />
+      </div>
     </div>
   );
 }
@@ -257,21 +299,25 @@ export function ClaimsByProductChart({
           <CardTitle>Claims by Product</CardTitle>
           <CardDescription>Claims breakdown by battery model</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <ChartSkeleton height={300} />
         </CardContent>
       </Card>
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Claims by Product</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load claims by product"
+            message="Warranty claims by product are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -284,7 +330,10 @@ export function ClaimsByProductChart({
           <CardTitle>Claims by Product</CardTitle>
           <CardDescription>Claims breakdown by battery model</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent claims by product while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No claims data"
             message="No warranty claims recorded for this period"
@@ -310,7 +359,10 @@ export function ClaimsByProductChart({
           {data.totalClaims} total claims across {data.items.length} products
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent claims by product while refresh is unavailable." />
+        ) : null}
         <figure
           role="img"
           aria-label={`Horizontal bar chart showing claims by product. Top product: ${data.items[0]?.productName} with ${data.items[0]?.claimsCount} claims.`}
@@ -376,14 +428,18 @@ export function ClaimsByTypeChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Claims by Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load claims by type"
+            message="Warranty claims by type are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -396,7 +452,10 @@ export function ClaimsByTypeChart({
           <CardTitle>Claims by Type</CardTitle>
           <CardDescription>Distribution of claim types</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent claims by type while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No claims data"
             message="No warranty claims recorded for this period"
@@ -419,7 +478,10 @@ export function ClaimsByTypeChart({
         <CardTitle>Claims by Type</CardTitle>
         <CardDescription>{data.totalClaims} total claims</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent claims by type while refresh is unavailable." />
+        ) : null}
         <figure
           role="img"
           aria-label={`Donut chart showing claims by type. ${data.items.map((i) => `${i.claimTypeLabel}: ${i.percentage}%`).join(', ')}`}
@@ -492,14 +554,18 @@ export function ClaimsTrendChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Claims Trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load claims trend"
+            message="Warranty claims trend is temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -512,7 +578,10 @@ export function ClaimsTrendChart({
           <CardTitle>Claims Trend</CardTitle>
           <CardDescription>Monthly claims over time</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent claims trend while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No trend data"
             message="No warranty claims recorded in the selected period"
@@ -534,7 +603,10 @@ export function ClaimsTrendChart({
         <CardTitle>Claims Trend</CardTitle>
         <CardDescription>Monthly claims volume and average cost</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent claims trend while refresh is unavailable." />
+        ) : null}
         <figure role="img" aria-label="Line chart showing claims trend over time">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -605,14 +677,18 @@ export function SlaComplianceCard({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>SLA Compliance</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load SLA compliance"
+            message="Warranty SLA compliance metrics are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -649,7 +725,10 @@ export function SlaComplianceCard({
         <CardTitle>SLA Compliance</CardTitle>
         <CardDescription>Response (24h) and resolution (5 days) targets</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent SLA compliance metrics while refresh is unavailable." />
+        ) : null}
         <div className="grid grid-cols-2 gap-6" role="region" aria-label="SLA compliance metrics">
           {/* Response SLA */}
           <div className="space-y-2">
@@ -740,14 +819,18 @@ export function CycleCountAnalysisChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Cycle Count at Claim</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load cycle-count analysis"
+            message="Warranty cycle-count analysis is temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -760,7 +843,10 @@ export function CycleCountAnalysisChart({
           <CardTitle>Cycle Count at Claim</CardTitle>
           <CardDescription>Average battery cycles when claims are filed</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent cycle-count analysis while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No cycle data"
             message="No claims with cycle count data recorded"
@@ -788,7 +874,10 @@ export function CycleCountAnalysisChart({
           claims)
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent cycle-count analysis while refresh is unavailable." />
+        ) : null}
         <figure role="img" aria-label="Bar chart showing average cycle count by claim type">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -854,14 +943,18 @@ export function RevenueVsCostChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Revenue vs Claims Cost</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load warranty finance analytics"
+            message="Warranty extension and resolution analytics are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -901,7 +994,10 @@ export function RevenueVsCostChart({
           Net Margin: ${netMargin.toLocaleString()} ({marginPercent}%)
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent warranty finance analytics while refresh is unavailable." />
+        ) : null}
         <figure
           role="img"
           aria-label={`Revenue: $${revenue.toLocaleString()}, Claims Cost: $${cost.toLocaleString()}, Net Margin: $${netMargin.toLocaleString()}`}
@@ -994,14 +1090,18 @@ export function ExtensionTypeChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Extension Types</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load extension types"
+            message="Warranty extension analytics are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -1013,7 +1113,10 @@ export function ExtensionTypeChart({
         <CardHeader>
           <CardTitle>Extension Types</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent extension type analytics while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No extension data"
             message="No warranty extensions recorded for this period"
@@ -1036,7 +1139,10 @@ export function ExtensionTypeChart({
         <CardTitle>Extension Types</CardTitle>
         <CardDescription>{data.extensions.totalExtensions} total extensions</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent extension type analytics while refresh is unavailable." />
+        ) : null}
         <figure role="img" aria-label="Pie chart showing extension type distribution">
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
@@ -1104,14 +1210,18 @@ export function ResolutionTypeChart({
     );
   }
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <Card className={className}>
         <CardHeader>
           <CardTitle>Resolution Types</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErrorChartState onRetry={onRetry} />
+          <ErrorChartState
+            title="Unable to load resolution types"
+            message="Warranty resolution analytics are temporarily unavailable. Please refresh and try again."
+            onRetry={onRetry}
+          />
         </CardContent>
       </Card>
     );
@@ -1123,7 +1233,10 @@ export function ResolutionTypeChart({
         <CardHeader>
           <CardTitle>Resolution Types</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isError && data ? (
+            <AnalyticsStaleWarning message="Showing the most recent resolution type analytics while refresh is unavailable." />
+          ) : null}
           <EmptyChartState
             title="No resolution data"
             message="No resolved claims for this period"
@@ -1146,7 +1259,10 @@ export function ResolutionTypeChart({
         <CardTitle>Resolution Types</CardTitle>
         <CardDescription>{data.resolutions.totalResolutions} resolved claims</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {isError ? (
+          <AnalyticsStaleWarning message="Showing the most recent resolution type analytics while refresh is unavailable." />
+        ) : null}
         <figure role="img" aria-label="Pie chart showing resolution type distribution">
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>

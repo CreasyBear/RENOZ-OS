@@ -319,6 +319,7 @@ export function WarrantyAnalyticsView({
           data={dashboard.summary}
           isLoading={dashboard.queries.summary.isLoading}
           isError={dashboard.queries.summary.isError}
+          onRetry={() => dashboard.queries.summary.refetch()}
         />
       </section>
 
