@@ -21,6 +21,10 @@ import {
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { DetailGrid } from '@/components/shared';
+import {
+  formatSupportReadError,
+  isSupportReadNotFound,
+} from '@/lib/support/read-error-messages';
 import type { RmaLineItemResponse, RmaResponse } from '@/lib/schemas/support/rma';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -65,10 +69,19 @@ export function RmaDetailCard({
   }
 
   if (error || !rma) {
+    const isNotFound = !error || isSupportReadNotFound(error);
+
     return (
       <ErrorState
-        title="Failed to load RMA"
-        message={error?.message ?? 'RMA not found'}
+        title={isNotFound ? 'RMA not found' : 'Unable to load RMA'}
+        message={
+          error
+            ? formatSupportReadError(
+                error,
+                'RMA details are temporarily unavailable. Please refresh and try again.'
+              )
+            : 'The requested RMA could not be found.'
+        }
         onRetry={onRetry}
       />
     );
