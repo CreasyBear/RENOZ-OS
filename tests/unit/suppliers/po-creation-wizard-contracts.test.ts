@@ -3,9 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   PURCHASE_ORDER_REVIEW_GST_RATE,
+  buildInitialPurchaseOrderLineItemKeys,
   buildInitialPurchaseOrderFormData,
   calculatePurchaseOrderReviewTotals,
   createBlankPurchaseOrderItem,
+  createPurchaseOrderLineItemKey,
   getLineItemValidationError,
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
@@ -72,6 +74,16 @@ describe('PO creation wizard contracts', () => {
     });
   });
 
+  it('assigns stable client keys to line-item rows outside the submitted form data', () => {
+    expect(createPurchaseOrderLineItemKey('wizard-1', 2)).toBe('wizard-1-line-2');
+    expect(
+      buildInitialPurchaseOrderLineItemKeys({
+        keyPrefix: 'wizard-1',
+        itemCount: 3,
+      })
+    ).toEqual(['wizard-1-line-0', 'wizard-1-line-1', 'wizard-1-line-2']);
+  });
+
   it('validates supplier selection and line items before submission', () => {
     expect(getSupplierSelectionValidationError('')).toBe('Please select a supplier');
     expect(getSupplierSelectionValidationError('supplier-1')).toBeNull();
@@ -125,11 +137,17 @@ describe('PO creation wizard contracts', () => {
     const source = read('src/components/domain/suppliers/po-creation-wizard.tsx');
 
     expect(source).toContain('buildInitialPurchaseOrderFormData({ initialSupplierId, initialItems })');
+    expect(source).toContain('buildInitialPurchaseOrderLineItemKeys({');
+    expect(source).toContain('createPurchaseOrderLineItemKey(');
+    expect(source).toContain('setLineItemKeys((prev) => [...prev, lineItemKey])');
+    expect(source).toContain('setLineItemKeys((prev) => prev.filter((_, idx) => idx !== index))');
+    expect(source).toContain('key={itemKeys[index] ?? `line-${index}`}');
     expect(source).toContain('createBlankPurchaseOrderItem()');
     expect(source).toContain('getSupplierSelectionValidationError(formData.supplierId)');
     expect(source).toContain('getLineItemValidationError(formData.items)');
     expect(source).toContain('getPurchaseOrderSubmissionValidationError(formData)');
     expect(source).toContain('calculatePurchaseOrderReviewTotals(formData.items)');
     expect(source).not.toContain('const taxRate = 0.1');
+    expect(source).not.toContain('key={index}');
   });
 });

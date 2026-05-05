@@ -56,6 +56,25 @@ export interface PurchaseOrderReviewTotals {
 
 export const PURCHASE_ORDER_REVIEW_GST_RATE = GST_RATE;
 
+export function createPurchaseOrderLineItemKey(
+  keyPrefix: string,
+  sequence: number
+): string {
+  return `${keyPrefix}-line-${sequence}`;
+}
+
+export function buildInitialPurchaseOrderLineItemKeys({
+  keyPrefix,
+  itemCount,
+}: {
+  keyPrefix: string;
+  itemCount: number;
+}): string[] {
+  return Array.from({ length: itemCount }, (_, index) =>
+    createPurchaseOrderLineItemKey(keyPrefix, index)
+  );
+}
+
 export function createBlankPurchaseOrderItem(): PurchaseOrderItemFormData {
   return {
     productName: "",

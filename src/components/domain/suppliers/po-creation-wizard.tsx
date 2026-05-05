@@ -10,7 +10,7 @@
  * @see _Initiation/_prd/2-domains/suppliers/wireframes/po-detail.wireframe.md
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
 import {
   Building2,
   Package,
@@ -52,9 +52,11 @@ import { toast } from "@/hooks";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import {
   PURCHASE_ORDER_REVIEW_GST_RATE,
+  buildInitialPurchaseOrderLineItemKeys,
   buildInitialPurchaseOrderFormData,
   calculatePurchaseOrderReviewTotals,
   createBlankPurchaseOrderItem,
+  createPurchaseOrderLineItemKey,
   getLineItemValidationError,
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
@@ -287,6 +289,7 @@ function Step1SupplierSelection({
 
 interface Step2LineItemsProps {
   items: PurchaseOrderItemFormData[];
+  itemKeys: string[];
   products: ProductItem[];
   onAddItem: () => void;
   onUpdateItem: (index: number, item: PurchaseOrderItemFormData) => void;
@@ -295,6 +298,7 @@ interface Step2LineItemsProps {
 
 function Step2LineItems({
   items,
+  itemKeys,
   products,
   onAddItem,
   onUpdateItem,
@@ -333,7 +337,7 @@ function Step2LineItems({
         <div className="space-y-4">
           {items.map((item, index) => (
             <LineItemCard
-              key={index}
+              key={itemKeys[index] ?? `line-${index}`}
               index={index}
               item={item}
               products={products}
@@ -610,7 +614,7 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
             </TableHeader>
             <TableBody>
               {formData.items.map((item, index) => (
-                <TableRow key={index}>
+                <TableRow key={`${item.productId ?? item.productName}-${index}`}>
                   <TableCell>
                     <p className="font-medium">{item.productName}</p>
                     {item.productSku && (
@@ -693,10 +697,18 @@ export function POCreationWizard({
   onSubmit,
   onCancel,
 }: POCreationWizardProps) {
+  const lineItemKeyPrefix = useId();
   const startingStep = getPurchaseOrderWizardStartingStep({ initialSupplierId, initialStep });
   const [currentStep, setCurrentStep] = useState<WizardStep>(startingStep);
   const [formData, setFormData] = useState<PurchaseOrderFormData>(() =>
     buildInitialPurchaseOrderFormData({ initialSupplierId, initialItems })
+  );
+  const nextLineItemKeySequence = useRef(initialItems.length);
+  const [lineItemKeys, setLineItemKeys] = useState<string[]>(() =>
+    buildInitialPurchaseOrderLineItemKeys({
+      keyPrefix: lineItemKeyPrefix,
+      itemCount: initialItems.length,
+    })
   );
 
   useEffect(() => {
@@ -715,6 +727,11 @@ export function POCreationWizard({
   }, []);
 
   const handleAddItem = useCallback(() => {
+    const lineItemKey = createPurchaseOrderLineItemKey(
+      lineItemKeyPrefix,
+      nextLineItemKeySequence.current
+    );
+    nextLineItemKeySequence.current += 1;
     setFormData((prev) => ({
       ...prev,
       items: [
@@ -722,7 +739,8 @@ export function POCreationWizard({
         createBlankPurchaseOrderItem(),
       ],
     }));
-  }, []);
+    setLineItemKeys((prev) => [...prev, lineItemKey]);
+  }, [lineItemKeyPrefix]);
 
   const handleUpdateItem = useCallback(
     (index: number, item: PurchaseOrderItemFormData) => {
@@ -739,6 +757,7 @@ export function POCreationWizard({
       ...prev,
       items: prev.items.filter((_, idx) => idx !== index),
     }));
+    setLineItemKeys((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
 
   const handleNext = useCallback(() => {
@@ -803,6 +822,7 @@ export function POCreationWizard({
             <>
               <Step2LineItems
                 items={formData.items}
+                itemKeys={lineItemKeys}
                 products={products}
                 onAddItem={handleAddItem}
                 onUpdateItem={handleUpdateItem}
