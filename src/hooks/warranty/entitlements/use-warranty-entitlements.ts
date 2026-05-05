@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { toast } from 'sonner';
+import { toast } from '../../_shared/use-toast';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { formatWarrantyMutationError } from '../_mutation-errors';
 import {
