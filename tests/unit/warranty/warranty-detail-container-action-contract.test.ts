@@ -20,5 +20,8 @@ describe('warranty detail container action contract', () => {
     expect(source).not.toContain("toast.success('Warranty deleted successfully')");
     expect(source).toContain('formatWarrantyCertificateResultError(result.error)');
     expect(source).toContain('WARRANTY_CERTIFICATE_GENERATION_FAILED_MESSAGE');
+    expect(source).toContain('formatWarrantyCertificateWindowError(error)');
+    expect(source).not.toContain("'Failed to open certificate'");
+    expect(source).not.toContain('error instanceof Error ? error.message');
   });
 });

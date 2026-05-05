@@ -52,7 +52,11 @@ import type {
   WarrantyDetailContainerRenderProps,
   WarrantyDetailContainerProps,
 } from '@/lib/schemas/warranty';
-import { formatWarrantyReadError, openCertificateWindow } from '@/lib/warranty';
+import {
+  formatWarrantyCertificateWindowError,
+  formatWarrantyReadError,
+  openCertificateWindow,
+} from '@/lib/warranty';
 import { TransferWarrantyDialog } from '../dialogs/transfer-warranty-dialog';
 import { WarrantyDetailView } from '../views/warranty-detail-view';
 
@@ -191,13 +195,9 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
 
       if (result.success && result.certificateUrl) {
         try {
-          openCertificateWindow(result.certificateUrl, {
-            errorMessage: 'Failed to open certificate',
-          });
+          openCertificateWindow(result.certificateUrl);
         } catch (error) {
-          setCertificateError(
-            error instanceof Error ? error.message : 'Failed to open certificate'
-          );
+          setCertificateError(formatWarrantyCertificateWindowError(error));
         }
       } else {
         setCertificateError(formatWarrantyCertificateResultError(result.error));
@@ -228,13 +228,9 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
 
         if (result.success && result.certificateUrl) {
           try {
-            openCertificateWindow(result.certificateUrl, {
-              errorMessage: 'Failed to open certificate',
-            });
+            openCertificateWindow(result.certificateUrl);
           } catch (error) {
-            setCertificateError(
-              error instanceof Error ? error.message : 'Failed to open certificate'
-            );
+            setCertificateError(formatWarrantyCertificateWindowError(error));
           }
         } else {
           setCertificateError(formatWarrantyCertificateResultError(result.error));
@@ -259,9 +255,7 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
 
   const handleDownloadCertificate = () => {
     if (certificateStatus?.certificateUrl) {
-      openCertificateWindow(certificateStatus.certificateUrl, {
-        errorMessage: 'Failed to open certificate',
-      });
+      openCertificateWindow(certificateStatus.certificateUrl);
     }
   };
 

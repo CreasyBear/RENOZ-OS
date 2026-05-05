@@ -7,14 +7,40 @@
 
 import { toast } from '@/lib/toast';
 
+export const WARRANTY_CERTIFICATE_OPEN_FAILED_MESSAGE =
+  'Warranty certificate could not be opened. Please refresh and try again.';
+
+export const WARRANTY_CERTIFICATE_POPUP_BLOCKED_MESSAGE =
+  'Popup blocked. Please allow popups for this site and try again.';
+
 /**
  * Options for opening certificate window
  */
 export interface OpenCertificateOptions {
   /** Callback when window fails to open */
   onError?: (error: Error) => void;
-  /** Custom error message for toast */
-  errorMessage?: string;
+}
+
+function extractMessage(error: unknown): string | null {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error;
+  }
+  return null;
+}
+
+export function formatWarrantyCertificateWindowError(error: unknown): string {
+  const message = extractMessage(error);
+  if (!message) return WARRANTY_CERTIFICATE_OPEN_FAILED_MESSAGE;
+
+  const normalized = message.toLowerCase();
+  if (normalized.includes('popup blocked') || normalized.includes('allow popups')) {
+    return WARRANTY_CERTIFICATE_POPUP_BLOCKED_MESSAGE;
+  }
+
+  return WARRANTY_CERTIFICATE_OPEN_FAILED_MESSAGE;
 }
 
 /**
@@ -27,7 +53,7 @@ export interface OpenCertificateOptions {
  * @example
  * ```ts
  * try {
- *   await openCertificateWindow(certificateUrl);
+ *   openCertificateWindow(certificateUrl);
  * } catch (error) {
  *   // Error already handled with toast
  * }
@@ -41,16 +67,13 @@ export function openCertificateWindow(
     const windowRef = window.open(url, '_blank', 'noopener,noreferrer');
     
     if (!windowRef) {
-      throw new Error('Popup blocked. Please allow popups for this site.');
+      throw new Error(WARRANTY_CERTIFICATE_POPUP_BLOCKED_MESSAGE);
     }
   } catch (error) {
-    const normalizedError =
-      error instanceof Error && error.message === 'Popup blocked. Please allow popups for this site.'
-        ? error
-        : new Error('Failed to open certificate');
+    const normalizedError = new Error(formatWarrantyCertificateWindowError(error));
     
     toast.error(
-      options?.errorMessage ?? 'Failed to open certificate',
+      WARRANTY_CERTIFICATE_OPEN_FAILED_MESSAGE,
       {
         description: normalizedError.message,
       }

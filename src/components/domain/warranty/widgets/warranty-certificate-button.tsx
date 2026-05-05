@@ -104,9 +104,7 @@ export function WarrantyCertificateButton({
       return;
     }
     if (certificateUrl) {
-      openCertificateWindow(certificateUrl, {
-        errorMessage: 'Failed to open certificate',
-      });
+      openCertificateWindow(certificateUrl);
     }
   };
 
