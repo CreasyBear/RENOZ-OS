@@ -333,6 +333,43 @@ type PriceImportSummarySource = PriceImportValidationResult & {
   };
 };
 
+export const PRICE_IMPORT_ROW_VALIDATION_FALLBACK_MESSAGE =
+  'Price import row could not be validated. Review the row and try again.';
+
+function isUnsafePriceImportErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('duplicate key') ||
+    normalized.includes('violates') ||
+    normalized.includes('constraint') ||
+    normalized.includes('postgres') ||
+    normalized.includes('supabase') ||
+    normalized.includes('database') ||
+    normalized.includes('stack') ||
+    normalized.includes('internal server error')
+  );
+}
+
+export function getPriceImportValidationErrorMessages(error: unknown): string[] {
+  if (error instanceof z.ZodError) {
+    return error.issues.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`);
+  }
+
+  if (error instanceof ValidationError && !isUnsafePriceImportErrorMessage(error.message)) {
+    return [error.message];
+  }
+
+  return [PRICE_IMPORT_ROW_VALIDATION_FALLBACK_MESSAGE];
+}
+
+export function getPriceImportExecutionErrorMessage(error: unknown, rowNumber: number): string {
+  if (error instanceof ValidationError && !isUnsafePriceImportErrorMessage(error.message)) {
+    return error.message;
+  }
+
+  return `Price import row ${rowNumber} could not be imported. Refresh validation and try again.`;
+}
+
 export function getPriceImportValidationStatus(
   resolutionStatus: PriceImportResolutionStatus
 ): PriceImportValidationStatus {
@@ -517,10 +554,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
           resolution,
         });
       } catch (error) {
-        const errorMessages =
-          error instanceof z.ZodError
-            ? error.issues.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
-            : [error instanceof Error ? error.message : 'Unknown validation error'];
+        const errorMessages = getPriceImportValidationErrorMessages(error);
 
         errors.push({
           rowNumber,
@@ -674,7 +708,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
         results.push({
           rowNumber: row.rowNumber,
           status: 'error',
-          error: (error as Error).message,
+          error: getPriceImportExecutionErrorMessage(error, row.rowNumber),
         });
       }
     }

@@ -56,4 +56,13 @@ describe('supplier price import execute contract', () => {
     expect(source).not.toContain('importReason');
     expect(source).not.toContain('changeRequests');
   });
+
+  it('does not serialize raw thrown errors into row failure results', () => {
+    const source = compact(read('src/server/functions/suppliers/price-imports.ts'));
+
+    expect(source).toContain('consterrorMessages=getPriceImportValidationErrorMessages(error)');
+    expect(source).toContain('error:getPriceImportExecutionErrorMessage(error,row.rowNumber)');
+    expect(source).not.toContain("errorinstanceofError?error.message:'Unknownvalidationerror'");
+    expect(source).not.toContain('error:(errorasError).message');
+  });
 });
