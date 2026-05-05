@@ -20,6 +20,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingState } from '@/components/shared/loading-state';
+import { ErrorState } from '@/components/shared/error-state';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/lib/auth/hooks';
@@ -45,6 +46,7 @@ import { useIssuesWithSlaMetrics, useUpdateIssue, useDeleteIssue, useSupportMetr
 import type { IssueKanbanItem } from '@/components/domain/support/issues/issue-kanban-card';
 import type { IssuePriority } from '@/lib/schemas/support/issues';
 import { fromUrlParams } from '@/lib/utils/issues-filter-url';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import { trackSupportIssueTransition } from '@/lib/analytics';
 import { issuesSearchSchema } from './issues';
 
@@ -577,13 +579,14 @@ function IssuesBoardPage() {
           description="Manage issues with drag-and-drop"
         />
         <PageLayout.Content>
-          <div className="py-12 text-center">
-            <p className="text-destructive mb-4">Failed to load issues</p>
-            <Button onClick={() => refetch()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Retry
-            </Button>
-          </div>
+          <ErrorState
+            title="Unable to load issue board"
+            message={formatSupportReadError(
+              error,
+              'Issue queue metrics are temporarily unavailable. Please refresh and try again.'
+            )}
+            onRetry={refetch}
+          />
         </PageLayout.Content>
       </PageLayout>
     );
