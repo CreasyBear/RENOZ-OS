@@ -44,6 +44,7 @@ import { ScheduledReportForm } from '@/components/domain/settings/scheduled-repo
 import { ReportFavoriteButton } from './report-favorite-button';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { toast } from '@/lib/toast';
+import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';
 import type { JobProfitabilityResult } from '@/lib/schemas';
 import type { JobCostingReportSearch } from '@/lib/schemas/reports/job-costing';
 import type { NavigateFn } from '@/hooks/filters';
@@ -365,14 +366,8 @@ export function JobCostingReportPage() {
           job.marginPercent.toFixed(1),
         ]);
 
-        const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `job-costing-report-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const csv = generateCSV({ headers, rows });
+        downloadCSV(csv, `job-costing-report-${formatDateForFilename()}.csv`);
         toast.success('Job costing report exported as CSV');
         return;
       }

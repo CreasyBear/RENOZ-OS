@@ -18,14 +18,22 @@ describe('reports CSV export empty-state contract', () => {
     expect(expiring).toContain("if (format === 'csv') {");
     expect(expiring).toContain("toast.error('No expiring warranties to export')");
     expect(expiring).toContain("toast.success('Expiring warranties exported as CSV')");
+    expect(expiring).toContain("import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';");
+    expect(expiring).toContain('headers: EXPIRING_WARRANTIES_CSV_HEADERS');
     expect(expiring).toContain('downloadCSV(csv, `expiring-warranties-${date}.csv`)');
+    expect(expiring).not.toContain('function downloadCSV(content: string, filename: string)');
+    expect(expiring).not.toContain('function generateCSV(warranties:');
     expect(expiring).not.toContain("if (!warranties.length && format === 'csv') return;");
 
     expect(jobCosting).toContain("toast.error(\n          format === 'csv'");
     expect(jobCosting).toContain("'No job costing rows to export'");
     expect(jobCosting).toContain("'Job costing report data is not available yet. Refresh and try again.'");
     expect(jobCosting).toContain("toast.success('Job costing report exported as CSV')");
-    expect(jobCosting).toContain('URL.createObjectURL(blob)');
+    expect(jobCosting).toContain("import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';");
+    expect(jobCosting).toContain('const csv = generateCSV({ headers, rows })');
+    expect(jobCosting).toContain('downloadCSV(csv, `job-costing-report-${formatDateForFilename()}.csv`)');
+    expect(jobCosting).not.toContain('URL.createObjectURL(blob)');
+    expect(jobCosting).not.toContain("row.join(',')");
     expect(jobCosting).not.toContain('if (!reportData?.jobs.length) return;');
 
     expect(procurement).toContain("toast.error('No data to export')");
