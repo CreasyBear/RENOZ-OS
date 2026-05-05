@@ -106,6 +106,51 @@ import {
 
 const rmaReadModel = createRmaReadModel();
 
+function isUnsafeBulkRmaFailureMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('duplicate key') ||
+    normalized.includes('violates') ||
+    normalized.includes('constraint') ||
+    normalized.includes('postgres') ||
+    normalized.includes('supabase') ||
+    normalized.includes('database') ||
+    normalized.includes('stack') ||
+    normalized.includes('internal server error')
+  );
+}
+
+function extractBulkRmaValidationMessage(error: ValidationError): string | null {
+  for (const [field, messages] of Object.entries(error.errors)) {
+    if (field === 'code') continue;
+    const message = messages.find((entry) => entry.trim().length > 0);
+    if (message) return message;
+  }
+
+  return null;
+}
+
+function formatBulkRmaReceiveFailure(error: unknown): string {
+  if (error instanceof NotFoundError) {
+    return 'RMA not found';
+  }
+
+  if (error instanceof ValidationError) {
+    const message = extractBulkRmaValidationMessage(error) ?? error.message;
+    return isUnsafeBulkRmaFailureMessage(message)
+      ? 'Unable to receive this RMA. Refresh and retry.'
+      : message;
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return isUnsafeBulkRmaFailureMessage(error.message)
+      ? 'Unable to receive this RMA. Refresh and retry.'
+      : error.message;
+  }
+
+  return 'Unable to receive this RMA. Refresh and retry.';
+}
+
 type RmaListFilterInput = Pick<
   z.infer<typeof listRmasSchema>,
   'status' | 'reason' | 'customerId' | 'orderId' | 'issueId' | 'resolution' | 'executionStatus' | 'search'
@@ -1647,7 +1692,7 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
       } catch (err) {
         failed.push({
           rmaId,
-          error: err instanceof Error ? err.message : 'Unknown error',
+          error: formatBulkRmaReceiveFailure(err),
         });
       }
     }

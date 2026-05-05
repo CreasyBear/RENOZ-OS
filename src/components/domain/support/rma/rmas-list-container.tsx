@@ -29,6 +29,11 @@ import type {
 } from '@/lib/schemas/support/rma';
 import { CheckCircle, Package } from 'lucide-react';
 import type { RmaSortField, SortDirection } from './rma-sorting';
+import {
+  buildRmaBulkFailureItems,
+  formatRmaBulkFailureToast,
+  formatRmaBulkMutationError,
+} from './rma-bulk-feedback';
 
 export interface RmasListContainerProps {
   /** Filter state from URL */
@@ -163,29 +168,17 @@ export function RmasListContainer({
         toastSuccess(`Approved ${result.updated} RMA${result.updated === 1 ? '' : 's'}`);
       }
       if (result.failed.length > 0) {
-        const failureItems = result.failed.map((failure) => {
-          const match = selectedItems.find((item) => item.id === failure.rmaId);
-          return {
-            rmaId: failure.rmaId,
-            rmaLabel: match?.rmaNumber ?? failure.rmaId.slice(0, 8),
-            message: failure.error,
-          };
-        });
+        const failureItems = buildRmaBulkFailureItems('approve', result.failed, selectedItems);
         setBulkFailures(failureItems);
         clearSelection();
         failureItems.forEach((failure) => handleSelect(failure.rmaId, true));
-        toastError(
-          `${result.failed.length} failed: ${failureItems
-            .slice(0, 2)
-            .map((f) => `${f.rmaLabel}: ${f.message}`)
-            .join(' | ')}`
-        );
+        toastError(formatRmaBulkFailureToast(failureItems));
         return;
       }
       setBulkFailures([]);
       clearSelection();
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to approve RMAs');
+      toastError(formatRmaBulkMutationError(err, 'Failed to approve RMAs'));
     }
   }, [canBulkApprove, selectedItems, bulkApproveMutation, clearSelection, handleSelect]);
 
@@ -200,29 +193,17 @@ export function RmasListContainer({
         toastSuccess(`Received ${result.updated} RMA${result.updated === 1 ? '' : 's'}. Stock restored to inventory.`);
       }
       if (result.failed.length > 0) {
-        const failureItems = result.failed.map((failure) => {
-          const match = selectedItems.find((item) => item.id === failure.rmaId);
-          return {
-            rmaId: failure.rmaId,
-            rmaLabel: match?.rmaNumber ?? failure.rmaId.slice(0, 8),
-            message: failure.error,
-          };
-        });
+        const failureItems = buildRmaBulkFailureItems('receive', result.failed, selectedItems);
         setBulkFailures(failureItems);
         clearSelection();
         failureItems.forEach((failure) => handleSelect(failure.rmaId, true));
-        toastError(
-          `${result.failed.length} failed: ${failureItems
-            .slice(0, 2)
-            .map((f) => `${f.rmaLabel}: ${f.message}`)
-            .join(' | ')}`
-        );
+        toastError(formatRmaBulkFailureToast(failureItems));
         return;
       }
       setBulkFailures([]);
       clearSelection();
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to receive RMAs');
+      toastError(formatRmaBulkMutationError(err, 'Failed to receive RMAs'));
     }
   }, [canBulkReceive, selectedItems, bulkReceiveMutation, clearSelection, handleSelect]);
 
@@ -240,21 +221,14 @@ export function RmasListContainer({
         );
       }
       if (result.failed.length > 0) {
-        const nextFailures = result.failed.map((failure) => {
-          const existing = bulkFailures.find((item) => item.rmaId === failure.rmaId);
-          return {
-            rmaId: failure.rmaId,
-            rmaLabel: existing?.rmaLabel ?? failure.rmaId.slice(0, 8),
-            message: failure.error,
-          };
-        });
+        const nextFailures = buildRmaBulkFailureItems(lastBulkAction, result.failed, bulkFailures);
         setBulkFailures(nextFailures);
         return;
       }
       setBulkFailures([]);
       clearSelection();
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to retry RMAs');
+      toastError(formatRmaBulkMutationError(err, 'Failed to retry RMAs'));
     }
   }, [bulkFailures, bulkApproveMutation, bulkReceiveMutation, clearSelection, lastBulkAction]);
 
