@@ -96,7 +96,11 @@ export {
 } from './analytics/use-warranty-analytics';
 export { formatWarrantyMutationError } from './_mutation-errors';
 export { formatWarrantyClaimMutationError } from './_mutation-errors';
-export type { WarrantyClaimMutationAction } from './_mutation-errors';
+export { formatWarrantyPolicyMutationError } from './_mutation-errors';
+export type {
+  WarrantyClaimMutationAction,
+  WarrantyPolicyMutationAction,
+} from './_mutation-errors';
 
 // --- Bulk import hooks ---
 export {

@@ -22,11 +22,26 @@ const WARRANTY_CLAIM_MUTATION_FALLBACKS = {
   cancel: 'Warranty claim cancellation is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const WARRANTY_POLICY_MUTATION_FALLBACKS = {
+  create: 'Warranty policy creation is temporarily unavailable. Please refresh and try again.',
+  update: 'Warranty policy update is temporarily unavailable. Please refresh and try again.',
+  delete: 'Warranty policy deletion is temporarily unavailable. Please refresh and try again.',
+  setDefault:
+    'Default warranty policy update is temporarily unavailable. Please refresh and try again.',
+  seedDefaults:
+    'Default warranty policy creation is temporarily unavailable. Please refresh and try again.',
+  assignProduct:
+    'Product warranty policy assignment is temporarily unavailable. Please refresh and try again.',
+  assignCategory:
+    'Category warranty policy assignment is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
 
 export type WarrantyClaimMutationAction = keyof typeof WARRANTY_CLAIM_MUTATION_FALLBACKS;
+export type WarrantyPolicyMutationAction = keyof typeof WARRANTY_POLICY_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -209,4 +224,11 @@ export function formatWarrantyClaimMutationError(
   action: WarrantyClaimMutationAction
 ): string {
   return formatWarrantyMutationError(error, WARRANTY_CLAIM_MUTATION_FALLBACKS[action]);
+}
+
+export function formatWarrantyPolicyMutationError(
+  error: unknown,
+  action: WarrantyPolicyMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_POLICY_MUTATION_FALLBACKS[action]);
 }

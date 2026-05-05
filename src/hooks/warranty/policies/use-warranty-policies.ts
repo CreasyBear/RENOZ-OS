@@ -24,7 +24,7 @@ import {
   assignDefaultWarrantyPolicyToCategory,
 } from '@/server/functions/warranty/policies/warranty-policies';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
-import { formatWarrantyMutationError } from '../_mutation-errors';
+import { formatWarrantyPolicyMutationError } from '../_mutation-errors';
 import type {
   GetWarrantyPoliciesInput,
   CreateWarrantyPolicyInput,
@@ -197,7 +197,7 @@ export function useCreateWarrantyPolicy() {
       toast.success('Warranty policy created successfully');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to create policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'create'));
     },
   });
 }
@@ -223,7 +223,7 @@ export function useUpdateWarrantyPolicy() {
       toast.success('Warranty policy updated successfully');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to update policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'update'));
     },
   });
 }
@@ -245,7 +245,7 @@ export function useDeleteWarrantyPolicy() {
       toast.success('Warranty policy deleted successfully');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to delete policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'delete'));
     },
   });
 }
@@ -268,7 +268,7 @@ export function useSetDefaultWarrantyPolicy() {
       toast.success('Default warranty policy updated');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to set default policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'setDefault'));
     },
   });
 }
@@ -299,7 +299,7 @@ export function useSeedDefaultWarrantyPolicies() {
       toast.success('Default warranty policies created');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to seed policies'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'seedDefaults'));
     },
   });
 }
@@ -323,7 +323,7 @@ export function useAssignWarrantyPolicyToProduct() {
       toast.success('Warranty policy assigned to product');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to assign policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'assignProduct'));
     },
   });
 }
@@ -347,7 +347,7 @@ export function useAssignDefaultWarrantyPolicyToCategory() {
       toast.success('Default warranty policy assigned to category');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to assign policy'));
+      toast.error(formatWarrantyPolicyMutationError(error, 'assignCategory'));
     },
   });
 }

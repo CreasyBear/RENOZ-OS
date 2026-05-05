@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWarrantyClaimMutationError,
   formatWarrantyMutationError,
+  formatWarrantyPolicyMutationError,
 } from '@/hooks/warranty/_mutation-errors';
 
 const root = process.cwd();
@@ -65,6 +66,27 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Warranty claim approval is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('formats policy mutation failures with action-specific unavailable copy', () => {
+    expect(
+      formatWarrantyPolicyMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            durationMonths: ['Warranty duration must be greater than zero.'],
+          },
+        },
+        'create'
+      )
+    ).toBe('Warranty duration must be greater than zero.');
+
+    expect(
+      formatWarrantyPolicyMutationError(
+        new Error('duplicate key value violates unique constraint warranty_policies_default_idx'),
+        'setDefault'
+      )
+    ).toBe('Default warranty policy update is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('keeps warranty mutation hooks on the formatter contract', () => {
     const sources = {
       claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
@@ -87,14 +109,27 @@ describe('warranty mutation error formatter', () => {
     expect(sources.claim).not.toContain('Failed to assign claim');
     expect(sources.claim).not.toContain('Failed to cancel claim');
 
-    for (const source of Object.values(sources).filter((source) => source !== sources.claim)) {
+    expect(sources.policy).toContain(
+      "import { formatWarrantyPolicyMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.policy).not.toContain('Failed to create policy');
+    expect(sources.policy).not.toContain('Failed to update policy');
+    expect(sources.policy).not.toContain('Failed to delete policy');
+    expect(sources.policy).not.toContain('Failed to set default policy');
+    expect(sources.policy).not.toContain('Failed to seed policies');
+    expect(sources.policy).not.toContain('Failed to assign policy');
+
+    for (const source of Object.values(sources).filter(
+      (source) => source !== sources.claim && source !== sources.policy
+    )) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
     }
     expect(sources.claim).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(sources.policy).not.toContain('toast.error(error instanceof Error ? error.message');
 
     expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
-    expect(sources.policy.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
+    expect(sources.policy.match(/formatWarrantyPolicyMutationError\(error,/g)).toHaveLength(7);
     expect(sources.core.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(4);
     expect(sources.entitlement.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
     expect(sources.extension.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);

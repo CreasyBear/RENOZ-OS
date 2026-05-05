@@ -25,7 +25,7 @@ describe('warranty policy form dialog action contract', () => {
     expect(container).toContain('useUpdateWarrantyPolicy()');
     expect(container).toContain('await updateMutation.mutateAsync({');
     expect(container).toContain('await createMutation.mutateAsync(dataToSave)');
-    expect(hook).toContain("toast.error(formatWarrantyMutationError(error, 'Failed to create policy'))");
-    expect(hook).toContain("toast.error(formatWarrantyMutationError(error, 'Failed to update policy'))");
+    expect(hook).toContain("toast.error(formatWarrantyPolicyMutationError(error, 'create'))");
+    expect(hook).toContain("toast.error(formatWarrantyPolicyMutationError(error, 'update'))");
   });
 });
