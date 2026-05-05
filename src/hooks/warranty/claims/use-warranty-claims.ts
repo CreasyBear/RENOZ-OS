@@ -7,7 +7,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json - DOM-WAR-006c
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { formatWarrantyMutationError } from '../_mutation-errors';
@@ -110,6 +110,34 @@ function showClaimMutationOutcome(
     return;
   }
   toast.success(result?.message ?? `${claimLabel} ${operation}`);
+}
+
+function invalidateWarrantyClaimReadModels(
+  queryClient: QueryClient,
+  {
+    claimId,
+    warrantyId,
+  }: {
+    claimId?: string | null;
+    warrantyId?: string | null;
+  }
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
+
+  if (claimId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.warrantyClaims.detail(claimId),
+    });
+  }
+
+  if (warrantyId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.warrantyClaims.byWarranty(warrantyId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.warrantyClaims.summary(warrantyId),
+    });
+  }
 }
 
 // ============================================================================
@@ -264,11 +292,8 @@ export function useCreateWarrantyClaim() {
   return useMutation({
     mutationFn: (data: CreateWarrantyClaimInput) => createWarrantyClaim({ data }),
     onSuccess: (result) => {
-      // Invalidate all claim lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      // Invalidate claims for this warranty
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        warrantyId: result.warrantyId,
       });
       showClaimMutationOutcome('submitted', result);
     },
@@ -291,12 +316,9 @@ export function useUpdateClaimStatus() {
   return useMutation({
     mutationFn: (data: UpdateClaimStatusInput) => updateClaimStatus({ data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(result.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: result.id,
+        warrantyId: result.warrantyId,
       });
       const message =
         (result as { message?: string }).message ??
@@ -322,12 +344,9 @@ export function useApproveClaim() {
   return useMutation({
     mutationFn: (data: ApproveClaimInput) => approveClaim({ data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(result.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: result.id,
+        warrantyId: result.warrantyId,
       });
       showClaimMutationOutcome('approved', result);
     },
@@ -350,12 +369,9 @@ export function useDenyClaim() {
   return useMutation({
     mutationFn: (data: DenyClaimInput) => denyClaim({ data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(result.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: result.id,
+        warrantyId: result.warrantyId,
       });
       showClaimMutationOutcome('denied', result);
     },
@@ -378,12 +394,9 @@ export function useResolveClaim() {
   return useMutation({
     mutationFn: (data: ResolveClaimInput) => resolveClaim({ data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(result.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.byWarranty(result.warrantyId),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: result.id,
+        warrantyId: result.warrantyId,
       });
       // Also invalidate warranty queries since resolution may extend warranty
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(result.warrantyId) });
@@ -409,9 +422,8 @@ export function useAssignClaim() {
   return useMutation({
     mutationFn: (data: AssignClaimInput) => assignClaim({ data }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(result.id),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: result.id,
       });
       toast.success('Claim assignment updated');
     },
@@ -435,9 +447,9 @@ export function useCancelWarrantyClaim() {
     mutationFn: (data: { id: string; reason?: string }) =>
       cancelWarrantyClaim({ data }),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.warrantyClaims.detail(variables.id),
+      invalidateWarrantyClaimReadModels(queryClient, {
+        claimId: variables.id,
+        warrantyId: result.warrantyId,
       });
       showClaimMutationOutcome('cancelled', result as { claimNumber?: string; notificationQueued?: boolean | null });
     },
