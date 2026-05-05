@@ -25,6 +25,7 @@ import {
   deleteSavedCustomerFilter,
 } from '@/server/functions/customers/saved-filters';
 import { queryKeys } from '@/lib/query-keys';
+import { formatCustomerSavedFilterMutationError } from './_mutation-errors';
 import type { CustomerFiltersState, SavedCustomerFilter } from '@/lib/schemas/customers/saved-filters';
 
 // Re-export type for convenience
@@ -68,8 +69,8 @@ export function useSavedCustomerFilters() {
       queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
       toast.success('Filter saved successfully');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to save filter');
+    onError: (error: unknown) => {
+      toast.error(formatCustomerSavedFilterMutationError(error, 'save'));
     },
   });
 
@@ -86,8 +87,8 @@ export function useSavedCustomerFilters() {
       queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
       toast.success('Filter updated successfully');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update filter');
+    onError: (error: unknown) => {
+      toast.error(formatCustomerSavedFilterMutationError(error, 'update'));
     },
   });
 
@@ -100,8 +101,8 @@ export function useSavedCustomerFilters() {
       queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
       toast.success('Filter deleted successfully');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete filter');
+    onError: (error: unknown) => {
+      toast.error(formatCustomerSavedFilterMutationError(error, 'delete'));
     },
   });
 

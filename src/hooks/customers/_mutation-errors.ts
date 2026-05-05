@@ -8,6 +8,26 @@ const DEFAULT_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Customer details conflict with an existing customer.',
 };
 
+const SAVED_FILTER_FALLBACKS = {
+  save: 'Unable to save customer filter.',
+  update: 'Unable to update customer filter.',
+  delete: 'Unable to delete customer filter.',
+} as const;
+
+const SAVED_FILTER_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The saved customer filter could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage saved customer filters.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing saved customer filters.',
+  RATE_LIMIT: 'Too many saved customer filter changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'A saved customer filter with that name already exists.',
+};
+
+interface FormatCustomerMutationErrorOptions {
+  codeMessages?: Record<string, string>;
+}
+
+export type CustomerSavedFilterMutationAction = keyof typeof SAVED_FILTER_FALLBACKS;
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
 }
@@ -155,15 +175,27 @@ function isUnsafeMessage(message: string): boolean {
   );
 }
 
-function lookupCodeMessage(code: string): string | undefined {
-  return DEFAULT_CODE_MESSAGES[code] ?? DEFAULT_CODE_MESSAGES[code.toUpperCase()];
+function lookupCodeMessage(
+  code: string,
+  options: FormatCustomerMutationErrorOptions
+): string | undefined {
+  return (
+    options.codeMessages?.[code] ??
+    options.codeMessages?.[code.toUpperCase()] ??
+    DEFAULT_CODE_MESSAGES[code] ??
+    DEFAULT_CODE_MESSAGES[code.toUpperCase()]
+  );
 }
 
-export function formatCustomerMutationError(error: unknown, fallback: string): string {
+export function formatCustomerMutationError(
+  error: unknown,
+  fallback: string,
+  options: FormatCustomerMutationErrorOptions = {}
+): string {
   const code = extractCode(error);
   const fieldMessage = extractFieldErrorMessage(error);
   const statusCode = extractStatusCode(error);
-  const codeMessage = code ? lookupCodeMessage(code) : undefined;
+  const codeMessage = code ? lookupCodeMessage(code, options) : undefined;
 
   if (fieldMessage && !isUnsafeMessage(fieldMessage)) {
     return fieldMessage;
@@ -188,4 +220,13 @@ export function formatCustomerMutationError(error: unknown, fallback: string): s
   }
 
   return fallback;
+}
+
+export function formatCustomerSavedFilterMutationError(
+  error: unknown,
+  action: CustomerSavedFilterMutationAction
+): string {
+  return formatCustomerMutationError(error, SAVED_FILTER_FALLBACKS[action], {
+    codeMessages: SAVED_FILTER_CODE_MESSAGES,
+  });
 }

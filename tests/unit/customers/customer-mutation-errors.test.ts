@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatCustomerMutationError } from '@/hooks/customers/_mutation-errors';
+import {
+  formatCustomerMutationError,
+  formatCustomerSavedFilterMutationError,
+} from '@/hooks/customers/_mutation-errors';
 
 const root = process.cwd();
 
@@ -47,9 +50,33 @@ describe('customer mutation error formatting', () => {
     ).toBe('Unable to update customer.');
   });
 
+  it('uses saved-filter-specific fallbacks and code copy', () => {
+    expect(
+      formatCustomerSavedFilterMutationError(
+        { statusCode: 404, code: 'NOT_FOUND' },
+        'update'
+      )
+    ).toBe('The saved customer filter could not be found. Refresh and try again.');
+
+    expect(
+      formatCustomerSavedFilterMutationError(
+        new Error('duplicate key value violates unique constraint user_preferences_key_unique'),
+        'save'
+      )
+    ).toBe('Unable to save customer filter.');
+
+    expect(
+      formatCustomerSavedFilterMutationError(
+        new Error('A saved filter named "Active Dealers" already exists'),
+        'save'
+      )
+    ).toBe('A saved filter named "Active Dealers" already exists');
+  });
+
   it('keeps customer list mutation feedback on the formatter contract', () => {
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
+    const savedFilters = read('src/hooks/customers/use-saved-filters.ts');
     const index = read('src/hooks/customers/index.ts');
 
     expect(index).toContain("export { formatCustomerMutationError } from './_mutation-errors';");
@@ -68,5 +95,13 @@ describe('customer mutation error formatting', () => {
     expect(detail).toContain("formatCustomerMutationError(error, 'Unable to delete customer.')");
     expect(detail).not.toContain('error instanceof Error && error.message');
     expect(detail).not.toContain("'Failed to delete customer'");
+
+    expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'save')");
+    expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'update')");
+    expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'delete')");
+    expect(savedFilters).not.toContain('error.message ||');
+    expect(savedFilters).not.toContain("'Failed to save filter'");
+    expect(savedFilters).not.toContain("'Failed to update filter'");
+    expect(savedFilters).not.toContain("'Failed to delete filter'");
   });
 });
