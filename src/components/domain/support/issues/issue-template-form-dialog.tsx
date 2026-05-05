@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
@@ -153,8 +153,8 @@ export function IssueTemplateFormDialog({
       });
       onOpenChange(false);
       onSuccess?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save template');
+    } catch {
+      // Mutation feedback is owned by the submit caller; keep the dialog open on failure.
     }
   };
 

@@ -18,13 +18,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { IssueTemplateList } from '@/components/domain/support/issues/issue-template-list';
 import { IssueTemplateFormDialog } from '@/components/domain/support/issues/issue-template-form-dialog';
 import {
+  formatSupportMutationError,
   useIssueTemplates,
   useDeleteIssueTemplate,
   useCreateIssueTemplate,
   useUpdateIssueTemplate,
 } from '@/hooks';
 import { useConfirmation } from '@/hooks';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import type {
   IssueTemplateResponse,
   IssueType,
@@ -38,6 +39,19 @@ export const Route = createFileRoute('/_authenticated/settings/issue-templates')
   ),
   pendingComponent: () => <SettingsPageSkeleton />,
 });
+
+const ISSUE_TEMPLATE_ERROR_MESSAGES = {
+  NOT_FOUND: 'The issue template could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage issue templates.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing issue templates.',
+  RATE_LIMIT: 'Too many issue template updates were attempted. Wait a moment and retry.',
+};
+
+function formatIssueTemplateMutationError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: ISSUE_TEMPLATE_ERROR_MESSAGES,
+  });
+}
 
 function IssueTemplatesSettingsPage() {
   const confirm = useConfirmation();
@@ -101,7 +115,7 @@ function IssueTemplatesSettingsPage() {
       });
       toast.success('Template duplicated successfully.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to duplicate template');
+      toast.error(formatIssueTemplateMutationError(err, 'Failed to duplicate template'));
     }
   };
 
@@ -119,7 +133,7 @@ function IssueTemplatesSettingsPage() {
         await deleteMutation.mutateAsync(template.id);
         toast.success('Template deleted successfully.');
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to delete template');
+        toast.error(formatIssueTemplateMutationError(err, 'Failed to delete template'));
       }
     }
   };
@@ -136,15 +150,20 @@ function IssueTemplatesSettingsPage() {
     templateId?: string;
   }) => {
     const { templateId, ...dataToSave } = payload;
-    if (templateId) {
-      await updateMutation.mutateAsync({
-        templateId,
-        ...dataToSave,
-      });
-      toast.success('Template updated successfully.');
-    } else {
-      await createMutation.mutateAsync(dataToSave);
-      toast.success('Template created successfully.');
+    try {
+      if (templateId) {
+        await updateMutation.mutateAsync({
+          templateId,
+          ...dataToSave,
+        });
+        toast.success('Template updated successfully.');
+      } else {
+        await createMutation.mutateAsync(dataToSave);
+        toast.success('Template created successfully.');
+      }
+    } catch (error) {
+      toast.error(formatIssueTemplateMutationError(error, 'Failed to save template'));
+      throw error;
     }
   };
 
