@@ -169,6 +169,11 @@ export function BulkReceivingDialog({
   }, [purchaseOrders]);
 
   const handleNext = useCallback(() => {
+    if (isLoading) {
+      toastError('Purchase order receiving details are still loading. Please wait before continuing.');
+      return;
+    }
+
     if (selectedPOIds.size === 0) {
       toastError('Select at least one purchase order to receive');
       return;
@@ -179,7 +184,7 @@ export function BulkReceivingDialog({
     } else {
       setStep('review');
     }
-  }, [selectedPOIds.size, hasSerializedItems]);
+  }, [isLoading, selectedPOIds.size, hasSerializedItems]);
 
   const handleBack = useCallback(() => {
     if (step === 'serials') {
@@ -683,9 +688,18 @@ export function BulkReceivingDialog({
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={handleNext} disabled={selectedPOIds.size === 0}>
-                Next
-                <ChevronRight className="h-4 w-4 ml-2" />
+              <Button onClick={handleNext} disabled={selectedPOIds.size === 0 || isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
               </Button>
             </>
           )}

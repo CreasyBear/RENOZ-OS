@@ -185,6 +185,44 @@ describe('BulkReceivingDialog', () => {
     })
   })
 
+  it('keeps bulk receiving on the select step while receiving details are loading', async () => {
+    const onConfirm = vi.fn()
+
+    const { BulkReceivingDialog } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog'
+    )
+
+    render(
+      <BulkReceivingDialog
+        open
+        isLoading
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-001',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 100,
+            currency: 'AUD',
+          } as never,
+        ]}
+        poDetailsWithSerials={[]}
+        onConfirm={onConfirm}
+      />
+    )
+
+    expect(await screen.findByText('1 of 1 purchase orders selected')).toBeInTheDocument()
+
+    const nextButton = screen.getByRole('button', { name: /loading/i })
+    expect(nextButton).toBeDisabled()
+
+    fireEvent.click(nextButton)
+
+    expect(screen.queryByText('1 purchase order ready to receive')).not.toBeInTheDocument()
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('blocks duplicate same-product serials before bulk receive review', async () => {
     const onConfirm = vi.fn().mockResolvedValue({
       processed: 2,
