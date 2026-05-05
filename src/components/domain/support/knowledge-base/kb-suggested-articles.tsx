@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { toast } from 'sonner';
 import type { KbArticleResponse } from '@/lib/schemas/support/knowledge-base';
 
 // ============================================================================
@@ -47,9 +46,8 @@ function ArticlePreview({
     try {
       await onFeedback(article.id, helpful);
       setHasVoted(true);
-      toast.success(helpful ? 'Thanks for the feedback!' : "We'll work on improving this article");
     } catch {
-      toast.error('Failed to record feedback');
+      // Mutation feedback is owned by the submit caller; keep the vote controls retryable.
     }
   };
 

@@ -352,8 +352,10 @@ function KnowledgeBasePage() {
     try {
       await feedbackMutation.mutateAsync({ articleId, helpful });
       clearFeedbackDelta(articleId);
+      toast.success(helpful ? 'Thanks for the feedback!' : "We'll work on improving this article");
     } catch (error) {
       rollbackFeedbackDelta(articleId, helpful);
+      toast.error(formatKbArticleMutationError(error, 'Failed to record article feedback'));
       throw error;
     } finally {
       setPendingFeedbackArticleId(null);
