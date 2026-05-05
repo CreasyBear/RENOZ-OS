@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SuppliersTablePresenter } from "./suppliers-table-presenter";
 import { SuppliersMobileCards } from "./suppliers-mobile-cards";
+import { getSupplierListReadErrorMessage } from "./supplier-read-error-messages";
 import type { SupplierTableItem } from "./supplier-columns";
 import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
@@ -199,7 +200,7 @@ export const SuppliersListPresenter = memo(function SuppliersListPresenter({
       <DataTableEmpty
         variant="error"
         title="Failed to load suppliers"
-        description={error.message ?? "An unexpected error occurred"}
+        description={getSupplierListReadErrorMessage(error)}
         action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />

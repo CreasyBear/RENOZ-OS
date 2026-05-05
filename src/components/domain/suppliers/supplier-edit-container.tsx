@@ -21,6 +21,7 @@ import {
   paymentTermsSchema,
 } from '@/lib/schemas/suppliers';
 import { formatSupplierMutationError, useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
+import { getSupplierDetailReadErrorMessage } from './supplier-read-error-messages';
 import { toast } from '@/lib/toast';
 import { logger } from '@/lib/logger';
 
@@ -136,11 +137,7 @@ export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps
     return (
       <ErrorState
         title="Supplier details are unavailable"
-        message={
-          error instanceof Error
-            ? error.message
-            : 'The supplier could not be loaded for editing. Refresh and try again.'
-        }
+        message={getSupplierDetailReadErrorMessage(error)}
         onRetry={() => refetch()}
       />
     );
