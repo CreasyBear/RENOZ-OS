@@ -1,13 +1,48 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatScheduledReportMutationError } from '@/hooks/reports';
+import { formatReportScheduleError, formatScheduledReportMutationError } from '@/hooks/reports';
 
 const root = process.cwd();
 
 function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
+
+const reportSchedulePages = [
+  {
+    path: 'src/components/domain/reports/pipeline-forecast-page.tsx',
+    reportName: 'pipeline forecast report',
+  },
+  {
+    path: 'src/components/domain/reports/procurement-reports-page.tsx',
+    reportName: 'procurement report',
+  },
+  {
+    path: 'src/components/domain/reports/customer-reports-page.tsx',
+    reportName: 'customer report',
+  },
+  {
+    path: 'src/components/domain/reports/expiring-warranties-container.tsx',
+    reportName: 'expiring warranties report',
+  },
+  {
+    path: 'src/components/domain/reports/win-loss-analysis-container.tsx',
+    reportName: 'win/loss analysis report',
+  },
+  {
+    path: 'src/components/domain/reports/financial-summary-page.tsx',
+    reportName: 'financial summary report',
+  },
+  {
+    path: 'src/components/domain/reports/job-costing-report-page.tsx',
+    reportName: 'job costing report',
+  },
+  {
+    path: 'src/components/domain/reports/warranty-analytics-page.tsx',
+    reportName: 'warranty analytics report',
+  },
+] as const;
 
 describe('scheduled report management feedback contract', () => {
   it('formats settings scheduled-report mutation failures before display', () => {
@@ -40,6 +75,27 @@ describe('scheduled report management feedback contract', () => {
 
     expect(form).toContain('submitError?: string | null');
     expect(form).toContain('<FormErrorSummary form={form} submitError={submitError} />');
+  });
+
+  it('formats report-page schedule failures before display', () => {
+    const reportsHooks = read('src/hooks/reports/index.ts');
+    const reportsFormatter = read('src/hooks/reports/_mutation-errors.ts');
+
+    expect(reportsHooks).toContain("export { formatReportScheduleError } from './_mutation-errors';");
+    expect(reportsFormatter).toContain('formatReportScheduleError');
+    expect(reportsFormatter).toContain(
+      '`${reportLabel} scheduling is temporarily unavailable. Please refresh and try again.`'
+    );
+
+    for (const { path, reportName } of reportSchedulePages) {
+      const source = read(path);
+
+      expect(source).toContain('formatReportScheduleError');
+      expect(source).toContain(reportName);
+      expect(source).toContain('toast.error(formatReportScheduleError(error,');
+      expect(source).toContain('throw error');
+      expect(source).not.toContain("toast.error('Failed to schedule report')");
+    }
   });
 
   it('keeps the scheduled-report mutation spine and cache policy explicit', () => {
@@ -93,5 +149,12 @@ describe('scheduled report management feedback contract', () => {
         'Scheduled report updates are temporarily unavailable. Please refresh and try again.'
       )
     ).toBe('You do not have permission to manage scheduled reports.');
+
+    expect(
+      formatReportScheduleError(
+        { message: 'postgres duplicate key violates constraint', statusCode: 500 },
+        'pipeline forecast report'
+      )
+    ).toBe('pipeline forecast report scheduling is temporarily unavailable. Please refresh and try again.');
   });
 });

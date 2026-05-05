@@ -37,6 +37,7 @@ import { useJobCostingReport } from '@/hooks';
 import { useCustomers } from '@/hooks';
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCreateScheduledReport,
   useGenerateReport,
 } from '@/hooks/reports';
@@ -399,7 +400,12 @@ export function JobCostingReportPage() {
 
   const handleScheduleSubmit = useCallback(
     async (data: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(data);
+      try {
+        await createScheduledReport.mutateAsync(data);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, 'job costing report'));
+        throw error;
+      }
     },
     [createScheduledReport]
   );

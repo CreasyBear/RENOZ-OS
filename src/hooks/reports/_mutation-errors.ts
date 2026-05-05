@@ -233,3 +233,13 @@ export function formatScheduledReportMutationError(
     codeMessages: SCHEDULED_REPORT_CODE_MESSAGES,
   });
 }
+
+export function formatReportScheduleError(error: unknown, reportName: string): string {
+  const trimmedReportName = reportName.trim();
+  const reportLabel = trimmedReportName.length > 0 ? trimmedReportName : 'Report';
+
+  return formatScheduledReportMutationError(
+    error,
+    `${reportLabel} scheduling is temporarily unavailable. Please refresh and try again.`
+  );
+}

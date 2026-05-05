@@ -18,6 +18,7 @@ import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv
 import { useProcurementDashboard } from '@/hooks/suppliers';
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCreateCustomReport,
   useCreateScheduledReport,
   useGenerateReport,
@@ -202,7 +203,7 @@ export function ProcurementReportsPage() {
         await createScheduledReport.mutateAsync(data);
         toast.success('Procurement report scheduled');
       } catch (error) {
-        toast.error('Failed to schedule report');
+        toast.error(formatReportScheduleError(error, 'procurement report'));
         throw error;
       }
     },

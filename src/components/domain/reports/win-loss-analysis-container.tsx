@@ -14,6 +14,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCompetitors,
   useCreateScheduledReport,
   useGenerateReport,
@@ -101,8 +102,13 @@ export function WinLossAnalysisContainer() {
 
   const handleScheduleSubmit = useCallback(
     async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(input);
-      setScheduleOpen(false);
+      try {
+        await createScheduledReport.mutateAsync(input);
+        setScheduleOpen(false);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, 'win/loss analysis report'));
+        throw error;
+      }
     },
     [createScheduledReport]
   );

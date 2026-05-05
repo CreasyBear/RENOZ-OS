@@ -64,6 +64,7 @@ export {
   type GenerateReportInput,
 } from './use-scheduled-reports';
 export { formatGeneratedReportError } from './_mutation-errors';
+export { formatReportScheduleError } from './_mutation-errors';
 export { formatReportsMutationError } from './_mutation-errors';
 export { formatScheduledReportMutationError } from './_mutation-errors';
 

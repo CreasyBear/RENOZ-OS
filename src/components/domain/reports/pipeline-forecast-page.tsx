@@ -45,6 +45,7 @@ import { ScheduledReportForm } from "@/components/domain/settings/scheduled-repo
 import { ReportFavoriteButton } from "./report-favorite-button";
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCreateScheduledReport,
   useGenerateReport,
 } from "@/hooks/reports";
@@ -303,7 +304,12 @@ export function PipelineForecastPage() {
 
   const handleScheduleSubmit = useCallback(
     async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(input);
+      try {
+        await createScheduledReport.mutateAsync(input);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, "pipeline forecast report"));
+        throw error;
+      }
     },
     [createScheduledReport]
   );

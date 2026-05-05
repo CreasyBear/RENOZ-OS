@@ -30,6 +30,7 @@ import {
 } from '@/hooks'
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCreateScheduledReport,
   useGenerateReport,
   type CreateScheduledReportInput,
@@ -302,7 +303,7 @@ export function CustomerReportsPage() {
         await createScheduledReport.mutateAsync(data)
         toast.success('Customer report scheduled')
       } catch (error) {
-        toast.error('Failed to schedule report')
+        toast.error(formatReportScheduleError(error, 'customer report'))
         throw error
       }
     },

@@ -14,6 +14,7 @@ import {
   useExportWarrantyAnalytics,
 } from '@/hooks';
 import {
+  formatReportScheduleError,
   formatReportsMutationError,
   useCreateScheduledReport,
   useGenerateReport,
@@ -219,7 +220,12 @@ export function WarrantyAnalyticsPage() {
 
   const handleScheduleSubmit = useCallback(
     async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(input);
+      try {
+        await createScheduledReport.mutateAsync(input);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, 'warranty analytics report'));
+        throw error;
+      }
     },
     [createScheduledReport]
   );

@@ -49,6 +49,7 @@ import { FormatAmount } from '@/components/shared/format';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useFinancialSummaryReport,
   useExportFinancialSummaryReport,
   useCreateScheduledReport,
@@ -165,7 +166,12 @@ export function FinancialSummaryPage() {
   const handleScheduleReport = useCallback(() => setScheduleOpen(true), []);
   const handleScheduleSubmit = useCallback(
     async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(input);
+      try {
+        await createScheduledReport.mutateAsync(input);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, 'financial summary report'));
+        throw error;
+      }
     },
     [createScheduledReport]
   );

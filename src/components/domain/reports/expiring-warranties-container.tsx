@@ -15,6 +15,7 @@ import {
 } from '@/hooks';
 import {
   formatGeneratedReportError,
+  formatReportScheduleError,
   useCreateScheduledReport,
   useGenerateReport,
 } from '@/hooks/reports';
@@ -173,7 +174,12 @@ export function ExpiringWarrantiesReportContainer({
 
   const handleScheduleSubmit = useCallback(
     async (input: CreateScheduledReportInput) => {
-      await createScheduledReport.mutateAsync(input);
+      try {
+        await createScheduledReport.mutateAsync(input);
+      } catch (error) {
+        toast.error(formatReportScheduleError(error, 'expiring warranties report'));
+        throw error;
+      }
     },
     [createScheduledReport]
   );
