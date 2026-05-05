@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { toastSuccess, toastError } from '@/hooks';
+import { formatPurchaseOrderMutationError } from '@/hooks/purchase-orders/_mutation-errors';
 import { useReceiveGoods } from '@/hooks/suppliers';
 import type { PurchaseOrderItem } from '@/lib/schemas/purchase-orders';
 import { SerialNumberBatchEntry } from '@/components/domain/procurement/receiving/serial-number-batch-entry';
@@ -351,7 +352,12 @@ export function GoodsReceiptDialog({
       onOpenChange(false);
       onReceiptComplete?.();
     } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to receive goods. Please try again.');
+      toastError(
+        formatPurchaseOrderMutationError(
+          error,
+          'Failed to receive goods. Please try again.'
+        )
+      );
     }
   }, [lineItems, poId, receiptNotes, totalReceiving, totalRejected, receiveGoods, onOpenChange, onReceiptComplete, navigate]);
 
