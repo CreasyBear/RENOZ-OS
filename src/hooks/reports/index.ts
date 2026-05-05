@@ -68,6 +68,7 @@ export { formatGeneratedReportError } from './_mutation-errors';
 export { formatReportScheduleError } from './_mutation-errors';
 export { formatReportsMutationError } from './_mutation-errors';
 export { formatScheduledReportMutationError } from './_mutation-errors';
+export { formatTargetMutationError } from './_mutation-errors';
 
 // ============================================================================
 // TARGETS HOOKS

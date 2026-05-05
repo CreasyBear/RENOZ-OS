@@ -53,6 +53,7 @@ import {
   useUpdateTarget,
   useDeleteTarget,
   useBulkDeleteTargets,
+  formatTargetMutationError,
 } from '@/hooks/reports';
 import type {
   Target as TargetType,
@@ -203,8 +204,13 @@ function TargetsSettingsPage() {
           next.delete(target.id);
           return next;
         });
-      } catch {
-        toast.error('Failed to delete target');
+      } catch (error) {
+        toast.error(
+          formatTargetMutationError(
+            error,
+            'Target deletion is temporarily unavailable. Please refresh and try again.'
+          )
+        );
       }
     },
     [confirmation, deleteMutation]
@@ -225,11 +231,14 @@ function TargetsSettingsPage() {
         }
         setFormOpen(false);
         setEditingTarget(null);
-      } catch {
+      } catch (error) {
         toast.error(
-          editingTarget
-            ? 'Failed to update target'
-            : 'Failed to create target'
+          formatTargetMutationError(
+            error,
+            editingTarget
+              ? 'Target update is temporarily unavailable. Please refresh and try again.'
+              : 'Target creation is temporarily unavailable. Please refresh and try again.'
+          )
         );
       }
     },
@@ -249,8 +258,13 @@ function TargetsSettingsPage() {
         await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) });
         toast.success(`${selectedIds.size} targets deleted`);
         setSelectedIds(new Set());
-      } catch {
-        toast.error('Failed to delete targets');
+      } catch (error) {
+        toast.error(
+          formatTargetMutationError(
+            error,
+            'Bulk target deletion is temporarily unavailable. Please refresh and try again.'
+          )
+        );
       }
     },
     [selectedIds, confirmation, bulkDeleteMutation]

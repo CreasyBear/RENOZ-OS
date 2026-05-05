@@ -27,6 +27,13 @@ const CUSTOM_REPORT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many custom report actions were attempted. Wait a moment and retry.',
 };
 
+const TARGET_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The target could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage targets.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing targets.',
+  RATE_LIMIT: 'Too many target changes were attempted. Wait a moment and retry.',
+};
+
 interface FormatReportsMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -257,5 +264,14 @@ export function formatCustomReportMutationError(
 ): string {
   return formatReportsMutationError(error, fallback, {
     codeMessages: CUSTOM_REPORT_CODE_MESSAGES,
+  });
+}
+
+export function formatTargetMutationError(
+  error: unknown,
+  fallback: string
+): string {
+  return formatReportsMutationError(error, fallback, {
+    codeMessages: TARGET_CODE_MESSAGES,
   });
 }
