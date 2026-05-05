@@ -11,7 +11,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { SupplierForm } from './supplier-form';
 import { supplierFormSchema, type SupplierFormValues } from '@/lib/schemas/suppliers/supplier-form';
-import { useCreateSupplier } from '@/hooks/suppliers';
+import { formatSupplierMutationError, useCreateSupplier } from '@/hooks/suppliers';
 import { toast } from '@/lib/toast';
 import { logger } from '@/lib/logger';
 
@@ -76,7 +76,10 @@ export function SupplierCreateContainer() {
       } catch (error) {
         logger.error('Failed to create supplier', error);
         toast.error('Failed to create supplier', {
-          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+          description: formatSupplierMutationError(
+            error,
+            'Supplier could not be created. Review details and try again.'
+          ),
         });
         throw error;
       }

@@ -21,7 +21,12 @@ import { Trash2, CheckCircle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { useSuppliers, useDeleteSupplier, useUpdateSupplier } from "@/hooks/suppliers";
+import {
+  formatSupplierMutationError,
+  useSuppliers,
+  useDeleteSupplier,
+  useUpdateSupplier,
+} from "@/hooks/suppliers";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import { DomainFilterBar } from "@/components/shared/filters";
 import {
@@ -195,7 +200,10 @@ export function SuppliersListContainer({
         toastSuccess("Supplier deleted");
       } catch (error) {
         toastError(
-          error instanceof Error ? error.message : "Failed to delete supplier"
+          formatSupplierMutationError(
+            error,
+            "Supplier could not be deleted. Refresh and try again."
+          )
         );
       }
     },
@@ -254,7 +262,10 @@ export function SuppliersListContainer({
       clearSelection();
     } catch (error) {
       toastError(
-        error instanceof Error ? error.message : "Failed to delete some suppliers"
+        formatSupplierMutationError(
+          error,
+          "Some suppliers could not be deleted. Refresh and try again."
+        )
       );
     }
   }, [selectedItems, confirmation, deleteMutation, clearSelection]);
@@ -277,7 +288,10 @@ export function SuppliersListContainer({
         clearSelection();
       } catch (error) {
         toastError(
-          error instanceof Error ? error.message : "Failed to update supplier status"
+          formatSupplierMutationError(
+            error,
+            "Supplier status could not be updated. Refresh and try again."
+          )
         );
       }
     },

@@ -31,6 +31,7 @@ import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toastSuccess, toastError } from '@/hooks';
 import {
+  formatSupplierMutationError,
   useSupplier,
   useDeleteSupplier,
   usePurchaseOrders,
@@ -185,7 +186,10 @@ export function SupplierDetailContainer({
       onBack?.();
     } catch (error) {
       toastError(
-        error instanceof Error ? error.message : 'Failed to delete supplier'
+        formatSupplierMutationError(
+          error,
+          'Supplier could not be deleted. Refresh and try again.'
+        )
       );
     }
   }, [deleteMutation, supplierId, onBack]);

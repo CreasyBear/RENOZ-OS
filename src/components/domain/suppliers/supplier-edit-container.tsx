@@ -20,7 +20,7 @@ import {
   supplierTypeSchema,
   paymentTermsSchema,
 } from '@/lib/schemas/suppliers';
-import { useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
+import { formatSupplierMutationError, useSupplier, useUpdateSupplier } from '@/hooks/suppliers';
 import { toast } from '@/lib/toast';
 import { logger } from '@/lib/logger';
 
@@ -85,7 +85,10 @@ export function SupplierEditContainer({ supplierId }: SupplierEditContainerProps
       } catch (error) {
         logger.error('Failed to update supplier', error);
         toast.error('Failed to update supplier', {
-          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+          description: formatSupplierMutationError(
+            error,
+            'Supplier could not be updated. Review details and try again.'
+          ),
         });
         throw error;
       }
