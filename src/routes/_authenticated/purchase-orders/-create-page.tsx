@@ -17,6 +17,7 @@ import {
 } from "@/components/domain/suppliers/po-creation-wizard";
 import { usePriceLists, useSuppliers } from "@/hooks/suppliers";
 import { useProduct, useProducts } from "@/hooks/products";
+import { formatPurchaseOrderMutationError } from "@/hooks/purchase-orders/_mutation-errors";
 import { useCreatePurchaseOrder } from "@/hooks/suppliers/use-purchase-orders";
 import { toast } from "@/hooks";
 import { logger } from "@/lib/logger";
@@ -131,8 +132,10 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
       } catch (error) {
         logger.error("Failed to create purchase order", error);
         toast.error("Failed to create purchase order", {
-          description:
-            error instanceof Error ? error.message : "An unexpected error occurred",
+          description: formatPurchaseOrderMutationError(
+            error,
+            "Review the purchase order details and try again."
+          ),
         });
         throw error;
       }
