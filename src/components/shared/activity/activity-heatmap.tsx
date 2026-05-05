@@ -10,6 +10,10 @@
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from "@/lib/activities/read-error-messages";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -146,7 +150,7 @@ export function ActivityHeatmap({
   dateTo,
   className,
 }: ActivityHeatmapProps) {
-  const { data, isLoading, isError } = useActivityStats({
+  const { data, isLoading, isError, error } = useActivityStats({
     dateFrom,
     dateTo,
     groupBy: "hour",
@@ -157,9 +161,14 @@ export function ActivityHeatmap({
   }
 
   if (isError) {
+    const message = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.statistics);
+
     return (
-      <div className="flex items-center justify-center h-[200px] text-muted-foreground">
-        Failed to load heatmap data
+      <div
+        className="flex items-center justify-center h-[200px] text-muted-foreground"
+        role="alert"
+      >
+        {message}
       </div>
     );
   }

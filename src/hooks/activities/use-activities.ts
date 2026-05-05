@@ -322,15 +322,13 @@ export function useActivityStats(options: UseActivityStatsOptions = {}) {
         return requireReadResult(result, {
           message: 'Activity stats returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity statistics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.statistics,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity statistics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.statistics,
         });
       }
     },
@@ -376,15 +374,13 @@ export function useActivityLeaderboard(options: UseActivityLeaderboardOptions = 
         return requireReadResult(result, {
           message: 'Activity leaderboard returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity leaderboard is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.leaderboard,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Activity leaderboard is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.leaderboard,
         });
       }
     },

@@ -9,6 +9,10 @@
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from "@/lib/activities/read-error-messages";
 import { Trophy, Medal, Award } from "lucide-react";
 import { useActivityLeaderboard } from "@/hooks";
 import type { LeaderboardEntry } from "@/lib/schemas/activities";
@@ -172,7 +176,7 @@ export function ActivityLeaderboard({
   showSkeleton = true,
   className,
 }: ActivityLeaderboardProps) {
-  const { data, isLoading, isError, refetch } = useActivityLeaderboard({
+  const { data, isLoading, isError, error, refetch } = useActivityLeaderboard({
     dateFrom,
     dateTo,
   });
@@ -182,9 +186,11 @@ export function ActivityLeaderboard({
   }
 
   if (isError) {
+    const message = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.leaderboard);
+
     return (
       <div className="text-center py-4" role="alert">
-        <p className="text-sm text-destructive mb-2">Failed to load leaderboard</p>
+        <p className="text-sm text-destructive mb-2">{message}</p>
         <button
           onClick={() => refetch()}
           className="text-sm text-primary hover:underline"

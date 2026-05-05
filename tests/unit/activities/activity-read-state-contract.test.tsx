@@ -34,18 +34,35 @@ describe('activity read state contract', () => {
     const barrel = read('src/lib/activities/index.ts');
     const activityFeed = read('src/components/shared/activity/activity-feed.tsx');
     const timeline = read('src/components/shared/activity/unified-activity-timeline.tsx');
+    const activityCharts = read('src/components/shared/activity/activity-charts.tsx');
+    const activityHeatmap = read('src/components/shared/activity/activity-heatmap.tsx');
+    const activityLeaderboard = read('src/components/shared/activity/activity-leaderboard.tsx');
     const activityHooks = read('src/hooks/activities/use-activities.ts');
     const unifiedHooks = read('src/hooks/activities/use-unified-activities.ts');
 
     expect(formatter).toContain('formatActivityReadError');
+    expect(formatter).toContain('statistics:');
+    expect(formatter).toContain('leaderboard:');
     expect(barrel).toContain('formatActivityReadError');
     expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.feed');
     expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.history');
+    expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.statistics');
+    expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.leaderboard');
     expect(unifiedHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.history');
 
     for (const source of [activityFeed, timeline]) {
       expect(source).toContain('formatActivityReadError');
       expect(source).not.toContain('Failed to load activities');
+      expect(source).not.toContain('{error.message}');
+    }
+
+    for (const source of [activityCharts, activityHeatmap, activityLeaderboard]) {
+      expect(source).toContain('formatActivityReadError');
+      expect(source).not.toContain('Failed to load trend data');
+      expect(source).not.toContain('Failed to load distribution data');
+      expect(source).not.toContain('Failed to load entity data');
+      expect(source).not.toContain('Failed to load heatmap data');
+      expect(source).not.toContain('Failed to load leaderboard');
       expect(source).not.toContain('{error.message}');
     }
   });

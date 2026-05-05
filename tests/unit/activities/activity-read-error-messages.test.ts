@@ -39,4 +39,31 @@ describe('activity read error messages', () => {
       'Fallback copy'
     );
   });
+
+  it('keeps activity analytics copy centralized for stats and leaderboard reads', () => {
+    const stats = normalizeReadQueryError(
+      { statusCode: 503, code: 'INTERNAL_ERROR', message: 'activity stats failed' },
+      {
+        contractType: 'always-shaped',
+        fallbackMessage: ACTIVITY_READ_MESSAGES.statistics,
+      }
+    );
+    const leaderboard = normalizeReadQueryError(
+      { statusCode: 503, code: 'INTERNAL_ERROR', message: 'activity leaderboard failed' },
+      {
+        contractType: 'always-shaped',
+        fallbackMessage: ACTIVITY_READ_MESSAGES.leaderboard,
+      }
+    );
+
+    expect(formatActivityReadError(stats, 'Fallback copy')).toBe(
+      ACTIVITY_READ_MESSAGES.statistics
+    );
+    expect(formatActivityReadError(leaderboard, 'Fallback copy')).toBe(
+      ACTIVITY_READ_MESSAGES.leaderboard
+    );
+    expect(formatActivityReadError(new Error('activity stats failed'), 'Fallback copy')).toBe(
+      'Fallback copy'
+    );
+  });
 });

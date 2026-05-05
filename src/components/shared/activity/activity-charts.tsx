@@ -24,6 +24,10 @@ import {
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActivityStats } from "@/hooks";
+import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from "@/lib/activities/read-error-messages";
 import { format } from "date-fns";
 import type { ActivityAction, ActivityEntityType } from "@/lib/schemas/activities";
 import { isActivityAction, isActivityEntityType } from "@/lib/schemas/activities";
@@ -132,6 +136,19 @@ function ChartSkeleton({ height = 300 }: { height?: number }) {
   );
 }
 
+function ChartErrorState({ error }: { error: unknown }) {
+  const message = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.statistics);
+
+  return (
+    <div
+      className="flex items-center justify-center h-[300px] text-muted-foreground"
+      role="alert"
+    >
+      {message}
+    </div>
+  );
+}
+
 // ============================================================================
 // TREND CHART
 // ============================================================================
@@ -153,7 +170,7 @@ export function ActivityTrendChart({
   dateTo,
   className,
 }: ActivityTrendChartProps) {
-  const { data, isLoading, isError } = useActivityStats({
+  const { data, isLoading, isError, error } = useActivityStats({
     dateFrom,
     dateTo,
     groupBy: "day",
@@ -164,11 +181,7 @@ export function ActivityTrendChart({
   }
 
   if (isError) {
-    return (
-      <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-        Failed to load trend data
-      </div>
-    );
+    return <ChartErrorState error={error} />;
   }
 
   // Transform stats array to chart data (key is the date for day groupBy)
@@ -240,7 +253,7 @@ export function ActionDistributionChart({
   dateTo,
   className,
 }: ActionDistributionChartProps) {
-  const { data, isLoading, isError } = useActivityStats({
+  const { data, isLoading, isError, error } = useActivityStats({
     dateFrom,
     dateTo,
     groupBy: "action",
@@ -251,11 +264,7 @@ export function ActionDistributionChart({
   }
 
   if (isError) {
-    return (
-      <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-        Failed to load distribution data
-      </div>
-    );
+    return <ChartErrorState error={error} />;
   }
 
   // Transform stats array to chart data (key is the action type)
@@ -331,7 +340,7 @@ export function EntityBreakdownChart({
   dateTo,
   className,
 }: EntityBreakdownChartProps) {
-  const { data, isLoading, isError } = useActivityStats({
+  const { data, isLoading, isError, error } = useActivityStats({
     dateFrom,
     dateTo,
     groupBy: "entityType",
@@ -342,11 +351,7 @@ export function EntityBreakdownChart({
   }
 
   if (isError) {
-    return (
-      <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-        Failed to load entity data
-      </div>
-    );
+    return <ChartErrorState error={error} />;
   }
 
   // Transform stats array to chart data (key is the entity type)
