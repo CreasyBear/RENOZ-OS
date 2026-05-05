@@ -24,6 +24,7 @@ import { WinLossAnalysis } from './win-loss-analysis';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
+import { formatWinLossAnalysisReadError } from './win-loss-report-errors';
 
 // ============================================================================
 // HELPERS
@@ -70,6 +71,8 @@ export function WinLossAnalysisContainer() {
   // Fetch competitors
   const competitorsQuery = useCompetitors({ dateFrom, dateTo });
   const hasAnyData = Boolean(analysisQuery.data || competitorsQuery.data);
+  const readError = analysisQuery.error ?? competitorsQuery.error;
+  const readErrorMessage = readError ? formatWinLossAnalysisReadError(readError) : null;
 
   const createScheduledReport = useCreateScheduledReport();
   const generateReport = useGenerateReport();
@@ -125,10 +128,7 @@ export function WinLossAnalysisContainer() {
             {hasAnyData ? 'Showing cached win/loss data' : 'Win/loss analysis unavailable'}
           </AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>
-              {(analysisQuery.error ?? competitorsQuery.error)?.message ??
-                'Win/loss analysis is temporarily unavailable. Please refresh and try again.'}
-            </span>
+            <span>{readErrorMessage}</span>
             <Button
               variant="outline"
               size="sm"
