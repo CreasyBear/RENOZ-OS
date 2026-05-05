@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ import {
 } from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
 import type { FinancialSummarySearchParams } from '@/lib/schemas/reports/financial-summary';
+import { formatFinancialSummaryReadError } from './financial-summary-report-errors';
 
 const PERIOD_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -93,11 +95,12 @@ export function FinancialSummaryPage() {
 
   const hasUrlDateRange = !!search.dateFrom && !!search.dateTo;
 
-  const { data, isLoading } = useFinancialSummaryReport({
+  const { data, isLoading, error, refetch } = useFinancialSummaryReport({
     dateFrom,
     dateTo,
     periodType,
   });
+  const readErrorMessage = error ? formatFinancialSummaryReadError(error) : null;
   const createScheduledReport = useCreateScheduledReport();
   const exportReport = useExportFinancialSummaryReport();
   const { formatCurrency } = useOrgFormat();
@@ -193,6 +196,30 @@ export function FinancialSummaryPage() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+          <AlertTriangle className="h-10 w-10 text-amber-500" aria-hidden />
+          <div>
+            <h3 className="text-base font-medium">Financial summary unavailable</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {readErrorMessage}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!data) {
     return (
       <Card>
@@ -207,6 +234,24 @@ export function FinancialSummaryPage() {
 
   return (
     <div className="space-y-6">
+      {error ? (
+        <Alert>
+          <AlertTitle>Showing cached financial summary</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-3">
+            <span>{readErrorMessage}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
