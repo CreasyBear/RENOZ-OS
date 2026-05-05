@@ -2,9 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
+import { formatServiceMutationError } from './_mutation-errors';
 import type {
   ListServiceSystemsInput,
   ListServiceLinkageReviewsInput,
@@ -127,9 +128,7 @@ export function useResolveServiceLinkageReview() {
       toast.success('Service linkage review resolved');
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to resolve service linkage review'
-      );
+      toast.error(formatServiceMutationError(error, 'Failed to resolve service linkage review'));
     },
   });
 }
@@ -146,13 +145,15 @@ export function useTransferServiceSystemOwnership() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.serviceSystems.detail(result.serviceSystemId),
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.statusCounts() });
+      for (const warrantyId of result.linkedWarrantyIds ?? []) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(warrantyId) });
+      }
       toast.success('System ownership transferred successfully');
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Failed to transfer system ownership'
-      );
+      toast.error(formatServiceMutationError(error, 'Failed to transfer system ownership'));
     },
   });
 }

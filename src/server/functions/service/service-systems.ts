@@ -97,6 +97,7 @@ export const transferServiceSystemOwnership = createServerFn({ method: 'POST' })
         success: true,
         serviceSystemId: data.serviceSystemId,
         newOwner: result.newOwner,
+        linkedWarrantyIds,
       };
     });
   });
