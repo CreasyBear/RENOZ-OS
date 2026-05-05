@@ -28,6 +28,15 @@ describe('service read state contract', () => {
     expect(hook).toContain('fallbackMessage: SERVICE_READ_MESSAGES.linkageReviewsList');
     expect(hook).toContain('fallbackMessage: SERVICE_READ_MESSAGES.linkageReviewDetail');
     expect(hook).toContain('notFoundMessage: SERVICE_READ_MESSAGES.linkageReviewNotFound');
+    expect(formatter).toContain('activityHistory');
+
+    const systemDetailContainer = read(
+      'src/components/domain/service/containers/service-system-detail-container.tsx'
+    );
+    expect(systemDetailContainer).toContain(
+      'new Error(formatServiceReadError(activitiesError, SERVICE_READ_MESSAGES.activityHistory))'
+    );
+    expect(systemDetailContainer).toContain('activitiesError={activityHistoryError}');
 
     for (const source of containers) {
       expect(source).toContain('formatServiceReadError');

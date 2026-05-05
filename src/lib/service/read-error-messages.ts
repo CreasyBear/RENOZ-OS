@@ -9,6 +9,8 @@ export const SERVICE_READ_MESSAGES = {
   linkageReviewDetail:
     'Service linkage review details are temporarily unavailable. Please refresh and try again.',
   linkageReviewNotFound: 'The requested service linkage review could not be found.',
+  activityHistory:
+    'Service system history is temporarily unavailable. Please refresh and try again.',
 } as const;
 
 export function formatServiceReadError(error: unknown, fallbackMessage: string): string {

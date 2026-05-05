@@ -35,6 +35,9 @@ export function ServiceSystemDetailContainer({
     entityId: serviceSystemId,
     enabled: !!serviceSystemId,
   });
+  const activityHistoryError = activitiesError
+    ? new Error(formatServiceReadError(activitiesError, SERVICE_READ_MESSAGES.activityHistory))
+    : null;
 
   if (isLoading) return <SupportDetailSkeleton />;
 
@@ -60,7 +63,7 @@ export function ServiceSystemDetailContainer({
         serviceSystem={data}
         activities={activities ?? []}
         activitiesLoading={activitiesLoading}
-        activitiesError={activitiesError}
+        activitiesError={activityHistoryError}
         onTransferOwnership={() => setDialogOpen(true)}
         isTransferring={transferMutation.isPending}
       />

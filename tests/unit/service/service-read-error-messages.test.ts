@@ -40,4 +40,21 @@ describe('service read error messages', () => {
       'Fallback copy'
     );
   });
+
+  it('formats service activity history through the same safe read contract', () => {
+    const normalized = normalizeReadQueryError(
+      { statusCode: 500, code: 'INTERNAL_ERROR', message: 'audit table timeout' },
+      {
+        contractType: 'always-shaped',
+        fallbackMessage: SERVICE_READ_MESSAGES.activityHistory,
+      }
+    );
+
+    expect(formatServiceReadError(normalized, 'Fallback copy')).toBe(
+      SERVICE_READ_MESSAGES.activityHistory
+    );
+    expect(formatServiceReadError(new Error('audit table timeout'), 'Fallback copy')).toBe(
+      'Fallback copy'
+    );
+  });
 });
