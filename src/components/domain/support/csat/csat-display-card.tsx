@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { StarRating, RatingBadge } from './star-rating';
 import { CsatEntryDialog } from './csat-entry-dialog';
 import { toast } from '@/hooks/_shared/use-toast';
@@ -71,6 +72,8 @@ interface CsatDisplayCardProps {
   /** From route container (useIssueFeedback). */
   isLoading?: boolean;
   /** From route container (useIssueFeedback). */
+  error?: Error | null;
+  /** From route container (useIssueFeedback). */
   onRefresh?: () => void;
   /** From route container (useGenerateFeedbackToken). */
   onGenerateFeedbackLink?: (issueId: string) => Promise<{ feedbackUrl: string }>;
@@ -94,6 +97,7 @@ export function CsatDisplayCard({
   issueStatus,
   feedback,
   isLoading,
+  error,
   onRefresh,
   onGenerateFeedbackLink,
   isGeneratingLink,
@@ -148,6 +152,34 @@ export function CsatDisplayCard({
   }
 
   const isResolved = issueStatus === 'resolved' || issueStatus === 'closed';
+
+  if (error && !feedback) {
+    return (
+      <Card className={className}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="text-muted-foreground h-4 w-4" />
+            Customer Satisfaction
+          </CardTitle>
+          <CardDescription>Feedback status unavailable</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <MessageSquare className="h-4 w-4" />
+            <AlertTitle>Unable to load customer feedback</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <span className="block">{error.message}</span>
+              {onRefresh ? (
+                <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
+                  Retry
+                </Button>
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (feedback && feedback.rating > 0) {
     return (

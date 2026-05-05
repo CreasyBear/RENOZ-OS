@@ -32,6 +32,7 @@ import { IssueAlerts, IssueDetailsCard, IssueOverviewTab } from './issue-display
 import { getIssueHeaderActions } from './issue-header-actions';
 import { IssueRelatedTab } from './issue-related-tab';
 import { getIssueDetailActionPolicy } from './issue-detail-action-policy';
+import { CsatDisplayCard } from '@/components/domain/support/csat';
 import type {
   IssueStatus,
   IssuePriority,
@@ -44,6 +45,7 @@ import type {
   EscalationDialogMode,
   IssueDetailActions,
 } from '@/hooks/support';
+import type { CsatResponseResponse } from '@/lib/schemas/support/csat-responses';
 
 // ============================================================================
 // CONSTANTS
@@ -90,6 +92,26 @@ interface IssueDetailViewProps {
   isDeEscalatePending: boolean;
   /** Handler to open activity logging dialog */
   onLogActivity?: () => void;
+  /** From IssueDetailContainer (useIssueFeedback). */
+  csatFeedback?: CsatResponseResponse | null;
+  /** From IssueDetailContainer (useIssueFeedback). */
+  isCsatFeedbackLoading?: boolean;
+  /** From IssueDetailContainer (useIssueFeedback). */
+  csatFeedbackError?: Error | null;
+  /** From IssueDetailContainer (useIssueFeedback). */
+  onRefreshCsatFeedback?: () => void;
+  /** From IssueDetailContainer (useGenerateFeedbackToken). */
+  onGenerateFeedbackLink?: (issueId: string) => Promise<{ feedbackUrl: string }>;
+  /** From IssueDetailContainer (useGenerateFeedbackToken). */
+  isGeneratingFeedbackLink?: boolean;
+  /** From IssueDetailContainer (useSubmitInternalFeedback). */
+  onSubmitCsatFeedback?: (payload: {
+    issueId: string;
+    rating: number;
+    comment: string | null;
+  }) => Promise<void>;
+  /** From IssueDetailContainer (useSubmitInternalFeedback). */
+  isSubmittingCsatFeedback?: boolean;
 }
 
 // ============================================================================
@@ -116,6 +138,14 @@ export function IssueDetailView({
   isEscalatePending,
   isDeEscalatePending,
   onLogActivity,
+  csatFeedback,
+  isCsatFeedbackLoading,
+  csatFeedbackError,
+  onRefreshCsatFeedback,
+  onGenerateFeedbackLink,
+  isGeneratingFeedbackLink,
+  onSubmitCsatFeedback,
+  isSubmittingCsatFeedback,
 }: IssueDetailViewProps) {
   const slaStatus = issue.slaMetrics
     ? issue.slaMetrics.responseBreached || issue.slaMetrics.resolutionBreached
@@ -224,6 +254,21 @@ export function IssueDetailView({
               isPending={isUpdatePending || isDeletePending || isDeEscalatePending}
             />
             <IssueDetailsCard issue={issue} typeLabel={TYPE_LABELS[issue.type]} />
+            {onSubmitCsatFeedback ? (
+              <CsatDisplayCard
+                issueId={issue.id}
+                issueTitle={issue.title}
+                issueStatus={issue.status}
+                feedback={csatFeedback ?? null}
+                isLoading={isCsatFeedbackLoading}
+                error={csatFeedbackError}
+                onRefresh={onRefreshCsatFeedback}
+                onGenerateFeedbackLink={onGenerateFeedbackLink}
+                isGeneratingLink={isGeneratingFeedbackLink}
+                onSubmitFeedback={onSubmitCsatFeedback}
+                isSubmittingFeedback={isSubmittingCsatFeedback}
+              />
+            ) : null}
             {customerId && (
               <IssueCustomerContextSidebar
                 customerId={customerId}

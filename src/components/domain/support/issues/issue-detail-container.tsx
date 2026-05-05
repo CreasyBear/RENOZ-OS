@@ -12,7 +12,12 @@
  */
 
 import { useEffect } from 'react';
-import { useIssueDetail } from '@/hooks/support';
+import {
+  useGenerateFeedbackToken,
+  useIssueDetail,
+  useIssueFeedback,
+  useSubmitInternalFeedback,
+} from '@/hooks/support';
 import { useTrackView } from '@/hooks/search';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
@@ -55,6 +60,15 @@ export function IssueDetailContainer({
     onDeEscalate,
     isDeEscalatePending,
   } = useIssueDetail(issueId);
+
+  const {
+    data: csatFeedback,
+    isLoading: isCsatFeedbackLoading,
+    error: csatFeedbackError,
+    refetch: refetchCsatFeedback,
+  } = useIssueFeedback({ issueId });
+  const generateFeedbackTokenMutation = useGenerateFeedbackToken();
+  const submitInternalFeedbackMutation = useSubmitInternalFeedback();
 
   const { onLogActivity, loggerProps } = useEntityActivityLogging({
     entityType: 'issue',
@@ -100,6 +114,20 @@ export function IssueDetailContainer({
   const handleTabChange = (tab: string) => {
     onTabChangeToUrl?.(tab);
   };
+  const handleGenerateFeedbackLink = async (targetIssueId: string) => {
+    const result = await generateFeedbackTokenMutation.mutateAsync({
+      issueId: targetIssueId,
+      expiresInDays: 7,
+    });
+    return { feedbackUrl: result.feedbackUrl };
+  };
+  const handleSubmitCsatFeedback = async (payload: {
+    issueId: string;
+    rating: number;
+    comment: string | null;
+  }) => {
+    await submitInternalFeedbackMutation.mutateAsync(payload);
+  };
 
   return (
     <>
@@ -123,6 +151,16 @@ export function IssueDetailContainer({
         isEscalatePending={isEscalatePending}
         isDeEscalatePending={isDeEscalatePending}
         onLogActivity={onLogActivity}
+        csatFeedback={csatFeedback ?? null}
+        isCsatFeedbackLoading={isCsatFeedbackLoading}
+        csatFeedbackError={csatFeedbackError instanceof Error ? csatFeedbackError : null}
+        onRefreshCsatFeedback={() => {
+          void refetchCsatFeedback();
+        }}
+        onGenerateFeedbackLink={handleGenerateFeedbackLink}
+        isGeneratingFeedbackLink={generateFeedbackTokenMutation.isPending}
+        onSubmitCsatFeedback={handleSubmitCsatFeedback}
+        isSubmittingCsatFeedback={submitInternalFeedbackMutation.isPending}
       />
 
       <EntityActivityLogger {...loggerProps} />
