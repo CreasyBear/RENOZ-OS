@@ -700,14 +700,18 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
         const itemAllocations =
           itemAllocationsRaw && itemAllocationsRaw.length > 0
             ? itemAllocationsRaw
-            : ((lineItem.allocatedSerialNumbers as string[] | null) ?? []).map((sn) => ({
-                serializedItemId: '',
-                serialNumber: normalizeSerial(sn),
-                currentInventoryId: null,
-              }));
+            : [];
 
         let serialsToRelease: string[];
         if (isSerialized && unpickItem.qtyToUnpick > 0) {
+          if (itemAllocations.length === 0) {
+            throw new ValidationError('Serialized allocation records are unavailable', {
+              serialNumbersToRelease: [
+                `Line '${lineItem.description}' has no canonical serialized allocation records. Repair serialized allocations before unpicking this order.`,
+              ],
+            });
+          }
+
           if (unpickItem.serialNumbersToRelease && unpickItem.serialNumbersToRelease.length > 0) {
             const requested = unpickItem.serialNumbersToRelease.map((s) => normalizeSerial(s));
             const duplicates = findDuplicateSerials(requested);
@@ -763,46 +767,33 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
 
         for (const sn of serialsToRelease) {
           const currentAllocation = itemAllocations.find((a) => a.serialNumber === sn);
-          let serializedItemId = currentAllocation?.serializedItemId;
-          let currentInventoryId = currentAllocation?.currentInventoryId ?? null;
-          if (!serializedItemId && lineItem.productId) {
-            const [si] = await tx
-              .select({
-                id: serializedItems.id,
-                currentInventoryId: serializedItems.currentInventoryId,
-              })
-              .from(serializedItems)
-              .where(
-                and(
-                  eq(serializedItems.organizationId, ctx.organizationId),
-                  eq(serializedItems.productId, lineItem.productId),
-                  eq(serializedItems.serialNumberNormalized, sn)
-                )
-              )
-              .limit(1);
-            serializedItemId = si?.id;
-            currentInventoryId = si?.currentInventoryId ?? null;
+          if (!currentAllocation?.serializedItemId) {
+            throw new ValidationError('Serialized allocation record not found', {
+              serialNumbersToRelease: [
+                `Serial '${sn}' is missing its canonical serialized allocation record. Repair serialized allocations before unpicking this order.`,
+              ],
+            });
           }
+          const serializedItemId = currentAllocation.serializedItemId;
+          const currentInventoryId = currentAllocation.currentInventoryId ?? null;
           if (currentInventoryId) {
             affectedInventoryIds.add(currentInventoryId);
           }
-          if (serializedItemId) {
-            touchesSerializedInventory = true;
-            await releaseSerializedItemAllocation(tx, {
-              organizationId: ctx.organizationId,
-              serializedItemId,
-              userId: ctx.user.id,
-            });
-            await addSerializedItemEvent(tx, {
-              organizationId: ctx.organizationId,
-              serializedItemId,
-              eventType: 'deallocated',
-              entityType: 'order_line_item',
-              entityId: unpickItem.lineItemId,
-              notes: `Unpicked from order ${data.orderId}`,
-              userId: ctx.user.id,
-            });
-          }
+          touchesSerializedInventory = true;
+          await releaseSerializedItemAllocation(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId,
+            userId: ctx.user.id,
+          });
+          await addSerializedItemEvent(tx, {
+            organizationId: ctx.organizationId,
+            serializedItemId,
+            eventType: 'deallocated',
+            entityType: 'order_line_item',
+            entityId: unpickItem.lineItemId,
+            notes: `Unpicked from order ${data.orderId}`,
+            userId: ctx.user.id,
+          });
         }
 
         const [updated] = await tx

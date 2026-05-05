@@ -91,4 +91,14 @@ describe('order picking serialization requirements', () => {
     expect(source).not.toContain('if(!inventoryRecord)continue;');
     expect(source).not.toContain('if(!serializedItemId)continue;');
   });
+
+  it('keeps unpicking from reconstructing or skipping serialized allocations', () => {
+    const source = compact(read('src/server/functions/orders/order-picking.ts'));
+
+    expect(source).toContain('Serializedallocationrecordsareunavailable');
+    expect(source).toContain('thrownewValidationError(\'Serializedallocationrecordnotfound\'');
+    expect(source).not.toContain('serializedItemId:\'\'');
+    expect(source).not.toContain('if(serializedItemId){');
+    expect(source).not.toContain('eq(serializedItems.productId,lineItem.productId),eq(serializedItems.serialNumberNormalized,sn)');
+  });
 });
