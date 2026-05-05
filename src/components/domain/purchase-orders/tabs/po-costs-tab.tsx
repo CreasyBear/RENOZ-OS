@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormatAmount } from '@/components/shared/format';
 import { toastSuccess, toastError } from '@/hooks';
+import { formatPurchaseOrderMutationError } from '@/hooks/purchase-orders/_mutation-errors';
 import {
   usePurchaseOrderCosts,
   useAllocatedCosts,
@@ -212,8 +213,13 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
         );
       }
       setDialogOpen(false);
-    } catch {
-      toastError(editingCostId ? 'Failed to update cost' : 'Failed to add cost');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(
+          error,
+          editingCostId ? 'Failed to update cost' : 'Failed to add cost'
+        )
+      );
     }
   }, [formData, editingCostId, poId, addCost, updateCost, formatCurrency]);
 
@@ -223,8 +229,8 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
       await removeCost.mutateAsync({ costId: deleteConfirmId });
       toastSuccess('Cost removed');
       setDeleteConfirmId(null);
-    } catch {
-      toastError('Failed to remove cost');
+    } catch (error) {
+      toastError(formatPurchaseOrderMutationError(error, 'Failed to remove cost'));
     }
   }, [deleteConfirmId, removeCost]);
 
