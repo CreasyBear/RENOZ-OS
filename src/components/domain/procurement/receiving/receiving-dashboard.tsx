@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import { FALLBACK_SUPPLIER_NAME } from '@/lib/constants/procurement';
 import { ReceivingStats, type ReceivingStatsProps } from './receiving-stats';
+import { getReceivingDashboardErrorMessage } from './receiving-dashboard-error-messages';
 
 // ============================================================================
 // TYPES
@@ -374,7 +375,7 @@ export const ReceivingDashboard = memo(function ReceivingDashboard({
         </div>
         <ErrorState
           title="Failed to load receiving data"
-          message={error.message || 'Unable to load purchase orders awaiting receipt.'}
+          message={getReceivingDashboardErrorMessage(error)}
           onRetry={onRefetch}
         />
       </div>
