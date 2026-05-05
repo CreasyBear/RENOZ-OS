@@ -34,6 +34,10 @@ import {
 } from '@/lib/schemas/reports/custom-reports';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 
+const SUPPORTED_CUSTOM_REPORT_SOURCES = ['procurement'] as const;
+type CustomReportSource = (typeof SUPPORTED_CUSTOM_REPORT_SOURCES)[number];
+type ReportDefinitionFilters = Record<string, string | number | boolean>;
+
 // ============================================================================
 // CUSTOM REPORTS CRUD
 // ============================================================================
@@ -275,13 +279,9 @@ export const executeCustomReport = createServerFn({ method: 'POST' })
         throw new ValidationError('Invalid report definition structure');
       }
 
-      const filters = (definition.filters ?? {}) as Record<string, string | number | boolean>;
-      const source = filters.source;
+      const filters = (definition.filters ?? {}) as ReportDefinitionFilters;
+      const source = resolveCustomReportSource(filters);
       const reportType = filters.reportType;
-
-      if (!source) {
-        throw new ValidationError('Report source not specified in definition');
-      }
 
       if (source === 'procurement') {
         // Validate and parse dates
@@ -448,13 +448,7 @@ export const executeCustomReport = createServerFn({ method: 'POST' })
         };
       }
 
-      // Unknown source - return empty result
-      return {
-        columns: definition.columns ?? [],
-        rows: [],
-        totalCount: 0,
-        generatedAt: new Date(),
-      };
+      return assertUnsupportedCustomReportSource(source);
     } catch (error) {
       // Re-throw known errors
       if (error instanceof NotFoundError || error instanceof ValidationError) {
@@ -464,6 +458,33 @@ export const executeCustomReport = createServerFn({ method: 'POST' })
       throw new Error(`Failed to execute custom report: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+function resolveCustomReportSource(filters: ReportDefinitionFilters): CustomReportSource {
+  const source = filters.source;
+
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    throw new ValidationError('Report source is missing from this custom report definition.', {
+      source: ['Report source is missing from this custom report definition. Recreate the report or contact support.'],
+    });
+  }
+
+  const normalizedSource = source.trim();
+  if (isSupportedCustomReportSource(normalizedSource)) {
+    return normalizedSource;
+  }
+
+  throw new ValidationError('This custom report source is no longer supported.', {
+    source: ['This custom report source is no longer supported. Recreate the report or contact support.'],
+  });
+}
+
+function isSupportedCustomReportSource(source: string): source is CustomReportSource {
+  return (SUPPORTED_CUSTOM_REPORT_SOURCES as readonly string[]).includes(source);
+}
+
+function assertUnsupportedCustomReportSource(source: never): never {
+  throw new ValidationError(`Unsupported custom report source: ${source}`);
+}
 
 function resolveColumns(columns: string[] | undefined, fallback: string[]) {
   if (!columns || columns.length === 0) return fallback;
