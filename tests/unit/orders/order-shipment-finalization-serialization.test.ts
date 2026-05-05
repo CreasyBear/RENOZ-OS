@@ -1,0 +1,29 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8');
+}
+
+function compact(source: string): string {
+  return source.replace(/\s+/g, '');
+}
+
+describe('shipment finalization serialization requirements', () => {
+  it('keeps shipment finalization from defaulting missing product serialization metadata', () => {
+    const source = compact(read('src/server/functions/orders/order-shipments-finalization.ts'));
+
+    expect(source).toContain(
+      "getOrderLineSerializationRequirement({id:lineItemWithProduct.id,productId:lineItemWithProduct.productId,description:lineItemWithProduct.productName??item.orderLineItemId,},productSerialization,'shipping')"
+    );
+    expect(source).toContain(
+      "getOrderLineSerializationRequirement({id:lineItemWithProduct.id,productId:lineItemWithProduct.productId,description:lineItemWithProduct.productName??item.orderLineItemId,},productSerialization,'reopeningashipmentfor')"
+    );
+    expect(source).not.toContain('if(!lineItemWithProduct?.productId){continue;}');
+    expect(source).not.toContain('if(!lineItemWithProduct?.productId||!shouldReverseShippedQuantities){continue;}');
+    expect(source).not.toContain('!lineItemWithProduct.isSerialized');
+  });
+});

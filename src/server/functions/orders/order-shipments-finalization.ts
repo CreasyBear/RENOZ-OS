@@ -46,6 +46,7 @@ import {
   planReservedInventoryConsumption,
   readActiveReservationsForLineItems,
 } from './order-inventory-reservations';
+import { getOrderLineSerializationRequirement } from './order-line-serialization';
 
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
@@ -173,6 +174,7 @@ export async function markShipmentAsShipped(
 
       const [lineItemWithProduct] = await tx
         .select({
+          id: orderLineItems.id,
           productId: orderLineItems.productId,
           productName: orderLineItems.description,
           isSerialized: products.isSerialized,
@@ -189,14 +191,33 @@ export async function markShipmentAsShipped(
         .where(eq(orderLineItems.id, item.orderLineItemId))
         .limit(1);
 
-      if (!lineItemWithProduct?.productId) {
+      if (!lineItemWithProduct) {
+        throw new ValidationError('Line item not found or does not belong to order', {
+          [item.orderLineItemId]: ['Line item not found'],
+        });
+      }
+      if (!lineItemWithProduct.productId) {
         continue;
       }
+      const productSerialization =
+        typeof lineItemWithProduct.isSerialized === 'boolean'
+          ? { isSerialized: lineItemWithProduct.isSerialized }
+          : null;
+      const isSerialized = getOrderLineSerializationRequirement(
+        {
+          id: lineItemWithProduct.id,
+          productId: lineItemWithProduct.productId,
+          description: lineItemWithProduct.productName ?? item.orderLineItemId,
+        },
+        productSerialization,
+        'shipping'
+      );
+
       if (Number(item.quantity) > 0) {
         affectedProductIds.add(lineItemWithProduct.productId);
       }
 
-      if (lineItemWithProduct.isSerialized) {
+      if (isSerialized) {
         const rawSerials = (item.serialNumbers as string[] | null) ?? [];
         const shipmentSerials = rawSerials
           .map((serial) => serial.trim().toUpperCase())
@@ -661,6 +682,7 @@ export async function reopenShipmentHandler({
 
       const [lineItemWithProduct] = await tx
         .select({
+          id: orderLineItems.id,
           productId: orderLineItems.productId,
           productName: orderLineItems.description,
           isSerialized: products.isSerialized,
@@ -677,9 +699,31 @@ export async function reopenShipmentHandler({
         .where(eq(orderLineItems.id, item.orderLineItemId))
         .limit(1);
 
-      if (!lineItemWithProduct?.productId || !shouldReverseShippedQuantities) {
+      if (!shouldReverseShippedQuantities) {
         continue;
       }
+      if (!lineItemWithProduct) {
+        throw new ValidationError('Line item not found or does not belong to order', {
+          [item.orderLineItemId]: ['Line item not found'],
+        });
+      }
+      if (!lineItemWithProduct.productId) {
+        continue;
+      }
+      const productSerialization =
+        typeof lineItemWithProduct.isSerialized === 'boolean'
+          ? { isSerialized: lineItemWithProduct.isSerialized }
+          : null;
+      const isSerialized = getOrderLineSerializationRequirement(
+        {
+          id: lineItemWithProduct.id,
+          productId: lineItemWithProduct.productId,
+          description: lineItemWithProduct.productName ?? item.orderLineItemId,
+        },
+        productSerialization,
+        'reopening a shipment for'
+      );
+
       if (Number(item.quantity) > 0) {
         affectedProductIds.add(lineItemWithProduct.productId);
       }
@@ -750,7 +794,7 @@ export async function reopenShipmentHandler({
           createdBy: ctx.user.id,
         });
 
-        if (!lineItemWithProduct.isSerialized) {
+        if (!isSerialized) {
           await tx
             .update(inventory)
             .set({
