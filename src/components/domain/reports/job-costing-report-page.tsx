@@ -49,6 +49,7 @@ import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv
 import type { JobProfitabilityResult } from '@/lib/schemas';
 import type { JobCostingReportSearch } from '@/lib/schemas/reports/job-costing';
 import type { NavigateFn } from '@/hooks/filters';
+import { formatJobCostingReportReadError } from './job-costing-report-errors';
 
 type JobCostingFilterState = {
   period: string;
@@ -322,6 +323,7 @@ export function JobCostingReportPage() {
     limit: 100,
     offset: 0,
   });
+  const reportReadErrorMessage = error ? formatJobCostingReportReadError(error) : null;
 
   const createScheduledReport = useCreateScheduledReport();
   const generateReport = useGenerateReport();
@@ -578,7 +580,10 @@ export function JobCostingReportPage() {
   if (error && !reportData) {
     return (
       <ErrorState
-        message={error instanceof Error ? error.message : 'Failed to load report'}
+        message={
+          reportReadErrorMessage ??
+          'Job costing report is temporarily unavailable. Please refresh and try again.'
+        }
         onRetry={() => {
           void refetch();
         }}
@@ -619,11 +624,7 @@ export function JobCostingReportPage() {
         <Alert className="mb-6">
           <AlertTitle>Showing cached job costing data</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>
-              {error instanceof Error
-                ? error.message
-                : 'Job costing report is temporarily unavailable. Please refresh and try again.'}
-            </span>
+            <span>{reportReadErrorMessage}</span>
             <Button
               variant="outline"
               size="sm"
