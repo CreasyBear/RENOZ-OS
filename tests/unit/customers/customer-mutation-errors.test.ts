@@ -49,6 +49,7 @@ describe('customer mutation error formatting', () => {
 
   it('keeps customer list mutation feedback on the formatter contract', () => {
     const list = read('src/components/domain/customers/customers-list-container.tsx');
+    const detail = read('src/hooks/customers/use-customer-detail.ts');
     const index = read('src/hooks/customers/index.ts');
 
     expect(index).toContain("export { formatCustomerMutationError } from './_mutation-errors';");
@@ -63,5 +64,9 @@ describe('customer mutation error formatting', () => {
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to assign tags"');
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to update health score"');
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to delete customers"');
+
+    expect(detail).toContain("formatCustomerMutationError(error, 'Unable to delete customer.')");
+    expect(detail).not.toContain('error instanceof Error && error.message');
+    expect(detail).not.toContain("'Failed to delete customer'");
   });
 });

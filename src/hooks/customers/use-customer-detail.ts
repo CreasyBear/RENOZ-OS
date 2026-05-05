@@ -17,6 +17,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useCustomerNavigation } from './use-customer-navigation';
 import { useCustomer, useDeleteCustomer } from './use-customers';
+import { formatCustomerMutationError } from './_mutation-errors';
 import { mergeCustomerDetailWithOrderSummary } from './customer-detail-metrics';
 import { getSummaryState, type SummaryState } from '@/lib/metrics/summary-health';
 import {
@@ -249,10 +250,7 @@ export function useCustomerDetail(
         setDeleteDialogOpen(false);
         navigateToList();
       } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : 'Failed to delete customer';
+        const message = formatCustomerMutationError(error, 'Unable to delete customer.');
         toastError(message);
         throw error instanceof Error ? error : new Error('Delete failed');
       }
