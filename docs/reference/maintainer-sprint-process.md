@@ -238,15 +238,21 @@ Gates are evidence, not proof of quality.
 
 Run the narrowest meaningful gates first, then broader gates when risk justifies them.
 
-Common checks:
+Default closeout checks:
 
 ```bash
 bun run lint
-bun run lint:reliability
 bun run typecheck
-bun run test:unit
-bun run build
+<focused test command for the touched workflow>
+git diff --check
 ```
+
+Broader gates should be risk-selected:
+
+- Run `bun run test:unit` or `bun run build` when the slice touches shared contracts, build-time behavior, route loading, or a cross-domain workflow.
+- Run `bun run lint:reliability` when the slice touches one of its guarded contracts: route casts, pending dialog guards, read-path query guards, or serialized read auto-upsert policy.
+- Run `bun run reliability:serialized-gates` only when the diff touches serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or a related repair script. Serialized gates are a closed baseline, not a default evidence tax for unrelated slices.
+- Run finance, document, release, or deploy gates only when the slice touches those contracts or when preparing a release.
 
 If local `bun run` is broken, run the underlying direct tool commands and record the reason.
 

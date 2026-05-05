@@ -9,7 +9,7 @@
 
 import { useEffect, useState, startTransition } from 'react';
 import { z } from 'zod';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import { X } from 'lucide-react';
 import {
   Dialog,
@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { useConfirmation } from '@/hooks';
+import { formatSupportMutationError } from '@/hooks/support';
 import {
   TextField,
   TextareaField,
@@ -103,7 +104,7 @@ export function KbArticleFormDialog({
         onOpenChange(false);
         form.reset();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to save article';
+        const message = formatSupportMutationError(error, 'Failed to save article');
         if (message.toLowerCase().includes('slug') && message.toLowerCase().includes('exist')) {
           setSlugConflictError(message);
         }

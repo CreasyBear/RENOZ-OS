@@ -36,10 +36,11 @@ import {
   useUpdateKbArticle,
   useRecordArticleFeedback,
   useOptimisticFeedbackDeltas,
+  formatSupportMutationError,
 } from '@/hooks/support';
 import { useDebounce } from '@/hooks/_shared';
 import { useConfirmation } from '@/hooks';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import {
   DEFAULT_KB_ARTICLE_SORT_FIELD,
   isValidKbArticleSortField,
@@ -70,6 +71,19 @@ export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
     </PageLayout>
   ),
 });
+
+const KB_ARTICLE_ERROR_MESSAGES = {
+  NOT_FOUND: 'The knowledge base article could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage knowledge base articles.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing articles.',
+  RATE_LIMIT: 'Too many article updates were attempted. Wait a moment and retry.',
+};
+
+function formatKbArticleMutationError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: KB_ARTICLE_ERROR_MESSAGES,
+  });
+}
 
 function KnowledgeBasePage() {
   const navigate = useNavigate({ from: Route.fullPath });
@@ -327,7 +341,7 @@ function KnowledgeBasePage() {
         const result = await deleteArticleMutation.mutateAsync(article.id);
         toast.success(result.message ?? 'Article deleted successfully');
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete article');
+        toast.error(formatKbArticleMutationError(error, 'Failed to delete article'));
       }
     }
   };
@@ -369,7 +383,12 @@ function KnowledgeBasePage() {
         toast.success('Article created successfully');
       }
     } catch (error) {
-      toast.error(editingArticle ? 'Failed to update article' : 'Failed to create article');
+      toast.error(
+        formatKbArticleMutationError(
+          error,
+          editingArticle ? 'Failed to update article' : 'Failed to create article'
+        )
+      );
       throw error;
     }
   };
