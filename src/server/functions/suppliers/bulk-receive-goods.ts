@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { receiveGoods } from './receive-goods';
 import { products } from 'drizzle/schema/products/products';
@@ -110,8 +111,14 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         // Fetch PO details
         const poDetails = await getPurchaseOrder({ data: { id: poId } });
 
-        if (!poDetails || !poDetails.items) {
-          throw new Error('Purchase order not found or has no items');
+        if (!poDetails) {
+          throw new NotFoundError('Purchase order not found', 'purchaseOrder');
+        }
+
+        if (!poDetails.items) {
+          throw new ValidationError(
+            'Purchase order receiving details are unavailable. Refresh and try again.'
+          );
         }
 
         // Get pending items

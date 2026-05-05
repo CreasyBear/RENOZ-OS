@@ -1,0 +1,26 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+
+function compact(path: string): string {
+  return readFileSync(join(root, path), 'utf8').replace(/\s+/g, '');
+}
+
+describe('bulk receive goods row failure contract', () => {
+  it('keeps defensive row failures typed before normalization', () => {
+    const source = compact('src/server/functions/suppliers/bulk-receive-goods.ts');
+
+    expect(source).toContain(
+      "import{NotFoundError,ValidationError}from'@/lib/server/errors';"
+    );
+    expect(source).toContain(
+      "if(!poDetails){thrownewNotFoundError('Purchaseordernotfound','purchaseOrder');}"
+    );
+    expect(source).toContain(
+      "if(!poDetails.items){thrownewValidationError('Purchaseorderreceivingdetailsareunavailable.Refreshandtryagain.');}"
+    );
+    expect(source).not.toContain("thrownewError('Purchaseordernotfoundorhasnoitems')");
+  });
+});
