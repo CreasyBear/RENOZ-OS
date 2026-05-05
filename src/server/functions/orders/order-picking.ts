@@ -40,6 +40,7 @@ import {
   releaseNonSerializedPickInventory,
   reserveNonSerializedPickInventory,
 } from './order-inventory-reservations';
+import { getOrderPickingSerializationRequirement } from './order-picking-serialization';
 
 // ============================================================================
 // PICK ORDER ITEMS
@@ -251,7 +252,11 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
         }
 
         const { lineItem, product } = lineItemData;
-        const isSerialized = product?.isSerialized ?? false;
+        const isSerialized = getOrderPickingSerializationRequirement(
+          lineItem,
+          product,
+          'picking'
+        );
         if (pickItem.qtyPicked > 0 && lineItem.productId) {
           affectedProductIds.add(lineItem.productId);
         }
@@ -639,7 +644,11 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
         }
 
         const { lineItem, product } = lineItemData;
-        const isSerialized = product?.isSerialized ?? false;
+        const isSerialized = getOrderPickingSerializationRequirement(
+          lineItem,
+          product,
+          'unpicking'
+        );
         if (unpickItem.qtyToUnpick > 0 && lineItem.productId) {
           affectedProductIds.add(lineItem.productId);
         }
