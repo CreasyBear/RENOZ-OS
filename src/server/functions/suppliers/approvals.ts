@@ -44,6 +44,7 @@ import { logger } from '@/lib/logger';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
 import type { SQL } from 'drizzle-orm';
+import { toBulkApprovalFailure, type BulkApprovalFailure } from './approval-failure';
 
 // ============================================================================
 // CONSTANTS
@@ -806,7 +807,7 @@ export const bulkApproveApprovals = createServerFn({ method: 'POST' })
 
     const results = {
       approved: [] as string[],
-      failed: [] as { id: string; reason: string }[],
+      failed: [] as BulkApprovalFailure[],
     };
 
     for (const approvalId of data.approvalIds) {
@@ -819,8 +820,7 @@ export const bulkApproveApprovals = createServerFn({ method: 'POST' })
         });
         results.approved.push(approvalId);
       } catch (error) {
-        const reason = error instanceof Error ? error.message : 'Processing error';
-        results.failed.push({ id: approvalId, reason });
+        results.failed.push(toBulkApprovalFailure(approvalId, error));
         // Log error for debugging (in production, use proper logger)
         logger.error(`Bulk approve failed for ${approvalId}`, error);
       }
