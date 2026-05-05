@@ -52,7 +52,7 @@ import type {
   WarrantyDetailContainerRenderProps,
   WarrantyDetailContainerProps,
 } from '@/lib/schemas/warranty';
-import { openCertificateWindow } from '@/lib/warranty';
+import { formatWarrantyReadError, openCertificateWindow } from '@/lib/warranty';
 import { TransferWarrantyDialog } from '../dialogs/transfer-warranty-dialog';
 import { WarrantyDetailView } from '../views/warranty-detail-view';
 
@@ -266,9 +266,10 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
   };
 
   const certificateStatusErrorMessage = isCertificateStatusError
-    ? certificateStatusQueryError instanceof Error
-      ? certificateStatusQueryError.message
-      : 'Warranty certificate status is temporarily unavailable. Please refresh and try again.'
+    ? formatWarrantyReadError(
+        certificateStatusQueryError,
+        'Warranty certificate status is temporarily unavailable. Please refresh and try again.'
+      )
     : null;
 
   // Must be before early returns (hooks rule)
@@ -422,7 +423,10 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     const errorContent = (
       <ErrorState
         title="Failed to load warranty"
-        message={warrantyError instanceof Error ? warrantyError.message : 'Unknown error'}
+        message={formatWarrantyReadError(
+          warrantyError,
+          'Warranty details are temporarily unavailable. Please refresh and try again.'
+        )}
         onRetry={() => refetchWarranty()}
       />
     );

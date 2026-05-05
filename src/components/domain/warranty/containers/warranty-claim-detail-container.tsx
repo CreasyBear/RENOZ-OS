@@ -59,6 +59,7 @@ import {
   type WarrantyClaimDetailContainerRenderProps,
   type WarrantyClaimDetailContainerProps,
 } from '@/lib/schemas/warranty';
+import { formatWarrantyReadError } from '@/lib/warranty';
 import { getSlaDueStatus } from '@/lib/warranty/claims-utils';
 import { WarrantyClaimDetailView } from '@/components/domain/warranty/views/warranty-claim-detail-view';
 
@@ -322,7 +323,10 @@ export function WarrantyClaimDetailContainer({
     const content = (
       <ErrorState
         title="Failed to load claim"
-        message={error instanceof Error ? error.message : 'Unknown error'}
+        message={formatWarrantyReadError(
+          error,
+          'Warranty claim details are temporarily unavailable. Please refresh and try again.'
+        )}
         onRetry={() => refetch()}
       />
     );

@@ -50,6 +50,7 @@ import {
   formatClaimDate,
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
+import { formatWarrantyReadError } from '@/lib/warranty';
 import {
   isWarrantyClaimStatusValue,
   isWarrantyClaimantRoleValue,
@@ -525,7 +526,10 @@ export function WarrantyClaimsListView({
               <AlertTriangle className="text-destructive mx-auto mb-4 h-12 w-12" />
               <h3 className="text-lg font-semibold">Failed to load claims</h3>
               <p className="text-muted-foreground mb-4 text-sm">
-                {error.message || 'An error occurred'}
+                {formatWarrantyReadError(
+                  error,
+                  'Warranty claims are temporarily unavailable. Please refresh and try again.'
+                )}
               </p>
               <Button onClick={onRetry}>Retry</Button>
             </div>

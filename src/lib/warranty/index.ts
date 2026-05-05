@@ -12,5 +12,6 @@ export * from './constants';
 export * from './date-utils';
 export * from './claims-utils';
 export * from './certificate-utils';
+export * from './read-error-messages';
 export * from './urgency-utils';
 export * from './status-utils';

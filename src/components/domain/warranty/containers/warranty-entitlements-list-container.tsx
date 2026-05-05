@@ -12,6 +12,7 @@ import type {
   WarrantyEntitlementListItem,
   WarrantyEntitlementStatus,
 } from '@/lib/schemas/warranty/entitlements';
+import { formatWarrantyReadError } from '@/lib/warranty';
 import { ActivateWarrantyDialog } from '../dialogs/activate-warranty-dialog';
 import { WarrantyEntitlementReviewDialog } from '../dialogs/warranty-entitlement-review-dialog';
 import { WarrantyEntitlementsListView } from '../views/warranty-entitlements-list-view';
@@ -55,8 +56,10 @@ export function WarrantyEntitlementsListContainer({
 
   const { data, isLoading, error, refetch, isRefetching } = useWarrantyEntitlements(filters);
   const activateMutation = useActivateWarrantyFromEntitlement();
-  const errorMessage =
-    error instanceof Error ? error.message : 'Warranty entitlements are temporarily unavailable.';
+  const errorMessage = formatWarrantyReadError(
+    error,
+    'Warranty entitlements are temporarily unavailable. Please refresh and try again.'
+  );
 
   if (error && !data) {
     return (

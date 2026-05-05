@@ -28,7 +28,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { WarrantyPolicy } from '@/lib/schemas/warranty';
-import { WARRANTY_POLICY_LABELS } from '@/lib/warranty';
+import { formatWarrantyReadError, WARRANTY_POLICY_LABELS } from '@/lib/warranty';
 import {
   Plus,
   Search,
@@ -302,7 +302,10 @@ export function WarrantyPolicyList({
       <div className={className}>
         <ErrorState
           title="Failed to load warranty policies"
-          message={error instanceof Error ? error.message : 'An error occurred'}
+          message={formatWarrantyReadError(
+            error,
+            'Warranty policies are temporarily unavailable. Please refresh and try again.'
+          )}
           onRetry={() => onRetry?.()}
         />
       </div>
