@@ -9,7 +9,11 @@
 
 import * as React from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useValidateFeedbackToken, useSubmitPublicFeedback } from '@/hooks';
+import {
+  formatSupportMutationError,
+  useValidateFeedbackToken,
+  useSubmitPublicFeedback,
+} from '@/hooks';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +31,19 @@ import { CheckCircle2, AlertCircle, Clock, MessageSquare, Building2 } from 'luci
 export const Route = createFileRoute('/feedback/$token')({
   component: PublicFeedbackPage,
 });
+
+const PUBLIC_FEEDBACK_ERROR_MESSAGES = {
+  NOT_FOUND: 'This feedback link is invalid or no longer available.',
+  VALIDATION_ERROR: 'This feedback link has expired or the form needs to be checked.',
+  CONFLICT: 'Feedback has already been submitted for this support case.',
+  RATE_LIMIT: 'Too many feedback attempts were made. Wait a moment and try again.',
+};
+
+function formatPublicFeedbackError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: PUBLIC_FEEDBACK_ERROR_MESSAGES,
+  });
+}
 
 // ============================================================================
 // PAGE COMPONENT
@@ -85,7 +102,7 @@ function PublicFeedbackPage() {
   if (!validation?.valid || validationError) {
     const errorMessage =
       validation?.error ||
-      (validationError instanceof Error ? validationError.message : 'Invalid feedback link');
+      formatPublicFeedbackError(validationError, 'Invalid feedback link');
     const isExpired = validation?.expired;
     const isAlreadySubmitted = validation?.alreadySubmitted;
 
@@ -212,9 +229,10 @@ function PublicFeedbackPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>
-                {submitMutation.error instanceof Error
-                  ? submitMutation.error.message
-                  : 'Failed to submit feedback. Please try again.'}
+                {formatPublicFeedbackError(
+                  submitMutation.error,
+                  'Failed to submit feedback. Please try again.'
+                )}
               </AlertDescription>
             </Alert>
           )}
