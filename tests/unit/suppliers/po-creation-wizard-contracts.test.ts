@@ -7,6 +7,7 @@ import {
   buildInitialPurchaseOrderFormData,
   calculatePurchaseOrderReviewTotals,
   createBlankPurchaseOrderItem,
+  createCustomPurchaseOrderItem,
   createPurchaseOrderLineItemKey,
   getPurchaseOrderProductUnitPrice,
   getLineItemValidationError,
@@ -106,6 +107,25 @@ describe('PO creation wizard contracts', () => {
     ).toBe(120);
   });
 
+  it('converts a product-backed line into a custom item without product identity', () => {
+    expect(
+      createCustomPurchaseOrderItem({
+        productId: 'product-1',
+        productName: 'Battery module',
+        productSku: 'BAT-1',
+        description: 'Product description',
+        quantity: 3,
+        unitPrice: 25,
+        notes: 'Keep this operator note',
+      })
+    ).toEqual({
+      productName: 'Custom Item',
+      quantity: 3,
+      unitPrice: 25,
+      notes: 'Keep this operator note',
+    });
+  });
+
   it('validates supplier selection and line items before submission', () => {
     expect(getSupplierSelectionValidationError('')).toBe('Please select a supplier');
     expect(getSupplierSelectionValidationError('supplier-1')).toBeNull();
@@ -160,6 +180,7 @@ describe('PO creation wizard contracts', () => {
 
     expect(source).toContain('buildInitialPurchaseOrderFormData({ initialSupplierId, initialItems })');
     expect(source).toContain('buildInitialPurchaseOrderLineItemKeys({');
+    expect(source).toContain('createCustomPurchaseOrderItem(item)');
     expect(source).toContain('createPurchaseOrderLineItemKey(');
     expect(source).toContain('getPurchaseOrderProductUnitPrice(product)');
     expect(source).toContain('setLineItemKeys((prev) => [...prev, lineItemKey])');
@@ -173,5 +194,6 @@ describe('PO creation wizard contracts', () => {
     expect(source).not.toContain('const taxRate = 0.1');
     expect(source).not.toContain('key={index}');
     expect(source).not.toContain('product.costPrice || product.basePrice || 0');
+    expect(source).not.toContain('onUpdate({ ...item, productName: "Custom Item" })');
   });
 });

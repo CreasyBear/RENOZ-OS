@@ -54,6 +54,8 @@ export interface PurchaseOrderReviewTotals {
   total: number;
 }
 
+export const CUSTOM_PURCHASE_ORDER_ITEM_NAME = "Custom Item";
+
 export const PURCHASE_ORDER_REVIEW_GST_RATE = GST_RATE;
 
 export function createPurchaseOrderLineItemKey(
@@ -94,6 +96,17 @@ export function createBlankPurchaseOrderItem(): PurchaseOrderItemFormData {
     productName: "",
     quantity: 1,
     unitPrice: 0,
+  };
+}
+
+export function createCustomPurchaseOrderItem(
+  item: PurchaseOrderItemFormData
+): PurchaseOrderItemFormData {
+  return {
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    notes: item.notes,
+    productName: CUSTOM_PURCHASE_ORDER_ITEM_NAME,
   };
 }
 

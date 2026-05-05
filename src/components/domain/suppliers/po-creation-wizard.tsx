@@ -56,6 +56,7 @@ import {
   buildInitialPurchaseOrderFormData,
   calculatePurchaseOrderReviewTotals,
   createBlankPurchaseOrderItem,
+  createCustomPurchaseOrderItem,
   createPurchaseOrderLineItemKey,
   getLineItemValidationError,
   getPurchaseOrderProductUnitPrice,
@@ -440,7 +441,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
             <Button
               variant="ghost"
               onClick={() => {
-                onUpdate({ ...item, productName: "Custom Item" });
+                onUpdate(createCustomPurchaseOrderItem(item));
                 setShowProductSearch(false);
               }}
             >
