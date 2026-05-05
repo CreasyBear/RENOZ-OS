@@ -101,7 +101,9 @@ export { formatWarrantyCoreMutationError } from './_mutation-errors';
 export { formatWarrantyEntitlementMutationError } from './_mutation-errors';
 export { formatWarrantyExtensionMutationError } from './_mutation-errors';
 export { formatWarrantyCertificateMutationError } from './_mutation-errors';
+export { formatWarrantyBulkImportMutationError } from './_mutation-errors';
 export type {
+  WarrantyBulkImportMutationAction,
   WarrantyCertificateMutationAction,
   WarrantyClaimMutationAction,
   WarrantyCoreMutationAction,

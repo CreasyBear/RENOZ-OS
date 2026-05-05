@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  formatWarrantyBulkImportMutationError,
   formatWarrantyCertificateMutationError,
   formatWarrantyClaimMutationError,
   formatWarrantyCoreMutationError,
@@ -175,6 +176,27 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Warranty certificate regeneration is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('formats bulk import mutation failures with action-specific unavailable copy', () => {
+    expect(
+      formatWarrantyBulkImportMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            csvContent: ['CSV file is required.'],
+          },
+        },
+        'preview'
+      )
+    ).toBe('CSV file is required.');
+
+    expect(
+      formatWarrantyBulkImportMutationError(
+        new Error('duplicate key value violates unique constraint warranty_bulk_import_idx'),
+        'register'
+      )
+    ).toBe('Bulk warranty registration is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('keeps warranty mutation hooks on the formatter contract', () => {
     const sources = {
       claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
@@ -232,6 +254,12 @@ describe('warranty mutation error formatter', () => {
     expect(sources.certificate).not.toContain('Failed to regenerate certificate');
     expect(sources.certificate).toContain('formatWarrantyCertificateResultError(result.error)');
 
+    expect(sources.bulkImport).toContain(
+      "import { formatWarrantyBulkImportMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.bulkImport).not.toContain('Failed to parse CSV');
+    expect(sources.bulkImport).not.toContain('Failed to register warranties');
+
     for (const source of Object.values(sources).filter(
       (source) =>
         source !== sources.claim &&
@@ -239,7 +267,8 @@ describe('warranty mutation error formatter', () => {
         source !== sources.core &&
         source !== sources.entitlement &&
         source !== sources.extension &&
-        source !== sources.certificate
+        source !== sources.certificate &&
+        source !== sources.bulkImport
     )) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
@@ -250,6 +279,7 @@ describe('warranty mutation error formatter', () => {
     expect(sources.entitlement).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.extension).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.certificate).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(sources.bulkImport).not.toContain('toast.error(error instanceof Error ? error.message');
 
     expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
     expect(sources.policy.match(/formatWarrantyPolicyMutationError\(error,/g)).toHaveLength(7);
@@ -257,6 +287,6 @@ describe('warranty mutation error formatter', () => {
     expect(sources.entitlement.match(/formatWarrantyEntitlementMutationError\(error,/g)).toHaveLength(1);
     expect(sources.extension.match(/formatWarrantyExtensionMutationError\(error,/g)).toHaveLength(1);
     expect(sources.certificate.match(/formatWarrantyCertificateMutationError\(error,/g)).toHaveLength(2);
-    expect(sources.bulkImport.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
+    expect(sources.bulkImport.match(/formatWarrantyBulkImportMutationError\(error,/g)).toHaveLength(2);
   });
 });

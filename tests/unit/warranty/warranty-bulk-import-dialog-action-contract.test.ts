@@ -31,9 +31,11 @@ describe('warranty bulk import dialog action contract', () => {
     expect(container).toContain('useBulkRegisterWarranties()');
     expect(container).toContain('previewMutation.mutateAsync(payload)');
     expect(container).toContain('registerMutation.mutateAsync(payload)');
-    expect(hook).toContain("toast.error(formatWarrantyMutationError(error, 'Failed to parse CSV'))");
     expect(hook).toContain(
-      "toast.error(formatWarrantyMutationError(error, 'Failed to register warranties'))"
+      "toast.error(formatWarrantyBulkImportMutationError(error, 'preview'))"
+    );
+    expect(hook).toContain(
+      "toast.error(formatWarrantyBulkImportMutationError(error, 'register'))"
     );
   });
 });
