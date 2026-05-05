@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicateReceiptSerials } from '@/components/domain/purchase-orders/receive/receipt-serial-validation';
+import {
+  findCrossLineDuplicateReceiptSerials,
+  findDuplicateReceiptSerials,
+} from '@/components/domain/purchase-orders/receive/receipt-serial-validation';
 
 describe('receipt serial validation', () => {
   it('detects duplicate receipt serials after canonical trim and uppercase normalization', () => {
@@ -10,5 +13,45 @@ describe('receipt serial validation', () => {
 
   it('does not report blank serial values as duplicates', () => {
     expect(findDuplicateReceiptSerials(['', '   ', 'SN-001'])).toEqual([]);
+  });
+
+  it('detects duplicate receipt serials across lines for the same product', () => {
+    expect(
+      findCrossLineDuplicateReceiptSerials([
+        {
+          productId: 'product-1',
+          productName: 'RENOZ LFP Module',
+          serialNumbers: [' sn-001 '],
+        },
+        {
+          productId: 'product-1',
+          productName: 'RENOZ LFP Module',
+          serialNumbers: ['SN-001'],
+        },
+      ])
+    ).toEqual([
+      {
+        productId: 'product-1',
+        productName: 'RENOZ LFP Module',
+        serialNumber: 'SN-001',
+      },
+    ]);
+  });
+
+  it('allows matching serial text across different products', () => {
+    expect(
+      findCrossLineDuplicateReceiptSerials([
+        {
+          productId: 'product-1',
+          productName: 'RENOZ LFP Module',
+          serialNumbers: ['SN-001'],
+        },
+        {
+          productId: 'product-2',
+          productName: 'RENOZ BMS',
+          serialNumbers: ['SN-001'],
+        },
+      ])
+    ).toEqual([]);
   });
 });

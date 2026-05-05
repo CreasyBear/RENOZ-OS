@@ -55,7 +55,10 @@ import { toastSuccess, toastError } from '@/hooks';
 import { useReceiveGoods } from '@/hooks/suppliers';
 import type { PurchaseOrderItem } from '@/lib/schemas/purchase-orders';
 import { SerialNumberBatchEntry } from '@/components/domain/procurement/receiving/serial-number-batch-entry';
-import { findDuplicateReceiptSerials } from './receipt-serial-validation';
+import {
+  findCrossLineDuplicateReceiptSerials,
+  findDuplicateReceiptSerials,
+} from './receipt-serial-validation';
 
 // ============================================================================
 // TYPES
@@ -262,6 +265,21 @@ export function GoodsReceiptDialog({
             }
           }
         }
+
+        const crossLineDuplicateSerials = findCrossLineDuplicateReceiptSerials(
+          receivingItems
+            .filter((item) => item.requiresSerialNumbers && item.quantityReceived - item.quantityRejected > 0)
+            .map((item) => ({
+              productId: item.productId,
+              productName: item.productName,
+              serialNumbers: item.serialNumbers,
+            }))
+        );
+        crossLineDuplicateSerials.forEach((duplicate) => {
+          errors.push(
+            `${duplicate.productName}: Serial ${duplicate.serialNumber} appears multiple times in this receipt.`
+          );
+        });
       }
 
       return errors;
