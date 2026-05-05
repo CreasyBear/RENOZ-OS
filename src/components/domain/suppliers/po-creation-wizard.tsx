@@ -50,37 +50,27 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks";
 import { useOrgFormat } from "@/hooks/use-org-format";
+import {
+  PURCHASE_ORDER_REVIEW_GST_RATE,
+  buildInitialPurchaseOrderFormData,
+  calculatePurchaseOrderReviewTotals,
+  createBlankPurchaseOrderItem,
+  getLineItemValidationError,
+  getPurchaseOrderSubmissionValidationError,
+  getPurchaseOrderWizardStartingStep,
+  getSupplierSelectionValidationError,
+  type ProductItem,
+  type PurchaseOrderFormData,
+  type PurchaseOrderItemFormData,
+  type SupplierItem,
+} from "./po-creation-wizard-contracts";
 
-// Supplier type from listSuppliers (matches actual server function return)
-export interface SupplierItem {
-  id: string;
-  supplierCode: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  status: "active" | "suspended" | "inactive" | "blacklisted";
-  supplierType: "service" | "manufacturer" | "distributor" | "retailer" | "raw_materials" | null;
-  primaryContactName: string | null;
-  overallRating: number | null;
-  leadTimeDays: number | null;
-  lastOrderDate: Date | null;
-  totalPurchaseOrders: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// Product type from listProducts
-export interface ProductItem {
-  id: string;
-  name: string;
-  sku: string | null;
-  description: string | null;
-  basePrice: number | null;
-  costPrice: number | null;
-  status: string;
-  isActive: boolean;
-  [key: string]: unknown;
-}
+export type {
+  ProductItem,
+  PurchaseOrderFormData,
+  PurchaseOrderItemFormData,
+  SupplierItem,
+} from "./po-creation-wizard-contracts";
 
 // ============================================================================
 // TYPES
@@ -105,45 +95,7 @@ export interface POCreationWizardProps {
   onCancel: () => void;
 }
 
-export interface PurchaseOrderFormData {
-  supplierId: string;
-  expectedDeliveryDate?: string;
-  paymentTerms?: string;
-  notes?: string;
-  internalNotes?: string;
-  items: PurchaseOrderItemFormData[];
-}
-
-export interface PurchaseOrderItemFormData {
-  productId?: string;
-  productName: string;
-  productSku?: string;
-  description?: string;
-  quantity: number;
-  unitPrice: number;
-  notes?: string;
-}
-
-function getLineItemValidationError(items: PurchaseOrderItemFormData[]): string | null {
-  if (items.length === 0) return "Please add at least one item";
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const row = i + 1;
-
-    if (!item.productName?.trim()) {
-      return `Line item #${row} is missing a product name`;
-    }
-    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
-      return `Line item #${row} must have a quantity greater than 0`;
-    }
-    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
-      return `Line item #${row} has an invalid unit price`;
-    }
-  }
-
-  return null;
-}
+type WizardStep = 1 | 2 | 3;
 
 // ============================================================================
 // STEP INDICATOR COMPONENT
@@ -579,17 +531,10 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
   const formatCurrencyDisplay = (value: number) =>
     formatCurrency(value, { cents: false, showCents: true });
   const supplier = suppliers.find((s) => s.id === formData.supplierId);
-
-  const totals = useMemo(() => {
-    const subtotal = formData.items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0
-    );
-    const taxRate = 0.1; // 10% GST
-    const taxAmount = subtotal * taxRate;
-    const total = subtotal + taxAmount;
-    return { subtotal, taxAmount, total };
-  }, [formData.items]);
+  const totals = useMemo(
+    () => calculatePurchaseOrderReviewTotals(formData.items),
+    [formData.items]
+  );
 
   return (
     <div className="space-y-6">
@@ -697,7 +642,9 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
               <span>{formatCurrencyDisplay(totals.subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">GST (10%)</span>
+              <span className="text-muted-foreground">
+                GST ({(PURCHASE_ORDER_REVIEW_GST_RATE * 100).toFixed(0)}%)
+              </span>
               <span>{formatCurrencyDisplay(totals.taxAmount)}</span>
             </div>
             <Separator />
@@ -746,12 +693,11 @@ export function POCreationWizard({
   onSubmit,
   onCancel,
 }: POCreationWizardProps) {
-  const startingStep = initialSupplierId && initialStep === 2 ? 2 : 1;
-  const [currentStep, setCurrentStep] = useState(startingStep);
-  const [formData, setFormData] = useState<PurchaseOrderFormData>({
-    supplierId: initialSupplierId ?? "",
-    items: initialItems.map((item) => ({ ...item })),
-  });
+  const startingStep = getPurchaseOrderWizardStartingStep({ initialSupplierId, initialStep });
+  const [currentStep, setCurrentStep] = useState<WizardStep>(startingStep);
+  const [formData, setFormData] = useState<PurchaseOrderFormData>(() =>
+    buildInitialPurchaseOrderFormData({ initialSupplierId, initialItems })
+  );
 
   useEffect(() => {
     if (!initialSupplierId || formData.supplierId) return;
@@ -773,11 +719,7 @@ export function POCreationWizard({
       ...prev,
       items: [
         ...prev.items,
-        {
-          productName: "",
-          quantity: 1,
-          unitPrice: 0,
-        },
+        createBlankPurchaseOrderItem(),
       ],
     }));
   }, []);
@@ -800,9 +742,12 @@ export function POCreationWizard({
   }, []);
 
   const handleNext = useCallback(() => {
-    if (currentStep === 1 && !formData.supplierId) {
-      toast.error("Please select a supplier");
-      return;
+    if (currentStep === 1) {
+      const supplierError = getSupplierSelectionValidationError(formData.supplierId);
+      if (supplierError) {
+        toast.error(supplierError);
+        return;
+      }
     }
     if (currentStep === 2) {
       const lineItemError = getLineItemValidationError(formData.items);
@@ -811,17 +756,17 @@ export function POCreationWizard({
         return;
       }
     }
-    setCurrentStep((prev) => Math.min(prev + 1, 3));
+    setCurrentStep((prev) => (prev === 3 ? 3 : ((prev + 1) as WizardStep)));
   }, [currentStep, formData]);
 
   const handleBack = useCallback(() => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    setCurrentStep((prev) => (prev === 1 ? 1 : ((prev - 1) as WizardStep)));
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    const lineItemError = getLineItemValidationError(formData.items);
-    if (lineItemError) {
-      toast.error(lineItemError);
+    const validationError = getPurchaseOrderSubmissionValidationError(formData);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
