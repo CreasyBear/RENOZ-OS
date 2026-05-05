@@ -20,8 +20,9 @@ import {
   useEscalateIssue,
   useDeEscalateIssue,
 } from './use-issues';
+import { formatSupportMutationError } from './_mutation-errors';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import type { IssueRelatedContext, IssueStatus } from '@/lib/schemas/support/issues';
 import type { StatusChangeResult } from '@/components/domain/support/issues/issue-status-change-dialog';
 import { trackSupportIssueTransition } from '@/lib/analytics';
@@ -235,7 +236,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
             });
             setStatusDialog(null);
           } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to update issue status');
+            toast.error(formatSupportMutationError(err, 'Failed to update issue status'));
           }
         })();
       },
@@ -255,8 +256,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
           });
           navigate({ to: '/support/issues' });
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to delete issue';
-          toast.error(message);
+          toast.error(formatSupportMutationError(error, 'Failed to delete issue'));
           throw error;
         }
       },
@@ -300,8 +300,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
           },
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to escalate';
-        toast.error(message);
+        toast.error(formatSupportMutationError(err, 'Failed to escalate'));
         throw err;
       }
     },
@@ -332,8 +331,7 @@ export function useIssueDetail(issueId: string): UseIssueDetailReturn {
           },
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to de-escalate';
-        toast.error(message);
+        toast.error(formatSupportMutationError(err, 'Failed to de-escalate'));
         throw err;
       }
     },
