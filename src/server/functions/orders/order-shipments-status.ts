@@ -219,7 +219,13 @@ export async function updateShipmentStatusHandler({
             userId: ctx.user.id,
             source: 'order_shipment_returned',
           });
-          if (!serializedItem) continue;
+          if (!serializedItem) {
+            throw new ValidationError('Serialized item record not found', {
+              serialNumbers: [
+                `Serial "${serial}" could not be resolved to a serialized item before marking the shipment returned.`,
+              ],
+            });
+          }
 
           await tx
             .update(serializedItems)
