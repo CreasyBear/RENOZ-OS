@@ -7,6 +7,7 @@ import { findDuplicateSerials, normalizeSerial } from '@/lib/serials';
 import { orderLineItems, orderLineSerialAllocations, serializedItems } from 'drizzle/schema';
 import { products } from 'drizzle/schema/products/products';
 import type { ShipmentStatus } from '@/lib/schemas';
+import { getOrderLineSerializationRequirement } from './order-line-serialization';
 import { getPendingShipmentReservations } from './order-pending-shipment-reservations';
 import { readActiveReservationsForLineItems } from './order-inventory-reservations';
 
@@ -77,18 +78,31 @@ export async function validateShipmentItems(
     );
 
   const lineItemMap = new Map(
-    rows.map((r) => [
-      r.lineItemId,
-      {
-        productId: r.productId,
-        quantity: r.quantity,
-        qtyPicked: r.qtyPicked,
-        qtyShipped: r.qtyShipped,
-        description: r.description,
-        allocatedSerialNumbers: (r.allocatedSerialNumbers as string[] | null) ?? [],
-        isSerialized: r.isSerialized ?? false,
-      },
-    ])
+    rows.map((r) => {
+      const productSerialization =
+        typeof r.isSerialized === 'boolean' ? { isSerialized: r.isSerialized } : null;
+
+      return [
+        r.lineItemId,
+        {
+          productId: r.productId,
+          quantity: r.quantity,
+          qtyPicked: r.qtyPicked,
+          qtyShipped: r.qtyShipped,
+          description: r.description,
+          allocatedSerialNumbers: (r.allocatedSerialNumbers as string[] | null) ?? [],
+          isSerialized: getOrderLineSerializationRequirement(
+            {
+              id: r.lineItemId,
+              productId: r.productId,
+              description: r.description,
+            },
+            productSerialization,
+            'shipping'
+          ),
+        },
+      ] as const;
+    })
   );
   const pendingReservations = await getPendingShipmentReservations(executor, {
     organizationId,
