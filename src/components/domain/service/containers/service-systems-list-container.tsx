@@ -8,6 +8,10 @@ import { ErrorState } from '@/components/shared/error-state';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { useServiceSystems } from '@/hooks/service';
 import type { ListServiceSystemsInput } from '@/lib/schemas/service';
+import {
+  formatServiceReadError,
+  SERVICE_READ_MESSAGES,
+} from '@/lib/service/read-error-messages';
 import { ServiceSystemsListView } from '../views/service-systems-list-view';
 
 export interface ServiceSystemsListContainerProps {
@@ -26,8 +30,8 @@ export function ServiceSystemsListContainer({
   if (error) {
     return (
       <ErrorState
-        title="Failed to load service systems"
-        message={error instanceof Error ? error.message : 'Unknown system error'}
+        title="Service systems unavailable"
+        message={formatServiceReadError(error, SERVICE_READ_MESSAGES.systemsList)}
         onRetry={() => {
           void refetch();
         }}

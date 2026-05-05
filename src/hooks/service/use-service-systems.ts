@@ -5,6 +5,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { toast } from '@/hooks/_shared/use-toast';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
+import { SERVICE_READ_MESSAGES } from '@/lib/service/read-error-messages';
 import { formatServiceActionMutationError } from './_mutation-errors';
 import type {
   ListServiceSystemsInput,
@@ -35,8 +36,8 @@ export function useServiceSystem(serviceSystemId: string, enabled = true) {
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
-          fallbackMessage: 'Service system details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested service system could not be found.',
+          fallbackMessage: SERVICE_READ_MESSAGES.systemDetail,
+          notFoundMessage: SERVICE_READ_MESSAGES.systemNotFound,
         });
       }
     },
@@ -56,7 +57,7 @@ export function useServiceSystems(filters: Partial<ListServiceSystemsInput> = {}
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Service systems are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: SERVICE_READ_MESSAGES.systemsList,
         });
       }
     },
@@ -77,7 +78,7 @@ export function useServiceLinkageReviews(
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Service linkage reviews are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: SERVICE_READ_MESSAGES.linkageReviewsList,
         });
       }
     },
@@ -96,8 +97,8 @@ export function useServiceLinkageReview(reviewId: string, enabled = true) {
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
-          fallbackMessage: 'Service linkage review details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested service linkage review could not be found.',
+          fallbackMessage: SERVICE_READ_MESSAGES.linkageReviewDetail,
+          notFoundMessage: SERVICE_READ_MESSAGES.linkageReviewNotFound,
         });
       }
     },

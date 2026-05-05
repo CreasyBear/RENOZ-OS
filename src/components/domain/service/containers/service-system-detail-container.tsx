@@ -9,6 +9,10 @@ import { ErrorState } from '@/components/shared/error-state';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { useServiceSystem, useTransferServiceSystemOwnership } from '@/hooks/service';
 import { useUnifiedActivities } from '@/hooks/activities';
+import {
+  formatServiceReadError,
+  SERVICE_READ_MESSAGES,
+} from '@/lib/service/read-error-messages';
 import { ServiceSystemDetailView } from '../views/service-system-detail-view';
 import { TransferServiceSystemDialog } from '../dialogs/transfer-service-system-dialog';
 
@@ -37,8 +41,12 @@ export function ServiceSystemDetailContainer({
   if (error || !data) {
     return (
       <ErrorState
-        title="Failed to load service system"
-        message={error instanceof Error ? error.message : 'Service system not found'}
+        title="Service system unavailable"
+        message={
+          error
+            ? formatServiceReadError(error, SERVICE_READ_MESSAGES.systemDetail)
+            : SERVICE_READ_MESSAGES.systemNotFound
+        }
         onRetry={() => {
           void refetch();
         }}

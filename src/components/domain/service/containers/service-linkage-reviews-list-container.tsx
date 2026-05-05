@@ -8,6 +8,10 @@ import { ErrorState } from '@/components/shared/error-state';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { useServiceLinkageReviews } from '@/hooks/service';
 import type { ServiceLinkageReviewReason, ServiceLinkageReviewStatus } from '@/lib/schemas/service';
+import {
+  formatServiceReadError,
+  SERVICE_READ_MESSAGES,
+} from '@/lib/service/read-error-messages';
 import { ServiceLinkageReviewsListView } from '../views/service-linkage-reviews-list-view';
 
 export interface ServiceLinkageReviewsListContainerProps {
@@ -34,8 +38,8 @@ export function ServiceLinkageReviewsListContainer({
   if (error) {
     return (
       <ErrorState
-        title="Failed to load service linkage reviews"
-        message={error instanceof Error ? error.message : 'Unknown review error'}
+        title="Service linkage reviews unavailable"
+        message={formatServiceReadError(error, SERVICE_READ_MESSAGES.linkageReviewsList)}
         onRetry={() => {
           void refetch();
         }}

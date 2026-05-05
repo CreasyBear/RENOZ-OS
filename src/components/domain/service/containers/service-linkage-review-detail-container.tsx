@@ -11,6 +11,10 @@ import {
   useResolveServiceLinkageReview,
   useServiceLinkageReview,
 } from '@/hooks/service';
+import {
+  formatServiceReadError,
+  SERVICE_READ_MESSAGES,
+} from '@/lib/service/read-error-messages';
 import { ResolveServiceLinkageReviewDialog } from '../dialogs/resolve-service-linkage-review-dialog';
 import { ServiceLinkageReviewDetailView } from '../views/service-linkage-review-detail-view';
 
@@ -30,8 +34,12 @@ export function ServiceLinkageReviewDetailContainer({
   if (error || !data) {
     return (
       <ErrorState
-        title="Failed to load service linkage review"
-        message={error instanceof Error ? error.message : 'Service linkage review not found'}
+        title="Service linkage review unavailable"
+        message={
+          error
+            ? formatServiceReadError(error, SERVICE_READ_MESSAGES.linkageReviewDetail)
+            : SERVICE_READ_MESSAGES.linkageReviewNotFound
+        }
         onRetry={() => {
           void refetch();
         }}
