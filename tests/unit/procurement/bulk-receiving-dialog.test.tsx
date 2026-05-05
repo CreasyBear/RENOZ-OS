@@ -315,6 +315,7 @@ describe('BulkReceivingDialog', () => {
         {
           poId: 'po-1',
           error: 'Serial "SN-001" already exists in stock.',
+          code: 'invalid_serial_state',
         },
       ],
     })

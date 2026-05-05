@@ -54,7 +54,7 @@ export interface BulkReceivingDialogProps {
   }) => Promise<{
     processed: number;
     failed: number;
-    errors: Array<{ poId: string; error: string }>;
+    errors: Array<{ poId: string; error: string; code?: string }>;
   }>;
   isLoading?: boolean;
   error?: React.ReactNode;
@@ -66,6 +66,12 @@ interface ProcessingProgress {
   processed: number;
   failed: number;
   currentPO?: string;
+}
+
+interface BulkReceivingFailureDetail {
+  poId: string;
+  error: string;
+  code?: string;
 }
 
 // ============================================================================
@@ -89,7 +95,7 @@ export function BulkReceivingDialog({
     failed: 0,
   });
   const [attemptTotal, setAttemptTotal] = useState(0);
-  const [failureDetails, setFailureDetails] = useState<Array<{ poId: string; error: string }>>([]);
+  const [failureDetails, setFailureDetails] = useState<BulkReceivingFailureDetail[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const wasOpenRef = useRef(false);
 
@@ -288,16 +294,16 @@ export function BulkReceivingDialog({
     if (failedPOIds.length === 0) return;
 
     const failedPOSet = new Set(failedPOIds);
-    const failedHasSerializedItems = poDetailsWithSerials.some(
-      (po) => failedPOSet.has(po.poId) && po.hasSerializedItems
+    const failedRequiresSerialReview = failureDetails.some(
+      (failure) => failure.code === 'invalid_serial_state'
     );
 
     setSelectedPOIds(failedPOSet);
     setProcessingProgress({ processed: 0, failed: 0 });
     setAttemptTotal(0);
     setFailureDetails([]);
-    setStep(failedHasSerializedItems ? 'serials' : 'review');
-  }, [failureDetails, poDetailsWithSerials]);
+    setStep(failedRequiresSerialReview ? 'serials' : 'review');
+  }, [failureDetails]);
 
   const handleClose = useCallback(() => {
     if (isProcessing) return; // Prevent closing during processing
@@ -307,9 +313,8 @@ export function BulkReceivingDialog({
   const isAllSelected = selectedPOIds.size === purchaseOrders.length && purchaseOrders.length > 0;
   const isPartiallySelected =
     selectedPOIds.size > 0 && selectedPOIds.size < purchaseOrders.length;
-  const failedPOIdSet = new Set(failureDetails.map((failure) => failure.poId));
-  const failedHasSerializedItems = selectedPODetails.some(
-    (po) => failedPOIdSet.has(po.poId) && po.hasSerializedItems
+  const failedRequiresSerialReview = failureDetails.some(
+    (failure) => failure.code === 'invalid_serial_state'
   );
 
   // Step content
@@ -767,7 +772,7 @@ export function BulkReceivingDialog({
                 </Link>
               )}
               {processingProgress.failed > 0 && !isProcessing && (
-                failedHasSerializedItems ? (
+                failedRequiresSerialReview ? (
                   <Button onClick={handleReviewFailed}>
                     Review Failed Serials ({processingProgress.failed})
                   </Button>

@@ -1,4 +1,5 @@
 import { normalizeSerial } from '@/lib/serials';
+import type { SerializedMutationErrorCode } from '@/lib/schemas/inventory';
 
 export interface BulkReceiveSerialPreflightLine {
   poId: string;
@@ -15,6 +16,7 @@ export interface BulkReceiveSerialPreflightFailure {
   productName: string;
   serialNumber: string;
   error: string;
+  code: SerializedMutationErrorCode;
 }
 
 interface SerialOccurrence {
@@ -64,6 +66,7 @@ export function findBulkReceiveDuplicateSerialFailures(
         productName: occurrence.productName,
         serialNumber: occurrence.serialNumber,
         error: `Serial "${occurrence.serialNumber}" appears multiple times for "${occurrence.productName}" in this bulk receipt request.`,
+        code: 'invalid_serial_state',
       });
     });
   });

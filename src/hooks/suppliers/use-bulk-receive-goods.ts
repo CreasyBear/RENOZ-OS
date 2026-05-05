@@ -29,7 +29,7 @@ export interface BulkReceiveGoodsResult {
   message: string;
   processed: number;
   failed: number;
-  errors: Array<{ poId: string; error: string }>;
+  errors: Array<{ poId: string; error: string; code?: string }>;
   errorsById?: Record<string, string>;
   partialFailure?: { code: string; message: string };
   affectedIds?: string[];

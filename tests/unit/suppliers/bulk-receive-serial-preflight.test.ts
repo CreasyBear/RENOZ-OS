@@ -41,6 +41,7 @@ describe('bulk receive serial preflight', () => {
         serialNumber: 'SN-001',
         error:
           'Serial "SN-001" appears multiple times for "RENOZ LFP Module" in this bulk receipt request.',
+        code: 'invalid_serial_state',
       },
       {
         poId: 'po-2',
@@ -50,6 +51,7 @@ describe('bulk receive serial preflight', () => {
         serialNumber: 'SN-001',
         error:
           'Serial "SN-001" appears multiple times for "RENOZ LFP Module" in this bulk receipt request.',
+        code: 'invalid_serial_state',
       },
     ]);
   });

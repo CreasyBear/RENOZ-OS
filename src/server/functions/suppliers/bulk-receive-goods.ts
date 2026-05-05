@@ -21,13 +21,17 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { receiveGoods } from './receive-goods';
 import { products } from 'drizzle/schema/products/products';
 import { getPurchaseOrder } from './purchase-orders';
-import { ValidationError } from '@/lib/server/errors';
 import { normalizeSerial } from '@/lib/serials';
-import { serializedMutationSuccess, type SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
+import {
+  createSerializedMutationError,
+  serializedMutationSuccess,
+  type SerializedMutationEnvelope,
+} from '@/lib/server/serialized-mutation-contract';
 import {
   findBulkReceiveDuplicateSerialFailures,
   type BulkReceiveSerialPreflightLine,
 } from './bulk-receive-serial-preflight';
+import { toBulkReceiveFailure, type BulkReceiveFailure } from './bulk-receive-failure';
 
 // ============================================================================
 // INPUT SCHEMA
@@ -72,7 +76,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
     SerializedMutationEnvelope<{
       processed: number;
       failed: number;
-      errors: Array<{ poId: string; error: string }>;
+      errors: BulkReceiveFailure[];
     }>
   > => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
@@ -80,7 +84,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
     const results = {
       processed: 0,
       failed: 0,
-      errors: [] as Array<{ poId: string; error: string }>,
+      errors: [] as BulkReceiveFailure[],
     };
     const preparedReceipts: Array<{
       poId: string;
@@ -158,21 +162,24 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
           if (isSerialized) {
             const quantity = item.quantityPending ?? 0;
             if (!itemSerials || itemSerials.length !== quantity) {
-              throw new ValidationError(
-                `Serialized product "${item.productName}" requires ${quantity} serial number${quantity !== 1 ? 's' : ''}, found ${itemSerials?.length ?? 0}`
+              throw createSerializedMutationError(
+                `Serialized product "${item.productName}" requires ${quantity} serial number${quantity !== 1 ? 's' : ''}, found ${itemSerials?.length ?? 0}`,
+                'invalid_serial_state'
               );
             }
             // Validate no duplicates
             const normalizedSerials = itemSerials.map((s) => normalizeSerial(s));
             if (normalizedSerials.some((s) => s.length === 0)) {
-              throw new ValidationError(
-                `Serialized product "${item.productName}" has an empty serial number`
+              throw createSerializedMutationError(
+                `Serialized product "${item.productName}" has an empty serial number`,
+                'invalid_serial_state'
               );
             }
             const uniqueSerials = new Set(normalizedSerials);
             if (uniqueSerials.size !== itemSerials.length) {
-              throw new ValidationError(
-                `Duplicate serial numbers found for "${item.productName}"`
+              throw createSerializedMutationError(
+                `Duplicate serial numbers found for "${item.productName}"`,
+                'invalid_serial_state'
               );
             }
 
@@ -202,10 +209,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         });
       } catch (error) {
         results.failed++;
-        results.errors.push({
-          poId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        results.errors.push(toBulkReceiveFailure(poId, error));
       }
     }
 
@@ -217,6 +221,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       results.errors.push({
         poId: failure.poId,
         error: failure.error,
+        code: failure.code,
       });
     });
 
@@ -235,10 +240,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
         results.processed++;
       } catch (error) {
         results.failed++;
-        results.errors.push({
-          poId: preparedReceipt.poId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        results.errors.push(toBulkReceiveFailure(preparedReceipt.poId, error));
       }
     }
 
