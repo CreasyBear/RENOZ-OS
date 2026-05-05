@@ -44,7 +44,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatDateAustralian } from '@/lib/warranty';
 import {
@@ -729,23 +728,29 @@ export function BulkWarrantyImportDialog({
   const handleValidate = useCallback(async () => {
     if (!file) return;
 
+    let content: string;
     try {
-      const content = await file.text();
+      content = await file.text();
+    } catch {
+      setFileError('Could not read CSV file. Please choose the file again.');
+      return;
+    }
 
-      // Check row count
-      const lines = content.split(/\r?\n/).filter((line) => line.trim());
-      if (lines.length > 1001) {
-        // 1000 rows + header
-        setFileError('Too many rows. Maximum is 1000 rows.');
-        return;
-      }
+    // Check row count
+    const lines = content.split(/\r?\n/).filter((line) => line.trim());
+    if (lines.length > 1001) {
+      // 1000 rows + header
+      setFileError('Too many rows. Maximum is 1000 rows.');
+      return;
+    }
 
+    try {
       const result = await onPreview({ csvContent: content });
 
       setPreviewResult(result);
       setStep('preview');
     } catch {
-      toast.error('Failed to preview CSV. Please check the file format and try again.');
+      // Preview mutation hook owns operator-facing parse/validation error toasts.
     }
   }, [file, onPreview]);
 
@@ -772,7 +777,7 @@ export function BulkWarrantyImportDialog({
       setStep('complete');
       onComplete?.(result);
     } catch {
-      toast.error('Import failed. Please try again or contact support.');
+      // Register mutation hook owns operator-facing import error toasts.
       setStep('preview');
     }
   }, [previewResult, sendNotifications, onRegister, onComplete]);
