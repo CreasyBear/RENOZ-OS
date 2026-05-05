@@ -23,12 +23,27 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from './star-rating';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
+import { formatSupportMutationError } from '@/hooks/support';
 import { MessageSquarePlus } from 'lucide-react';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
+
+const CSAT_ENTRY_ERROR_MESSAGES = {
+  NOT_FOUND: 'The support issue could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to record customer feedback.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before recording feedback.',
+  CONFLICT: 'Feedback has already been submitted for this issue.',
+  RATE_LIMIT: 'Too many feedback updates were attempted. Wait a moment and retry.',
+};
+
+function formatCsatEntryError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: CSAT_ENTRY_ERROR_MESSAGES,
+  });
+}
 
 interface CsatEntryDialogProps {
   open: boolean;
@@ -92,7 +107,7 @@ export function CsatEntryDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit feedback');
+      toast.error(formatCsatEntryError(err, 'Failed to submit feedback'));
     }
   };
 
