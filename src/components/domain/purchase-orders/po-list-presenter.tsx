@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
 import { POTablePresenter } from "./po-table-presenter";
 import { POMobileCards } from "./po-mobile-cards";
+import { getPurchaseOrderListErrorMessage } from "./po-list-error-messages";
 import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 
 export interface POListPresenterProps {
@@ -202,7 +203,7 @@ export const POListPresenter = memo(function POListPresenter({
       <DataTableEmpty
         variant="error"
         title="Failed to load purchase orders"
-        description={error.message ?? "An unexpected error occurred"}
+        description={getPurchaseOrderListErrorMessage(error)}
         action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
