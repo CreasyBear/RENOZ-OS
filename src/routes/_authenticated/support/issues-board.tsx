@@ -15,7 +15,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportKanbanSkeleton } from '@/components/skeletons/support';
 import { Plus, LayoutGrid, List, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/_shared/use-toast';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,6 +36,11 @@ import {
   IssueStatusChangeDialog,
   type StatusChangeResult,
 } from '@/components/domain/support/issues/issue-status-change-dialog';
+import {
+  formatIssueBoardBulkFailureToast,
+  formatIssueBoardMutationError,
+  formatIssueBoardTransitionFailureToast,
+} from '@/components/domain/support/issues/issue-board-feedback';
 import { useIssuesWithSlaMetrics, useUpdateIssue, useDeleteIssue, useSupportMetrics } from '@/hooks/support';
 import type { IssueKanbanItem } from '@/components/domain/support/issues/issue-kanban-card';
 import type { IssuePriority } from '@/lib/schemas/support/issues';
@@ -317,7 +322,7 @@ function IssuesBoardPage() {
         delete next[issueId];
         return next;
       });
-      const message = err instanceof Error ? err.message : 'Failed to update issue status';
+      const message = formatIssueBoardMutationError(err, 'Failed to update issue status');
       setTransitionFailures((prev) => {
         const next = prev.filter((entry) => entry.issueId !== issueId);
         next.push({
@@ -330,7 +335,7 @@ function IssuesBoardPage() {
         });
         return next;
       });
-      toast.error(`Failed to move ${issueLabel}: ${message}`, {
+      toast.error(formatIssueBoardTransitionFailureToast(issueLabel, message), {
         action: {
           label: 'Retry',
           onClick: () => {
@@ -543,20 +548,12 @@ function IssuesBoardPage() {
           return {
             issueId,
             issueLabel: issue?.issueNumber ?? issueId.slice(0, 8),
-            message: result.reason instanceof Error ? result.reason.message : 'Unknown error',
+            message: formatIssueBoardMutationError(result.reason, 'Failed to update issue'),
           };
         });
         setBulkFailures(failureItems);
 
-        const failedSummary = failureItems
-          .slice(0, 3)
-          .map((item) => `${item.issueLabel}: ${item.message}`)
-          .join(' | ');
-        toast.error(
-          `${failed.length} update${failed.length > 1 ? 's' : ''} failed${
-            failedSummary ? ` (${failedSummary})` : ''
-          }`
-        );
+        toast.error(formatIssueBoardBulkFailureToast(failureItems));
         setSelectedIds(new Set(failed.map((f) => f.issueId)));
         return;
       }
@@ -564,7 +561,7 @@ function IssuesBoardPage() {
       setBulkFailures([]);
       setSelectedIds(new Set());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update issues');
+      toast.error(formatIssueBoardMutationError(err, 'Failed to update issues'));
     }
   };
 
