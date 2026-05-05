@@ -118,7 +118,7 @@ export function isCustomPurchaseOrderItem(
 
 export function parsePurchaseOrderQuantityInput(value: string): number {
   const quantity = Number(value);
-  return Number.isInteger(quantity) ? quantity : 0;
+  return Number.isFinite(quantity) ? quantity : 0;
 }
 
 export function parsePurchaseOrderUnitPriceInput(value: string): number {
@@ -167,6 +167,9 @@ export function getLineItemValidationError(items: PurchaseOrderItemFormData[]): 
     }
     if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       return `Line item #${row} must have a quantity greater than 0`;
+    }
+    if (!Number.isInteger(item.quantity)) {
+      return `Line item #${row} must have a whole number quantity`;
     }
     if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
       return `Line item #${row} has an invalid unit price`;

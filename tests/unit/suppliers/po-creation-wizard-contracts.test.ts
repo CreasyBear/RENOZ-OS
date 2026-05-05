@@ -151,7 +151,7 @@ describe('PO creation wizard contracts', () => {
     expect(parsePurchaseOrderQuantityInput('12')).toBe(12);
     expect(parsePurchaseOrderQuantityInput('0')).toBe(0);
     expect(parsePurchaseOrderQuantityInput('')).toBe(0);
-    expect(parsePurchaseOrderQuantityInput('1.5')).toBe(0);
+    expect(parsePurchaseOrderQuantityInput('1.5')).toBe(1.5);
 
     expect(parsePurchaseOrderUnitPriceInput('0')).toBe(0);
     expect(parsePurchaseOrderUnitPriceInput('12.5')).toBe(12.5);
@@ -173,6 +173,9 @@ describe('PO creation wizard contracts', () => {
     );
     expect(getLineItemValidationError([{ ...validItems[0], quantity: 0 }])).toBe(
       'Line item #1 must have a quantity greater than 0'
+    );
+    expect(getLineItemValidationError([{ ...validItems[0], quantity: 1.5 }])).toBe(
+      'Line item #1 must have a whole number quantity'
     );
     expect(getLineItemValidationError([{ ...validItems[0], unitPrice: -1 }])).toBe(
       'Line item #1 has an invalid unit price'
