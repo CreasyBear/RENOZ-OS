@@ -300,17 +300,14 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     notes?: string;
   }) => {
     await createClaimMutation.mutateAsync(payload);
-    await refetchClaims();
   };
 
   const handleApproveClaim = async (payload: { claimId: string; notes?: string }) => {
     await approveClaimMutation.mutateAsync(payload);
-    await refetchClaims();
   };
 
   const handleDenyClaim = async (payload: { claimId: string; denialReason: string; notes?: string }) => {
     await denyClaimMutation.mutateAsync(payload);
-    await refetchClaims();
   };
 
   const handleRequestInfoClaim = async (payload: { claimId: string; notes: string }) => {
@@ -319,7 +316,6 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
       status: 'under_review',
       notes: payload.notes,
     });
-    await refetchClaims();
   };
 
   const handleExtendWarranty = async (payload: {
@@ -330,7 +326,6 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     notes: string | null;
   }) => {
     await extendMutation.mutateAsync(payload);
-    await refetchExtensions();
   };
 
   const handleTransferWarranty = async (payload: {
