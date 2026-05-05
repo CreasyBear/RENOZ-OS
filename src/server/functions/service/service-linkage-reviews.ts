@@ -191,7 +191,9 @@ export const resolveServiceLinkageReview = createServerFn({ method: 'POST' })
       }
 
       if (!resolvedServiceSystemId) {
-        throw new ValidationError('Failed to resolve service linkage review');
+        throw new ValidationError(
+          'Service linkage review could not be resolved. Review the selected service system and try again.'
+        );
       }
 
       await tx

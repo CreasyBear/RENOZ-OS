@@ -35,6 +35,10 @@ describe('service linkage review resolution cache contract', () => {
     );
 
     expect(resolveServer).toContain('sourceWarrantyId: detail.sourceWarranty?.id ?? null');
+    expect(resolveServer).toContain(
+      "'Service linkage review could not be resolved. Review the selected service system and try again.'"
+    );
+    expect(resolveServer).not.toContain('Failed to resolve service linkage review');
 
     expect(resolveHook).toContain('queryKeys.serviceLinkageReviews.lists()');
     expect(resolveHook).toContain('queryKeys.serviceLinkageReviews.detail(variables.reviewId)');
@@ -47,7 +51,8 @@ describe('service linkage review resolution cache contract', () => {
     expect(resolveHook).not.toContain('queryKeys.serviceLinkageReviews.all');
     expect(resolveHook).not.toContain('queryKeys.warranties.all');
     expect(resolveHook).toContain(
-      "toast.error(formatServiceMutationError(error, 'Failed to resolve service linkage review'))"
+      "toast.error(formatServiceActionMutationError(error, 'resolveLinkageReview'))"
     );
+    expect(resolveHook).not.toContain('Failed to resolve service linkage review');
   });
 });

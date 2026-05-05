@@ -36,7 +36,7 @@ describe('service-system ownership transfer cache contract', () => {
 
     expect(hook).not.toContain("import { toast } from 'sonner'");
     expect(hook).toContain("import { toast } from '@/hooks/_shared/use-toast'");
-    expect(hook).toContain("import { formatServiceMutationError } from './_mutation-errors'");
+    expect(hook).toContain("import { formatServiceActionMutationError } from './_mutation-errors'");
 
     expect(transferServer).toContain('const linkedWarrantyIds = result.linkedWarrantyIds ?? []');
     expect(transferServer).toContain('linkedWarrantyIds,');
@@ -49,7 +49,8 @@ describe('service-system ownership transfer cache contract', () => {
     expect(transferHook).toContain('queryKeys.warranties.detail(warrantyId)');
     expect(transferHook).not.toContain('queryKeys.warranties.all');
     expect(transferHook).toContain(
-      "toast.error(formatServiceMutationError(error, 'Failed to transfer system ownership'))"
+      "toast.error(formatServiceActionMutationError(error, 'transferOwnership'))"
     );
+    expect(transferHook).not.toContain('Failed to transfer system ownership');
   });
 });

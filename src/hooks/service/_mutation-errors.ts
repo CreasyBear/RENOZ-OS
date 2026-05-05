@@ -7,9 +7,18 @@ const DEFAULT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many service updates were attempted. Wait a moment and retry.',
 };
 
+const SERVICE_MUTATION_FALLBACKS = {
+  resolveLinkageReview:
+    'Service linkage review resolution is temporarily unavailable. Please refresh and try again.',
+  transferOwnership:
+    'Service system ownership transfer is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatServiceMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
+
+export type ServiceMutationAction = keyof typeof SERVICE_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -185,4 +194,11 @@ export function formatServiceMutationError(
   }
 
   return fallback;
+}
+
+export function formatServiceActionMutationError(
+  error: unknown,
+  action: ServiceMutationAction
+): string {
+  return formatServiceMutationError(error, SERVICE_MUTATION_FALLBACKS[action]);
 }
