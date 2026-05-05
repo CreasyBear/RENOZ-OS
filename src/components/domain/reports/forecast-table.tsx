@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { generateCSV, downloadCSV, formatDateForFilename } from "@/lib/utils/csv";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import type { ForecastPeriod } from "@/lib/schemas/pipeline";
 
@@ -171,14 +172,8 @@ export const ForecastTable = memo(function ForecastTable({
       "-",
     ]);
 
-    const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `forecast-${new Date().toISOString().split("T")[0]}.csv`);
-    link.click();
-    URL.revokeObjectURL(url);
+    const csv = generateCSV({ headers, rows });
+    downloadCSV(csv, `forecast-${formatDateForFilename()}.csv`);
   };
 
   if (data.length === 0) {

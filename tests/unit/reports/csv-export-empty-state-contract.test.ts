@@ -12,6 +12,7 @@ describe('reports CSV export empty-state contract', () => {
   it('keeps local CSV exports honest when there is no data to download', () => {
     const expiring = read('src/components/domain/reports/expiring-warranties-container.tsx');
     const jobCosting = read('src/components/domain/reports/job-costing-report-page.tsx');
+    const forecastTable = read('src/components/domain/reports/forecast-table.tsx');
     const procurement = read('src/components/domain/reports/procurement-reports-page.tsx');
     const customer = read('src/components/domain/reports/customer-reports-page.tsx');
 
@@ -35,6 +36,13 @@ describe('reports CSV export empty-state contract', () => {
     expect(jobCosting).not.toContain('URL.createObjectURL(blob)');
     expect(jobCosting).not.toContain("row.join(',')");
     expect(jobCosting).not.toContain('if (!reportData?.jobs.length) return;');
+
+    expect(forecastTable).toContain('if (onExportCsv) {');
+    expect(forecastTable).toContain('onExportCsv();');
+    expect(forecastTable).toContain('const csv = generateCSV({ headers, rows })');
+    expect(forecastTable).toContain('downloadCSV(csv, `forecast-${formatDateForFilename()}.csv`)');
+    expect(forecastTable).not.toContain('URL.createObjectURL(blob)');
+    expect(forecastTable).not.toContain('row.join(",")');
 
     expect(procurement).toContain("toast.error('No data to export')");
     expect(procurement).toContain("toast.success('Procurement report exported as CSV')");
