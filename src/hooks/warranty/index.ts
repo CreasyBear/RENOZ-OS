@@ -97,8 +97,10 @@ export {
 export { formatWarrantyMutationError } from './_mutation-errors';
 export { formatWarrantyClaimMutationError } from './_mutation-errors';
 export { formatWarrantyPolicyMutationError } from './_mutation-errors';
+export { formatWarrantyCoreMutationError } from './_mutation-errors';
 export type {
   WarrantyClaimMutationAction,
+  WarrantyCoreMutationAction,
   WarrantyPolicyMutationAction,
 } from './_mutation-errors';
 

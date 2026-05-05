@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatWarrantyClaimMutationError,
+  formatWarrantyCoreMutationError,
   formatWarrantyMutationError,
   formatWarrantyPolicyMutationError,
 } from '@/hooks/warranty/_mutation-errors';
@@ -87,6 +88,27 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Default warranty policy update is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('formats core warranty mutation failures with action-specific unavailable copy', () => {
+    expect(
+      formatWarrantyCoreMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            transferReason: ['Transfer reason is required.'],
+          },
+        },
+        'transferOwnership'
+      )
+    ).toBe('Transfer reason is required.');
+
+    expect(
+      formatWarrantyCoreMutationError(
+        new Error('duplicate key value violates unique constraint warranties_deleted_idx'),
+        'delete'
+      )
+    ).toBe('Warranty deletion is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('keeps warranty mutation hooks on the formatter contract', () => {
     const sources = {
       claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
@@ -119,18 +141,28 @@ describe('warranty mutation error formatter', () => {
     expect(sources.policy).not.toContain('Failed to seed policies');
     expect(sources.policy).not.toContain('Failed to assign policy');
 
+    expect(sources.core).toContain(
+      "import { formatWarrantyCoreMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.core).not.toContain('Failed to update warranty notification settings');
+    expect(sources.core).not.toContain('Failed to delete warranty');
+    expect(sources.core).not.toContain('Failed to void warranty');
+    expect(sources.core).not.toContain('Failed to transfer warranty ownership');
+
     for (const source of Object.values(sources).filter(
-      (source) => source !== sources.claim && source !== sources.policy
+      (source) =>
+        source !== sources.claim && source !== sources.policy && source !== sources.core
     )) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
     }
     expect(sources.claim).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.policy).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(sources.core).not.toContain('toast.error(error instanceof Error ? error.message');
 
     expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
     expect(sources.policy.match(/formatWarrantyPolicyMutationError\(error,/g)).toHaveLength(7);
-    expect(sources.core.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(4);
+    expect(sources.core.match(/formatWarrantyCoreMutationError\(error,/g)).toHaveLength(4);
     expect(sources.entitlement.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
     expect(sources.extension.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
     expect(sources.certificate.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);

@@ -36,12 +36,22 @@ const WARRANTY_POLICY_MUTATION_FALLBACKS = {
     'Category warranty policy assignment is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const WARRANTY_CORE_MUTATION_FALLBACKS = {
+  updateNotifications:
+    'Warranty notification settings update is temporarily unavailable. Please refresh and try again.',
+  delete: 'Warranty deletion is temporarily unavailable. Please refresh and try again.',
+  void: 'Warranty voiding is temporarily unavailable. Please refresh and try again.',
+  transferOwnership:
+    'Warranty ownership transfer is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
 
 export type WarrantyClaimMutationAction = keyof typeof WARRANTY_CLAIM_MUTATION_FALLBACKS;
 export type WarrantyPolicyMutationAction = keyof typeof WARRANTY_POLICY_MUTATION_FALLBACKS;
+export type WarrantyCoreMutationAction = keyof typeof WARRANTY_CORE_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -231,4 +241,11 @@ export function formatWarrantyPolicyMutationError(
   action: WarrantyPolicyMutationAction
 ): string {
   return formatWarrantyMutationError(error, WARRANTY_POLICY_MUTATION_FALLBACKS[action]);
+}
+
+export function formatWarrantyCoreMutationError(
+  error: unknown,
+  action: WarrantyCoreMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_CORE_MUTATION_FALLBACKS[action]);
 }
