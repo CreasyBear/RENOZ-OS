@@ -135,3 +135,6 @@ export { useCustomerTriage } from './use-customer-triage';
 
 // Rollback hooks
 export { useRecentBulkOperations, useRollbackBulkOperation } from './use-rollback';
+
+// Mutation feedback helpers
+export { formatCustomerMutationError } from './_mutation-errors';

@@ -45,6 +45,7 @@ import {
   useRecentBulkOperations,
   useRollbackBulkOperation,
   useCustomerKpis,
+  formatCustomerMutationError,
 } from "@/hooks/customers";
 import { useTableSelection } from "@/components/shared/data-table";
 import { BulkActionsBar } from "@/components/layout";
@@ -151,8 +152,8 @@ export function CustomersListContainer({
         toastSuccess("Tags assigned to selected customers");
         setShowTagDialog(false);
         form.reset();
-      } catch {
-        toastError("Failed to assign tags");
+      } catch (error) {
+        toastError(formatCustomerMutationError(error, "Unable to assign customer tags."));
       }
     },
   });
@@ -305,11 +306,7 @@ export function CustomersListContainer({
         await deleteMutation.mutateAsync(customerId);
         toastSuccess("Customer deleted");
       } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Failed to delete customer";
-        toastError(message);
+        toastError(formatCustomerMutationError(error, "Unable to delete customer."));
       }
     },
     [deleteMutation, customers, confirmation]
@@ -336,13 +333,14 @@ export function CustomersListContainer({
       
       return operationResult;
     } catch (error) {
+      const message = formatCustomerMutationError(error, "Unable to update customer status.");
       const operationResult: OperationResult = {
         success: 0,
         failed: Array.from(selectedIds).length,
-        errors: [{ customerId: "", error: error instanceof Error ? error.message : "Failed to update status" }],
+        errors: [{ customerId: "", error: message }],
       };
       setOperationResult(operationResult);
-      toastError("Failed to update status");
+      toastError(message);
       throw error;
     } finally {
       setTimeout(() => {
@@ -373,13 +371,14 @@ export function CustomersListContainer({
       
       return operationResult;
     } catch (error) {
+      const message = formatCustomerMutationError(error, "Unable to assign customer tags.");
       const operationResult: OperationResult = {
         success: 0,
         failed: Array.from(selectedIds).length,
-        errors: [{ customerId: "", error: error instanceof Error ? error.message : "Failed to assign tags" }],
+        errors: [{ customerId: "", error: message }],
       };
       setOperationResult(operationResult);
-      toastError("Failed to assign tags");
+      toastError(message);
       throw error;
     } finally {
       setTimeout(() => setCurrentOperation(""), 500);
@@ -423,13 +422,14 @@ export function CustomersListContainer({
       await refetchRecentOperations(); // Refresh rollback list
       return operationResult;
     } catch (error) {
+      const message = formatCustomerMutationError(error, "Unable to update customer health score.");
       const operationResult: OperationResult = {
         success: 0,
         failed: Array.from(selectedIds).length,
-        errors: [{ customerId: "", error: error instanceof Error ? error.message : "Failed to update health score" }],
+        errors: [{ customerId: "", error: message }],
       };
       setOperationResult(operationResult);
-      toastError("Failed to update health score");
+      toastError(message);
       throw error;
     } finally {
       setTimeout(() => setCurrentOperation(""), 500);
@@ -463,13 +463,14 @@ export function CustomersListContainer({
       clearSelection();
       return operationResult;
     } catch (error) {
+      const message = formatCustomerMutationError(error, "Unable to delete selected customers.");
       const operationResult: OperationResult = {
         success: 0,
         failed: count,
-        errors: [{ customerId: "", error: error instanceof Error ? error.message : "Failed to delete customers" }],
+        errors: [{ customerId: "", error: message }],
       };
       setOperationResult(operationResult);
-      toastError("Failed to delete customers");
+      toastError(message);
       throw error;
     } finally {
       setTimeout(() => setCurrentOperation(""), 500);
