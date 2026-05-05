@@ -24,10 +24,7 @@ describe('RMA detail mutation feedback contract', () => {
 
     expect(hook).not.toContain("import { toastSuccess, toastError } from '@/hooks'");
     expect(hook).toContain("import { toast } from '@/hooks/_shared/use-toast'");
-    expect(hook).toContain("import { formatSupportMutationError } from './_mutation-errors'");
-    expect(hook).toContain('const RMA_MUTATION_CODE_MESSAGES');
-    expect(hook).toContain('function formatRmaMutationError');
-    expect(hook).toContain('function formatRmaExecutionBlockedFeedback');
+    expect(hook).toContain("} from './_rma-mutation-errors'");
 
     const approve = section(hook, 'const handleApprove', 'const handleReject');
     const reject = section(hook, 'const handleReject', 'const handleReceive');

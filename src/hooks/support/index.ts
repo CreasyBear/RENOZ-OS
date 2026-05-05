@@ -19,6 +19,7 @@ export * from './use-csat';
 export * from './use-issue-templates';
 export * from './use-knowledge-base';
 export * from './use-rma';
+export { formatRmaMutationError } from './_rma-mutation-errors';
 export { useRmaDetail, type UseRmaDetailReturn } from './use-rma-detail';
 export * from './use-optimistic-feedback-deltas';
 export * from './use-sla';

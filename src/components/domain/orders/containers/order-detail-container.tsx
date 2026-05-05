@@ -67,7 +67,7 @@ import { AmendmentRequestDialogContainer, AmendmentReviewDialog } from '../amend
 import { RecordPaymentDialog } from '../dialogs/record-payment-dialog';
 import { RefundPaymentDialog } from '../dialogs/refund-payment-dialog';
 import { RmaCreateDialog } from '@/components/domain/support/rma/rma-create-dialog';
-import { useCreateRma, useIssue } from '@/hooks/support';
+import { formatRmaMutationError, useCreateRma, useIssue } from '@/hooks/support';
 import { useOrderDetailDialogState } from './use-order-detail-dialog-state';
 import { useOrderDetailRouteIntents } from './use-order-detail-route-intents';
 import { useOrderDetailContainerActions } from './use-order-detail-container-actions';
@@ -1149,16 +1149,21 @@ export function OrderDetailContainer({
             navigate({ to: '/support/rmas/$rmaId', params: { rmaId } });
           }}
           onSubmit={async (payload) => {
-            const result = await createRmaMutation.mutateAsync({
-              orderId: payload.orderId,
-              reason: payload.reason,
-              lineItems: payload.lineItems,
-              issueId: payload.issueId,
-              customerId: payload.customerId,
-              reasonDetails: payload.reasonDetails,
-              customerNotes: payload.customerNotes,
-            });
-            return { id: result.id };
+            try {
+              const result = await createRmaMutation.mutateAsync({
+                orderId: payload.orderId,
+                reason: payload.reason,
+                lineItems: payload.lineItems,
+                issueId: payload.issueId,
+                customerId: payload.customerId,
+                reasonDetails: payload.reasonDetails,
+                customerNotes: payload.customerNotes,
+              });
+              return { id: result.id };
+            } catch (error) {
+              toastError(formatRmaMutationError(error, 'Failed to create RMA'));
+              throw error;
+            }
           }}
           isSubmitting={createRmaMutation.isPending}
         />

@@ -291,8 +291,8 @@ export function RmaCreateDialog({
 
       onOpenChange(false);
       onSuccess?.(result.id);
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to create RMA');
+    } catch {
+      // Mutation feedback is owned by the submit caller; keep the dialog open on failure.
     }
   };
 
