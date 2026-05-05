@@ -17,6 +17,7 @@ import { toast } from '@/lib/toast';
 import { generateCSV, downloadCSV, formatDateForFilename } from '@/lib/utils/csv';
 import { useProcurementDashboard } from '@/hooks/suppliers';
 import {
+  formatCustomReportMutationError,
   formatGeneratedReportError,
   formatReportScheduleError,
   useCreateCustomReport,
@@ -185,8 +186,13 @@ export function ProcurementReportsPage() {
           },
         });
         toast.success('Custom report created successfully');
-      } catch {
-        toast.error('Failed to create custom report');
+      } catch (error) {
+        toast.error(
+          formatCustomReportMutationError(
+            error,
+            'Custom report creation is temporarily unavailable. Please refresh and try again.'
+          )
+        );
       }
     },
     [createCustomReport]

@@ -20,6 +20,13 @@ const SCHEDULED_REPORT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many scheduled report actions were attempted. Wait a moment and retry.',
 };
 
+const CUSTOM_REPORT_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The custom report could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage custom reports.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing custom reports.',
+  RATE_LIMIT: 'Too many custom report actions were attempted. Wait a moment and retry.',
+};
+
 interface FormatReportsMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -242,4 +249,13 @@ export function formatReportScheduleError(error: unknown, reportName: string): s
     error,
     `${reportLabel} scheduling is temporarily unavailable. Please refresh and try again.`
   );
+}
+
+export function formatCustomReportMutationError(
+  error: unknown,
+  fallback: string
+): string {
+  return formatReportsMutationError(error, fallback, {
+    codeMessages: CUSTOM_REPORT_CODE_MESSAGES,
+  });
 }
