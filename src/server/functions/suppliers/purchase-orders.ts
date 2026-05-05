@@ -33,6 +33,7 @@ import {
   updatePurchaseOrderSchema,
   purchaseOrderItemSchema,
 } from '@/lib/schemas/purchase-orders';
+import { toBulkDeletePOFailure, type BulkDeletePOFailure } from './bulk-delete-failure';
 
 // Excluded fields for activity logging (system-managed fields)
 const PO_EXCLUDED_FIELDS: string[] = [
@@ -842,7 +843,7 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
   });
 
 /** Per-ID failure for bulk delete (PROC-001 / D5.5) */
-export type BulkDeletePOFailure = { id: string; error: string };
+export type { BulkDeletePOFailure } from './bulk-delete-failure';
 
 /**
  * Bulk delete draft purchase orders.
@@ -906,8 +907,7 @@ export const bulkDeletePurchaseOrders = createServerFn({ method: 'POST' })
 
         results.deleted += 1;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        results.failed.push({ id, error: msg });
+        results.failed.push(toBulkDeletePOFailure(id, err));
       }
     }
 
