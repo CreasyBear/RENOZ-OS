@@ -306,4 +306,72 @@ describe('BulkReceivingDialog', () => {
     expect(screen.queryByText('2 purchase orders ready to receive')).not.toBeInTheDocument()
     expect(onConfirm).not.toHaveBeenCalled()
   })
+
+  it('returns failed serialized bulk receipts to serial review instead of retrying immediately', async () => {
+    const onConfirm = vi.fn().mockResolvedValue({
+      processed: 0,
+      failed: 1,
+      errors: [
+        {
+          poId: 'po-1',
+          error: 'Serial "SN-001" already exists in stock.',
+        },
+      ],
+    })
+
+    const { BulkReceivingDialog } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog'
+    )
+
+    render(
+      <BulkReceivingDialog
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-001',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 100,
+            currency: 'AUD',
+          } as never,
+        ]}
+        poDetailsWithSerials={[
+          {
+            poId: 'po-1',
+            poNumber: 'PO-001',
+            items: [
+              {
+                id: 'po-item-1',
+                productId: 'product-1',
+                productName: 'RENOZ LFP Module',
+                productSku: 'LFP-100',
+                quantityPending: 1,
+                requiresSerialNumbers: true,
+              },
+            ],
+            hasSerializedItems: true,
+            totalSerializedQuantity: 1,
+          },
+        ]}
+        onConfirm={onConfirm}
+      />
+    )
+
+    expect(await screen.findByText('1 of 1 purchase orders selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /use sn001/i }))
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /receive 1 purchase order/i }))
+
+    expect(await screen.findByText('Failed Purchase Orders')).toBeInTheDocument()
+    expect(screen.getByText('Serial "SN-001" already exists in stock.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /review failed serials/i }))
+
+    expect(screen.getByText(/1 serialized item require serial numbers/i)).toBeInTheDocument()
+    expect(screen.getByText(/serial-entry: sn-001/i)).toBeInTheDocument()
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
 })

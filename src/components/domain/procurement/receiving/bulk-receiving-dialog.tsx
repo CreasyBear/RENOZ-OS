@@ -283,6 +283,22 @@ export function BulkReceivingDialog({
     await runProcessing(failedPOIds);
   }, [failureDetails, runProcessing]);
 
+  const handleReviewFailed = useCallback(() => {
+    const failedPOIds = Array.from(new Set(failureDetails.map((f) => f.poId)));
+    if (failedPOIds.length === 0) return;
+
+    const failedPOSet = new Set(failedPOIds);
+    const failedHasSerializedItems = poDetailsWithSerials.some(
+      (po) => failedPOSet.has(po.poId) && po.hasSerializedItems
+    );
+
+    setSelectedPOIds(failedPOSet);
+    setProcessingProgress({ processed: 0, failed: 0 });
+    setAttemptTotal(0);
+    setFailureDetails([]);
+    setStep(failedHasSerializedItems ? 'serials' : 'review');
+  }, [failureDetails, poDetailsWithSerials]);
+
   const handleClose = useCallback(() => {
     if (isProcessing) return; // Prevent closing during processing
     onOpenChange(false);
@@ -291,6 +307,10 @@ export function BulkReceivingDialog({
   const isAllSelected = selectedPOIds.size === purchaseOrders.length && purchaseOrders.length > 0;
   const isPartiallySelected =
     selectedPOIds.size > 0 && selectedPOIds.size < purchaseOrders.length;
+  const failedPOIdSet = new Set(failureDetails.map((failure) => failure.poId));
+  const failedHasSerializedItems = selectedPODetails.some(
+    (po) => failedPOIdSet.has(po.poId) && po.hasSerializedItems
+  );
 
   // Step content
   const renderSelectStep = () => (
@@ -519,7 +539,6 @@ export function BulkReceivingDialog({
         reasons,
       };
     });
-
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -748,9 +767,15 @@ export function BulkReceivingDialog({
                 </Link>
               )}
               {processingProgress.failed > 0 && !isProcessing && (
-                <Button onClick={handleRetryFailed}>
-                  Retry Failed ({processingProgress.failed})
-                </Button>
+                failedHasSerializedItems ? (
+                  <Button onClick={handleReviewFailed}>
+                    Review Failed Serials ({processingProgress.failed})
+                  </Button>
+                ) : (
+                  <Button onClick={handleRetryFailed}>
+                    Retry Failed ({processingProgress.failed})
+                  </Button>
+                )
               )}
               <Button
                 onClick={handleClose}
