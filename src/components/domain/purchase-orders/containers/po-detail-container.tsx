@@ -58,6 +58,7 @@ import { EntityHeaderActions } from '@/components/shared';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { GoodsReceiptDialog } from '../receive/goods-receipt-dialog';
 import { toastSuccess, toastError } from '@/hooks';
+import { formatPurchaseOrderMutationError } from '@/hooks/purchase-orders/_mutation-errors';
 import {
   usePurchaseOrder,
   useDeletePurchaseOrder,
@@ -242,8 +243,10 @@ export function PODetailContainer({
     try {
       await submitMutation.mutateAsync({ id: poId });
       toastSuccess('Purchase order submitted for approval');
-    } catch {
-      toastError('Failed to submit for approval');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to submit for approval')
+      );
     }
   }, [submitMutation, poId]);
 
@@ -256,8 +259,10 @@ export function PODetailContainer({
           onClick: () => setReceiveDialogOpen(true),
         },
       });
-    } catch {
-      toastError('Failed to approve purchase order');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to approve purchase order')
+      );
     }
   }, [approveMutation, poId]);
 
@@ -265,8 +270,10 @@ export function PODetailContainer({
     try {
       await rejectMutation.mutateAsync({ id: poId, reason: 'Rejected by approver' });
       toastSuccess('Purchase order rejected');
-    } catch {
-      toastError('Failed to reject purchase order');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to reject purchase order')
+      );
     }
   }, [rejectMutation, poId]);
 
@@ -279,8 +286,10 @@ export function PODetailContainer({
           onClick: () => setReceiveDialogOpen(true),
         },
       });
-    } catch {
-      toastError('Failed to mark as ordered');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to mark as ordered')
+      );
     }
   }, [orderMutation, poId]);
 
@@ -291,8 +300,10 @@ export function PODetailContainer({
       toastSuccess('Purchase order cancelled');
       setCancelDialogOpen(false);
       onBack?.();
-    } catch {
-      toastError('Failed to cancel purchase order');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to cancel purchase order')
+      );
     }
   }, [cancelMutation, poId, onBack]);
 
@@ -303,8 +314,10 @@ export function PODetailContainer({
       toastSuccess('Purchase order deleted');
       setDeleteDialogOpen(false);
       onBack?.();
-    } catch {
-      toastError('Failed to delete purchase order');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to delete purchase order')
+      );
     }
   }, [deleteMutation, poId, onBack]);
 
@@ -338,8 +351,10 @@ export function PODetailContainer({
       if (openEditOnMount) {
         onEditModeClose?.();
       }
-    } catch {
-      toastError('Failed to update purchase order');
+    } catch (error) {
+      toastError(
+        formatPurchaseOrderMutationError(error, 'Failed to update purchase order')
+      );
     }
   }, [po, editForm, updateMutation, openEditOnMount, onEditModeClose]);
 
