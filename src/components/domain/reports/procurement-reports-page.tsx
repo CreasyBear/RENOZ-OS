@@ -11,6 +11,7 @@ import {
   ProcurementReports,
   type ProcurementAnalytics,
 } from '@/components/domain/reports/procurement-reports';
+import { formatProcurementAnalyticsReadError } from '@/components/domain/reports/procurement-report-errors';
 import { type DateRange } from '@/components/ui/date-picker-with-range';
 import type { ProcurementTab } from '@/lib/schemas/reports/procurement';
 import { toast } from '@/lib/toast';
@@ -75,7 +76,7 @@ export function ProcurementReportsPage() {
     includePreviousPeriod: true,
   });
   const reportError = !data && error instanceof Error ? error : null;
-  const reportWarning = data && error instanceof Error ? error.message : null;
+  const reportWarning = data && error ? formatProcurementAnalyticsReadError(error) : null;
 
   const createCustomReport = useCreateCustomReport();
   const createScheduledReport = useCreateScheduledReport();

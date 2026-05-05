@@ -75,6 +75,7 @@ import type {
   ReportConfigType,
   ProcurementTab,
 } from '@/lib/schemas/reports/procurement';
+import { formatProcurementAnalyticsReadError } from './procurement-report-errors';
 
 // Re-export for consumers
 export type { ProcurementAnalytics, ReportConfig, ProcurementReportsProps };
@@ -165,10 +166,11 @@ export const ProcurementReports = memo(function ProcurementReports({
 
   // Handle error state
   if (error) {
+    const errorMessage = formatProcurementAnalyticsReadError(error);
     return (
       <div className="flex flex-col items-center justify-center space-y-4 py-12">
         <p className="text-destructive text-lg font-medium">Failed to load procurement analytics</p>
-        <p className="text-muted-foreground text-sm">{error.message}</p>
+        <p className="text-muted-foreground text-sm">{errorMessage}</p>
       </div>
     );
   }
