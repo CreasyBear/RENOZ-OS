@@ -11,9 +11,22 @@ const DEFAULT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many warranty claim updates were attempted. Wait a moment and retry.',
 };
 
+const WARRANTY_CLAIM_MUTATION_FALLBACKS = {
+  submit: 'Warranty claim submission is temporarily unavailable. Please refresh and try again.',
+  updateStatus:
+    'Warranty claim status update is temporarily unavailable. Please refresh and try again.',
+  approve: 'Warranty claim approval is temporarily unavailable. Please refresh and try again.',
+  deny: 'Warranty claim denial is temporarily unavailable. Please refresh and try again.',
+  resolve: 'Warranty claim resolution is temporarily unavailable. Please refresh and try again.',
+  assign: 'Warranty claim assignment is temporarily unavailable. Please refresh and try again.',
+  cancel: 'Warranty claim cancellation is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
+
+export type WarrantyClaimMutationAction = keyof typeof WARRANTY_CLAIM_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -189,4 +202,11 @@ export function formatWarrantyMutationError(
   }
 
   return fallback;
+}
+
+export function formatWarrantyClaimMutationError(
+  error: unknown,
+  action: WarrantyClaimMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_CLAIM_MUTATION_FALLBACKS[action]);
 }

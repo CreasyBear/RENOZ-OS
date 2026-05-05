@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatWarrantyMutationError } from '@/hooks/warranty/_mutation-errors';
+import {
+  formatWarrantyClaimMutationError,
+  formatWarrantyMutationError,
+} from '@/hooks/warranty/_mutation-errors';
 
 const root = process.cwd();
 
@@ -21,7 +24,7 @@ describe('warranty mutation error formatter', () => {
       statusCode: 400,
     };
 
-    expect(formatWarrantyMutationError(error, 'Failed to submit claim')).toBe(
+    expect(formatWarrantyClaimMutationError(error, 'submit')).toBe(
       'Claimant details are required.'
     );
   });
@@ -37,7 +40,7 @@ describe('warranty mutation error formatter', () => {
       statusCode: 400,
     };
 
-    expect(formatWarrantyMutationError(error, 'Failed to update status')).toBe(
+    expect(formatWarrantyClaimMutationError(error, 'updateStatus')).toBe(
       'This claim cannot move to that status. Refresh and review the current claim state.'
     );
   });
@@ -50,16 +53,16 @@ describe('warranty mutation error formatter', () => {
           message: 'Cannot approve claim with status: denied',
           statusCode: 400,
         },
-        'Failed to approve claim'
+        'Warranty claim approval is temporarily unavailable. Please refresh and try again.'
       )
     ).toBe('Cannot approve claim with status: denied');
 
     expect(
-      formatWarrantyMutationError(
+      formatWarrantyClaimMutationError(
         new Error('duplicate key value violates unique constraint warranty_claims_pkey'),
-        'Failed to approve claim'
+        'approve'
       )
-    ).toBe('Failed to approve claim');
+    ).toBe('Warranty claim approval is temporarily unavailable. Please refresh and try again.');
   });
 
   it('keeps warranty mutation hooks on the formatter contract', () => {
@@ -73,12 +76,24 @@ describe('warranty mutation error formatter', () => {
       bulkImport: read('src/hooks/warranty/bulk-import/use-warranty-bulk-import.ts'),
     };
 
-    for (const source of Object.values(sources)) {
+    expect(sources.claim).toContain(
+      "import { formatWarrantyClaimMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.claim).not.toContain('Failed to submit claim');
+    expect(sources.claim).not.toContain('Failed to update status');
+    expect(sources.claim).not.toContain('Failed to approve claim');
+    expect(sources.claim).not.toContain('Failed to deny claim');
+    expect(sources.claim).not.toContain('Failed to resolve claim');
+    expect(sources.claim).not.toContain('Failed to assign claim');
+    expect(sources.claim).not.toContain('Failed to cancel claim');
+
+    for (const source of Object.values(sources).filter((source) => source !== sources.claim)) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
     }
+    expect(sources.claim).not.toContain('toast.error(error instanceof Error ? error.message');
 
-    expect(sources.claim.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
+    expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
     expect(sources.policy.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
     expect(sources.core.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(4);
     expect(sources.entitlement.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);

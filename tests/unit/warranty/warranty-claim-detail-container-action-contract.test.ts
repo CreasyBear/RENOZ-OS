@@ -19,6 +19,6 @@ describe('warranty claim detail container action contract', () => {
     expect(container).toContain('useCancelWarrantyClaim()');
     expect(container).toContain('await cancelMutation.mutateAsync({ id: currentClaim.id })');
     expect(hook).toContain('showClaimMutationOutcome(\'cancelled\'');
-    expect(hook).toContain("toast.error(formatWarrantyMutationError(error, 'Failed to cancel claim'))");
+    expect(hook).toContain("toast.error(formatWarrantyClaimMutationError(error, 'cancel'))");
   });
 });
