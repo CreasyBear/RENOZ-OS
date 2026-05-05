@@ -40,6 +40,10 @@ import { BulkReceivingDialogContainer } from '@/components/domain/procurement/re
 import { BulkActionsBar } from '@/components/shared/data-table';
 import { useReceivingDialog } from '@/hooks/purchase-orders/use-receiving-dialog';
 import {
+  formatPurchaseOrderBulkFailureReason,
+  formatPurchaseOrderMutationError,
+} from '@/hooks/purchase-orders/_mutation-errors';
+import {
   usePurchaseOrders,
   usePurchaseOrderStatusCounts,
   useDeletePurchaseOrder,
@@ -232,7 +236,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
             },
             onError: (error) => {
               toast.error(
-                error instanceof Error ? error.message : 'Failed to delete purchase order'
+                formatPurchaseOrderMutationError(error, 'Failed to delete purchase order')
               );
             },
           }
@@ -393,7 +397,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
       setSelectedIds(new Set());
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to bulk approve purchase orders'
+        formatPurchaseOrderMutationError(error, 'Failed to bulk approve purchase orders')
       );
     }
   }, [
@@ -427,7 +431,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
           bulkResult.failed.map((f) => ({
             id: f.id,
             poNumber: idToPoNumber.get(f.id) ?? f.id,
-            error: f.error,
+            error: formatPurchaseOrderBulkFailureReason(f.error),
           }))
         );
         setSelectedIds(new Set(failedIds));
@@ -437,7 +441,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
       setSelectedIds(new Set());
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to bulk delete purchase orders'
+        formatPurchaseOrderMutationError(error, 'Failed to bulk delete purchase orders')
       );
     }
   }, [canBulkDelete, draftPOs, confirm, bulkDeleteMutation]);
@@ -458,7 +462,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
           bulkResult.failed.map((f) => ({
             id: f.id,
             poNumber: idToFailure.get(f.id)?.poNumber ?? f.id,
-            error: f.error,
+            error: formatPurchaseOrderBulkFailureReason(f.error),
           }))
         );
         setSelectedIds(new Set(bulkResult.failed.map((f) => f.id)));
@@ -468,7 +472,7 @@ export default function PurchaseOrdersPage({ search }: PurchaseOrdersPageProps) 
       }
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to retry bulk delete'
+        formatPurchaseOrderMutationError(error, 'Failed to retry bulk delete')
       );
     }
   }, [bulkDeleteFailures, bulkDeleteMutation]);

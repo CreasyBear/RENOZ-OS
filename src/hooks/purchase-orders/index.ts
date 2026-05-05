@@ -4,6 +4,10 @@
 
 export { useReceivingDialog } from './use-receiving-dialog';
 export { useProductSerialization } from './use-product-serialization';
+export {
+  formatPurchaseOrderBulkFailureReason,
+  formatPurchaseOrderMutationError,
+} from './_mutation-errors';
 export type { ProductSerializationMap } from './use-product-serialization';
 export type {
   ReceivingDialogState,
