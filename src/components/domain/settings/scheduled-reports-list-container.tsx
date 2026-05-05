@@ -18,6 +18,7 @@ import { Plus, RefreshCw, Play, Pause, Trash2 } from 'lucide-react';
 import { MetricCard } from '@/components/shared/metric-card';
 import { FileText, CheckCircle2, PauseCircle, Clock } from 'lucide-react';
 import {
+  formatScheduledReportMutationError,
   useScheduledReports,
   useCreateScheduledReport,
   useUpdateScheduledReport,
@@ -37,6 +38,15 @@ import {
   DEFAULT_SCHEDULED_REPORTS_FILTERS,
 } from './scheduled-reports-filter-config';
 import type { ScheduledReportsFiltersState } from './scheduled-reports-filter-config';
+
+const SCHEDULED_REPORT_ERROR_FALLBACKS = {
+  create: 'Scheduled report creation is temporarily unavailable. Please refresh and try again.',
+  update: 'Scheduled report updates are temporarily unavailable. Please refresh and try again.',
+  delete: 'Scheduled report deletion is temporarily unavailable. Please refresh and try again.',
+  execute: 'Scheduled report execution is temporarily unavailable. Please refresh and try again.',
+  bulkDelete: 'Scheduled report deletion is temporarily unavailable. Please refresh and try again.',
+  bulkUpdate: 'Scheduled report status updates are temporarily unavailable. Please refresh and try again.',
+} as const;
 
 export interface ScheduledReportsListContainerProps {
   /** Filters from URL (synced by parent route) */
@@ -133,6 +143,15 @@ export function ScheduledReportsListContainer({
   const executeMutation = useExecuteScheduledReport();
   const bulkDeleteMutation = useBulkDeleteScheduledReports();
   const bulkUpdateMutation = useBulkUpdateScheduledReports();
+  const submitMutationError = createMutation.error ?? updateMutation.error;
+  const submitError = submitMutationError
+    ? formatScheduledReportMutationError(
+        submitMutationError,
+        editingReport
+          ? SCHEDULED_REPORT_ERROR_FALLBACKS.update
+          : SCHEDULED_REPORT_ERROR_FALLBACKS.create
+      )
+    : null;
 
   const handleCreateClick = useCallback(() => {
     setEditingReport(null);
@@ -155,8 +174,10 @@ export function ScheduledReportsListContainer({
         await deleteMutation.mutateAsync(report.id);
         toast.success(`"${report.name}" has been deleted`);
         clearSelection();
-      } catch {
-        toast.error('Failed to delete report');
+      } catch (error) {
+        toast.error(
+          formatScheduledReportMutationError(error, SCHEDULED_REPORT_ERROR_FALLBACKS.delete)
+        );
       }
     },
     [confirmation, deleteMutation, clearSelection]
@@ -168,8 +189,10 @@ export function ScheduledReportsListContainer({
       try {
         await executeMutation.mutateAsync(report.id);
         toast.success(`"${report.name}" execution triggered`);
-      } catch {
-        toast.error('Failed to execute report');
+      } catch (error) {
+        toast.error(
+          formatScheduledReportMutationError(error, SCHEDULED_REPORT_ERROR_FALLBACKS.execute)
+        );
       } finally {
         setExecutingReportId(null);
       }
@@ -189,8 +212,10 @@ export function ScheduledReportsListContainer({
             ? `"${report.name}" has been paused`
             : `"${report.name}" has been activated`
         );
-      } catch {
-        toast.error('Failed to update report status');
+      } catch (error) {
+        toast.error(
+          formatScheduledReportMutationError(error, SCHEDULED_REPORT_ERROR_FALLBACKS.update)
+        );
       }
     },
     [updateMutation]
@@ -208,9 +233,14 @@ export function ScheduledReportsListContainer({
         }
         setFormOpen(false);
         setEditingReport(null);
-      } catch {
+      } catch (error) {
         toast.error(
-          editingReport ? 'Failed to update report' : 'Failed to create report'
+          formatScheduledReportMutationError(
+            error,
+            editingReport
+              ? SCHEDULED_REPORT_ERROR_FALLBACKS.update
+              : SCHEDULED_REPORT_ERROR_FALLBACKS.create
+          )
         );
       }
     },
@@ -230,8 +260,10 @@ export function ScheduledReportsListContainer({
         await bulkDeleteMutation.mutateAsync({ ids: Array.from(selectedIds) });
         toast.success(`${selectedIds.size} reports deleted`);
         clearSelection();
-      } catch {
-        toast.error('Failed to delete reports');
+      } catch (error) {
+        toast.error(
+          formatScheduledReportMutationError(error, SCHEDULED_REPORT_ERROR_FALLBACKS.bulkDelete)
+        );
       }
     },
     [selectedIds, confirmation, bulkDeleteMutation, clearSelection]
@@ -249,8 +281,10 @@ export function ScheduledReportsListContainer({
           `${selectedIds.size} reports ${activate ? 'activated' : 'paused'}`
         );
         clearSelection();
-      } catch {
-        toast.error('Failed to update reports');
+      } catch (error) {
+        toast.error(
+          formatScheduledReportMutationError(error, SCHEDULED_REPORT_ERROR_FALLBACKS.bulkUpdate)
+        );
       }
     },
     [selectedIds, bulkUpdateMutation, clearSelection]
@@ -419,7 +453,7 @@ export function ScheduledReportsListContainer({
         report={editingReport}
         onSubmit={handleFormSubmit}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
-        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitError={submitError}
       />
     </div>
   );

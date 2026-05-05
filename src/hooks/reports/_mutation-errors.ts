@@ -13,6 +13,13 @@ const GENERATED_REPORT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many reports were generated. Wait a moment and retry.',
 };
 
+const SCHEDULED_REPORT_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The scheduled report could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage scheduled reports.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing scheduled reports.',
+  RATE_LIMIT: 'Too many scheduled report actions were attempted. Wait a moment and retry.',
+};
+
 interface FormatReportsMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -216,4 +223,13 @@ export function formatGeneratedReportError(
       codeMessages: GENERATED_REPORT_CODE_MESSAGES,
     }
   );
+}
+
+export function formatScheduledReportMutationError(
+  error: unknown,
+  fallback: string
+): string {
+  return formatReportsMutationError(error, fallback, {
+    codeMessages: SCHEDULED_REPORT_CODE_MESSAGES,
+  });
 }
