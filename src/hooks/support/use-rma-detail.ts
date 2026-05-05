@@ -13,7 +13,6 @@
  */
 
 import { useNavigate } from '@tanstack/react-router';
-import { toastSuccess, toastError } from '@/hooks';
 import {
   useRma,
   useApproveRma,
@@ -22,8 +21,10 @@ import {
   useProcessRma,
   useCancelRma,
 } from './use-rma';
+import { formatSupportMutationError } from './_mutation-errors';
 import { useTrackView } from '@/hooks/search';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
+import { toast } from '@/hooks/_shared/use-toast';
 import {
   rmaInspectionNotesSchema,
   type ProcessRmaPayload,
@@ -62,6 +63,33 @@ export interface UseRmaDetailReturn {
 // HOOK
 // ============================================================================
 
+const RMA_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  transition_blocked:
+    'This RMA cannot move to that status. Refresh and review the current RMA state.',
+  NOT_FOUND: 'The RMA could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to update this RMA.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before updating this RMA.',
+  RATE_LIMIT: 'Too many RMA updates were attempted. Wait a moment and retry.',
+};
+
+function formatRmaMutationError(error: unknown, fallback: string): string {
+  return formatSupportMutationError(error, fallback, {
+    codeMessages: RMA_MUTATION_CODE_MESSAGES,
+  });
+}
+
+function formatRmaExecutionBlockedFeedback(blockedReason: string | null | undefined): string {
+  return formatRmaMutationError(
+    {
+      statusCode: 400,
+      errors: {
+        executionBlockedReason: [blockedReason ?? 'RMA execution is blocked'],
+      },
+    },
+    'RMA execution is blocked'
+  );
+}
+
 export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
   const navigate = useNavigate();
   const { confirm } = useConfirmation();
@@ -85,18 +113,20 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
   const handleApprove = async (notes?: string) => {
     try {
       await approveMutation.mutateAsync({ rmaId, notes: notes ?? null });
-      toastSuccess('RMA approved successfully');
+      toast.success('RMA approved successfully');
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to approve RMA');
+      toast.error(formatRmaMutationError(err, 'Failed to approve RMA'));
+      throw err;
     }
   };
 
   const handleReject = async (reason: string) => {
     try {
       await rejectMutation.mutateAsync({ rmaId, rejectionReason: reason });
-      toastSuccess('RMA rejected');
+      toast.success('RMA rejected');
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to reject RMA');
+      toast.error(formatRmaMutationError(err, 'Failed to reject RMA'));
+      throw err;
     }
   };
 
@@ -108,7 +138,7 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
             .safeParse(inspection)
         : { success: false as const, data: undefined };
       if (!inspection?.locationId) {
-        toastError('Receiving location is required');
+        toast.error('Receiving location is required');
         return;
       }
       const result = await receiveMutation.mutateAsync({
@@ -117,13 +147,14 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
         inspectionNotes: parsed.success ? parsed.data : undefined,
       });
       const units = result.unitsRestored ?? 0;
-      toastSuccess(
+      toast.success(
         units > 0
           ? `RMA received. ${units} unit${units !== 1 ? 's' : ''} returned to inventory.`
           : 'RMA marked as received'
       );
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to mark RMA as received');
+      toast.error(formatRmaMutationError(err, 'Failed to mark RMA as received'));
+      throw err;
     }
   };
 
@@ -134,21 +165,25 @@ export function useRmaDetail(rmaId: string): UseRmaDetailReturn {
         ...input,
       });
       if (result.execution?.status === 'blocked') {
-        throw new Error(result.execution.blockedReason ?? 'RMA execution is blocked');
+        toast.error(formatRmaExecutionBlockedFeedback(result.execution.blockedReason));
+        throw new Error('RMA execution is blocked');
       }
-      toastSuccess('RMA remedy completed successfully');
+      toast.success('RMA remedy completed successfully');
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to execute remedy');
+      if (!(err instanceof Error && err.message === 'RMA execution is blocked')) {
+        toast.error(formatRmaMutationError(err, 'Failed to execute remedy'));
+      }
+      throw err;
     }
   };
 
   const handleCancel = async () => {
     try {
       await cancelMutation.mutateAsync({ id: rmaId });
-      toastSuccess('RMA cancelled successfully');
+      toast.success('RMA cancelled successfully');
       navigate({ to: '/support/rmas' });
     } catch (err) {
-      toastError(err instanceof Error ? err.message : 'Failed to cancel RMA');
+      toast.error(formatRmaMutationError(err, 'Failed to cancel RMA'));
     }
   };
 

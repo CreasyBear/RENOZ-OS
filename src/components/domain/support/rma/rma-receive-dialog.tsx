@@ -141,8 +141,8 @@ function RmaReceiveDialogForm({
       });
       resetForm();
       onClose();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to mark received');
+    } catch {
+      // Mutation feedback is owned by useRmaDetail; keep the dialog open on failure.
     }
   };
 

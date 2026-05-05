@@ -32,6 +32,20 @@ describe('support mutation error formatting', () => {
     ).toBe('You do not have permission to update this issue.');
   });
 
+  it('allows workflow-specific code copy at the call site', () => {
+    expect(
+      formatSupportMutationError(
+        { statusCode: 404, code: 'NOT_FOUND' },
+        'Failed to receive RMA',
+        {
+          codeMessages: {
+            NOT_FOUND: 'The RMA could not be found. Refresh and try again.',
+          },
+        }
+      )
+    ).toBe('The RMA could not be found. Refresh and try again.');
+  });
+
   it('suppresses unsafe infrastructure messages', () => {
     const message = formatSupportMutationError(
       {

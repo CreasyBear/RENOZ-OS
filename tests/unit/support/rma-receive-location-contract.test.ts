@@ -20,7 +20,7 @@ describe('RMA receive location contract', () => {
     const hook = read('src/hooks/support/use-rma-detail.ts');
 
     expect(hook).toContain("if (!inspection?.locationId) {");
-    expect(hook).toContain("toastError('Receiving location is required')");
+    expect(hook).toContain("toast.error('Receiving location is required')");
     expect(hook).toContain('locationId: inspection.locationId');
   });
 

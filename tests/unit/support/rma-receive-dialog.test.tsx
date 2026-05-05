@@ -309,6 +309,29 @@ describe('RmaReceiveDialog', () => {
     expect(screen.queryByText('Receive Items')).not.toBeInTheDocument();
   });
 
+  it('keeps the dialog open when the receive mutation fails', async () => {
+    const onReceive = vi.fn().mockRejectedValue(new Error('database constraint failed'));
+
+    render(<ReceiveDialogHarness onReceive={onReceive} />);
+
+    fireEvent.change(screen.getByLabelText('receivingLocation'), {
+      target: { value: 'loc-2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Received' }));
+
+    await waitFor(() => {
+      expect(onReceive).toHaveBeenCalledWith({
+        condition: 'good',
+        notes: undefined,
+        locationId: 'loc-2',
+      });
+    });
+
+    expect(screen.getByText('Receive Items')).toBeInTheDocument();
+    expect((screen.getByLabelText('receivingLocation') as HTMLSelectElement).value).toBe('loc-2');
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
   it('shows only active receiving locations in the selector', () => {
     render(
       <ReceiveDialogHarness

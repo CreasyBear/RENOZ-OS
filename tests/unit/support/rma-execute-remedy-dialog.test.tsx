@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Payment } from '@/lib/schemas/orders/order-payments';
 import type { RmaResponse } from '@/lib/schemas/support/rma';
@@ -252,6 +252,10 @@ function ExecuteRemedyHarness({
 }
 
 describe('RmaExecuteRemedyDialog', () => {
+  beforeEach(() => {
+    toastErrorMock.mockClear();
+  });
+
   it('shows the refund blocker and resets form state after close and reopen', async () => {
     render(<ExecuteRemedyHarness orderPayments={[]} onProcess={vi.fn().mockResolvedValue(undefined)} />);
 
@@ -323,5 +327,32 @@ describe('RmaExecuteRemedyDialog', () => {
         'This records a real refund payment against the selected source payment.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('keeps the dialog open when remedy execution fails', async () => {
+    const onProcess = vi.fn().mockRejectedValue(new Error('internal server error'));
+
+    render(
+      <ExecuteRemedyHarness
+        orderPayments={[createPayment()]}
+        onProcess={onProcess}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('resolution'), {
+      target: { value: 'repair' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Execute Remedy' }));
+
+    await waitFor(() => {
+      expect(onProcess).toHaveBeenCalledWith({
+        resolution: 'repair',
+        notes: undefined,
+      });
+    });
+
+    expect(screen.getByRole('heading', { name: 'Execute Remedy' })).toBeInTheDocument();
+    expect((screen.getByLabelText('resolution') as HTMLSelectElement).value).toBe('repair');
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 });

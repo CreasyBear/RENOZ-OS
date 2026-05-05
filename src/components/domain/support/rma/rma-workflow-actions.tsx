@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 
-import { useHasPermission, toastError } from '@/hooks';
+import { useHasPermission } from '@/hooks';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { useLocations } from '@/hooks/inventory';
 import { useOrderPayments } from '@/hooks/orders/use-order-payments';
@@ -74,8 +74,8 @@ export function RmaWorkflowActions({
     try {
       await onApprove();
       onSuccess?.();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to approve RMA');
+    } catch {
+      // Mutation feedback is owned by useRmaDetail; keep this presenter from closing as success.
     }
   };
 
@@ -86,8 +86,8 @@ export function RmaWorkflowActions({
     try {
       await onReject(reason.trim());
       onSuccess?.();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to reject RMA');
+    } catch {
+      // Mutation feedback is owned by useRmaDetail; keep this presenter from closing as success.
     }
   };
 

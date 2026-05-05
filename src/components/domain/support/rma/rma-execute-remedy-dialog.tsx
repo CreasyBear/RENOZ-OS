@@ -217,8 +217,8 @@ function RmaExecuteRemedyDialogForm({
 
       resetForm();
       onClose();
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to execute remedy');
+    } catch {
+      // Mutation feedback is owned by useRmaDetail; keep the dialog open on failure.
     }
   };
 
