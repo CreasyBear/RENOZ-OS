@@ -28,6 +28,15 @@ describe('customer import surface', () => {
     expect(existsSync(join(process.cwd(), 'src/server/customers.ts'))).toBe(false)
   })
 
+  it('does not keep retired customer directory/table surfaces around', () => {
+    expect(existsSync(join(process.cwd(), 'src/components/domain/customers/customer-directory.tsx'))).toBe(false)
+    expect(existsSync(join(process.cwd(), 'src/components/domain/customers/customer-table.tsx'))).toBe(false)
+
+    const index = readFileSync(join(process.cwd(), 'src/components/domain/customers/index.ts'), 'utf8')
+    expect(index).not.toContain('CustomerDirectory')
+    expect(index).not.toContain("from './customer-table'")
+  })
+
   it('does not reference the legacy customer server import path anywhere in src or tests', () => {
     const currentTestFile = join(process.cwd(), 'tests/unit/customers/customer-import-surface.test.ts')
     const files = [
@@ -38,6 +47,23 @@ describe('customer import surface', () => {
     for (const file of files) {
       const contents = readFileSync(file, 'utf8')
       expect(contents).not.toContain("@/server/customers")
+    }
+  })
+
+  it('does not reference retired customer directory/table import paths anywhere in src or tests', () => {
+    const currentTestFile = join(process.cwd(), 'tests/unit/customers/customer-import-surface.test.ts')
+    const files = [
+      ...collectFiles(join(process.cwd(), 'src')),
+      ...collectFiles(join(process.cwd(), 'tests')),
+    ].filter((file) => file !== currentTestFile)
+
+    for (const file of files) {
+      const contents = readFileSync(file, 'utf8')
+      expect(contents).not.toContain('CustomerDirectory')
+      expect(contents).not.toContain('./customer-directory')
+      expect(contents).not.toContain('./customer-table')
+      expect(contents).not.toContain('@/components/domain/customers/customer-directory')
+      expect(contents).not.toContain('@/components/domain/customers/customer-table')
     }
   })
 })

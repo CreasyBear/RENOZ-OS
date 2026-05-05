@@ -647,18 +647,21 @@ const CustomersPage = lazy(() => import('./customers-page'));
 
 export const Route = createFileRoute('/_authenticated/customers/')({
   validateSearch: searchParamsSchema,
-  component: () => (
-    <Suspense fallback={
-      <PageLayout variant="full-width">
-        <PageLayout.Header title="Customers" />
-        <PageLayout.Content>
-          <CustomerTableSkeleton />
-        </PageLayout.Content>
-      </PageLayout>
-    }>
-      <CustomersPage />
-    </Suspense>
-  ),
+  component: function CustomersRouteComponent() {
+    const search = Route.useSearch();
+    return (
+      <Suspense fallback={
+        <PageLayout variant="full-width">
+          <PageLayout.Header title="Customers" />
+          <PageLayout.Content>
+            <CustomerTableSkeleton />
+          </PageLayout.Content>
+        </PageLayout>
+      }>
+        <CustomersPage search={search} />
+      </Suspense>
+    );
+  },
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
@@ -670,20 +673,26 @@ export const Route = createFileRoute('/_authenticated/customers/')({
 /**
  * Customers Page Component
  *
- * Main customer directory page with search, filtering, and management.
+ * Main customer directory page with advanced search, filtering, and management.
  *
- * @source customers from useCustomers hook
- * @source tags from useCustomerTags hook
- * @source mutations from useDeleteCustomer hook
+ * @source filters from useTransformedFilterUrlState hook
+ * @source tags from useCustomerTags hook (supporting data)
  *
  * @see src/routes/_authenticated/customers/index.tsx
+ * @see src/components/domain/customers/customers-list-container.tsx
  */
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
+import { Plus } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
-import { CustomerDirectory } from '@/components/domain/customers';
-import { useCustomers, useDeleteCustomer } from '@/hooks/customers';
+import { useCustomerTags } from '@/hooks/customers';
+import {
+  CustomersListContainer,
+  DEFAULT_CUSTOMER_FILTERS,
+} from '@/components/domain/customers';
+import { useTransformedFilterUrlState } from '@/hooks/filters/use-filter-url-state';
+import { fromUrlParams, toUrlParams } from '@/lib/utils/customer-filters';
 import type { SearchParams } from './index';
 
 interface CustomersPageProps {
@@ -692,14 +701,22 @@ interface CustomersPageProps {
 
 export default function CustomersPage({ search }: CustomersPageProps) {
   const navigate = useNavigate();
-  
-  const { data, isLoading } = useCustomers({
-    page: search.page,
-    search: search.search,
-    status: search.status,
+
+  const { filters, setFilters } = useTransformedFilterUrlState({
+    currentSearch: search,
+    navigate,
+    defaults: DEFAULT_CUSTOMER_FILTERS,
+    fromUrlParams,
+    toUrlParams,
+    resetPageOnChange: ['search', 'status', 'type', 'size', 'healthScoreRange', 'tags'],
   });
-  
-  const deleteMutation = useDeleteCustomer();
+
+  const { data: tagsData } = useCustomerTags();
+  const availableTags = (tagsData || []).map((tag) => ({
+    id: tag.id,
+    name: tag.name,
+    color: tag.color,
+  }));
   
   const handleCreate = useCallback(() => {
     navigate({ to: '/customers/new' });
@@ -709,13 +726,19 @@ export default function CustomersPage({ search }: CustomersPageProps) {
     <PageLayout variant="full-width">
       <PageLayout.Header
         title="Customers"
-        actions={<Button onClick={handleCreate}>Add Customer</Button>}
+        actions={
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Customer
+          </Button>
+        }
       />
       <PageLayout.Content>
-        <CustomerDirectory
-          customers={data?.items || []}
-          isLoading={isLoading}
-          onDelete={(id) => deleteMutation.mutate(id)}
+        <CustomersListContainer
+          filters={filters}
+          onFiltersChange={setFilters}
+          onCreateCustomer={handleCreate}
+          availableTags={availableTags}
         />
       </PageLayout.Content>
     </PageLayout>

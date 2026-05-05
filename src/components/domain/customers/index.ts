@@ -5,8 +5,6 @@
  */
 
 // --- Core Components ---
-export { CustomerDirectory } from './customer-directory';
-export { CustomerTable } from './customer-table'
 export { CustomerCard, CustomerCardSkeleton } from './customer-card';
 
 // --- Filter Config (FILTER-STANDARDS compliant) ---

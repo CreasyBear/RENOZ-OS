@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { FormatAmount } from '@/components/shared/format'
-import type { CustomerTableData } from './customer-table'
+import type { CustomerTableData } from './customer-columns'
 
 // ============================================================================
 // TYPES
