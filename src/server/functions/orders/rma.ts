@@ -97,6 +97,7 @@ import {
 import {
   getRequiredRmaCreateLineSerializationRequirement,
   getRmaCreateLineSerializationRequirement,
+  getRmaReceiveLineSerializationRequirement,
 } from './order-rma-serialization';
 
 // ============================================================================
@@ -1184,18 +1185,46 @@ export const receiveRma = createServerFn({ method: 'POST' })
         .select({
           rmaLineItem: rmaLineItems,
           productId: orderLineItems.productId,
+          description: orderLineItems.description,
           isSerialized: products.isSerialized,
           costPrice: products.costPrice,
         })
         .from(rmaLineItems)
-        .innerJoin(orderLineItems, eq(rmaLineItems.orderLineItemId, orderLineItems.id))
-        .innerJoin(products, eq(orderLineItems.productId, products.id))
-        .where(
+        .leftJoin(
+          orderLineItems,
           and(
-            eq(rmaLineItems.rmaId, data.rmaId),
-            eq(orderLineItems.organizationId, ctx.organizationId),
-            eq(products.organizationId, ctx.organizationId)
+            eq(rmaLineItems.orderLineItemId, orderLineItems.id),
+            eq(orderLineItems.organizationId, ctx.organizationId)
           )
+        )
+        .leftJoin(
+          products,
+          and(
+            eq(orderLineItems.productId, products.id),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
+        )
+        .where(
+          eq(rmaLineItems.rmaId, data.rmaId)
+        )
+        .then((rows) =>
+          rows.map((r) => {
+            const productSerialization =
+              typeof r.isSerialized === 'boolean' ? { isSerialized: r.isSerialized } : null;
+
+            return {
+              ...r,
+              isSerialized: getRmaReceiveLineSerializationRequirement(
+                {
+                  id: r.rmaLineItem.id,
+                  productId: r.productId,
+                  description: r.description ?? r.rmaLineItem.id,
+                },
+                productSerialization
+              ),
+            };
+          })
         );
 
       // Resolve explicit receiving location so returns never silently land in an arbitrary bin
@@ -1247,7 +1276,13 @@ export const receiveRma = createServerFn({ method: 'POST' })
         const qty = Number(rmaLineItem.quantityReturned ?? 1);
         const unitCost = Number(costPrice ?? 0);
 
-        if (!productId) continue;
+        if (!productId) {
+          throw new ValidationError('RMA line item must be linked to a product', {
+            [rmaLineItem.id]: [
+              'RMA line item is not linked to a product. Repair the source order line before receiving this RMA.',
+            ],
+          });
+        }
         affectedProductIds.add(productId);
 
         unitsRestored += qty;

@@ -30,6 +30,25 @@ export function getRmaCreateLineSerializationRequirement(
   );
 }
 
+export function getRmaReceiveLineSerializationRequirement(
+  lineItem: RmaCreateLineSerializationInput,
+  product: RmaCreateLineProductSerializationInput | null
+): boolean {
+  if (!lineItem.productId) {
+    throw new ValidationError('RMA line item must be linked to a product', {
+      [lineItem.id]: [
+        `RMA line '${lineItem.description}' is not linked to a product. Repair the source order line before receiving this RMA.`,
+      ],
+    });
+  }
+
+  return getOrderLineSerializationRequirement(
+    lineItem,
+    product,
+    'receiving an RMA for'
+  );
+}
+
 export function getRequiredRmaCreateLineSerializationRequirement(
   serializationMap: Map<string, boolean>,
   orderLineItemId: string

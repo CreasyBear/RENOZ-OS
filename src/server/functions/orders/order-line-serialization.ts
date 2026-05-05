@@ -4,7 +4,8 @@ export type OrderLineSerializationAction =
   | 'picking'
   | 'shipping'
   | 'unpicking'
-  | 'creating an RMA for';
+  | 'creating an RMA for'
+  | 'receiving an RMA for';
 
 export interface OrderLineSerializationInput {
   id?: string;
