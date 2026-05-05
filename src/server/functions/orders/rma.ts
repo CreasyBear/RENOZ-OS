@@ -94,6 +94,10 @@ import {
   rmaLineItemsProjection,
   type RmaRow,
 } from './_shared/rma-read-model';
+import {
+  getRequiredRmaCreateLineSerializationRequirement,
+  getRmaCreateLineSerializationRequirement,
+} from './order-rma-serialization';
 
 // ============================================================================
 // HELPERS
@@ -332,13 +336,19 @@ export const createRma = createServerFn({ method: 'POST' })
         const lineItemsWithProduct = await tx
           .select({
             orderLineItemId: orderLineItems.id,
+            productId: orderLineItems.productId,
+            description: orderLineItems.description,
             isSerialized: products.isSerialized,
           })
           .from(orderLineItems)
-          .innerJoin(products, and(
-            eq(orderLineItems.productId, products.id),
-            eq(products.organizationId, ctx.organizationId)
-          ))
+          .leftJoin(
+            products,
+            and(
+              eq(orderLineItems.productId, products.id),
+              eq(products.organizationId, ctx.organizationId),
+              isNull(products.deletedAt)
+            )
+          )
           .where(
             and(
               eq(orderLineItems.orderId, data.orderId),
@@ -347,9 +357,6 @@ export const createRma = createServerFn({ method: 'POST' })
             )
           );
 
-        const lineItemProductMap = new Map(
-          lineItemsWithProduct.map((r) => [r.orderLineItemId, r.isSerialized ?? false])
-        );
         const existingIds = new Set(lineItemsWithProduct.map((r) => r.orderLineItemId));
         const invalidIds = lineItemIds.filter((id) => !existingIds.has(id));
 
@@ -359,11 +366,33 @@ export const createRma = createServerFn({ method: 'POST' })
           );
         }
 
+        const lineItemSerializationMap = new Map(
+          lineItemsWithProduct.map((r) => {
+            const productSerialization =
+              typeof r.isSerialized === 'boolean' ? { isSerialized: r.isSerialized } : null;
+
+            return [
+              r.orderLineItemId,
+              getRmaCreateLineSerializationRequirement(
+                {
+                  id: r.orderLineItemId,
+                  productId: r.productId,
+                  description: r.description,
+                },
+                productSerialization
+              ),
+            ] as const;
+          })
+        );
+
         const requestedQuantityByLine = new Map<string, number>();
         const requestedSerials = new Set<string>();
 
         for (const item of data.lineItems) {
-          const isSerialized = lineItemProductMap.get(item.orderLineItemId) ?? false;
+          const isSerialized = getRequiredRmaCreateLineSerializationRequirement(
+            lineItemSerializationMap,
+            item.orderLineItemId
+          );
           requestedQuantityByLine.set(
             item.orderLineItemId,
             (requestedQuantityByLine.get(item.orderLineItemId) ?? 0) + item.quantityReturned
@@ -471,7 +500,10 @@ export const createRma = createServerFn({ method: 'POST' })
 
         // Validate serialized products have serialNumber
         for (const item of data.lineItems) {
-          const isSerialized = lineItemProductMap.get(item.orderLineItemId) ?? false;
+          const isSerialized = getRequiredRmaCreateLineSerializationRequirement(
+            lineItemSerializationMap,
+            item.orderLineItemId
+          );
           if (isSerialized && (!item.serialNumber || !String(item.serialNumber).trim())) {
             throw new ValidationError(
               `Serial number is required for serialized products. Please provide a serial number for each serialized item.`

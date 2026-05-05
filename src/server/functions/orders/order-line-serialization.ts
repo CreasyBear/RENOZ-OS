@@ -1,6 +1,10 @@
 import { ValidationError } from '@/lib/server/errors';
 
-export type OrderLineSerializationAction = 'picking' | 'shipping' | 'unpicking';
+export type OrderLineSerializationAction =
+  | 'picking'
+  | 'shipping'
+  | 'unpicking'
+  | 'creating an RMA for';
 
 export interface OrderLineSerializationInput {
   id?: string;
