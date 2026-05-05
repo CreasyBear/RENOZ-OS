@@ -98,7 +98,20 @@ vi.mock('@/components/ui/scroll-area', () => ({
 }))
 
 vi.mock('@/components/domain/procurement/receiving/serial-number-batch-entry', () => ({
-  SerialNumberBatchEntry: () => <div>serial-entry</div>,
+  SerialNumberBatchEntry: ({
+    existingSerialNumbers = [],
+    onSerialNumbersChange,
+  }: {
+    existingSerialNumbers?: string[]
+    onSerialNumbersChange: (serialNumbers: string[]) => void
+  }) => (
+    <div>
+      <div>serial-entry:{existingSerialNumbers.join(',')}</div>
+      <button type="button" onClick={() => onSerialNumbersChange([' sn-001 '])}>
+        Use SN001
+      </button>
+    </div>
+  ),
 }))
 
 describe('BulkReceivingDialog', () => {
@@ -170,5 +183,89 @@ describe('BulkReceivingDialog', () => {
         serialNumbers: undefined,
       })
     })
+  })
+
+  it('blocks duplicate same-product serials before bulk receive review', async () => {
+    const onConfirm = vi.fn().mockResolvedValue({
+      processed: 2,
+      failed: 0,
+      errors: [],
+    })
+
+    const { BulkReceivingDialog } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog'
+    )
+
+    render(
+      <BulkReceivingDialog
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-001',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 100,
+            currency: 'AUD',
+          } as never,
+          {
+            id: 'po-2',
+            poNumber: 'PO-002',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 200,
+            currency: 'AUD',
+          } as never,
+        ]}
+        poDetailsWithSerials={[
+          {
+            poId: 'po-1',
+            poNumber: 'PO-001',
+            items: [
+              {
+                id: 'po-item-1',
+                productId: 'product-1',
+                productName: 'RENOZ LFP Module',
+                productSku: 'LFP-100',
+                quantityPending: 1,
+                requiresSerialNumbers: true,
+              },
+            ],
+            hasSerializedItems: true,
+            totalSerializedQuantity: 1,
+          },
+          {
+            poId: 'po-2',
+            poNumber: 'PO-002',
+            items: [
+              {
+                id: 'po-item-2',
+                productId: 'product-1',
+                productName: 'RENOZ LFP Module',
+                productSku: 'LFP-100',
+                quantityPending: 1,
+                requiresSerialNumbers: true,
+              },
+            ],
+            hasSerializedItems: true,
+            totalSerializedQuantity: 1,
+          },
+        ]}
+        onConfirm={onConfirm}
+      />
+    )
+
+    expect(await screen.findByText('2 of 2 purchase orders selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    const serialButtons = screen.getAllByRole('button', { name: /use sn001/i })
+    fireEvent.click(serialButtons[0])
+    fireEvent.click(serialButtons[1])
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'PO-002 - RENOZ LFP Module: Serial SN-001 appears multiple times in this bulk receipt.'
+    )
+    expect(screen.queryByText('2 purchase orders ready to receive')).not.toBeInTheDocument()
+    expect(onConfirm).not.toHaveBeenCalled()
   })
 })

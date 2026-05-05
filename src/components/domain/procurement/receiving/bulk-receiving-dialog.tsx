@@ -30,6 +30,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { FormatAmount } from '@/components/shared/format';
 import { toastError } from '@/hooks';
+import {
+  findCrossLineDuplicateReceiptSerials,
+  type ReceiptSerialLine,
+} from '@/lib/receipt-serial-validation';
 import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import type { PODetailsWithSerials } from '@/lib/schemas/procurement/procurement-types';
 import { SerialNumberBatchEntry } from './serial-number-batch-entry';
@@ -188,7 +192,8 @@ export function BulkReceivingDialog({
   const handleSerialNumbersNext = useCallback(() => {
     // Validate serial numbers before proceeding
     const errors: string[] = [];
-    
+    const receiptSerialLines: ReceiptSerialLine[] = [];
+
     selectedPODetails.forEach((po) => {
       if (!po.hasSerializedItems) return;
       
@@ -196,12 +201,25 @@ export function BulkReceivingDialog({
         if (!item.requiresSerialNumbers) return;
         
         const itemSerials = serialNumbers.get(po.poId)?.get(item.id) ?? [];
+        receiptSerialLines.push({
+          productId: item.productId,
+          productName: `${po.poNumber} - ${item.productName}`,
+          serialNumbers: itemSerials,
+        });
+
         if (itemSerials.length !== item.quantityPending) {
           errors.push(
             `${po.poNumber} - ${item.productName}: Requires ${item.quantityPending} serial number${item.quantityPending !== 1 ? 's' : ''}, found ${itemSerials.length}`
           );
         }
       });
+    });
+
+    const duplicateSerials = findCrossLineDuplicateReceiptSerials(receiptSerialLines);
+    duplicateSerials.forEach((duplicate) => {
+      errors.push(
+        `${duplicate.productName}: Serial ${duplicate.serialNumber} appears multiple times in this bulk receipt.`
+      );
     });
 
     if (errors.length > 0) {

@@ -58,7 +58,7 @@ import { SerialNumberBatchEntry } from '@/components/domain/procurement/receivin
 import {
   findCrossLineDuplicateReceiptSerials,
   findDuplicateReceiptSerials,
-} from './receipt-serial-validation';
+} from '@/lib/receipt-serial-validation';
 
 // ============================================================================
 // TYPES

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   findCrossLineDuplicateReceiptSerials,
   findDuplicateReceiptSerials,
-} from '@/components/domain/purchase-orders/receive/receipt-serial-validation';
+} from '@/lib/receipt-serial-validation';
 
 describe('receipt serial validation', () => {
   it('detects duplicate receipt serials after canonical trim and uppercase normalization', () => {
