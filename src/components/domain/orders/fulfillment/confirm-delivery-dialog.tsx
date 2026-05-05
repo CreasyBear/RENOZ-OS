@@ -39,7 +39,14 @@ import {
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmDelivery } from "@/hooks/orders";
+import { getShipmentActionErrorMessage } from "@/hooks/orders/shipment-action-errors";
 import { useUploadFile, useFetchDownloadUrl } from "@/hooks/files";
+import {
+  DELIVERY_CONFIRMATION_FALLBACK,
+  DELIVERY_PHOTO_IMAGE_TYPE_MESSAGE,
+  DELIVERY_PHOTO_SIZE_MESSAGE,
+  getDeliveryPhotoUploadErrorMessage,
+} from "./confirm-delivery-errors";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -232,10 +239,10 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
   const uploadPhoto = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) {
-        throw new Error("Please select an image file.");
+        throw new Error(DELIVERY_PHOTO_IMAGE_TYPE_MESSAGE);
       }
       if (file.size > MAX_UPLOAD_BYTES) {
-        throw new Error("Image must be 10MB or smaller.");
+        throw new Error(DELIVERY_PHOTO_SIZE_MESSAGE);
       }
 
       const uploadResult = await uploadFile.mutateAsync({
@@ -261,7 +268,7 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
         setIsUploadingPhoto(true);
         finalPhotoUrl = await uploadPhoto(photoFile);
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to upload photo");
+        toastError(getDeliveryPhotoUploadErrorMessage(error));
         setIsUploadingPhoto(false);
         return;
       }
@@ -294,9 +301,7 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
           }
         },
         onError: (error) => {
-          toastError(
-            error instanceof Error ? error.message : "Failed to confirm delivery"
-          );
+          toastError(getShipmentActionErrorMessage(error, DELIVERY_CONFIRMATION_FALLBACK));
         },
       }
     );
@@ -310,13 +315,13 @@ export const ConfirmDeliveryDialog = memo(function ConfirmDeliveryDialog({
 
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        toastError("Please select an image file");
+        toastError(DELIVERY_PHOTO_IMAGE_TYPE_MESSAGE);
         return;
       }
 
       // Validate file size (max 10MB)
       if (file.size > MAX_UPLOAD_BYTES) {
-        toastError("Image must be 10MB or smaller");
+        toastError(DELIVERY_PHOTO_SIZE_MESSAGE);
         return;
       }
 
