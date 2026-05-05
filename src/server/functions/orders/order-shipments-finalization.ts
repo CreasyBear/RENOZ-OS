@@ -237,7 +237,11 @@ export async function markShipmentAsShipped(
               });
 
           if (!serialRecord) {
-            continue;
+            throw new ValidationError('Serialized item record not found', {
+              serialNumbers: [
+                `Serial "${serial}" could not be resolved to a serialized item before shipment finalization.`,
+              ],
+            });
           }
 
           const [canonicalSerial] = await tx
@@ -849,7 +853,13 @@ export async function reopenShipmentHandler({
           userId: ctx.user.id,
           source: 'order_shipment_reopen',
         });
-        if (!serialRecord) continue;
+        if (!serialRecord) {
+          throw new ValidationError('Serialized item record not found', {
+            serialNumbers: [
+              `Serial "${serial}" could not be resolved to a serialized item before shipment reopen.`,
+            ],
+          });
+        }
         touchesSerializedInventory = true;
 
         await allocateSerializedItemToOrderLine(tx, {

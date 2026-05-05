@@ -26,4 +26,12 @@ describe('shipment finalization serialization requirements', () => {
     expect(source).not.toContain('if(!lineItemWithProduct?.productId||!shouldReverseShippedQuantities){continue;}');
     expect(source).not.toContain('!lineItemWithProduct.isSerialized');
   });
+
+  it('keeps shipment finalization from skipping unresolved serialized item records', () => {
+    const source = compact(read('src/server/functions/orders/order-shipments-finalization.ts'));
+
+    expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).not.toContain('if(!serialRecord){continue;}');
+    expect(source).not.toContain('if(!serialRecord)continue;');
+  });
 });
