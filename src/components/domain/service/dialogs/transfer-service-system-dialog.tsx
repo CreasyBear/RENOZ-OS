@@ -7,7 +7,10 @@ import * as React from 'react';
 import { z } from 'zod';
 import { ArrowRightLeft } from 'lucide-react';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { buildOptionalServiceOwnerAddress } from '@/lib/service-owner-address';
+import {
+  buildOptionalServiceOwnerAddress,
+  getOptionalServiceOwnerAddressError,
+} from '@/lib/service-owner-address';
 import {
   Dialog,
   DialogContent,
@@ -21,28 +24,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { FormFieldDisplayProvider } from '@/components/shared/forms';
+import { FormErrorSummary, FormFieldDisplayProvider } from '@/components/shared/forms';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 
-const transferServiceSystemSchema = z.object({
-  fullName: z.string().min(1, 'Owner name is required').max(255),
-  email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
-  phone: z
-    .string()
-    .max(50)
-    .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
-  street1: z.string().max(255),
-  street2: z.string().max(255),
-  city: z.string().max(100),
-  state: z.string().max(100),
-  postalCode: z.string().max(20),
-  country: z.string().max(2),
-  ownerNotes: z.string().max(2000),
-  reason: z.string().min(1, 'Transfer reason is required').max(2000),
-});
+const transferServiceSystemSchema = z
+  .object({
+    fullName: z.string().min(1, 'Owner name is required').max(255),
+    email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
+    phone: z
+      .string()
+      .max(50)
+      .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
+    street1: z.string().max(255),
+    street2: z.string().max(255),
+    city: z.string().max(100),
+    state: z.string().max(100),
+    postalCode: z.string().max(20),
+    country: z.string().max(2),
+    ownerNotes: z.string().max(2000),
+    reason: z.string().min(1, 'Transfer reason is required').max(2000),
+  })
+  .superRefine((values, ctx) => {
+    const addressError = getOptionalServiceOwnerAddressError(values);
+    if (!addressError) return;
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: addressError,
+    });
+  });
 
 type TransferServiceSystemValues = z.infer<typeof transferServiceSystemSchema>;
 
@@ -156,6 +169,11 @@ export function TransferServiceSystemDialog({
             }}
           >
             <FormFieldDisplayProvider form={form}>
+              <FormErrorSummary
+                form={form}
+                title="Check ownership transfer"
+              />
+
               <Card className="bg-muted/40">
                 <CardContent className="space-y-2 p-4 text-sm">
                   <div className="font-medium">{serviceSystem.displayName}</div>

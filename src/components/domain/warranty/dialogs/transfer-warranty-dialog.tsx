@@ -20,29 +20,42 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRightLeft } from 'lucide-react';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
-import { buildOptionalServiceOwnerAddress } from '@/lib/service-owner-address';
-import { FormFieldDisplayProvider } from '@/components/shared/forms';
+import {
+  buildOptionalServiceOwnerAddress,
+  getOptionalServiceOwnerAddressError,
+} from '@/lib/service-owner-address';
+import { FormErrorSummary, FormFieldDisplayProvider } from '@/components/shared/forms';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 
-const transferWarrantySchema = z.object({
-  fullName: z.string().min(1, 'Owner name is required').max(255),
-  email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
-  phone: z
-    .string()
-    .max(50)
-    .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
-  street1: z.string().max(255),
-  street2: z.string().max(255),
-  city: z.string().max(100),
-  state: z.string().max(100),
-  postalCode: z.string().max(20),
-  country: z.string().max(2),
-  ownerNotes: z.string().max(2000),
-  reason: z.string().min(1, 'Transfer reason is required').max(2000),
-});
+const transferWarrantySchema = z
+  .object({
+    fullName: z.string().min(1, 'Owner name is required').max(255),
+    email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
+    phone: z
+      .string()
+      .max(50)
+      .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
+    street1: z.string().max(255),
+    street2: z.string().max(255),
+    city: z.string().max(100),
+    state: z.string().max(100),
+    postalCode: z.string().max(20),
+    country: z.string().max(2),
+    ownerNotes: z.string().max(2000),
+    reason: z.string().min(1, 'Transfer reason is required').max(2000),
+  })
+  .superRefine((values, ctx) => {
+    const addressError = getOptionalServiceOwnerAddressError(values);
+    if (!addressError) return;
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: addressError,
+    });
+  });
 
 type TransferWarrantyValues = z.infer<typeof transferWarrantySchema>;
 
@@ -154,6 +167,11 @@ export function TransferWarrantyDialog({
           }}
         >
           <FormFieldDisplayProvider form={form}>
+            <FormErrorSummary
+              form={form}
+              title="Check ownership transfer"
+            />
+
             <Card className="bg-muted/50">
               <CardContent className="space-y-1 p-4 text-sm">
                 <div className="font-medium">{warranty.warrantyNumber}</div>

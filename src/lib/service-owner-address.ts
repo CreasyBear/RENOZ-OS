@@ -16,6 +16,9 @@ export interface ServiceOwnerAddressInput {
   country: string;
 }
 
+export const OPTIONAL_SERVICE_OWNER_ADDRESS_ERROR =
+  'Complete the owner address or clear all address fields.';
+
 function hasAddressContent(values: ServiceOwnerAddressFormValues): boolean {
   return Boolean(
     values.street1.trim() ||
@@ -24,6 +27,26 @@ function hasAddressContent(values: ServiceOwnerAddressFormValues): boolean {
       values.state.trim() ||
       values.postalCode.trim()
   );
+}
+
+export function getOptionalServiceOwnerAddressError(
+  values: ServiceOwnerAddressFormValues
+): string | null {
+  if (!hasAddressContent(values)) {
+    return null;
+  }
+
+  if (
+    !values.street1.trim() ||
+    !values.city.trim() ||
+    !values.state.trim() ||
+    !values.postalCode.trim() ||
+    !values.country.trim()
+  ) {
+    return OPTIONAL_SERVICE_OWNER_ADDRESS_ERROR;
+  }
+
+  return null;
 }
 
 export function buildOptionalServiceOwnerAddress(
