@@ -327,7 +327,14 @@ export function JobCostingReportPage() {
   // Export to CSV
   const handleExport = useCallback(
     (format: 'csv' | 'pdf' | 'excel') => {
-      if (!reportData?.jobs.length) return;
+      if (!reportData?.jobs.length) {
+        toast.error(
+          format === 'csv'
+            ? 'No job costing rows to export'
+            : 'Job costing report data is not available yet. Refresh and try again.'
+        );
+        return;
+      }
 
       if (format === 'csv') {
         const headers = [
@@ -366,6 +373,7 @@ export function JobCostingReportPage() {
         a.download = `job-costing-report-${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
         URL.revokeObjectURL(url);
+        toast.success('Job costing report exported as CSV');
         return;
       }
 

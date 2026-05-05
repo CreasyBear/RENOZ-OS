@@ -140,12 +140,17 @@ export function ExpiringWarrantiesReportContainer({
   const handleExport = useCallback(
     (format: 'csv' | 'pdf' | 'excel') => {
       const warranties = data?.warranties ?? [];
-      if (!warranties.length && format === 'csv') return;
 
       if (format === 'csv') {
+        if (!warranties.length) {
+          toast.error('No expiring warranties to export');
+          return;
+        }
+
         const csv = generateCSV(warranties);
         const date = new Date().toISOString().split('T')[0];
         downloadCSV(csv, `expiring-warranties-${date}.csv`);
+        toast.success('Expiring warranties exported as CSV');
         return;
       }
 
