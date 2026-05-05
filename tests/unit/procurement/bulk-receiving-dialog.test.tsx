@@ -185,6 +185,57 @@ describe('BulkReceivingDialog', () => {
     })
   })
 
+  it('does not surface raw onConfirm rejection copy from the presenter', async () => {
+    const onConfirm = vi.fn().mockRejectedValue(
+      new Error('duplicate key value violates unique constraint purchase_order_receipts_pkey')
+    )
+
+    const { BulkReceivingDialog } = await import(
+      '@/components/domain/procurement/receiving/bulk-receiving-dialog'
+    )
+
+    render(
+      <BulkReceivingDialog
+        open
+        onOpenChange={vi.fn()}
+        purchaseOrders={[
+          {
+            id: 'po-1',
+            poNumber: 'PO-001',
+            supplierName: 'RENOZ Cells',
+            totalAmount: 100,
+            currency: 'AUD',
+          } as never,
+        ]}
+        poDetailsWithSerials={[
+          {
+            poId: 'po-1',
+            poNumber: 'PO-001',
+            items: [],
+            hasSerializedItems: false,
+            totalSerializedQuantity: 0,
+          },
+        ]}
+        onConfirm={onConfirm}
+      />
+    )
+
+    expect(await screen.findByText('1 of 1 purchase orders selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /receive 1 purchase order/i }))
+
+    await waitFor(() => {
+      expect(onConfirm).toHaveBeenCalledTimes(1)
+    })
+
+    expect(screen.getByText('1 purchase order ready to receive')).toBeInTheDocument()
+    expect(mockToastError).not.toHaveBeenCalledWith(
+      expect.stringContaining('duplicate key value violates')
+    )
+    expect(mockToastError).not.toHaveBeenCalledWith('Failed to process bulk receiving')
+  })
+
   it('keeps bulk receiving on the select step while receiving details are loading', async () => {
     const onConfirm = vi.fn()
 

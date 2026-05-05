@@ -5,6 +5,7 @@
 export { useReceivingDialog } from './use-receiving-dialog';
 export { useProductSerialization } from './use-product-serialization';
 export {
+  formatPurchaseOrderBulkReceiveMutationError,
   formatPurchaseOrderBulkFailureReason,
   formatPurchaseOrderMutationError,
 } from './_mutation-errors';

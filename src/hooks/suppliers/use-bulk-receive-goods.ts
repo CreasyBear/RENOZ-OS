@@ -11,6 +11,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { formatPurchaseOrderBulkReceiveMutationError } from '@/hooks/purchase-orders/_mutation-errors';
 import { bulkReceiveGoods } from '@/server/functions/suppliers/bulk-receive-goods';
 import { toastSuccess, toastError } from '@/hooks';
 
@@ -101,7 +102,7 @@ export function useBulkReceiveGoods() {
       }
     },
     onError: (error) => {
-      toastError(error instanceof Error ? error.message : 'Failed to process bulk receiving');
+      toastError(formatPurchaseOrderBulkReceiveMutationError(error));
     },
   });
 }

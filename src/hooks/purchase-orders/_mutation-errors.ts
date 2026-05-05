@@ -7,6 +7,13 @@ const DEFAULT_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMIT: 'Too many purchase order updates were attempted. Wait a moment and retry.',
 };
 
+const BULK_RECEIVE_CODE_MESSAGES: Record<string, string> = {
+  transition_blocked:
+    'Some purchase orders were not receipted. Review failed rows and retry.',
+  invalid_serial_state:
+    'Some selected purchase orders need serial-number review before receiving. Review failed rows and retry.',
+};
+
 interface FormatPurchaseOrderMutationErrorOptions {
   codeMessages?: Record<string, string>;
   allowSafeMessageWithoutStatus?: boolean;
@@ -207,5 +214,14 @@ export function formatPurchaseOrderBulkFailureReason(
 ): string {
   return formatPurchaseOrderMutationError(error, fallback, {
     allowSafeMessageWithoutStatus: true,
+  });
+}
+
+export function formatPurchaseOrderBulkReceiveMutationError(
+  error: unknown,
+  fallback = 'Failed to process bulk receiving'
+): string {
+  return formatPurchaseOrderMutationError(error, fallback, {
+    codeMessages: BULK_RECEIVE_CODE_MESSAGES,
   });
 }

@@ -110,4 +110,30 @@ describe('useBulkReceiveGoods', () => {
       'Some purchase orders were not receipted. Review failed rows and retry.'
     )
   })
+
+  it('formats root bulk receive failures without leaking unsafe server messages', async () => {
+    mockBulkReceiveGoods.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint purchase_order_receipts_pkey')
+    )
+
+    const queryClient = new QueryClient()
+    const { useBulkReceiveGoods } = await import('@/hooks/suppliers/use-bulk-receive-goods')
+
+    const { result } = renderHook(() => useBulkReceiveGoods(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({
+          purchaseOrderIds: ['po-1'],
+        })
+      ).rejects.toThrow('duplicate key value violates unique constraint purchase_order_receipts_pkey')
+    })
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to process bulk receiving')
+    expect(mockToastError).not.toHaveBeenCalledWith(
+      expect.stringContaining('duplicate key value violates')
+    )
+  })
 })

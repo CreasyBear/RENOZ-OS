@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatPurchaseOrderBulkFailureReason,
+  formatPurchaseOrderBulkReceiveMutationError,
   formatPurchaseOrderMutationError,
 } from '@/hooks/purchase-orders/_mutation-errors';
 
@@ -54,5 +55,29 @@ describe('purchase order mutation errors', () => {
         'duplicate key value violates unique constraint purchase_orders_pkey'
       )
     ).toBe('Could not delete this purchase order');
+  });
+
+  it('formats bulk receive root failures with workflow-specific safe copy', () => {
+    expect(
+      formatPurchaseOrderBulkReceiveMutationError({
+        statusCode: 400,
+        code: 'invalid_serial_state',
+      })
+    ).toBe(
+      'Some selected purchase orders need serial-number review before receiving. Review failed rows and retry.'
+    );
+
+    expect(
+      formatPurchaseOrderBulkReceiveMutationError({
+        statusCode: 400,
+        code: 'transition_blocked',
+      })
+    ).toBe('Some purchase orders were not receipted. Review failed rows and retry.');
+
+    expect(
+      formatPurchaseOrderBulkReceiveMutationError(
+        new Error('duplicate key value violates unique constraint purchase_order_receipts_pkey')
+      )
+    ).toBe('Failed to process bulk receiving');
   });
 });

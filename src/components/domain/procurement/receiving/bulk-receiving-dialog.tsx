@@ -270,8 +270,7 @@ export function BulkReceivingDialog({
           onOpenChange(false);
         }, 1500);
       }
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to process bulk receiving');
+    } catch {
       setStep('review');
     } finally {
       setIsProcessing(false);
