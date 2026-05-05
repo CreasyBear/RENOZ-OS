@@ -41,4 +41,21 @@ describe('custom report execution source contract', () => {
     expect(server).toContain('if (error instanceof NotFoundError || error instanceof ValidationError)');
     expect(server).toContain('throw error;');
   });
+
+  it('keeps unexpected execution failures logged and operator-safe', () => {
+    const server = read('src/server/functions/reports/custom-reports.ts');
+
+    expect(server).toContain("import { logger } from '@/lib/logger';");
+    expect(server).toContain('NotFoundError, ServerError, ValidationError');
+    expect(server).toContain("logger.error('[reports.customReports] Failed to execute custom report'");
+    expect(server).toContain('orgId: ctx.organizationId');
+    expect(server).toContain('reportId: data.id');
+    expect(server).toContain('throw new ServerError(');
+    expect(server).toContain(
+      "'Custom report execution is temporarily unavailable. Please refresh and try again.'"
+    );
+    expect(server).toContain("'CUSTOM_REPORT_EXECUTION_FAILED'");
+    expect(server).not.toContain('Failed to execute custom report: ${');
+    expect(server).not.toContain('error instanceof Error ? error.message');
+  });
 });

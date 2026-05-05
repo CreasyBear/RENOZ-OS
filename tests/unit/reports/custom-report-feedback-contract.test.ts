@@ -73,5 +73,12 @@ describe('custom report feedback contract', () => {
         'Custom report creation is temporarily unavailable. Please refresh and try again.'
       )
     ).toBe('You do not have permission to manage custom reports.');
+
+    expect(
+      formatCustomReportMutationError(
+        new Error('Failed to execute custom report: database connection failed'),
+        'Custom report execution is temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBe('Custom report execution is temporarily unavailable. Please refresh and try again.');
   });
 });

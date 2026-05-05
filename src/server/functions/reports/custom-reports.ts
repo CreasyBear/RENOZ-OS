@@ -17,9 +17,10 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, gte, lte, ne, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
+import { logger } from '@/lib/logger';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { NotFoundError, ServerError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { customReports } from 'drizzle/schema/reports';
 import { purchaseOrders, suppliers } from 'drizzle/schema/suppliers';
@@ -454,8 +455,18 @@ export const executeCustomReport = createServerFn({ method: 'POST' })
       if (error instanceof NotFoundError || error instanceof ValidationError) {
         throw error;
       }
-      // Wrap unexpected errors
-      throw new Error(`Failed to execute custom report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      logger.error('[reports.customReports] Failed to execute custom report', error, {
+        domain: 'reports',
+        orgId: ctx.organizationId,
+        reportId: data.id,
+      });
+
+      throw new ServerError(
+        'Custom report execution is temporarily unavailable. Please refresh and try again.',
+        500,
+        'CUSTOM_REPORT_EXECUTION_FAILED'
+      );
     }
   });
 
