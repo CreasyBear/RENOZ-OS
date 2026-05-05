@@ -63,6 +63,7 @@ import {
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
   getSupplierSelectionValidationError,
+  isCustomPurchaseOrderItem,
   type ProductItem,
   type PurchaseOrderFormData,
   type PurchaseOrderItemFormData,
@@ -369,8 +370,10 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
   const { formatCurrency } = useOrgFormat();
   const formatCurrencyDisplay = (value: number) =>
     formatCurrency(value, { cents: false, showCents: true });
+  const fieldIdPrefix = useId();
   const [searchQuery, setSearchQuery] = useState("");
   const [showProductSearch, setShowProductSearch] = useState(!item.productId);
+  const isCustomItem = isCustomPurchaseOrderItem(item);
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products.slice(0, 10);
@@ -451,14 +454,28 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">{item.productName}</p>
-                {item.productSku && (
-                  <p className="text-sm text-muted-foreground">
-                    SKU: {item.productSku}
-                  </p>
-                )}
-              </div>
+              {isCustomItem ? (
+                <div className="flex-1 space-y-2 pr-4">
+                  <Label htmlFor={`${fieldIdPrefix}-custom-name`}>Item Name</Label>
+                  <Input
+                    id={`${fieldIdPrefix}-custom-name`}
+                    placeholder="Freight, sample, surcharge..."
+                    value={item.productName}
+                    onChange={(e) =>
+                      onUpdate({ ...item, productName: e.target.value })
+                    }
+                  />
+                </div>
+              ) : (
+                <div>
+                  <p className="font-medium">{item.productName}</p>
+                  {item.productSku && (
+                    <p className="text-sm text-muted-foreground">
+                      SKU: {item.productSku}
+                    </p>
+                  )}
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

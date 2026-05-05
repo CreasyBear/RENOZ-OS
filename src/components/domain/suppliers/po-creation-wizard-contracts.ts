@@ -110,6 +110,12 @@ export function createCustomPurchaseOrderItem(
   };
 }
 
+export function isCustomPurchaseOrderItem(
+  item: PurchaseOrderItemFormData
+): boolean {
+  return !item.productId;
+}
+
 export function buildInitialPurchaseOrderFormData({
   initialSupplierId,
   initialItems,

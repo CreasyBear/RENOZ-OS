@@ -14,6 +14,7 @@ import {
   getPurchaseOrderSubmissionValidationError,
   getPurchaseOrderWizardStartingStep,
   getSupplierSelectionValidationError,
+  isCustomPurchaseOrderItem,
   type PurchaseOrderItemFormData,
 } from '@/components/domain/suppliers/po-creation-wizard-contracts';
 import { GST_RATE, roundCurrency } from '@/lib/order-calculations';
@@ -126,6 +127,24 @@ describe('PO creation wizard contracts', () => {
     });
   });
 
+  it('treats item naming as operator-owned only for custom lines', () => {
+    expect(
+      isCustomPurchaseOrderItem({
+        productName: 'Freight',
+        quantity: 1,
+        unitPrice: 80,
+      })
+    ).toBe(true);
+    expect(
+      isCustomPurchaseOrderItem({
+        productId: 'product-1',
+        productName: 'Battery module',
+        quantity: 1,
+        unitPrice: 80,
+      })
+    ).toBe(false);
+  });
+
   it('validates supplier selection and line items before submission', () => {
     expect(getSupplierSelectionValidationError('')).toBe('Please select a supplier');
     expect(getSupplierSelectionValidationError('supplier-1')).toBeNull();
@@ -183,6 +202,8 @@ describe('PO creation wizard contracts', () => {
     expect(source).toContain('createCustomPurchaseOrderItem(item)');
     expect(source).toContain('createPurchaseOrderLineItemKey(');
     expect(source).toContain('getPurchaseOrderProductUnitPrice(product)');
+    expect(source).toContain('isCustomPurchaseOrderItem(item)');
+    expect(source).toContain('placeholder="Freight, sample, surcharge..."');
     expect(source).toContain('setLineItemKeys((prev) => [...prev, lineItemKey])');
     expect(source).toContain('setLineItemKeys((prev) => prev.filter((_, idx) => idx !== index))');
     expect(source).toContain('key={itemKeys[index] ?? `line-${index}`}');
