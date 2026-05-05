@@ -36,6 +36,10 @@ import { useReportFavorites, useScheduledReports } from '@/hooks/reports';
 import type { PrebuiltReportType } from '@/lib/schemas/reports/report-favorites';
 import type { ScheduledReport } from '@/lib/schemas/reports/scheduled-reports';
 import type { ReportFavoriteWithDetails } from '@/lib/schemas/reports/report-favorites';
+import {
+  formatReportFavoritesReadError,
+  formatScheduledReportsReadError,
+} from './reports-landing-read-errors';
 
 // ============================================================================
 // CONSTANTS
@@ -127,6 +131,12 @@ export function ReportsLandingContent({ className }: ReportsLandingContentProps)
 
   const favorites = useMemo(() => favoritesData?.items ?? [], [favoritesData]);
   const allScheduled = useMemo(() => scheduledData?.items ?? [], [scheduledData]);
+  const favoritesErrorMessage = favoritesError
+    ? formatReportFavoritesReadError(favoritesError)
+    : null;
+  const scheduledErrorMessage = scheduledError
+    ? formatScheduledReportsReadError(scheduledError)
+    : null;
 
   const filteredScheduled = useMemo(() => {
     if (scheduleFilter === 'all') return allScheduled;
@@ -162,7 +172,7 @@ export function ReportsLandingContent({ className }: ReportsLandingContentProps)
                   {favoritesData ? 'Showing cached favorites' : 'Favorites unavailable'}
                 </AlertTitle>
                 <AlertDescription className="flex items-center justify-between gap-3">
-                  <span>{favoritesError.message}</span>
+                  <span>{favoritesErrorMessage}</span>
                   <Button variant="outline" size="sm" onClick={() => void refetchFavorites()}>
                     Retry
                   </Button>
@@ -210,7 +220,7 @@ export function ReportsLandingContent({ className }: ReportsLandingContentProps)
                   {scheduledData ? 'Showing cached scheduled reports' : 'Scheduled reports unavailable'}
                 </AlertTitle>
                 <AlertDescription className="flex items-center justify-between gap-3">
-                  <span>{scheduledError.message}</span>
+                  <span>{scheduledErrorMessage}</span>
                   <Button variant="outline" size="sm" onClick={() => void refetchScheduled()}>
                     Retry
                   </Button>
