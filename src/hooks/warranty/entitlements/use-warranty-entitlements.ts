@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from '../../_shared/use-toast';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
-import { formatWarrantyMutationError } from '../_mutation-errors';
+import { formatWarrantyEntitlementMutationError } from '../_mutation-errors';
 import {
   activateWarrantyFromEntitlement,
   getWarrantyEntitlement,
@@ -78,7 +78,7 @@ export function useActivateWarrantyFromEntitlement() {
       toast.success(result.message ?? 'Warranty activated successfully');
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to activate warranty'));
+      toast.error(formatWarrantyEntitlementMutationError(error, 'activate'));
     },
   });
 }

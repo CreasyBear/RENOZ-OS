@@ -45,6 +45,11 @@ const WARRANTY_CORE_MUTATION_FALLBACKS = {
     'Warranty ownership transfer is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS = {
+  activate:
+    'Warranty activation from entitlement is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -52,6 +57,8 @@ interface FormatWarrantyMutationErrorOptions {
 export type WarrantyClaimMutationAction = keyof typeof WARRANTY_CLAIM_MUTATION_FALLBACKS;
 export type WarrantyPolicyMutationAction = keyof typeof WARRANTY_POLICY_MUTATION_FALLBACKS;
 export type WarrantyCoreMutationAction = keyof typeof WARRANTY_CORE_MUTATION_FALLBACKS;
+export type WarrantyEntitlementMutationAction =
+  keyof typeof WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -248,4 +255,11 @@ export function formatWarrantyCoreMutationError(
   action: WarrantyCoreMutationAction
 ): string {
   return formatWarrantyMutationError(error, WARRANTY_CORE_MUTATION_FALLBACKS[action]);
+}
+
+export function formatWarrantyEntitlementMutationError(
+  error: unknown,
+  action: WarrantyEntitlementMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS[action]);
 }
