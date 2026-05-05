@@ -5,6 +5,10 @@ import * as React from 'react';
 import { z } from 'zod';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
+  buildOptionalServiceOwnerAddress,
+  getOptionalServiceOwnerAddressError,
+} from '@/lib/service-owner-address';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,24 +20,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FormFieldDisplayProvider } from '@/components/shared/forms';
+import { FormErrorSummary, FormFieldDisplayProvider } from '@/components/shared/forms';
 import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
 
-const resolveSchema = z.object({
-  fullName: z.string().min(1).max(255),
-  email: z.union([z.literal(''), z.string().email()]),
-  phone: z.string().max(50),
-  street1: z.string().max(255),
-  street2: z.string().max(255),
-  city: z.string().max(100),
-  state: z.string().max(100),
-  postalCode: z.string().max(20),
-  country: z.string().max(2),
-  notes: z.string().max(2000),
-});
+const resolveSchema = z
+  .object({
+    fullName: z.string().min(1, 'Owner name is required').max(255),
+    email: z.union([z.literal(''), z.string().email('Enter a valid email')]),
+    phone: z
+      .string()
+      .max(50)
+      .refine((value) => value === '' || /^[+\d\s()-]+$/.test(value), 'Enter a valid phone number'),
+    street1: z.string().max(255),
+    street2: z.string().max(255),
+    city: z.string().max(100),
+    state: z.string().max(100),
+    postalCode: z.string().max(20),
+    country: z.string().max(2),
+    notes: z.string().max(2000),
+  })
+  .superRefine((values, ctx) => {
+    const addressError = getOptionalServiceOwnerAddressError(values);
+    if (!addressError) return;
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: addressError,
+    });
+  });
 
 type ResolveValues = z.infer<typeof resolveSchema>;
 
@@ -104,6 +121,8 @@ export function ResolveServiceLinkageReviewDialog({
     },
     onSubmit: async (values) => {
       if (!review) return;
+      const address = buildOptionalServiceOwnerAddress(values);
+
       await onSubmit({
         reviewId: review.id,
         resolutionType: 'create_new',
@@ -111,16 +130,7 @@ export function ResolveServiceLinkageReviewDialog({
           fullName: values.fullName.trim(),
           email: values.email || undefined,
           phone: values.phone || undefined,
-          address: values.street1
-            ? {
-                street1: values.street1,
-                street2: values.street2 || undefined,
-                city: values.city,
-                state: values.state,
-                postalCode: values.postalCode,
-                country: values.country,
-              }
-            : undefined,
+          address,
         },
         notes: values.notes || undefined,
       });
@@ -167,85 +177,141 @@ export function ResolveServiceLinkageReviewDialog({
             }}
           >
             <FormFieldDisplayProvider form={form}>
+              <FormErrorSummary
+                form={form}
+                title="Check service system creation"
+              />
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Owner name</Label>
+                  <Label htmlFor="linkage-review-owner-name">Owner name</Label>
                   <form.Field name="fullName">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-owner-name"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label htmlFor="linkage-review-owner-email">Email</Label>
                   <form.Field name="email">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-owner-email"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone</Label>
+                  <Label htmlFor="linkage-review-owner-phone">Phone</Label>
                   <form.Field name="phone">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-owner-phone"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>Country</Label>
+                  <Label htmlFor="linkage-review-country">Country</Label>
                   <form.Field name="country">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value.toUpperCase())} />
+                      <Input
+                        id="linkage-review-country"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value.toUpperCase())}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Street address</Label>
+                  <Label htmlFor="linkage-review-street1">Street address</Label>
                   <form.Field name="street1">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-street1"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Street address line 2</Label>
+                  <Label htmlFor="linkage-review-street2">Street address line 2</Label>
                   <form.Field name="street2">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-street2"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>City</Label>
+                  <Label htmlFor="linkage-review-city">City</Label>
                   <form.Field name="city">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-city"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>State</Label>
+                  <Label htmlFor="linkage-review-state">State</Label>
                   <form.Field name="state">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-state"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
                 <div className="space-y-2">
-                  <Label>Postal code</Label>
+                  <Label htmlFor="linkage-review-postal">Postal code</Label>
                   <form.Field name="postalCode">
                     {(field) => (
-                      <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                      <Input
+                        id="linkage-review-postal"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) => field.handleChange(event.target.value)}
+                      />
                     )}
                   </form.Field>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Resolution notes</Label>
+                <Label htmlFor="linkage-review-notes">Resolution notes</Label>
                 <form.Field name="notes">
                   {(field) => (
-                    <Textarea rows={3} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Textarea
+                      id="linkage-review-notes"
+                      rows={3}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
