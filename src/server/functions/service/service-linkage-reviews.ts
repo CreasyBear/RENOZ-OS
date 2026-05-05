@@ -244,6 +244,10 @@ export const resolveServiceLinkageReview = createServerFn({ method: 'POST' })
         });
       }
 
-      return { success: true, resolvedServiceSystemId };
+      return {
+        success: true,
+        resolvedServiceSystemId,
+        sourceWarrantyId: detail.sourceWarranty?.id ?? null,
+      };
     });
   });

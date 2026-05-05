@@ -114,17 +114,23 @@ export function useResolveServiceLinkageReview() {
     mutationFn: (input: ResolveServiceLinkageReviewInput) =>
       resolveServiceLinkageReviewFn({ data: input }),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.serviceLinkageReviews.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.serviceLinkageReviews.lists() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.serviceLinkageReviews.detail(variables.reviewId),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.serviceSystems.lists() });
       if (result.resolvedServiceSystemId) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.serviceSystems.detail(result.resolvedServiceSystemId),
         });
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.all });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.serviceLinkageReviews.detail(variables.reviewId),
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.statusCounts() });
+      if (result.sourceWarrantyId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.warranties.detail(result.sourceWarrantyId),
+        });
+      }
       toast.success('Service linkage review resolved');
     },
     onError: (error) => {
