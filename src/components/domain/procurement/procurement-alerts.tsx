@@ -31,6 +31,7 @@ import type {
   ProcurementAlert,
 } from '@/lib/schemas/procurement';
 import { isValidAlertType } from '@/lib/schemas/procurement';
+import { getProcurementAlertsErrorMessage } from './procurement-alert-error-messages';
 
 // ============================================================================
 // TYPES
@@ -290,7 +291,7 @@ function ProcurementAlerts({
           {error ? (
             <ErrorState
               title="Procurement alerts unavailable"
-              message={error.message}
+              message={getProcurementAlertsErrorMessage(error)}
               onRetry={onRetry}
               className="py-4"
             />
@@ -337,7 +338,7 @@ function ProcurementAlerts({
           <Alert className="mb-3">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Alert data may be outdated</AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertDescription>{getProcurementAlertsErrorMessage(error)}</AlertDescription>
           </Alert>
         ) : null}
         <div className="space-y-3">
