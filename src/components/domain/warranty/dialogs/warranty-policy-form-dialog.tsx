@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
 import {
   warrantyPolicyTermsSchema,
   isWarrantyPolicyTypeValue,
@@ -194,7 +193,7 @@ export function WarrantyPolicyFormDialog({
         onOpenChange(false);
         onSuccess?.();
       } catch {
-        toast.error('Failed to save policy. Please try again.');
+        // Policy mutation hooks own operator-facing error toasts.
       }
     },
   });
