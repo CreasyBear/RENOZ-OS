@@ -150,6 +150,8 @@ function TargetsSettingsPage() {
   const {
     data: progressData,
     isLoading: isProgressLoading,
+    error: progressError,
+    refetch: refetchProgress,
   } = useTargetProgress();
 
   // ============================================================================
@@ -164,6 +166,8 @@ function TargetsSettingsPage() {
   // Extract data
   const targets = useMemo(() => targetsData?.items ?? [], [targetsData]);
   const pagination = targetsData?.pagination;
+  const progressErrorForDisplay = progressError instanceof Error ? progressError : null;
+  const progressUnavailable = Boolean(progressErrorForDisplay && !progressData);
 
   // ============================================================================
   // HANDLERS
@@ -305,6 +309,8 @@ function TargetsSettingsPage() {
           <TargetProgressWidget
             progress={progressData}
             isLoading={isProgressLoading}
+            error={progressErrorForDisplay}
+            onRetry={() => refetchProgress()}
             maxItems={3}
             showSummary
             className="md:col-span-1"
@@ -327,10 +333,16 @@ function TargetsSettingsPage() {
                   <div className="text-xs text-muted-foreground">Total Targets</div>
                 </div>
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
-                    {progressData?.overall?.achieved ?? 0}
+                  <div
+                    className={`text-2xl font-bold ${
+                      progressUnavailable ? 'text-muted-foreground' : 'text-green-600'
+                    }`}
+                  >
+                    {progressUnavailable ? '--' : progressData?.overall?.achieved ?? 0}
                   </div>
-                  <div className="text-xs text-muted-foreground">Achieved</div>
+                  <div className="text-xs text-muted-foreground">
+                    {progressUnavailable ? 'Progress unavailable' : 'Achieved'}
+                  </div>
                 </div>
               </div>
             </CardContent>
