@@ -45,6 +45,7 @@ import {
   type CertificateGenerationResult,
   type GetCertificateResult,
 } from '@/lib/schemas/warranty/certificates';
+import { formatWarrantyCertificateResultError } from '@/lib/warranty/certificate-result-errors';
 
 // PDF Generation imports
 import {
@@ -325,7 +326,7 @@ export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
         filename: '',
         wasRegenerated: false,
         generatedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Certificate generation failed',
+        error: formatWarrantyCertificateResultError(error),
       };
     }
   });
