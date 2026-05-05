@@ -33,7 +33,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { toast } from 'sonner';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityHeaderActions } from '@/components/shared';
@@ -235,10 +234,9 @@ export function WarrantyClaimDetailContainer({
     if (!result.confirmed) return;
     try {
       await cancelMutation.mutateAsync({ id: currentClaim.id });
-      toast.success('Claim cancelled successfully');
       await refetch();
     } catch {
-      toast.error('Failed to cancel claim');
+      // The claim mutation hook owns the operator-facing error toast.
     }
   };
 
