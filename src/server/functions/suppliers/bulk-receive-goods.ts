@@ -5,7 +5,7 @@
  * Processes each PO individually using the existing receiveGoods logic.
  *
  * Business Rules:
- * - Cannot bulk receive serialized products (they require individual serial number entry)
+ * - Serialized products require serial numbers before receiving
  * - Receives all pending items with default values (condition: 'new', no rejections)
  * - Returns summary of processed/failed counts
  *
@@ -24,6 +24,10 @@ import { getPurchaseOrder } from './purchase-orders';
 import { ValidationError } from '@/lib/server/errors';
 import { normalizeSerial } from '@/lib/serials';
 import { serializedMutationSuccess, type SerializedMutationEnvelope } from '@/lib/server/serialized-mutation-contract';
+import {
+  findBulkReceiveDuplicateSerialFailures,
+  type BulkReceiveSerialPreflightLine,
+} from './bulk-receive-serial-preflight';
 
 // ============================================================================
 // INPUT SCHEMA
@@ -78,8 +82,21 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       failed: 0,
       errors: [] as Array<{ poId: string; error: string }>,
     };
+    const preparedReceipts: Array<{
+      poId: string;
+      items: Array<{
+        poItemId: string;
+        quantityReceived: number;
+        quantityRejected: number;
+        condition: 'new';
+        lotNumber: undefined;
+        serialNumbers: string[] | undefined;
+        notes: undefined;
+      }>;
+    }> = [];
+    const serialPreflightLines: BulkReceiveSerialPreflightLine[] = [];
 
-    // Process each PO sequentially
+    // Prepare each PO first so batch-level serial conflicts cannot partially receipt.
     for (const poId of data.purchaseOrderIds) {
       try {
         // Fetch PO details
@@ -158,6 +175,14 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
                 `Duplicate serial numbers found for "${item.productName}"`
               );
             }
+
+            serialPreflightLines.push({
+              poId,
+              poItemId: item.id,
+              productId: item.productId,
+              productName: item.productName,
+              serialNumbers: normalizedSerials,
+            });
           }
 
           return {
@@ -171,11 +196,39 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
           };
         });
 
-        // Call receiveGoods for this PO
+        preparedReceipts.push({
+          poId,
+          items: receiptItems,
+        });
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          poId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    const duplicateSerialFailures =
+      findBulkReceiveDuplicateSerialFailures(serialPreflightLines);
+    const preflightBlockedPOIds = new Set(duplicateSerialFailures.map((failure) => failure.poId));
+    results.failed += preflightBlockedPOIds.size;
+    duplicateSerialFailures.forEach((failure) => {
+      results.errors.push({
+        poId: failure.poId,
+        error: failure.error,
+      });
+    });
+
+    // Process prepared POs sequentially after batch-level serial preflight passes.
+    for (const preparedReceipt of preparedReceipts) {
+      if (preflightBlockedPOIds.has(preparedReceipt.poId)) continue;
+
+      try {
         await receiveGoods({
           data: {
-            purchaseOrderId: poId,
-            items: receiptItems,
+            purchaseOrderId: preparedReceipt.poId,
+            items: preparedReceipt.items,
           },
         });
 
@@ -183,7 +236,7 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       } catch (error) {
         results.failed++;
         results.errors.push({
-          poId,
+          poId: preparedReceipt.poId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
