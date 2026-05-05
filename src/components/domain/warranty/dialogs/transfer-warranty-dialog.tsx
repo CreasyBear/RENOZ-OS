@@ -184,93 +184,150 @@ export function TransferWarrantyDialog({
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>New owner name</Label>
+                <Label htmlFor="warranty-transfer-owner-name">New owner name</Label>
                 <form.Field name="fullName">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-owner-name"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label htmlFor="warranty-transfer-owner-email">Email</Label>
                 <form.Field name="email">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-owner-email"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label htmlFor="warranty-transfer-owner-phone">Phone</Label>
                 <form.Field name="phone">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-owner-phone"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>Country</Label>
+                <Label htmlFor="warranty-transfer-country">Country</Label>
                 <form.Field name="country">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value.toUpperCase())} />
+                    <Input
+                      id="warranty-transfer-country"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value.toUpperCase())}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>Street address</Label>
+                <Label htmlFor="warranty-transfer-street1">Street address</Label>
                 <form.Field name="street1">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-street1"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>Street address line 2</Label>
+                <Label htmlFor="warranty-transfer-street2">Street address line 2</Label>
                 <form.Field name="street2">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-street2"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>City</Label>
+                <Label htmlFor="warranty-transfer-city">City</Label>
                 <form.Field name="city">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-city"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>State</Label>
+                <Label htmlFor="warranty-transfer-state">State</Label>
                 <form.Field name="state">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-state"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
               <div className="space-y-2">
-                <Label>Postal code</Label>
+                <Label htmlFor="warranty-transfer-postal">Postal code</Label>
                 <form.Field name="postalCode">
                   {(field) => (
-                    <Input value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                    <Input
+                      id="warranty-transfer-postal"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                    />
                   )}
                 </form.Field>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Owner notes</Label>
+              <Label htmlFor="warranty-transfer-owner-notes">Owner notes</Label>
               <form.Field name="ownerNotes">
                 {(field) => (
-                  <Textarea rows={2} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  <Textarea
+                    id="warranty-transfer-owner-notes"
+                    rows={2}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                  />
                 )}
               </form.Field>
             </div>
 
             <div className="space-y-2">
-              <Label>Transfer reason</Label>
+              <Label htmlFor="warranty-transfer-reason">Transfer reason</Label>
               <form.Field name="reason">
                 {(field) => (
-                  <Textarea rows={3} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} />
+                  <Textarea
+                    id="warranty-transfer-reason"
+                    rows={3}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                  />
                 )}
               </form.Field>
             </div>
