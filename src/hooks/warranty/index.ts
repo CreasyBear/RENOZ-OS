@@ -94,6 +94,7 @@ export {
   useExportWarrantyAnalytics,
   useWarrantyAnalyticsDashboard,
 } from './analytics/use-warranty-analytics';
+export { formatWarrantyMutationError } from './_mutation-errors';
 
 // --- Bulk import hooks ---
 export {

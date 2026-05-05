@@ -8,7 +8,11 @@ import { useState, useCallback, useMemo } from 'react';
 import { useSearch, useNavigate } from '@tanstack/react-router';
 import { format, subDays } from 'date-fns';
 
-import { useWarrantyAnalyticsDashboard, useExportWarrantyAnalytics } from '@/hooks';
+import {
+  formatWarrantyMutationError,
+  useWarrantyAnalyticsDashboard,
+  useExportWarrantyAnalytics,
+} from '@/hooks';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { toast } from '@/hooks';
 import {
@@ -53,6 +57,22 @@ const DEFAULT_FILTERS: WarrantyAnalyticsSearchParams = {
   claimType: 'all',
 };
 
+const WARRANTY_ANALYTICS_EXPORT_ERROR_MESSAGES = {
+  PERMISSION_DENIED: 'You do not have permission to export warranty analytics.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before exporting warranty analytics.',
+  RATE_LIMIT: 'Too many warranty analytics exports were attempted. Wait a moment and retry.',
+};
+
+function formatWarrantyAnalyticsExportError(error: unknown): string {
+  return formatWarrantyMutationError(
+    error,
+    'Warranty analytics export is temporarily unavailable. Please refresh and try again.',
+    {
+      codeMessages: WARRANTY_ANALYTICS_EXPORT_ERROR_MESSAGES,
+    }
+  );
+}
+
 /**
  * Warranty analytics container.
  * @source hooks/useWarrantyAnalyticsDashboard, useExportWarrantyAnalytics
@@ -94,7 +114,7 @@ export function WarrantyAnalyticsPage() {
       toast.success('Your warranty analytics report has been downloaded.');
     },
     onError: (error) => {
-      toast.error(error.message || 'Failed to export analytics data.');
+      toast.error(formatWarrantyAnalyticsExportError(error));
     },
   });
   const createScheduledReport = useCreateScheduledReport();
