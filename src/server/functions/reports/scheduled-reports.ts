@@ -52,6 +52,9 @@ import {
   type GenerateReportResponse,
 } from '@/lib/schemas/reports/scheduled-reports';
 
+const GENERATED_REPORT_METRIC_VALIDATION_MESSAGE =
+  'One or more selected report metrics are no longer available. Refresh and try again.';
+
 // ============================================================================
 // SCHEDULED REPORTS CRUD
 // ============================================================================
@@ -489,18 +492,7 @@ export const generateReport = createServerFn({ method: 'POST' })
       throw new ValidationError('Date range cannot exceed 1 year');
     }
 
-    // Validate metric IDs (deduplicate first to avoid redundant validation)
-    const uniqueMetricIds = Array.from(new Set(data.metrics));
-    for (const metricId of uniqueMetricIds) {
-      try {
-        getMetric(metricId); // Validate metric exists
-      } catch (error) {
-        throw new ValidationError(`Invalid metric ID: ${metricId}. ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-    
-    // Use deduplicated list for calculation
-    const metricsToCalculate = uniqueMetricIds;
+    const metricsToCalculate = assertGeneratedReportMetrics(data.metrics);
 
     // Calculate metrics using centralized aggregator (with deduplicated list)
     const metrics = await calculateMetricsAggregator({
@@ -594,6 +586,30 @@ export const generateReport = createServerFn({ method: 'POST' })
 // ============================================================================
 // RENDERING HELPERS
 // ============================================================================
+
+function assertGeneratedReportMetrics(metricIds: string[]): string[] {
+  const uniqueMetricIds = Array.from(new Set(metricIds));
+  const hasUnsupportedMetric = uniqueMetricIds.some(
+    (metricId) => !isGeneratedReportMetricId(metricId)
+  );
+
+  if (hasUnsupportedMetric) {
+    throw new ValidationError('Selected report metrics are no longer available.', {
+      metrics: [GENERATED_REPORT_METRIC_VALIDATION_MESSAGE],
+    });
+  }
+
+  return uniqueMetricIds;
+}
+
+function isGeneratedReportMetricId(metricId: string): boolean {
+  try {
+    getMetric(metricId);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function generateCsvReport(metrics: Record<string, number>, metricIds: string[]): string {
   const header = 'Metric,Value\n';
