@@ -62,10 +62,18 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Failed to approve claim');
   });
 
-  it('keeps claim mutation hooks on the formatter contract', () => {
-    const source = read('src/hooks/warranty/claims/use-warranty-claims.ts');
+  it('keeps claim and policy mutation hooks on the formatter contract', () => {
+    const claimSource = read('src/hooks/warranty/claims/use-warranty-claims.ts');
+    const policySource = read('src/hooks/warranty/policies/use-warranty-policies.ts');
 
-    expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
-    expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(claimSource).toContain(
+      "import { formatWarrantyMutationError } from '../_mutation-errors';"
+    );
+    expect(policySource).toContain(
+      "import { formatWarrantyMutationError } from '../_mutation-errors';"
+    );
+    expect(claimSource).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(policySource).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(policySource.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(7);
   });
 });
