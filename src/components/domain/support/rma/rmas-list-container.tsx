@@ -275,9 +275,7 @@ export function RmasListContainer({
         <Alert className="mb-3">
           <AlertTitle>Showing cached RMAs</AlertTitle>
           <AlertDescription>
-            {error instanceof Error
-              ? error.message
-              : 'RMA data is temporarily unavailable. Please refresh and try again.'}
+            Showing the most recent RMAs while refresh is unavailable.
           </AlertDescription>
         </Alert>
       ) : null}

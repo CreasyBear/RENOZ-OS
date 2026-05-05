@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/shared/empty-state';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import type {
   LinkedIssueOpenState,
   RmaExecutionStatus,
@@ -250,7 +251,16 @@ export function RmaList({
 
   // Error state
   if (error) {
-    return <ErrorState title="Failed to load RMAs" message={error.message} onRetry={onRetry} />;
+    return (
+      <ErrorState
+        title="Unable to load RMAs"
+        message={formatSupportReadError(
+          error,
+          'RMAs are temporarily unavailable. Please refresh and try again.'
+        )}
+        onRetry={onRetry}
+      />
+    );
   }
 
   return (
