@@ -36,6 +36,7 @@ import type {
   RevokeDelegationInput,
   BulkApproveInput,
 } from '@/lib/schemas/approvals';
+import { formatApprovalBulkFailureReason } from './approval-mutation-errors';
 
 // ============================================================================
 // QUERY HOOKS
@@ -265,7 +266,7 @@ export function useBulkReject() {
         } catch (error) {
           results.failed.push({
             id: item.approvalId,
-            reason: error instanceof Error ? error.message : 'Unknown error',
+            reason: formatApprovalBulkFailureReason(error),
           });
         }
       }
