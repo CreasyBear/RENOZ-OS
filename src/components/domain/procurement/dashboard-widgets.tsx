@@ -22,6 +22,12 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormatAmount } from '@/components/shared/format';
 import { ErrorState } from '@/components/shared/error-state';
+import {
+  getProcurementApprovalsErrorMessage,
+  getProcurementOrderMetricsErrorMessage,
+  getProcurementSpendMetricsErrorMessage,
+  getProcurementSupplierMetricsErrorMessage,
+} from './procurement-dashboard-error-messages';
 import type {
   SpendMetrics,
   OrderMetrics,
@@ -88,7 +94,7 @@ function SpendOverviewWidget({ metrics, error, onRetry }: SpendWidgetProps) {
         <CardContent className="pt-6">
           <ErrorState
             title="Failed to load spend metrics"
-            message={error.message || 'Unable to load spend data.'}
+            message={getProcurementSpendMetricsErrorMessage(error)}
             onRetry={onRetry}
             className="py-4"
           />
@@ -156,7 +162,7 @@ function OrderStatusWidget({ metrics, error, onRetry }: OrderWidgetProps) {
         <CardContent className="pt-6">
           <ErrorState
             title="Failed to load order metrics"
-            message={error.message || 'Unable to load order status data.'}
+            message={getProcurementOrderMetricsErrorMessage(error)}
             onRetry={onRetry}
             className="py-4"
           />
@@ -222,7 +228,7 @@ function SupplierPerformanceWidget({ metrics, error, onRetry }: SupplierWidgetPr
         <CardContent className="pt-6">
           <ErrorState
             title="Failed to load supplier metrics"
-            message={error.message || 'Unable to load supplier performance data.'}
+            message={getProcurementSupplierMetricsErrorMessage(error)}
             onRetry={onRetry}
             className="py-4"
           />
@@ -287,7 +293,7 @@ function ApprovalQueueWidget({ items, error, onRetry }: ApprovalWidgetProps) {
         <CardContent className="pt-6">
           <ErrorState
             title="Failed to load approvals"
-            message={error.message || 'Unable to load pending approvals.'}
+            message={getProcurementApprovalsErrorMessage(error)}
             onRetry={onRetry}
             className="py-4"
           />
@@ -397,7 +403,7 @@ function DashboardWidgets({
           <CardContent className="pt-6">
             <ErrorState
               title="Failed to load spend metrics"
-              message={errors.spend.message || 'Unable to load spend data.'}
+              message={getProcurementSpendMetricsErrorMessage(errors.spend)}
               onRetry={onRefreshSpend ?? onRefresh}
               className="py-4"
             />
@@ -423,7 +429,7 @@ function DashboardWidgets({
           <CardContent className="pt-6">
             <ErrorState
               title="Failed to load order metrics"
-              message={errors.orders.message || 'Unable to load order data.'}
+              message={getProcurementOrderMetricsErrorMessage(errors.orders)}
               onRetry={onRefreshOrders ?? onRefresh}
               className="py-4"
             />
@@ -449,7 +455,7 @@ function DashboardWidgets({
           <CardContent className="pt-6">
             <ErrorState
               title="Failed to load supplier metrics"
-              message={errors.suppliers.message || 'Unable to load supplier data.'}
+              message={getProcurementSupplierMetricsErrorMessage(errors.suppliers)}
               onRetry={onRefreshSuppliers ?? onRefresh}
               className="py-4"
             />

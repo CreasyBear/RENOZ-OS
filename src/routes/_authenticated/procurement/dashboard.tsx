@@ -20,6 +20,10 @@ import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 import { ErrorState } from '@/components/shared/error-state';
 import { ProcurementDashboard } from '@/components/domain/procurement/procurement-dashboard';
 import {
+  PROCUREMENT_DASHBOARD_FALLBACK_MESSAGE,
+  getProcurementDashboardErrorMessage,
+} from '@/components/domain/procurement/procurement-dashboard-error-messages';
+import {
   useProcurementDashboard,
   useSpendMetrics,
   useOrderMetrics,
@@ -289,6 +293,9 @@ export function ProcurementDashboardPage() {
   // Error handling - only block the page when no usable payload exists
   const hasErrors = errors.length > 0;
   const primaryError = errors[0] ?? null;
+  const primaryErrorMessage = primaryError
+    ? getProcurementDashboardErrorMessage(primaryError)
+    : PROCUREMENT_DASHBOARD_FALLBACK_MESSAGE;
 
   // Handlers - individual widget retry functions
   const handleRefreshSpend = useCallback(() => {
@@ -367,8 +374,8 @@ export function ProcurementDashboardPage() {
             title="Failed to load procurement data"
             message={
               errors.length > 1
-                ? `${errors.length} widgets failed to load. ${primaryError.message || 'Try refreshing.'}`
-                : primaryError.message || 'One or more procurement widgets failed to load. Try refreshing.'
+                ? `${errors.length} widgets failed to load. ${primaryErrorMessage}`
+                : primaryErrorMessage
             }
             onRetry={handleRefresh}
           />
