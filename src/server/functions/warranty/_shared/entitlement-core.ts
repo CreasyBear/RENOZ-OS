@@ -18,7 +18,7 @@ import {
   shipmentItems,
   warrantyEntitlements,
 } from 'drizzle/schema';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { normalizeSerial } from '@/lib/serials';
 import {
   findSerializedItemBySerial,
@@ -221,8 +221,16 @@ export async function createEntitlementsForDeliveredShipmentTx(
       const serializedItem = await findSerializedItemBySerial(tx, params.organizationId, serial, {
         userId: params.userId,
         productId: item.productId,
+        allowAutoUpsert: false,
         source: 'warranty_entitlement_delivery',
       });
+      if (!serializedItem) {
+        throw new ValidationError('Serialized item record not found', {
+          serialNumbers: [
+            `Serial "${serial}" could not be resolved to a serialized item before creating the delivery warranty entitlement.`,
+          ],
+        });
+      }
 
       await tx.insert(warrantyEntitlements).values({
         organizationId: params.organizationId,
@@ -233,7 +241,7 @@ export async function createEntitlementsForDeliveredShipmentTx(
         commercialCustomerId: shipment.commercialCustomerId,
         productId: item.productId,
         warrantyPolicyId: policy?.id ?? null,
-        serializedItemId: serializedItem?.id ?? null,
+        serializedItemId: serializedItem.id,
         productSerial: serial,
         evidenceType: 'serialized',
         status: policy ? 'pending_activation' : 'needs_review',
