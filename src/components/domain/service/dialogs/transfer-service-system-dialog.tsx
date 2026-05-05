@@ -7,6 +7,7 @@ import * as React from 'react';
 import { z } from 'zod';
 import { ArrowRightLeft } from 'lucide-react';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { buildOptionalServiceOwnerAddress } from '@/lib/service-owner-address';
 import {
   Dialog,
   DialogContent,
@@ -102,9 +103,7 @@ export function TransferServiceSystemDialog({
     },
     onSubmit: async (values) => {
       if (!serviceSystem) return;
-      const hasAddress = Boolean(
-        values.street1 || values.city || values.state || values.postalCode || values.country
-      );
+      const address = buildOptionalServiceOwnerAddress(values);
 
       await onSubmit({
         serviceSystemId: serviceSystem.id,
@@ -112,16 +111,7 @@ export function TransferServiceSystemDialog({
           fullName: values.fullName.trim(),
           email: values.email || undefined,
           phone: values.phone || undefined,
-          address: hasAddress
-            ? {
-                street1: values.street1,
-                street2: values.street2 || undefined,
-                city: values.city,
-                state: values.state,
-                postalCode: values.postalCode,
-                country: values.country,
-              }
-            : undefined,
+          address,
           notes: values.ownerNotes || undefined,
         },
         reason: values.reason.trim(),

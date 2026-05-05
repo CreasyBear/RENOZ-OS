@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRightLeft } from 'lucide-react';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { buildOptionalServiceOwnerAddress } from '@/lib/service-owner-address';
 import { FormFieldDisplayProvider } from '@/components/shared/forms';
 import {
   createPendingDialogInteractionGuards,
@@ -102,25 +103,14 @@ export function TransferWarrantyDialog({
       reason: '',
     },
     onSubmit: async (values) => {
-      const hasAddress = Boolean(
-        values.street1 || values.city || values.state || values.postalCode || values.country
-      );
+      const address = buildOptionalServiceOwnerAddress(values);
       await onSubmit({
         id: warranty.id,
         newOwner: {
           fullName: values.fullName.trim(),
           email: values.email || undefined,
           phone: values.phone || undefined,
-          address: hasAddress
-            ? {
-                street1: values.street1,
-                street2: values.street2 || undefined,
-                city: values.city,
-                state: values.state,
-                postalCode: values.postalCode,
-                country: values.country,
-              }
-            : undefined,
+          address,
           notes: values.ownerNotes || undefined,
         },
         reason: values.reason.trim(),
