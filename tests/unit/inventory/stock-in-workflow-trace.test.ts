@@ -45,6 +45,25 @@ describe('stock-in workflow trace', () => {
     expect(traceIndex).not.toContain('bulkReceiveStock');
   });
 
+  it('keeps the bulk PO receipt trace aligned with live preflight and cache contracts', () => {
+    const trace = read('docs/code-traces/02-inventory-stock-in.md');
+    const bulkReceiveServer = read('src/server/functions/suppliers/bulk-receive-goods.ts');
+    const bulkReceiveHook = read('src/hooks/suppliers/use-bulk-receive-goods.ts');
+
+    expect(bulkReceiveServer).toContain('findBulkReceiveDuplicateSerialFailures');
+    expect(bulkReceiveServer).toContain("'invalid_serial_state'");
+    expect(bulkReceiveHook).toContain('purchaseOrderStatusCounts');
+    expect(bulkReceiveHook).toContain('purchaseOrdersReceivingSummary');
+    expect(bulkReceiveHook).toContain('purchaseOrderReceipts(purchaseOrderId)');
+
+    expect(trace).toContain('batch serial preflight');
+    expect(trace).toContain('invalid_serial_state');
+    expect(trace).toContain('typed row failures');
+    expect(trace).toContain('purchase-order list, status counts, receiving summary, pending approvals');
+    expect(trace).toContain('errors[]');
+    expect(trace).toContain('optional row `code`');
+  });
+
   it('keeps product inventory receive wrappers delegated to canonical inventory endpoints', () => {
     const productInventoryServer = read('src/server/functions/products/product-inventory.ts');
 
