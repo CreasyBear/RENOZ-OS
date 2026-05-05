@@ -16,7 +16,7 @@ import {
   getExtensionById,
 } from '@/server/functions/warranty/extensions/warranty-extensions';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
-import { formatWarrantyMutationError } from '../_mutation-errors';
+import { formatWarrantyExtensionMutationError } from '../_mutation-errors';
 import type {
   ExtendWarrantyInput,
   GetExtensionHistoryInput,
@@ -177,7 +177,7 @@ export function useExtendWarranty() {
       }
     },
     onError: (error) => {
-      toast.error(formatWarrantyMutationError(error, 'Failed to extend warranty'));
+      toast.error(formatWarrantyExtensionMutationError(error, 'extend'));
     },
   });
 }

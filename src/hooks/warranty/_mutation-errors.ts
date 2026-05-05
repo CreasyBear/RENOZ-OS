@@ -50,6 +50,10 @@ const WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS = {
     'Warranty activation from entitlement is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const WARRANTY_EXTENSION_MUTATION_FALLBACKS = {
+  extend: 'Warranty extension is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 interface FormatWarrantyMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
@@ -59,6 +63,8 @@ export type WarrantyPolicyMutationAction = keyof typeof WARRANTY_POLICY_MUTATION
 export type WarrantyCoreMutationAction = keyof typeof WARRANTY_CORE_MUTATION_FALLBACKS;
 export type WarrantyEntitlementMutationAction =
   keyof typeof WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS;
+export type WarrantyExtensionMutationAction =
+  keyof typeof WARRANTY_EXTENSION_MUTATION_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -262,4 +268,11 @@ export function formatWarrantyEntitlementMutationError(
   action: WarrantyEntitlementMutationAction
 ): string {
   return formatWarrantyMutationError(error, WARRANTY_ENTITLEMENT_MUTATION_FALLBACKS[action]);
+}
+
+export function formatWarrantyExtensionMutationError(
+  error: unknown,
+  action: WarrantyExtensionMutationAction
+): string {
+  return formatWarrantyMutationError(error, WARRANTY_EXTENSION_MUTATION_FALLBACKS[action]);
 }

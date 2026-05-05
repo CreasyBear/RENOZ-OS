@@ -5,6 +5,7 @@ import {
   formatWarrantyClaimMutationError,
   formatWarrantyCoreMutationError,
   formatWarrantyEntitlementMutationError,
+  formatWarrantyExtensionMutationError,
   formatWarrantyMutationError,
   formatWarrantyPolicyMutationError,
 } from '@/hooks/warranty/_mutation-errors';
@@ -131,6 +132,27 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Warranty activation from entitlement is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('formats extension mutation failures with action-specific unavailable copy', () => {
+    expect(
+      formatWarrantyExtensionMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            extensionMonths: ['Extension months must be between 1 and 120.'],
+          },
+        },
+        'extend'
+      )
+    ).toBe('Extension months must be between 1 and 120.');
+
+    expect(
+      formatWarrantyExtensionMutationError(
+        new Error('duplicate key value violates unique constraint warranty_extensions_pkey'),
+        'extend'
+      )
+    ).toBe('Warranty extension is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('keeps warranty mutation hooks on the formatter contract', () => {
     const sources = {
       claim: read('src/hooks/warranty/claims/use-warranty-claims.ts'),
@@ -176,12 +198,18 @@ describe('warranty mutation error formatter', () => {
     );
     expect(sources.entitlement).not.toContain('Failed to activate warranty');
 
+    expect(sources.extension).toContain(
+      "import { formatWarrantyExtensionMutationError } from '../_mutation-errors';"
+    );
+    expect(sources.extension).not.toContain('Failed to extend warranty');
+
     for (const source of Object.values(sources).filter(
       (source) =>
         source !== sources.claim &&
         source !== sources.policy &&
         source !== sources.core &&
-        source !== sources.entitlement
+        source !== sources.entitlement &&
+        source !== sources.extension
     )) {
       expect(source).toContain("import { formatWarrantyMutationError } from '../_mutation-errors';");
       expect(source).not.toContain('toast.error(error instanceof Error ? error.message');
@@ -190,12 +218,13 @@ describe('warranty mutation error formatter', () => {
     expect(sources.policy).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.core).not.toContain('toast.error(error instanceof Error ? error.message');
     expect(sources.entitlement).not.toContain('toast.error(error instanceof Error ? error.message');
+    expect(sources.extension).not.toContain('toast.error(error instanceof Error ? error.message');
 
     expect(sources.claim.match(/formatWarrantyClaimMutationError\(error,/g)).toHaveLength(7);
     expect(sources.policy.match(/formatWarrantyPolicyMutationError\(error,/g)).toHaveLength(7);
     expect(sources.core.match(/formatWarrantyCoreMutationError\(error,/g)).toHaveLength(4);
     expect(sources.entitlement.match(/formatWarrantyEntitlementMutationError\(error,/g)).toHaveLength(1);
-    expect(sources.extension.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(1);
+    expect(sources.extension.match(/formatWarrantyExtensionMutationError\(error,/g)).toHaveLength(1);
     expect(sources.certificate.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
     expect(sources.bulkImport.match(/formatWarrantyMutationError\(error,/g)).toHaveLength(2);
   });
