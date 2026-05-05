@@ -20,6 +20,7 @@ import { StarRating, RatingBadge } from './star-rating';
 import { CsatEntryDialog } from './csat-entry-dialog';
 import { toast } from '@/hooks/_shared/use-toast';
 import { formatSupportMutationError } from '@/hooks/support';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   MessageSquare,
@@ -152,6 +153,9 @@ export function CsatDisplayCard({
   }
 
   const isResolved = issueStatus === 'resolved' || issueStatus === 'closed';
+  const feedbackRefreshWarning = error && feedback
+    ? 'Showing the most recent customer feedback while refresh is unavailable.'
+    : null;
 
   if (error && !feedback) {
     return (
@@ -168,7 +172,12 @@ export function CsatDisplayCard({
             <MessageSquare className="h-4 w-4" />
             <AlertTitle>Unable to load customer feedback</AlertTitle>
             <AlertDescription className="space-y-3">
-              <span className="block">{error.message}</span>
+              <span className="block">
+                {formatSupportReadError(
+                  error,
+                  'Issue feedback is temporarily unavailable. Please refresh and try again.'
+                )}
+              </span>
               {onRefresh ? (
                 <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
                   Retry
@@ -200,6 +209,14 @@ export function CsatDisplayCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {feedbackRefreshWarning ? (
+            <Alert>
+              <MessageSquare className="h-4 w-4" />
+              <AlertTitle>Customer feedback refresh unavailable</AlertTitle>
+              <AlertDescription>{feedbackRefreshWarning}</AlertDescription>
+            </Alert>
+          ) : null}
+
           <div className="flex items-center gap-3">
             <StarRating value={feedback.rating} size="md" />
             <span className="text-muted-foreground">{feedback.rating} out of 5</span>
