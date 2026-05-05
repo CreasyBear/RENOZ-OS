@@ -24,8 +24,6 @@ import { Label } from '@/components/ui/label';
 import { createPendingDialogInteractionGuards } from '@/components/ui/dialog-pending-guards';
 import { AlertTriangle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks';
-import { logger } from '@/lib/logger';
 
 /**
  * Props for uncontrolled mode (with trigger button)
@@ -99,9 +97,8 @@ export function EscalationDialog(props: EscalationDialogProps) {
         if (!submit) return;
         await submit(reason);
         setReason('');
-      } catch (error) {
-        logger.error('Escalation failed', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to update escalation status');
+      } catch {
+        // Mutation feedback is owned by the submit caller; keep the dialog open on failure.
       }
     } else {
       // Uncontrolled mode - manage loading state internally (props narrowed by isUncontrolled)
@@ -114,9 +111,8 @@ export function EscalationDialog(props: EscalationDialogProps) {
         }
         setOpen(false);
         setReason('');
-      } catch (error) {
-        logger.error('Escalation failed', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to update escalation status');
+      } catch {
+        // Mutation feedback is owned by the submit caller; keep the dialog open on failure.
       } finally {
         setIsLoading(false);
       }

@@ -1,8 +1,9 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EscalationDialog } from '@/components/domain/support/escalation/escalation-dialog';
+import { toast } from '@/hooks';
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open?: boolean; children: React.ReactNode }) =>
@@ -52,11 +53,11 @@ vi.mock('@/hooks', () => ({
   toast: { error: vi.fn() },
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn() },
-}));
-
 describe('EscalationDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('routes controlled de-escalation through onDeEscalate', async () => {
     const onEscalate = vi.fn();
     const onDeEscalate = vi.fn().mockResolvedValue(undefined);
@@ -82,5 +83,33 @@ describe('EscalationDialog', () => {
       expect(onDeEscalate).toHaveBeenCalledWith('Back in normal support queue')
     );
     expect(onEscalate).not.toHaveBeenCalled();
+  });
+
+  it('keeps controlled failure feedback with the submit caller', async () => {
+    const onEscalate = vi
+      .fn()
+      .mockRejectedValue(new Error('duplicate key value violates unique constraint'));
+    const onOpenChange = vi.fn();
+
+    render(
+      <EscalationDialog
+        open
+        onOpenChange={onOpenChange}
+        isEscalated={false}
+        onEscalate={onEscalate}
+      />
+    );
+
+    const reasonInput = screen.getByLabelText('Escalation Reason');
+    fireEvent.change(reasonInput, {
+      target: { value: 'Customer shipment is blocked' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Escalate' }));
+
+    await waitFor(() => expect(onEscalate).toHaveBeenCalledWith('Customer shipment is blocked'));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(reasonInput).toHaveValue('Customer shipment is blocked');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
