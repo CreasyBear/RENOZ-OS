@@ -334,7 +334,6 @@ export function WarrantyDetailContainer({ warrantyId, children }: WarrantyDetail
     reason: string;
   }) => {
     await transferWarrantyMutation.mutateAsync(payload);
-    await refetchWarranty();
   };
 
   const handleClaimRowClick = useCallback(

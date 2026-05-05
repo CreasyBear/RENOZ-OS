@@ -1052,6 +1052,7 @@ export const transferWarranty = createServerFn({ method: 'POST' })
       previousCustomerId: existing.customerId,
       serviceSystemId: existing.serviceSystemId,
       newOwnerId: transferResult.newOwner.id,
+      linkedWarrantyIds: transferResult.linkedWarrantyIds,
     };
   });
 

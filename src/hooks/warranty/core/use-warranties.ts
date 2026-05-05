@@ -180,12 +180,15 @@ export function useTransferWarranty() {
       transferWarranty({ data: input }),
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.statusCounts() });
+      for (const warrantyId of result.linkedWarrantyIds ?? [variables.id]) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(warrantyId) });
+      }
       if (result.previousCustomerId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(result.previousCustomerId) });
       }
       if (result.serviceSystemId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.serviceSystems.lists() });
         queryClient.invalidateQueries({ queryKey: queryKeys.serviceSystems.detail(result.serviceSystemId) });
       }
       toast.success('Warranty ownership transferred successfully');
