@@ -738,7 +738,7 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
       const durationMonths = policyInfo?.durationMonths ?? 12;
 
       try {
-        await db.transaction(async (tx) => {
+        const created = await db.transaction(async (tx) => {
           await tx.execute(
             sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
           );
@@ -782,41 +782,49 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
             updatedBy: ctx.user.id,
           });
 
-          const created = {
+          const serialNumber = row.serialNumber ? normalizeSerial(row.serialNumber) : null;
+          if (serialNumber) {
+            const serializedItem = await findSerializedItemBySerial(
+              tx,
+              ctx.organizationId,
+              serialNumber,
+              {
+                userId: ctx.user.id,
+                productId: row.productId,
+                allowAutoUpsert: false,
+                source: 'warranty_bulk_import',
+              }
+            );
+            if (!serializedItem) {
+              throw new ValidationError('Serialized item record not found', {
+                serialNumbers: [
+                  `Serial "${serialNumber}" could not be resolved to a serialized item before importing this warranty.`,
+                ],
+              });
+            }
+
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId: serializedItem.id,
+              eventType: 'warranty_registered',
+              entityType: 'warranty',
+              entityId: inserted.id,
+              notes: `Warranty registered: ${warrantyNumbers[index]}`,
+              userId: ctx.user.id,
+            });
+          }
+
+          return {
             id: inserted.id,
             warrantyNumber: inserted.warrantyNumber,
             customerId: row.customerId,
             productId: row.productId,
           };
-          createdWarranties.push(created);
-          createdWithRows.push({ warranty: created, row });
-          byPolicyType[row.policyType]++;
         });
 
-        // Serial lineage (outside tx - fire-and-forget style, don't fail row)
-        const serialNumber = row.serialNumber ? normalizeSerial(row.serialNumber) : null;
-        if (serialNumber) {
-          try {
-            const serializedItem = await findSerializedItemBySerial(db, ctx.organizationId, serialNumber, {
-              userId: ctx.user.id,
-              productId: row.productId,
-              source: 'warranty_bulk_import',
-            });
-            if (serializedItem) {
-              await addSerializedItemEvent(db, {
-                organizationId: ctx.organizationId,
-                serializedItemId: serializedItem.id,
-                eventType: 'warranty_registered',
-                entityType: 'warranty',
-                entityId: createdWarranties[createdWarranties.length - 1]!.id,
-                notes: `Warranty registered: ${warrantyNumbers[index]}`,
-                userId: ctx.user.id,
-              });
-            }
-          } catch {
-            // Log but don't fail - lineage is best-effort
-          }
-        }
+        createdWarranties.push(created);
+        createdWithRows.push({ warranty: created, row });
+        byPolicyType[row.policyType]++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         failed.push({ rowIndex, error: msg });
