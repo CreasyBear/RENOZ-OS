@@ -34,6 +34,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import type { IssueTemplateResponse, IssueType } from '@/lib/schemas/support/issue-templates';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Plus,
@@ -203,7 +204,14 @@ export function IssueTemplateList({
   // Error state
   if (error) {
     return (
-      <ErrorState title="Failed to load templates" message={error.message} onRetry={onRetry} />
+      <ErrorState
+        title="Unable to load issue templates"
+        message={formatSupportReadError(
+          error,
+          'Issue templates are temporarily unavailable. Please refresh and try again.'
+        )}
+        onRetry={onRetry}
+      />
     );
   }
 
