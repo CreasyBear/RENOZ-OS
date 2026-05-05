@@ -17,6 +17,7 @@ describe('shipment status serialization requirements', () => {
     const source = compact(read('src/server/functions/orders/order-shipments-status.ts'));
 
     expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).toContain('allowAutoUpsert:false,source:\'order_shipment_returned\'');
     expect(source).not.toContain('if(!serializedItem)continue;');
   });
 });

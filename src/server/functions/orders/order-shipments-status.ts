@@ -217,6 +217,7 @@ export async function updateShipmentStatusHandler({
         for (const serial of serials) {
           const serializedItem = await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
             userId: ctx.user.id,
+            allowAutoUpsert: false,
             source: 'order_shipment_returned',
           });
           if (!serializedItem) {

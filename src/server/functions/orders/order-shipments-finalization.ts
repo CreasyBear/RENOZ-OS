@@ -233,6 +233,7 @@ export async function markShipmentAsShipped(
             : await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
                 userId: ctx.user.id,
                 productId: lineItemWithProduct.productId,
+                allowAutoUpsert: false,
                 source: 'order_shipment_mark_shipped',
               });
 
@@ -851,6 +852,7 @@ export async function reopenShipmentHandler({
       for (const serial of shipmentSerials) {
         const serialRecord = await findSerializedItemBySerial(tx, ctx.organizationId, serial, {
           userId: ctx.user.id,
+          allowAutoUpsert: false,
           source: 'order_shipment_reopen',
         });
         if (!serialRecord) {

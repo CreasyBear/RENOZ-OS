@@ -31,6 +31,8 @@ describe('shipment finalization serialization requirements', () => {
     const source = compact(read('src/server/functions/orders/order-shipments-finalization.ts'));
 
     expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).toContain('allowAutoUpsert:false,source:\'order_shipment_mark_shipped\'');
+    expect(source).toContain('allowAutoUpsert:false,source:\'order_shipment_reopen\'');
     expect(source).not.toContain('if(!serialRecord){continue;}');
     expect(source).not.toContain('if(!serialRecord)continue;');
   });

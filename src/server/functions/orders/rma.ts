@@ -561,6 +561,7 @@ export const createRma = createServerFn({ method: 'POST' })
             li.serialNumber,
             {
               userId: ctx.user.id,
+              allowAutoUpsert: false,
               source: 'rma_create',
             }
           );

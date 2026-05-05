@@ -113,6 +113,7 @@ describe('RMA line serialization requirements', () => {
     const source = compact(read('src/server/functions/orders/rma.ts'));
 
     expect(source).toContain('thrownewValidationError(\'Serializeditemrecordnotfound\'');
+    expect(source).toContain('allowAutoUpsert:false,source:\'rma_create\'');
     expect(source).not.toContain('if(serializedItem){awaitaddSerializedItemEvent');
   });
 });
