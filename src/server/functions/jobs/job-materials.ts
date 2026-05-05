@@ -36,7 +36,7 @@ import {
   type JobMaterialCostSummary,
 } from '@/lib/schemas';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -745,21 +745,28 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
         const serializedItem = await findSerializedItemBySerial(tx, ctx.organizationId, normalizedSerial, {
           userId: ctx.user.id,
           productId: existingMaterial.productId,
+          allowAutoUpsert: false,
           source: 'job_material_installation',
         });
-        if (serializedItem) {
-          await addSerializedItemEvent(tx, {
-            organizationId: ctx.organizationId,
-            serializedItemId: serializedItem.id,
-            eventType: 'status_changed',
-            entityType: 'job_material',
-            entityId: data.materialId,
-            notes: data.installedLocation
-              ? `Installed at: ${data.installedLocation}`
-              : `Material installed`,
-            userId: ctx.user.id,
+        if (!serializedItem) {
+          throw new ValidationError('Serialized item record not found', {
+            serialNumbers: [
+              `Serial "${normalizedSerial}" could not be resolved to a serialized item before installing this job material.`,
+            ],
           });
         }
+
+        await addSerializedItemEvent(tx, {
+          organizationId: ctx.organizationId,
+          serializedItemId: serializedItem.id,
+          eventType: 'status_changed',
+          entityType: 'job_material',
+          entityId: data.materialId,
+          notes: data.installedLocation
+            ? `Installed at: ${data.installedLocation}`
+            : `Material installed`,
+          userId: ctx.user.id,
+        });
       }
 
       // Replace photos in dedicated table (PHASE12-007)
