@@ -29,6 +29,7 @@ import {
   generateOrderDocument,
   generateShipmentDocument,
 } from '@/server/functions/documents/generate-documents-sync';
+import { unwrapDocumentServerRecord } from './document-server-result';
 
 // ============================================================================
 // TYPES
@@ -50,8 +51,6 @@ export interface GenerateOrderDocumentResult {
   fileSize: number;
   checksum: string;
 }
-
-type UnknownRecord = Record<string, unknown>;
 
 export interface GenerateOrderQuoteInput {
   orderId: string;
@@ -121,28 +120,6 @@ function resolveShipmentInvalidateId(
   return result?.shipmentId ?? result?.entityId ?? variables.shipmentId;
 }
 
-async function unwrapServerFnResult(value: unknown): Promise<unknown> {
-  if (value instanceof Response) {
-    const contentType = value.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) {
-      return unwrapServerFnResult(await value.json());
-    }
-    throw new Error('Document generation returned a non-JSON response');
-  }
-
-  if (!value || typeof value !== 'object') return value;
-
-  const record = value as UnknownRecord;
-  if ('result' in record && record.result !== value) {
-    return unwrapServerFnResult(record.result);
-  }
-  if ('data' in record && record.data !== value) {
-    return unwrapServerFnResult(record.data);
-  }
-
-  return value;
-}
-
 async function normalizeGeneratedDocumentResult(
   value: unknown,
   fallback: {
@@ -150,12 +127,7 @@ async function normalizeGeneratedDocumentResult(
     shipmentId?: string;
   }
 ): Promise<GenerateOrderDocumentResult> {
-  const candidate = await unwrapServerFnResult(value);
-  if (!candidate || typeof candidate !== 'object') {
-    throw new Error('Document generation returned an invalid response');
-  }
-
-  const record = candidate as UnknownRecord;
+  const record = await unwrapDocumentServerRecord(value, 'Document generation');
   if (typeof record.url !== 'string' || typeof record.filename !== 'string') {
     throw new Error('Document generation returned an invalid response');
   }

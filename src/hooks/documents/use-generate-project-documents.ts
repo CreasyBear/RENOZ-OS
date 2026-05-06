@@ -25,6 +25,7 @@ import {
   generateProjectCompletionCertificatePdf,
   generateProjectDocument,
 } from '@/server/functions/documents';
+import { unwrapDocumentServerRecord } from './document-server-result';
 
 // ============================================================================
 // TYPES
@@ -61,40 +62,11 @@ export interface GenerateCompletionCertificateInput {
   regenerate?: boolean;
 }
 
-type UnknownRecord = Record<string, unknown>;
-
-async function unwrapServerFnResult(value: unknown): Promise<unknown> {
-  if (value instanceof Response) {
-    const contentType = value.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) {
-      return unwrapServerFnResult(await value.json());
-    }
-    throw new Error('Project document generation returned a non-JSON response');
-  }
-
-  if (!value || typeof value !== 'object') return value;
-
-  const record = value as UnknownRecord;
-  if ('result' in record && record.result !== value) {
-    return unwrapServerFnResult(record.result);
-  }
-  if ('data' in record && record.data !== value) {
-    return unwrapServerFnResult(record.data);
-  }
-
-  return value;
-}
-
 async function normalizeProjectDocumentResult(
   value: unknown,
   fallback: { projectId: string }
 ): Promise<GenerateProjectDocumentResult> {
-  const candidate = await unwrapServerFnResult(value);
-  if (!candidate || typeof candidate !== 'object') {
-    throw new Error('Project document generation returned an invalid response');
-  }
-
-  const record = candidate as UnknownRecord;
+  const record = await unwrapDocumentServerRecord(value, 'Project document generation');
   if (typeof record.url !== 'string' || typeof record.filename !== 'string') {
     throw new Error('Project document generation returned an invalid response');
   }

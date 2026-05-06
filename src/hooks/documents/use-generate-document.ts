@@ -28,6 +28,7 @@ import {
   generateInvoicePdf,
   getDocumentStatus,
 } from '@/server/functions/documents';
+import { unwrapDocumentServerRecord } from './document-server-result';
 
 // ============================================================================
 // TYPES
@@ -70,40 +71,11 @@ export interface DocumentGenerationStartResult {
   message: string;
 }
 
-type UnknownRecord = Record<string, unknown>;
-
-async function unwrapServerFnResult(value: unknown): Promise<unknown> {
-  if (value instanceof Response) {
-    const contentType = value.headers.get('content-type') ?? '';
-    if (contentType.includes('application/json')) {
-      return unwrapServerFnResult(await value.json());
-    }
-    throw new Error('Document generation returned a non-JSON response');
-  }
-
-  if (!value || typeof value !== 'object') return value;
-
-  const record = value as UnknownRecord;
-  if ('result' in record && record.result !== value) {
-    return unwrapServerFnResult(record.result);
-  }
-  if ('data' in record && record.data !== value) {
-    return unwrapServerFnResult(record.data);
-  }
-
-  return value;
-}
-
 async function normalizeDocumentGenerationStartResult(
   value: unknown,
   fallback: { orderId: string }
 ): Promise<DocumentGenerationStartResult> {
-  const candidate = await unwrapServerFnResult(value);
-  if (!candidate || typeof candidate !== 'object') {
-    throw new Error('Document generation returned an invalid response');
-  }
-
-  const record = candidate as UnknownRecord;
+  const record = await unwrapDocumentServerRecord(value, 'Document generation');
 
   return {
     success: true,
@@ -119,12 +91,7 @@ async function normalizeDocumentStatusResult(
   value: unknown,
   fallback: DocumentStatusInput
 ): Promise<DocumentStatusResult> {
-  const candidate = await unwrapServerFnResult(value);
-  if (!candidate || typeof candidate !== 'object') {
-    throw new Error('Document status returned an invalid response');
-  }
-
-  const record = candidate as UnknownRecord;
+  const record = await unwrapDocumentServerRecord(value, 'Document status');
   const status = record.status;
   if (
     status !== 'pending' &&
