@@ -134,7 +134,12 @@ export const generateQuotePdf = task({
         notes: orderLineItems.notes,
       })
       .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, orderId))
+      .where(
+        and(
+          eq(orderLineItems.orderId, orderId),
+          eq(orderLineItems.organizationId, organizationId)
+        )
+      )
       .orderBy(orderLineItems.lineNumber);
 
     const orderData = {

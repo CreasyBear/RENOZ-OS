@@ -17,7 +17,8 @@ import {
 } from 'drizzle/schema';
 
 export async function fetchShipmentSerialsByOrderLineItem(
-  orderId: string
+  orderId: string,
+  organizationId: string
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   try {
@@ -31,7 +32,15 @@ export async function fetchShipmentSerialsByOrderLineItem(
       .innerJoin(shipmentItems, eq(shipmentItemSerials.shipmentItemId, shipmentItems.id))
       .innerJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
       .innerJoin(serializedItems, eq(shipmentItemSerials.serializedItemId, serializedItems.id))
-      .where(eq(orderShipments.orderId, orderId));
+      .where(
+        and(
+          eq(orderShipments.orderId, orderId),
+          eq(orderShipments.organizationId, organizationId),
+          eq(shipmentItems.organizationId, organizationId),
+          eq(shipmentItemSerials.organizationId, organizationId),
+          eq(serializedItems.organizationId, organizationId)
+        )
+      );
 
     if (canonicalRows.length > 0) {
       for (const row of canonicalRows) {
@@ -58,7 +67,13 @@ export async function fetchShipmentSerialsByOrderLineItem(
       })
       .from(shipmentItems)
       .innerJoin(orderShipments, eq(shipmentItems.shipmentId, orderShipments.id))
-      .where(eq(orderShipments.orderId, orderId));
+      .where(
+        and(
+          eq(orderShipments.orderId, orderId),
+          eq(orderShipments.organizationId, organizationId),
+          eq(shipmentItems.organizationId, organizationId)
+        )
+      );
 
     for (const row of rows) {
       const serials = (row.serialNumbers as string[] | null) ?? [];
@@ -74,7 +89,8 @@ export async function fetchShipmentSerialsByOrderLineItem(
 }
 
 export async function fetchAllocatedSerialsByOrderLineItem(
-  orderLineItemIds: string[]
+  orderLineItemIds: string[],
+  organizationId: string
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (orderLineItemIds.length === 0) {
@@ -92,6 +108,8 @@ export async function fetchAllocatedSerialsByOrderLineItem(
       .where(
         and(
           inArray(orderLineSerialAllocations.orderLineItemId, orderLineItemIds),
+          eq(orderLineSerialAllocations.organizationId, organizationId),
+          eq(serializedItems.organizationId, organizationId),
           eq(orderLineSerialAllocations.isActive, true)
         )
       );

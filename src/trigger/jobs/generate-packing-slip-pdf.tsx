@@ -142,10 +142,15 @@ export const generatePackingSlipPdf = task({
         allocatedSerialNumbers: orderLineItems.allocatedSerialNumbers,
       })
       .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, orderId))
+      .where(
+        and(
+          eq(orderLineItems.orderId, orderId),
+          eq(orderLineItems.organizationId, organizationId)
+        )
+      )
       .orderBy(orderLineItems.lineNumber);
 
-    const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+    const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId, organizationId);
     const packingLineItems: PackingSlipLineItem[] = lineItems.map((item, index) => {
       const serialNumbers =
         shipmentSerialMap.get(item.id) ??

@@ -155,7 +155,12 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       notes: orderLineItems.notes,
     })
     .from(orderLineItems)
-    .where(eq(orderLineItems.orderId, orderId))
+    .where(
+      and(
+        eq(orderLineItems.orderId, orderId),
+        eq(orderLineItems.organizationId, organizationId)
+      )
+    )
     .orderBy(orderLineItems.lineNumber);
 
   return {
@@ -387,7 +392,14 @@ async function fetchShipmentDocumentData(
     })
     .from(shipmentItems)
     .innerJoin(orderLineItems, eq(shipmentItems.orderLineItemId, orderLineItems.id))
-    .where(eq(shipmentItems.shipmentId, shipmentId))
+    .where(
+      and(
+        eq(shipmentItems.shipmentId, shipmentId),
+        eq(shipmentItems.organizationId, organizationId),
+        eq(orderLineItems.organizationId, organizationId),
+        eq(orderLineItems.orderId, shipment.orderId)
+      )
+    )
     .orderBy(shipmentItems.createdAt);
 
   return {
@@ -427,7 +439,13 @@ async function getShipmentDocumentCapabilities(params: {
             qtyShipped: orderLineItems.qtyShipped,
           })
           .from(orderLineItems)
-          .where(inArray(orderLineItems.id, lineItemIds))
+          .where(
+            and(
+              inArray(orderLineItems.id, lineItemIds),
+              eq(orderLineItems.organizationId, params.organizationId),
+              eq(orderLineItems.orderId, params.orderId)
+            )
+          )
       : [];
 
   const lineItemMap = new Map(
@@ -691,9 +709,13 @@ async function generateOrderDocumentHandler({
           customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
           customerName: customerData.name,
         });
-        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(
+          orderId,
+          ctx.organizationId
+        );
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
-          orderData.lineItems.map((item) => item.id)
+          orderData.lineItems.map((item) => item.id),
+          ctx.organizationId
         );
         const packingSlipLineItems: PackingSlipLineItem[] = orderData.lineItems.map((item, index) => {
           const serialNumbers =
@@ -751,9 +773,13 @@ async function generateOrderDocumentHandler({
           customerBillingAddress: customerData.billingAddress ?? customerData.primaryAddress,
           customerName: customerData.name,
         });
-        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(orderId);
+        const shipmentSerialMap = await fetchShipmentSerialsByOrderLineItem(
+          orderId,
+          ctx.organizationId
+        );
         const allocationSerialMap = await fetchAllocatedSerialsByOrderLineItem(
-          orderData.lineItems.map((item) => item.id)
+          orderData.lineItems.map((item) => item.id),
+          ctx.organizationId
         );
 
         // Map line items to DeliveryNoteLineItem format
