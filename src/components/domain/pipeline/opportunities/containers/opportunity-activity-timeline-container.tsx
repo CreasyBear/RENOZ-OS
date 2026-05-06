@@ -13,7 +13,11 @@ import { UnifiedActivityTimeline } from '@/components/shared/activity';
 import { getActivitiesFeedSearch } from '@/lib/activities';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import { toastSuccess, toastError } from '@/hooks';
-import { useActivityTimeline, useCompleteActivity } from '@/hooks/pipeline';
+import {
+  formatPipelineActivityMutationError,
+  useActivityTimeline,
+  useCompleteActivity,
+} from '@/hooks/pipeline';
 
 // ============================================================================
 // TYPES
@@ -124,8 +128,8 @@ export function OpportunityActivityTimelineContainer({
         onSuccess: () => {
           toastSuccess('Activity marked as complete.');
         },
-        onError: () => {
-          toastError('Failed to complete activity. Please try again.');
+        onError: (error) => {
+          toastError(formatPipelineActivityMutationError(error, 'complete'));
         },
       }
     );

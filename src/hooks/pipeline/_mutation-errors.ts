@@ -64,3 +64,28 @@ export function formatPipelineOpportunityMutationError(
     codeMessages: PIPELINE_OPPORTUNITY_CODE_MESSAGES,
   });
 }
+
+export type PipelineActivityMutationAction = 'log' | 'scheduleFollowUp' | 'complete';
+
+const PIPELINE_ACTIVITY_MUTATION_FALLBACKS: Record<PipelineActivityMutationAction, string> = {
+  log: 'Unable to log activity. Refresh and try again.',
+  scheduleFollowUp: 'Unable to schedule follow-up. Refresh and try again.',
+  complete: 'Unable to complete activity. Refresh and try again.',
+};
+
+const PIPELINE_ACTIVITY_CODE_MESSAGES: Record<string, string> = {
+  CONFLICT: 'Activity state changed. Refresh and review before trying again.',
+  FORBIDDEN: 'You do not have permission to manage opportunity activities.',
+  NOT_FOUND: 'Activity was not found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage opportunity activities.',
+  VALIDATION_ERROR: 'Activity details need review before continuing.',
+};
+
+export function formatPipelineActivityMutationError(
+  error: unknown,
+  action: PipelineActivityMutationAction
+): string {
+  return formatMutationError(error, PIPELINE_ACTIVITY_MUTATION_FALLBACKS[action], {
+    codeMessages: PIPELINE_ACTIVITY_CODE_MESSAGES,
+  });
+}

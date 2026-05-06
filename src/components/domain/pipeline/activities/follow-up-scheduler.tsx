@@ -43,7 +43,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { useFollowUps, useLogActivity, useCompleteActivity } from "@/hooks/pipeline";
+import {
+  formatPipelineActivityMutationError,
+  useFollowUps,
+  useLogActivity,
+  useCompleteActivity,
+} from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
@@ -116,8 +121,8 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
             setIsDialogOpen(false);
             setNewFollowUp({ description: "", scheduledAt: "" });
           },
-          onError: () => {
-            toastError("Failed to schedule follow-up. Please try again.");
+          onError: (error) => {
+            toastError(formatPipelineActivityMutationError(error, "scheduleFollowUp"));
           },
         }
       );
@@ -134,8 +139,8 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
           onSuccess: () => {
             toastSuccess("Follow-up marked as complete.");
           },
-          onError: () => {
-            toastError("Failed to complete follow-up. Please try again.");
+          onError: (error) => {
+            toastError(formatPipelineActivityMutationError(error, "complete"));
           },
         }
       );

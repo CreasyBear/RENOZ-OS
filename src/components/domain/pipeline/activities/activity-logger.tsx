@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toastSuccess, toastError } from "@/hooks";
-import { useLogActivity } from "@/hooks/pipeline";
+import { formatPipelineActivityMutationError, useLogActivity } from "@/hooks/pipeline";
 import type { OpportunityActivityType } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -141,8 +141,8 @@ export const ActivityLogger = memo(function ActivityLogger({
             setIsOpen(false);
             onSuccess?.();
           },
-          onError: () => {
-            toastError("Failed to log activity. Please try again.");
+          onError: (error) => {
+            toastError(formatPipelineActivityMutationError(error, "log"));
           },
         }
       );

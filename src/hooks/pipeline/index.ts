@@ -112,8 +112,10 @@ export {
 } from './use-quote-mutations';
 
 export {
+  formatPipelineActivityMutationError,
   formatPipelineOpportunityMutationError,
   formatPipelineQuoteMutationError,
+  type PipelineActivityMutationAction,
   type PipelineOpportunityMutationAction,
   type PipelineQuoteMutationAction,
 } from './_mutation-errors';

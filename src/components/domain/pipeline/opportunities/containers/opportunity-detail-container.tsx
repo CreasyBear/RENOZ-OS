@@ -45,7 +45,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
-import { useOpportunityDetail, useCompleteActivity } from '@/hooks/pipeline';
+import {
+  formatPipelineActivityMutationError,
+  useOpportunityDetail,
+  useCompleteActivity,
+} from '@/hooks/pipeline';
 import { useTrackView } from '@/hooks/search';
 import { isValidOpportunityStage, isValidOpportunityMetadata } from '@/lib/schemas/pipeline';
 import { OpportunityDetailView } from '../views/opportunity-detail-view';
@@ -167,7 +171,7 @@ export const OpportunityDetailContainer = memo(function OpportunityDetailContain
       { activityId, opportunityId, outcome },
       {
         onSuccess: () => toastSuccess('Activity marked as complete.'),
-        onError: () => toastError('Failed to complete activity. Please try again.'),
+        onError: (error) => toastError(formatPipelineActivityMutationError(error, 'complete')),
       }
     );
   };
