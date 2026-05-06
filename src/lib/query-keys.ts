@@ -592,10 +592,13 @@ export const queryKeys = {
     recent: ['orders', 'recent'] as const,
     byStatus: (status: string) =>
       [...queryKeys.orders.lists(), { status }] as const,
+    fulfillmentRoot: () => [...queryKeys.orders.all, 'fulfillment'] as const,
     fulfillment: (status?: string) =>
-      [...queryKeys.orders.all, 'fulfillment', status ?? ''] as const,
+      status
+        ? [...queryKeys.orders.fulfillmentRoot(), status] as const
+        : queryKeys.orders.fulfillmentRoot(),
     fulfillmentSummary: () =>
-      [...queryKeys.orders.all, 'fulfillment', 'summary'] as const,
+      [...queryKeys.orders.fulfillmentRoot(), 'summary'] as const,
     shipments: (filters?: Record<string, unknown>) =>
       [...queryKeys.orders.all, 'shipments', filters ?? {}] as const,
     shipmentDetail: (shipmentId: string) =>

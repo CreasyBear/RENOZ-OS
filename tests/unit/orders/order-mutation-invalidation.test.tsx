@@ -77,6 +77,8 @@ describe('order mutation invalidation', () => {
     mockUpdateOrderStatus.mockResolvedValue({ success: true })
 
     const queryClient = new QueryClient()
+    queryClient.setQueryData(queryKeys.orders.fulfillmentSummary(), { readyToShip: 1 })
+    queryClient.setQueryData(queryKeys.orders.fulfillment('picked'), [])
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const { useUpdateOrderStatus } = await import('@/hooks/orders/use-order-status')
 
@@ -97,6 +99,12 @@ describe('order mutation invalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.infiniteLists(),
     })
+    expect(queryClient.getQueryState(queryKeys.orders.fulfillmentSummary())?.isInvalidated).toBe(
+      true
+    )
+    expect(queryClient.getQueryState(queryKeys.orders.fulfillment('picked'))?.isInvalidated).toBe(
+      true
+    )
   })
 
   it('shipment status updates also refresh infinite order collections', async () => {
