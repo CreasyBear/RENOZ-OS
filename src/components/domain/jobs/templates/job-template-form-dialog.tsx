@@ -39,7 +39,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCreateJobTemplate, useUpdateJobTemplate, useChecklistTemplates, toast } from '@/hooks';
+import {
+  formatJobTemplateMutationError,
+  useCreateJobTemplate,
+  useUpdateJobTemplate,
+  useChecklistTemplates,
+  toast,
+} from '@/hooks';
 import { useJobFormValidation } from '@/lib/schemas/jobs/job-validation';
 import type {
   JobTemplateResponse,
@@ -171,8 +177,8 @@ export function JobTemplateFormDialog({
       }
       onOpenChange(false);
       onSuccess?.();
-    } catch {
-      // Error toast is handled by the mutation hook
+    } catch (error) {
+      toast.error(formatJobTemplateMutationError(error, isEditMode ? 'update' : 'create'));
     }
   };
 

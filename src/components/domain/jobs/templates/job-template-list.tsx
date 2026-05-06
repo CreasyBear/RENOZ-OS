@@ -25,7 +25,12 @@ import {
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useJobTemplates, useDeleteJobTemplate } from '@/hooks';
+import {
+  formatJobTemplateMutationError,
+  toast,
+  useJobTemplates,
+  useDeleteJobTemplate,
+} from '@/hooks';
 import { useConfirmation } from '@/hooks';
 import type { JobTemplateResponse } from '@/lib/schemas';
 import { formatDistanceToNow } from 'date-fns';
@@ -111,8 +116,8 @@ export function JobTemplateList({
     if (confirmed) {
       try {
         await deleteMutation.mutateAsync({ templateId: template.id });
-      } catch {
-        // Error toast is handled by the mutation hook
+      } catch (error) {
+        toast.error(formatJobTemplateMutationError(error, 'delete'));
       }
     }
   }, [confirm, deleteMutation]);

@@ -414,7 +414,12 @@ export const updateJobTemplate = createServerFn({ method: 'POST' })
     const [updatedTemplate] = await db
       .update(jobTemplates)
       .set(updateValues)
-      .where(eq(jobTemplates.id, data.templateId))
+      .where(
+        and(
+          eq(jobTemplates.id, data.templateId),
+          eq(jobTemplates.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { template: toTemplateResponse(updatedTemplate as TemplateRow) };
@@ -443,7 +448,12 @@ export const deleteJobTemplate = createServerFn({ method: 'POST' })
         updatedAt: new Date(),
         updatedBy: ctx.user.id,
       })
-      .where(eq(jobTemplates.id, data.templateId));
+      .where(
+        and(
+          eq(jobTemplates.id, data.templateId),
+          eq(jobTemplates.organizationId, ctx.organizationId)
+        )
+      );
 
     return { success: true };
   });

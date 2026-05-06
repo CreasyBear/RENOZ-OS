@@ -16,7 +16,7 @@ import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
 import { JobTemplateList } from '@/components/domain/jobs';
 import { JobTemplateFormDialog } from '@/components/domain/jobs';
-import { useCreateJobTemplate } from '@/hooks';
+import { formatJobTemplateMutationError, toast, useCreateJobTemplate } from '@/hooks';
 import type { JobTemplateResponse } from '@/lib/schemas';
 export const Route = createFileRoute('/_authenticated/settings/job-templates')({
   component: JobTemplatesSettingsPage,
@@ -68,8 +68,8 @@ function JobTemplatesSettingsPage() {
         })),
         isActive: true,
       });
-    } catch {
-      // Error toast is handled by the mutation hook
+    } catch (error) {
+      toast.error(formatJobTemplateMutationError(error, 'duplicate'));
     }
   };
 

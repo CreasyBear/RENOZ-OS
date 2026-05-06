@@ -147,6 +147,11 @@ export {
   useUpdateChecklistItem,
 } from './use-job-templates-config';
 
+export {
+  formatJobTemplateMutationError,
+} from './_mutation-errors';
+export type { JobTemplateMutationAction } from './_mutation-errors';
+
 // ============================================================================
 // JOB DOCUMENTS
 // ============================================================================
