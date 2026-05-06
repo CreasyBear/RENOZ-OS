@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useWarrantyEntitlement } from '@/hooks/warranty';
+import { formatWarrantyReadError } from '@/lib/warranty';
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-AU', {
@@ -87,9 +88,10 @@ export function WarrantyEntitlementReviewDialog({
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {error instanceof Error
-                ? error.message
-                : 'Entitlement details are temporarily unavailable.'}
+              {formatWarrantyReadError(
+                error,
+                'Warranty entitlement details are temporarily unavailable. Please refresh and try again.'
+              )}
             </AlertDescription>
           </Alert>
         ) : data ? (

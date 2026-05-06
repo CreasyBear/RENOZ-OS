@@ -10,6 +10,7 @@ const warrantyReadErrorConsumerPaths = [
   'src/components/domain/warranty/containers/warranty-claim-detail-container.tsx',
   'src/components/domain/warranty/containers/warranty-detail-container.tsx',
   'src/components/domain/warranty/containers/warranty-entitlements-list-container.tsx',
+  'src/components/domain/warranty/dialogs/warranty-entitlement-review-dialog.tsx',
   'src/components/domain/warranty/tables/warranty-list-table.tsx',
   'src/components/domain/warranty/views/warranty-claims-list-view.tsx',
   'src/components/domain/warranty/views/warranty-policy-list.tsx',
@@ -49,6 +50,7 @@ describe('warranty read error messages', () => {
       expect(source, path).toContain('formatWarrantyReadError(');
       expect(source, path).not.toContain('warrantyError instanceof Error ? warrantyError.message');
       expect(source, path).not.toContain('certificateStatusQueryError.message');
+      expect(source, path).not.toContain('? error.message');
       expect(source, path).not.toContain('message={error.message}');
       expect(source, path).not.toContain("error.message || 'An error occurred'");
       expect(source, path).not.toContain("'An error occurred'");
