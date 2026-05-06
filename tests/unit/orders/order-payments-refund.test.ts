@@ -11,6 +11,13 @@ function createAwaitableResult<T>(values: T[]) {
   };
 }
 
+function createSelectableResult<T>(values: T[]) {
+  return {
+    ...createAwaitableResult(values),
+    for: () => createAwaitableResult(values),
+  };
+}
+
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({
     inputValidator: () => ({
@@ -30,10 +37,26 @@ vi.mock('@/lib/db', () => ({
   db: {
     select: () => ({
       from: () => ({
-        where: () => createAwaitableResult(state.selectResponses.shift() ?? []),
+        where: () => createSelectableResult(state.selectResponses.shift() ?? []),
       }),
     }),
-    transaction: vi.fn(),
+    transaction: vi.fn(async (callback: (tx: {
+      execute: () => Promise<void>;
+      select: () => {
+        from: () => {
+          where: () => ReturnType<typeof createSelectableResult>;
+        };
+      };
+    }) => Promise<unknown>) =>
+      callback({
+        execute: async () => {},
+        select: () => ({
+          from: () => ({
+            where: () => createSelectableResult(state.selectResponses.shift() ?? []),
+          }),
+        }),
+      })
+    ),
   },
 }));
 

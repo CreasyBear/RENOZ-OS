@@ -395,62 +395,63 @@ export const createRefundPayment = createServerFn({ method: "POST" })
   .handler(async ({ data: { orderId, originalPaymentId, amount, notes } }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
-    // Get original payment
-    const [original] = await db
-      .select({
-        id: orderPayments.id,
-        amount: orderPayments.amount,
-        paymentMethod: orderPayments.paymentMethod,
-      })
-      .from(orderPayments)
-      .where(
-        and(
-          eq(orderPayments.id, originalPaymentId),
-          eq(orderPayments.orderId, orderId),
-          eq(orderPayments.organizationId, ctx.organizationId),
-          eq(orderPayments.isRefund, false),
-          isNull(orderPayments.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!original) {
-      throw new NotFoundError("Original payment not found");
-    }
-
-    const [refundTotals] = await db
-      .select({
-        totalRefunded: sql<number>`coalesce(sum(${orderPayments.amount}), 0)::numeric`,
-      })
-      .from(orderPayments)
-      .where(
-        and(
-          eq(orderPayments.orderId, orderId),
-          eq(orderPayments.organizationId, ctx.organizationId),
-          eq(orderPayments.isRefund, true),
-          eq(orderPayments.relatedPaymentId, originalPaymentId),
-          isNull(orderPayments.deletedAt)
-        )
-      )
-      .limit(1);
-
-    const totalRefunded = Number(refundTotals?.totalRefunded ?? 0);
-    const remainingRefundable = Math.max(0, Number(original.amount) - totalRefunded);
-
-    if (amount > remainingRefundable) {
-      throw new ValidationError("Refund amount cannot exceed remaining refundable balance", {
-        amount: [
-          `Refund amount (${amount}) exceeds remaining refundable balance (${remainingRefundable})`,
-        ],
-      });
-    }
-
     const today = new Date().toISOString().split("T")[0];
 
     return db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      // Lock the original payment so concurrent refunds serialize on this payment.
+      const [original] = await tx
+        .select({
+          id: orderPayments.id,
+          amount: orderPayments.amount,
+          paymentMethod: orderPayments.paymentMethod,
+        })
+        .from(orderPayments)
+        .where(
+          and(
+            eq(orderPayments.id, originalPaymentId),
+            eq(orderPayments.orderId, orderId),
+            eq(orderPayments.organizationId, ctx.organizationId),
+            eq(orderPayments.isRefund, false),
+            isNull(orderPayments.deletedAt)
+          )
+        )
+        .for("update")
+        .limit(1);
+
+      if (!original) {
+        throw new NotFoundError("Original payment not found");
+      }
+
+      const [refundTotals] = await tx
+        .select({
+          totalRefunded: sql<number>`coalesce(sum(${orderPayments.amount}), 0)::numeric`,
+        })
+        .from(orderPayments)
+        .where(
+          and(
+            eq(orderPayments.orderId, orderId),
+            eq(orderPayments.organizationId, ctx.organizationId),
+            eq(orderPayments.isRefund, true),
+            eq(orderPayments.relatedPaymentId, originalPaymentId),
+            isNull(orderPayments.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const totalRefunded = Number(refundTotals?.totalRefunded ?? 0);
+      const remainingRefundable = Math.max(0, Number(original.amount) - totalRefunded);
+
+      if (amount > remainingRefundable) {
+        throw new ValidationError("Refund amount cannot exceed remaining refundable balance", {
+          amount: [
+            `Refund amount (${amount}) exceeds remaining refundable balance (${remainingRefundable})`,
+          ],
+        });
+      }
 
       const [refund] = await tx
         .insert(orderPayments)

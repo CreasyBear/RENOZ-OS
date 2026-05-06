@@ -164,7 +164,11 @@ describe('order payment ledger contract', () => {
     const source = read('src/server/functions/orders/order-payments.ts');
     const refundPaymentSource = sourceFrom(source, 'export const createRefundPayment');
 
+    const transactionIndex = refundPaymentSource.indexOf('return db.transaction(async (tx) => {');
     const originalGuardIndex = refundPaymentSource.indexOf('.from(orderPayments)');
+    const originalLockIndex = refundPaymentSource.indexOf('.for("update")');
+    const refundTotalsIndex = refundPaymentSource.indexOf('const [refundTotals] = await tx');
+    const validationIndex = refundPaymentSource.indexOf('if (amount > remainingRefundable)');
     const refundInsertIndex = refundPaymentSource.indexOf('.insert(orderPayments)');
 
     expect(refundPaymentSource).toContain('eq(orderPayments.id, originalPaymentId)');
@@ -173,8 +177,13 @@ describe('order payment ledger contract', () => {
     expect(refundPaymentSource).toContain('eq(orderPayments.isRefund, false)');
     expect(refundPaymentSource).toContain('isNull(orderPayments.deletedAt)');
     expect(refundPaymentSource).toContain("set_config('app.organization_id'");
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(originalGuardIndex).toBeGreaterThan(transactionIndex);
+    expect(originalLockIndex).toBeGreaterThan(originalGuardIndex);
+    expect(refundTotalsIndex).toBeGreaterThan(originalLockIndex);
+    expect(validationIndex).toBeGreaterThan(refundTotalsIndex);
     expect(originalGuardIndex).toBeGreaterThanOrEqual(0);
-    expect(refundInsertIndex).toBeGreaterThan(originalGuardIndex);
+    expect(refundInsertIndex).toBeGreaterThan(validationIndex);
   });
 
   it('keeps invoice payment recording on the order payment mutation spine', () => {
