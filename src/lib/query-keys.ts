@@ -1662,8 +1662,12 @@ export const queryKeys = {
     all: ['documents'] as const,
     status: (orderId: string, documentType: string) =>
       [...queryKeys.documents.all, 'status', orderId, documentType] as const,
+    historyRoot: (entityType: string, entityId: string) =>
+      [...queryKeys.documents.all, 'history', entityType, entityId] as const,
     history: (entityType: string, entityId: string, documentType?: string) =>
-      [...queryKeys.documents.all, 'history', entityType, entityId, documentType ?? ''] as const,
+      documentType
+        ? [...queryKeys.documents.historyRoot(entityType, entityId), documentType] as const
+        : queryKeys.documents.historyRoot(entityType, entityId),
     counts: (entityType: string, entityId: string) =>
       [...queryKeys.documents.all, 'counts', entityType, entityId] as const,
   },

@@ -59,6 +59,7 @@ describe('async document generation hooks', () => {
     const { queryClient, wrapper } = createHarness();
     queryClient.setQueryData(queryKeys.orders.detail(orderId), { id: orderId });
     queryClient.setQueryData(queryKeys.documents.history('order', orderId), []);
+    queryClient.setQueryData(queryKeys.documents.history('order', orderId, 'quote'), []);
     queryClient.setQueryData(queryKeys.documents.status(orderId, 'quote'), {
       orderId,
       documentType: 'quote',
@@ -87,6 +88,9 @@ describe('async document generation hooks', () => {
     expect(queryClient.getQueryState(queryKeys.orders.detail(orderId))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(queryKeys.documents.history('order', orderId))?.isInvalidated)
       .toBe(true);
+    expect(
+      queryClient.getQueryState(queryKeys.documents.history('order', orderId, 'quote'))?.isInvalidated
+    ).toBe(true);
     expect(queryClient.getQueryState(queryKeys.documents.status(orderId, 'quote'))?.isInvalidated)
       .toBe(true);
   });

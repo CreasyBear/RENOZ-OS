@@ -219,7 +219,7 @@ export function useInvalidateDocumentHistory() {
 
   return (filters: { entityType: DocumentEntityType; entityId: string }) => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.documents.history(filters.entityType, filters.entityId),
+      queryKey: queryKeys.documents.historyRoot(filters.entityType, filters.entityId),
     });
   };
 }
