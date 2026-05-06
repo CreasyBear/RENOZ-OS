@@ -6,6 +6,7 @@ import { safeNumber } from '@/lib/numeric';
 import { updateOrderPaymentStatus } from '@/server/functions/orders/order-payments';
 import { xeroWebhookEventSchema } from '@/lib/schemas/settings/xero-sync';
 import { getXeroErrorMessage, getXeroPaymentById } from '../xero-adapter';
+import { formatXeroPaymentWebhookError } from './xero-sync-feedback';
 
 /** Maximum single payment amount in AUD (10 million) */
 const MAX_PAYMENT_AMOUNT_AUD = 10_000_000;
@@ -91,6 +92,28 @@ async function updateXeroPaymentEventResult(params: {
         eq(xeroPaymentEvents.dedupeKey, params.dedupeKey)
       )
     )
+}
+
+function summarizeXeroPaymentWebhookResult(result: Record<string, unknown>) {
+  const success = result.success === true;
+  const resultState = typeof result.resultState === 'string' ? result.resultState : 'processing';
+  const retryable = result.retryable === true;
+  const duplicate = result.duplicate === true;
+  const error = success
+    ? undefined
+    : formatXeroPaymentWebhookError(
+        typeof result.error === 'string' ? result.error : null,
+        resultState,
+        retryable
+      );
+
+  return {
+    success,
+    resultState,
+    ...(duplicate ? { duplicate } : {}),
+    ...(retryable ? { retryable } : {}),
+    ...(error ? { error } : {}),
+  };
 }
 
 async function resolveWebhookRecordedBy(
@@ -201,7 +224,7 @@ export async function applyXeroPaymentUpdate(data: {
       success: false,
       duplicate: false,
       resultState: 'unknown_invoice',
-      error: `Order not found for Xero invoice: ${xeroInvoiceId}`,
+      error: formatXeroPaymentWebhookError(null, 'unknown_invoice'),
       xeroInvoiceId,
     }
   }
@@ -295,7 +318,7 @@ export async function applyXeroPaymentUpdate(data: {
       resultState: 'rejected',
       orderId: order.id,
       xeroInvoiceId,
-      error: error.message,
+      error: formatXeroPaymentWebhookError(error.message, 'rejected'),
     }
   }
 }
@@ -309,7 +332,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
       success: false,
       resultState: 'rejected',
       retryable: false,
-      error: 'Webhook event is missing a tenantId',
+      error: formatXeroPaymentWebhookError('missing tenant', 'rejected'),
     }
   }
 
@@ -328,8 +351,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
       success: false,
       resultState: 'rejected',
       retryable: false,
-      error: 'Webhook payment event did not include a payment resource ID',
-      tenantId,
+      error: 'Xero payment webhook did not include a payment resource.',
     }
   }
 
@@ -339,9 +361,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
       success: false,
       resultState: 'rejected',
       retryable: false,
-      error: organization.error,
-      tenantId,
-      paymentId,
+      error: formatXeroPaymentWebhookError(organization.error, 'rejected'),
     }
   }
 
@@ -352,10 +372,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
         success: false,
         resultState: 'rejected',
         retryable: false,
-        error: `Xero payment ${paymentId} could not be loaded`,
-        organizationId: organization.organizationId,
-        tenantId,
-        paymentId,
+        error: formatXeroPaymentWebhookError('payment could not be loaded', 'rejected'),
       }
     }
 
@@ -379,10 +396,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
       success: false,
       resultState: retryable ? 'processing' : 'rejected',
       retryable,
-      error: errorMessage,
-      organizationId: organization.organizationId,
-      tenantId,
-      paymentId,
+      error: formatXeroPaymentWebhookError(errorMessage, retryable ? 'processing' : 'rejected', retryable),
     }
   }
 }
@@ -391,21 +405,24 @@ export async function processXeroPaymentWebhookEvents(
   events: unknown[],
   applyFn: typeof applyXeroPaymentWebhookEvent = applyXeroPaymentWebhookEvent
 ) {
-  const results = [];
+  const rawResults = [];
 
   for (const event of events) {
-    results.push(await applyFn(event));
+    rawResults.push(await applyFn(event));
   }
 
-  const retryableFailure = results.find(
+  const retryableFailure = rawResults.find(
     (result) => result.success === false && 'retryable' in result && result.retryable === true
+  );
+  const results = rawResults.map((result) =>
+    summarizeXeroPaymentWebhookResult(result as Record<string, unknown>)
   );
 
   return {
     status: retryableFailure ? 'retry' : 'accepted',
     httpStatus: retryableFailure ? 503 : 200,
     results,
-    duplicateCount: results.filter((result) => 'duplicate' in result && result.duplicate === true).length,
+    duplicateCount: rawResults.filter((result) => 'duplicate' in result && result.duplicate === true).length,
   };
 }
 
@@ -428,14 +445,14 @@ async function resolveWebhookOrganizationByTenant(tenantId: string) {
   if (matches.length === 0) {
     return {
       success: false as const,
-      error: `No active Xero accounting connection matches tenant ${tenantId}`,
+      error: 'No active Xero accounting connection matches this webhook tenant',
     }
   }
 
   if (matches.length > 1) {
     return {
       success: false as const,
-      error: `Multiple active Xero accounting connections match tenant ${tenantId}`,
+      error: 'Multiple active Xero accounting connections match this webhook tenant',
     }
   }
 

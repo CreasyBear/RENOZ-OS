@@ -87,6 +87,42 @@ export function formatXeroInvoiceSyncMutationError(xeroSyncError?: string | null
   return 'Invoice sync is temporarily unavailable. Review the invoice and try again.';
 }
 
+export function formatXeroPaymentWebhookError(
+  error?: string | null,
+  resultState?: string | null,
+  retryable?: boolean,
+): string {
+  const normalized = error?.toLowerCase() ?? '';
+
+  if (
+    normalized.includes('not be loaded') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('too many requests') ||
+    retryable
+  ) {
+    return 'Xero payment processing is temporarily unavailable. Xero should retry this event.';
+  }
+
+  if (
+    normalized.includes('tenant') ||
+    normalized.includes('no active xero') ||
+    normalized.includes('multiple active xero') ||
+    normalized.includes('connection')
+  ) {
+    return 'Xero payment webhook could not be matched to an active accounting connection.';
+  }
+
+  if (resultState === 'unknown_invoice' || normalized.includes('invoice')) {
+    return 'No local order matched this Xero invoice. The payment was not applied.';
+  }
+
+  if (resultState === 'rejected') {
+    return 'The Xero payment could not be safely applied. Review the payment event audit.';
+  }
+
+  return 'Xero payment processing is temporarily unavailable. Review the payment event audit.';
+}
+
 export function formatRevenueRecognitionXeroSyncError(
   xeroSyncError?: string | null,
   state?: string | null,

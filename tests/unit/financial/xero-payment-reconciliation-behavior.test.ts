@@ -134,6 +134,7 @@ describe("Xero payment reconciliation behavior", () => {
     ).resolves.toMatchObject({
       success: false,
       resultState: "unknown_invoice",
+      error: "No local order matched this Xero invoice. The payment was not applied.",
     });
     expect(dbState.updates).toEqual(
       expect.arrayContaining([expect.objectContaining({ resultState: "unknown_invoice" })]),
@@ -209,12 +210,37 @@ describe("Xero payment reconciliation behavior", () => {
     ).resolves.toMatchObject({
       success: false,
       resultState: "rejected",
-      error: "Xero payment could not be recorded",
+      error: "The Xero payment could not be safely applied. Review the payment event audit.",
     });
     expect(dbState.committedPayments).toEqual([]);
     expect(dbState.updates).toEqual(
       expect.arrayContaining([expect.objectContaining({ resultState: "rejected" })]),
     );
+  });
+
+  it("returns safe webhook tenant resolution failures without echoing tenant ids", async () => {
+    dbState.selectQueue = [[]];
+
+    const { applyXeroPaymentWebhookEvent } = await import(
+      "@/server/functions/financial/_shared/xero-payment-reconciliation"
+    );
+
+    const result = await applyXeroPaymentWebhookEvent({
+      id: "evt-tenant",
+      eventCategory: "PAYMENT",
+      eventType: "CREATE",
+      tenantId: "tenant-secret-1",
+      resourceId: "payment-secret-1",
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      resultState: "rejected",
+      retryable: false,
+      error: "Xero payment webhook could not be matched to an active accounting connection.",
+    });
+    expect(JSON.stringify(result)).not.toContain("tenant-secret-1");
+    expect(JSON.stringify(result)).not.toContain("payment-secret-1");
   });
 
   it("returns retry batch policy when any webhook event is retryable", async () => {
@@ -233,5 +259,52 @@ describe("Xero payment reconciliation behavior", () => {
       status: "retry",
       httpStatus: 503,
     });
+  });
+
+  it("sanitizes webhook batch results before route responses and logs can expose them", async () => {
+    const { processXeroPaymentWebhookEvents } = await import(
+      "@/server/functions/financial/_shared/xero-payment-reconciliation"
+    );
+
+    const result = await processXeroPaymentWebhookEvents(
+      [{ id: "evt-1" }, { id: "evt-2" }],
+      vi.fn()
+        .mockResolvedValueOnce({
+          success: true,
+          duplicate: false,
+          resultState: "applied",
+          orderId: "order-secret-1",
+          xeroInvoiceId: "invoice-secret-1",
+        })
+        .mockResolvedValueOnce({
+          success: false,
+          retryable: true,
+          resultState: "processing",
+          error: "provider stack leaked refresh_token for tenant-secret-1",
+          organizationId: "org-secret-1",
+          tenantId: "tenant-secret-1",
+          paymentId: "payment-secret-1",
+        }) as never,
+    );
+
+    expect(result).toMatchObject({
+      status: "retry",
+      httpStatus: 503,
+      results: [
+        { success: true, resultState: "applied" },
+        {
+          success: false,
+          resultState: "processing",
+          retryable: true,
+          error: "Xero payment processing is temporarily unavailable. Xero should retry this event.",
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain("order-secret-1");
+    expect(JSON.stringify(result)).not.toContain("invoice-secret-1");
+    expect(JSON.stringify(result)).not.toContain("refresh_token");
+    expect(JSON.stringify(result)).not.toContain("tenant-secret-1");
+    expect(JSON.stringify(result)).not.toContain("org-secret-1");
+    expect(JSON.stringify(result)).not.toContain("payment-secret-1");
   });
 });
