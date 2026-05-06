@@ -7,10 +7,20 @@ export const PIPELINE_READ_MESSAGES = {
   opportunities: 'Opportunities are temporarily unavailable. Please refresh and try again.',
   opportunitiesCached:
     'Opportunity data is temporarily unavailable. Showing cached opportunities while refresh is unavailable.',
+  opportunityDetails:
+    'Opportunity details are temporarily unavailable. Please refresh and try again.',
+  opportunityNotFound: 'The requested opportunity could not be found.',
+  opportunitySearch: 'Opportunity search is temporarily unavailable. Please refresh and try again.',
   opportunityDocumentsTitle: 'Documents unavailable',
   opportunityDocuments: 'Opportunity documents are temporarily unavailable. Please refresh and try again.',
   opportunityDocumentsCached:
     'Opportunity documents are temporarily unavailable. Showing the most recent documents.',
+  pipelineMetrics: 'Pipeline metrics are temporarily unavailable. Please refresh and try again.',
+  pipelineForecast: 'Pipeline forecast is temporarily unavailable. Please refresh and try again.',
+  pipelineVelocity: 'Pipeline velocity is temporarily unavailable. Please refresh and try again.',
+  revenueAttribution: 'Revenue attribution is temporarily unavailable. Please refresh and try again.',
+  pipelineCustomers: 'Pipeline customers are temporarily unavailable. Please refresh and try again.',
+  pipelineProducts: 'Pipeline products are temporarily unavailable. Please refresh and try again.',
   quoteVersionHistory: 'Quote version history is temporarily unavailable. Please refresh and try again.',
 } as const;
 

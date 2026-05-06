@@ -16,6 +16,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import { listOpportunities, getOpportunity } from '@/server/functions/pipeline/pipeline';
 import { type Opportunity } from '@/lib/schemas/pipeline';
 import { isValidOpportunitySortField } from '@/components/domain/pipeline/opportunities/opportunity-sorting';
@@ -106,13 +107,13 @@ export function useOpportunities(options: UseOpportunitiesOptions = {}) {
         return requireReadResult(result, {
           message: 'Opportunities list returned no data',
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       }
     },
@@ -160,13 +161,13 @@ export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = 
         return requireReadResult(result, {
           message: 'Opportunities list returned no data',
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       }
     },
@@ -205,13 +206,13 @@ export function useOpportunitiesInfinite(filters: Partial<OpportunityFilters> = 
         return requireReadResult(result, {
           message: 'Opportunities list returned no data',
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Opportunities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunities,
         });
       }
     },
@@ -245,17 +246,15 @@ export function useOpportunity({ id, enabled = true }: UseOpportunityOptions) {
         return requireReadResult(result, {
           message: 'Opportunity not found',
           contractType: 'detail-not-found',
-          fallbackMessage:
-            'Opportunity details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested opportunity could not be found.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityDetails,
+          notFoundMessage: PIPELINE_READ_MESSAGES.opportunityNotFound,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
-          fallbackMessage:
-            'Opportunity details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested opportunity could not be found.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityDetails,
+          notFoundMessage: PIPELINE_READ_MESSAGES.opportunityNotFound,
         });
       }
     },
@@ -300,15 +299,13 @@ export function useOpportunitySearch({ query, limit = 10, enabled = true }: UseO
         return requireReadResult(result, {
           message: 'Opportunity search returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity search is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunitySearch,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity search is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunitySearch,
         });
       }
     },

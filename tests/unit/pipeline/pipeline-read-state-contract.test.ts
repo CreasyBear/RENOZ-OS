@@ -66,4 +66,23 @@ describe('pipeline read state contract', () => {
     expect(documentsTab).not.toContain('Failed to load documents');
     expect(documentsTab).not.toContain('error.message ||');
   });
+
+  it('keeps pipeline hook read normalization fallbacks in the pipeline message map', () => {
+    const useOpportunities = read('src/hooks/pipeline/use-opportunities.ts');
+    const usePipelineMetrics = read('src/hooks/pipeline/use-pipeline-metrics.ts');
+
+    expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunities');
+    expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityDetails');
+    expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityNotFound');
+    expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunitySearch');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineMetrics');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineForecast');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineVelocity');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.revenueAttribution');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineCustomers');
+    expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineProducts');
+
+    expect(useOpportunities).not.toMatch(/fallbackMessage:\s*['"]/);
+    expect(usePipelineMetrics).not.toMatch(/fallbackMessage:\s*['"]/);
+  });
 });

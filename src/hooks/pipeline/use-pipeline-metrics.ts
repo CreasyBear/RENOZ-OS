@@ -18,6 +18,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import {
   getPipelineMetrics,
   getPipelineForecast,
@@ -60,13 +61,13 @@ export function usePipelineMetrics({ assignedTo, customerId, enabled = true }: U
         return requireReadResult(result, {
           message: 'Pipeline metrics returned no data',
           contractType: 'always-shaped',
-          fallbackMessage: 'Pipeline metrics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineMetrics,
         }) as PipelineMetricsData;
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Pipeline metrics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineMetrics,
         });
       }
     },
@@ -134,15 +135,13 @@ export function usePipelineForecast(options: UsePipelineForecastOptions = {}) {
         return requireReadResult(result, {
           message: 'Pipeline forecast returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline forecast is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineForecast,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline forecast is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineForecast,
         });
       }
     },
@@ -199,15 +198,13 @@ export function usePipelineVelocity(options: UsePipelineVelocityOptions = {}) {
         return requireReadResult(result, {
           message: 'Pipeline velocity returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline velocity is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineVelocity,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline velocity is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineVelocity,
         });
       }
     },
@@ -267,15 +264,13 @@ export function useRevenueAttribution(options: UseRevenueAttributionOptions = {}
         return requireReadResult(result, {
           message: 'Revenue attribution returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Revenue attribution is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.revenueAttribution,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Revenue attribution is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.revenueAttribution,
         });
       }
     },
@@ -302,15 +297,13 @@ export function usePipelineCustomers() {
         return requireReadResult(result, {
           message: 'Pipeline customers returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline customers are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineCustomers,
         }) as { items: Array<{ id: string; name: string; email?: string | null }> };
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline customers are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineCustomers,
         });
       }
     },
@@ -332,8 +325,7 @@ export function usePipelineProducts() {
         return requireReadResult(result, {
           message: 'Pipeline products returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline products are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineProducts,
         }) as {
           products: Array<{ id: string; name: string; sku: string; basePrice: number }>;
         };
@@ -341,8 +333,7 @@ export function usePipelineProducts() {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Pipeline products are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.pipelineProducts,
         });
       }
     },

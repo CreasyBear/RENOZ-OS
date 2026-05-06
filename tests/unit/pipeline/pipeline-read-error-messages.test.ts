@@ -27,9 +27,18 @@ describe('pipeline read error messages', () => {
     expect(PIPELINE_READ_MESSAGES.pipelineBoard).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunities).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunitiesCached).toContain('Showing cached opportunities');
+    expect(PIPELINE_READ_MESSAGES.opportunityDetails).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunityNotFound).toContain('could not be found');
+    expect(PIPELINE_READ_MESSAGES.opportunitySearch).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunityDocuments).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunityDocumentsCached).toContain(
       'Showing the most recent documents'
     );
+    expect(PIPELINE_READ_MESSAGES.pipelineMetrics).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.pipelineForecast).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.pipelineVelocity).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.revenueAttribution).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.pipelineCustomers).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.pipelineProducts).toContain('temporarily unavailable');
   });
 });
