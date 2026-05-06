@@ -15,9 +15,6 @@ vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   extendQuoteValidity: vi.fn(),
   generateQuotePdf: (args: unknown) => generateQuotePdfMock(args),
   sendQuote: (args: unknown) => sendQuoteMock(args),
-}));
-
-vi.mock('@/server/functions/pipeline/pipeline', () => ({
   deleteQuote: (args: unknown) => deleteQuoteMock(args),
 }));
 

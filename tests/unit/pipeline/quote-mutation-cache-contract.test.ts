@@ -49,7 +49,25 @@ describe('pipeline quote mutation cache contract', () => {
     expect(readSource).not.toContain('useDeleteQuote');
 
     expect(mutationSource).toContain('export function useDeleteQuote()');
-    expect(mutationSource).toContain("import { deleteQuote } from '@/server/functions/pipeline/pipeline'");
+    expect(mutationSource).toContain('deleteQuote,');
+    expect(mutationSource).toContain("} from '@/server/functions/pipeline/quote-versions'");
     expect(barrelSource).toContain("useDeleteQuote,\n  type CreateQuoteVersionInput");
+  });
+
+  it('keeps delete quote server ownership with quote server functions', () => {
+    const pipelineServerSource = read('src/server/functions/pipeline/pipeline.ts');
+    const quoteServerSource = read('src/server/functions/pipeline/quote-versions.tsx');
+
+    expect(pipelineServerSource).not.toContain('export const deleteQuote');
+    expect(pipelineServerSource).not.toContain('QUOTE_EXCLUDED_FIELDS');
+    expect(pipelineServerSource).not.toContain('buildQuoteByIdWhere');
+
+    expect(quoteServerSource).toContain('export const deleteQuote');
+    expect(quoteServerSource).toContain('permission: PERMISSIONS.quote.delete');
+    expect(quoteServerSource).toContain('buildQuoteByIdWhere(id, ctx.organizationId)');
+    expect(quoteServerSource).toContain("throw new ValidationError('Cannot delete an accepted quote')");
+    expect(quoteServerSource).toContain("entityType: 'quote'");
+    expect(quoteServerSource).toContain("action: 'delete'");
+    expect(quoteServerSource).toContain('computeChanges({');
   });
 });

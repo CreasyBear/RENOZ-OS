@@ -33,7 +33,6 @@ import {
   winLossReasons,
   customers,
   contacts,
-  quotes,
 } from 'drizzle/schema';
 import { createOrder } from '@/server/functions/orders/orders';
 import type { CreateOrder } from '@/lib/schemas/orders';
@@ -144,18 +143,6 @@ function buildActivityByIdWhere(id: string, organizationId: string) {
   return and(
     eq(opportunityActivities.id, id),
     eq(opportunityActivities.organizationId, organizationId)
-  )!;
-}
-
-/**
- * Build where clause for quote by ID.
- * Includes organizationId and deletedAt filters.
- */
-function buildQuoteByIdWhere(id: string, organizationId: string) {
-  return and(
-    eq(quotes.id, id),
-    eq(quotes.organizationId, organizationId),
-    isNull(quotes.deletedAt)
   )!;
 }
 
@@ -2525,91 +2512,4 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
       },
       dateRange: { dateFrom, dateTo },
     };
-  });
-
-// ============================================================================
-// DELETE QUOTE (Soft Delete)
-// ============================================================================
-
-/**
- * Fields to exclude from quote activity change tracking (system-managed)
- */
-const QUOTE_EXCLUDED_FIELDS: string[] = [
-  'updatedAt',
-  'updatedBy',
-  'createdAt',
-  'createdBy',
-  'deletedAt',
-];
-
-/**
- * Soft delete a quote.
- * Cannot delete quotes that have been accepted.
- */
-export const deleteQuote = createServerFn({ method: 'POST' })
-  .inputValidator(opportunityParamsSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({
-      permission: PERMISSIONS.quote.delete,
-    });
-    const logger = createActivityLoggerWithContext(ctx);
-
-    const { id } = data;
-
-    // Verify ownership
-    const current = await db
-      .select()
-      .from(quotes)
-        .where(buildQuoteByIdWhere(id, ctx.organizationId))
-      .limit(1);
-
-    if (!current[0]) {
-      throw new NotFoundError('Quote not found', 'quote');
-    }
-
-    const quoteToDelete = current[0];
-
-    // Guard: Cannot delete accepted quotes
-    if (quoteToDelete.status === 'accepted') {
-      throw new ValidationError('Cannot delete an accepted quote');
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(quotes)
-        .set({
-          deletedAt: new Date(),
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(quotes.id, id));
-
-      await enqueueSearchIndexOutbox(
-        {
-          organizationId: ctx.organizationId,
-          entityType: 'quote',
-          entityId: id,
-          action: 'delete',
-        },
-        tx
-      );
-    });
-
-    // Log quote deletion
-    logger.logAsync({
-      entityType: 'quote',
-      entityId: id,
-      action: 'deleted',
-      changes: computeChanges({
-        before: quoteToDelete,
-        after: null,
-        excludeFields: QUOTE_EXCLUDED_FIELDS as never[],
-      }),
-      description: `Deleted quote: ${quoteToDelete.quoteNumber}`,
-      metadata: {
-        status: quoteToDelete.status,
-        total: quoteToDelete.total,
-      },
-    });
-
-    return { success: true };
   });
