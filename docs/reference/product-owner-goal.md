@@ -14,6 +14,8 @@ Run work through domain sprints. For each sprint: triage product and architectur
 
 Architecture cleanliness is the dominant lens. Enforce strict modularity inside each domain: clear ownership, reviewable boundaries, centralized query keys, safe mutation/cache contracts, tenant isolation, transactional inventory and finance integrity, serialized lineage continuity, honest UI states, operator-safe errors, and meaningful tests.
 
+Serialized lineage remains a battery-asset invariant, but the old serialized gate pack is closed work. Do not treat serialized gates as routine closeout evidence or list them as skipped gates for unrelated slices; define focused serial evidence only when a future slice deliberately changes serial lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or related repair scripts.
+
 Prefer small domain-sliced work, but require extraction or boundary cleanup before behavior work when monolithic code, mixed concerns, or broken contracts would make the change unsafe.
 
 Treat gates as evidence, not proof. Before closing any sprint, state touched domains, workflow protected, business value protected, standards checked, smells removed, smells deferred, tests/gates run or skipped, goal adaptations made or declined, and residual risk.

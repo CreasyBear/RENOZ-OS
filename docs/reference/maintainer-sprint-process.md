@@ -251,7 +251,7 @@ Broader gates should be risk-selected:
 
 - Run `bun run test:unit` or `bun run build` when the slice touches shared contracts, build-time behavior, route loading, or a cross-domain workflow.
 - Run `bun run lint:reliability` when the slice touches one of its guarded contracts: route casts, pending dialog guards, read-path query guards, or serialized read auto-upsert policy.
-- The serialized gate pack is closed and no longer part of routine maintainer closeout. Future serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or repair-script work should define focused evidence inside that slice instead of rerunning the old default gate pack.
+- The serialized gate pack is closed and no longer part of routine maintainer closeout. Do not list it as a skipped gate for unrelated slices. Future serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or repair-script work should define focused evidence inside that slice instead of rerunning the old default gate pack.
 - Run finance, document, release, or deploy gates only when the slice touches those contracts or when preparing a release.
 
 If local `bun run` is broken, run the underlying direct tool commands and record the reason.
@@ -276,7 +276,7 @@ Closeout must state:
 - smells removed
 - smells deferred
 - tests and gates run
-- gates skipped and why
+- risk-selected gates skipped and why, excluding retired gates that are no longer part of the checklist
 - goal adaptations made or declined
 - residual risk
 
