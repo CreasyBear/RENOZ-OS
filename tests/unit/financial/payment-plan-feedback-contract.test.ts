@@ -77,8 +77,11 @@ describe('payment plan mutation feedback contract', () => {
     expect(route).not.toContain("error.message || 'Failed to record payment'");
 
     expect(hooks).toContain('useCreatePaymentPlan');
-    expect(hooks).toContain('queryKeys.financial.paymentScheduleDetail(variables.orderId)');
+    expect(hooks).toContain('invalidatePaymentScheduleQueries');
+    expect(hooks).toContain('invalidatePaymentScheduleQueries(queryClient, variables.orderId)');
     expect(hooks).toContain('useRecordInstallmentPayment');
+    expect(hooks).toContain('queryKeys.financial.paymentScheduleDetail(orderId)');
+    expect(hooks).toContain('invalidatePaymentScheduleQueries(queryClient, result.orderId)');
     expect(hooks).toContain('queryKeys.financial.paymentSchedules()');
     expect(server).toContain('createPaymentPlanForOrder');
     expect(server).toContain('recordPaymentScheduleInstallmentPayment');

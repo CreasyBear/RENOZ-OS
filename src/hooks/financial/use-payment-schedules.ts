@@ -2,7 +2,7 @@
  * Payment schedule hooks.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { isReadQueryError, normalizeReadQueryError, requireReadResult } from '@/lib/read-path-policy';
@@ -28,6 +28,21 @@ function rethrowFinancialReadError(
   }
 
   throw normalizeReadQueryError(error, options);
+}
+
+function invalidatePaymentScheduleQueries(
+  queryClient: QueryClient,
+  orderId?: string | null
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.financial.paymentSchedules(),
+  });
+
+  if (orderId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.financial.paymentScheduleDetail(orderId),
+    });
+  }
 }
 
 // ============================================================================
@@ -111,12 +126,7 @@ export function useCreatePaymentPlan() {
   return useMutation({
     mutationFn: (data: CreatePaymentPlanInput) => fn({ data }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.financial.paymentSchedules(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.financial.paymentScheduleDetail(variables.orderId),
-      });
+      invalidatePaymentScheduleQueries(queryClient, variables.orderId);
     },
   });
 }
@@ -134,8 +144,8 @@ export function useUpdateInstallment() {
       description?: string;
       notes?: string | null;
     }) => fn({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentSchedules() });
+    onSuccess: (result) => {
+      invalidatePaymentScheduleQueries(queryClient, result.orderId);
     },
   });
 }
@@ -154,8 +164,8 @@ export function useRecordInstallmentPayment() {
       paymentReference?: string;
       notes?: string;
     }) => fn({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentSchedules() });
+    onSuccess: (result) => {
+      invalidatePaymentScheduleQueries(queryClient, result.orderId);
     },
   });
 }
