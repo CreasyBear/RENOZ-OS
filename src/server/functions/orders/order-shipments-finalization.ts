@@ -47,6 +47,7 @@ import {
   readActiveReservationsForLineItems,
 } from './order-inventory-reservations';
 import { getOrderLineSerializationRequirement } from './order-line-serialization';
+import { formatFulfillmentImportResultError } from './order-shipment-import-result-messages';
 
 type MarkShippedInput = z.infer<typeof markShippedSchema>;
 type ReopenShipmentInput = z.infer<typeof reopenShipmentSchema>;
@@ -1117,7 +1118,7 @@ export async function importFulfillmentShipmentsHandler({
         orderNumber: row.orderNumber,
         shipmentNumber: row.shipmentNumber ?? null,
         status: 'failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: formatFulfillmentImportResultError(error),
       });
     }
   }
