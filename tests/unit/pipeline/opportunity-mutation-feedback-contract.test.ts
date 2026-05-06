@@ -120,10 +120,16 @@ describe('pipeline opportunity mutation feedback contract', () => {
       'export const bulkUpdateOpportunityStage = createServerFn'
     );
     for (const body of [updateOpportunityBody, updateStageBody]) {
+      expect(body).toContain('const [updatedOpportunity] = await tx');
       expect(body).toContain('eq(opportunities.id, id)');
       expect(body).toContain('eq(opportunities.organizationId, ctx.organizationId)');
       expect(body).toContain('eq(opportunities.version, version)');
+      expect(body).toContain('return updatedOpportunity;');
     }
+    expect(updateOpportunityBody).toContain('entityId: updatedOpportunity.id');
+    expect(updateOpportunityBody).not.toContain('entityId: result[0].id');
+    expect(updateOpportunityBody).not.toContain('return result[0] ?? null');
+    expect(updateStageBody).not.toContain('return updateResult[0] ?? null');
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"

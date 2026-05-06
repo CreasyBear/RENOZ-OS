@@ -852,7 +852,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
 
     const updated = await db.transaction(async (tx) => {
       // Atomic optimistic locking: version check in WHERE clause + increment in SET
-      const result = await tx
+      const [updatedOpportunity] = await tx
         .update(opportunities)
         .set({
           ...updateData,
@@ -868,7 +868,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
         .returning();
 
       // If no rows updated, another user modified the record
-      if (result.length === 0) {
+      if (!updatedOpportunity) {
         throw new ConflictError(
           'Opportunity has been modified by another user. Please refresh and try again.'
         );
@@ -878,18 +878,18 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
         {
           organizationId: ctx.organizationId,
           entityType: 'opportunity',
-          entityId: result[0].id,
+          entityId: updatedOpportunity.id,
           action: 'upsert',
           payload: {
-            title: result[0].title,
-            subtitle: result[0].customerId ?? undefined,
-            description: result[0].description ?? undefined,
+            title: updatedOpportunity.title,
+            subtitle: updatedOpportunity.customerId ?? undefined,
+            description: updatedOpportunity.description ?? undefined,
           },
         },
         tx
       );
 
-      return result[0] ?? null;
+      return updatedOpportunity;
     });
 
     // Log opportunity update
@@ -981,7 +981,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
     // Wrap update and activity log in transaction for atomicity
     const result = await db.transaction(async (tx) => {
       // Atomic optimistic locking: version check in WHERE clause + increment in SET
-      const updateResult = await tx
+      const [updatedOpportunity] = await tx
         .update(opportunities)
         .set({
           ...updateData,
@@ -997,7 +997,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
         .returning();
 
       // If no rows updated, another user modified the record
-      if (updateResult.length === 0) {
+      if (!updatedOpportunity) {
         throw new ConflictError(
           'Opportunity has been modified by another user. Please refresh and try again.'
         );
@@ -1012,7 +1012,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
         createdBy: ctx.user.id,
       });
 
-      return updateResult[0] ?? null;
+      return updatedOpportunity;
     });
 
     // Log stage change to audit trail
