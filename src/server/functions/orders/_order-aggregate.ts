@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { orders } from 'drizzle/schema';
 import type { TransactionExecutor } from '@/lib/db';
 import { ConflictError } from '@/lib/server/errors';
@@ -30,7 +30,8 @@ export async function claimOrderAggregateVersion(
       and(
         eq(orders.id, params.orderId),
         eq(orders.organizationId, params.organizationId),
-        eq(orders.version, params.expectedVersion)
+        eq(orders.version, params.expectedVersion),
+        isNull(orders.deletedAt)
       )
     )
     .returning({ id: orders.id, version: orders.version });

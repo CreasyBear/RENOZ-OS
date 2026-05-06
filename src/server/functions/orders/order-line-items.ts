@@ -273,10 +273,15 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(orderLineItems.id, itemId),
+            eq(orderLineItems.orderId, orderId),
             eq(orderLineItems.organizationId, ctx.organizationId)
           )
         )
         .returning();
+
+      if (!updatedItem) {
+        throw new NotFoundError('Line item not found', 'orderLineItem');
+      }
 
       await recalculateOrderTotals(orderId, ctx.user.id, ctx.organizationId, tx);
 
@@ -328,6 +333,22 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
         userId: ctx.user.id,
       });
 
+      const [targetLineItem] = await tx
+        .select({ id: orderLineItems.id })
+        .from(orderLineItems)
+        .where(
+          and(
+            eq(orderLineItems.id, data.itemId),
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!targetLineItem) {
+        throw new NotFoundError('Line item not found', 'orderLineItem');
+      }
+
       const [countResult] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(orderLineItems)
@@ -344,7 +365,7 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
         });
       }
 
-      await tx
+      const [deletedLineItem] = await tx
         .delete(orderLineItems)
         .where(
           and(
@@ -352,7 +373,12 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
             eq(orderLineItems.orderId, data.orderId),
             eq(orderLineItems.organizationId, ctx.organizationId)
           )
-        );
+        )
+        .returning({ id: orderLineItems.id });
+
+      if (!deletedLineItem) {
+        throw new NotFoundError('Line item not found', 'orderLineItem');
+      }
 
       await recalculateOrderTotals(data.orderId, ctx.user.id, ctx.organizationId, tx);
     });
