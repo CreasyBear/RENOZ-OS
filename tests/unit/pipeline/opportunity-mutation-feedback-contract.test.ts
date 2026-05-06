@@ -100,6 +100,14 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(server).not.toContain('failed.push(`${existing.id}: ${errorMessage}`)');
     expect(server).toContain("pipelineLogger.error('[Bulk Update] Exception'");
     expect(server).not.toContain('CONVERT TO ORDER (Stub)');
+    expect(server).toContain('async function recordOpportunityOrderConversion');
+    expect(server).toContain('convertedOrderId: order.id');
+    expect(server).toContain('convertedOrderNumber: order.orderNumber');
+    expect(server).toContain('convertedQuoteVersionId: quoteVersionId');
+    expect(server).toContain('const conversionOutcome = `order:${order.id}`;');
+    expect(server).toContain('eq(opportunityActivities.outcome, conversionOutcome)');
+    expect(server).toContain('description: `Converted to order ${order.orderNumber}`');
+    expect(server).toContain("'PIPELINE_OPPORTUNITY_CONVERSION_ACTIVITY_FAILED'");
     const createOpportunityBody = sliceBetween(
       server,
       'export const createOpportunity = createServerFn',
@@ -145,6 +153,15 @@ describe('pipeline opportunity mutation feedback contract', () => {
       "throw new NotFoundError('Opportunity not found', 'opportunity')"
     );
     expect(deleteOpportunityBody).toContain('entityId: id');
+    const convertToOrderBody = sliceBetween(
+      server,
+      'export const convertToOrder = createServerFn',
+      'export const listActivities = createServerFn'
+    );
+    expect(convertToOrderBody).toContain('await recordOpportunityOrderConversion({');
+    expect(convertToOrderBody).toContain('quoteVersionId: latestQuote.id');
+    expect(convertToOrderBody).toContain('existingMetadata: opportunity.metadata');
+    expect(convertToOrderBody).toContain('createdBy: ctx.user.id');
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"

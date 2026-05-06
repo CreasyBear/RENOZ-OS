@@ -70,6 +70,9 @@ describe('pipeline activity mutation feedback contract', () => {
     expect(server).toContain("'PIPELINE_ACTIVITY_LOG_FAILED'");
     expect(server).toContain('const [activity] = await db');
     expect(server).toContain('const [deletedActivity] = await db');
+    expect(server).toContain('const [conversionActivity] = await tx');
+    expect(server).toContain('eq(opportunityActivities.outcome, conversionOutcome)');
+    expect(server).toContain('description: `Converted to order ${order.orderNumber}`');
     expect(server).toContain('.returning({ id: opportunityActivities.id })');
     expect(server).toContain("throw new NotFoundError('Activity not found', 'opportunityActivity')");
     expect(server).not.toContain('return { activity: result[0] }');

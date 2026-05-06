@@ -259,6 +259,102 @@ async function logStageChangeActivity(
   });
 }
 
+type ConversionOrderEvidence = {
+  id: string;
+  orderNumber: string;
+};
+
+type OpportunityMetadataPersistence = NonNullable<typeof opportunities.$inferInsert.metadata>;
+
+async function recordOpportunityOrderConversion(params: {
+  organizationId: string;
+  opportunityId: string;
+  quoteVersionId: string;
+  existingMetadata: unknown;
+  order: ConversionOrderEvidence;
+  createdBy: string;
+}): Promise<void> {
+  const {
+    organizationId,
+    opportunityId,
+    quoteVersionId,
+    existingMetadata,
+    order,
+    createdBy,
+  } = params;
+  const currentMetadata =
+    existingMetadata && typeof existingMetadata === 'object'
+      ? (existingMetadata as Record<string, unknown>)
+      : {};
+  const sameConvertedOrder = currentMetadata.convertedOrderId === order.id;
+  const convertedAt =
+    sameConvertedOrder && typeof currentMetadata.convertedAt === 'string'
+      ? currentMetadata.convertedAt
+      : new Date().toISOString();
+  const conversionOutcome = `order:${order.id}`;
+  const conversionMetadata = {
+    ...currentMetadata,
+    convertedOrderId: order.id,
+    convertedOrderNumber: order.orderNumber,
+    convertedQuoteVersionId: quoteVersionId,
+    convertedAt,
+  } as Record<string, unknown> as OpportunityMetadataPersistence;
+
+  await db.transaction(async (tx) => {
+    const [updatedOpportunity] = await tx
+      .update(opportunities)
+      .set({
+        metadata: conversionMetadata,
+        updatedBy: createdBy,
+        version: sql`${opportunities.version} + 1`,
+      })
+      .where(buildOpportunityByIdWhere(opportunityId, organizationId))
+      .returning({ id: opportunities.id });
+
+    if (!updatedOpportunity) {
+      throw new NotFoundError('Opportunity not found', 'opportunity');
+    }
+
+    const [existingConversionActivity] = await tx
+      .select({ id: opportunityActivities.id })
+      .from(opportunityActivities)
+      .where(
+        and(
+          eq(opportunityActivities.organizationId, organizationId),
+          eq(opportunityActivities.opportunityId, opportunityId),
+          eq(opportunityActivities.type, 'note'),
+          eq(opportunityActivities.outcome, conversionOutcome)
+        )
+      )
+      .limit(1);
+
+    if (existingConversionActivity) {
+      return;
+    }
+
+    const [conversionActivity] = await tx
+      .insert(opportunityActivities)
+      .values({
+        organizationId,
+        opportunityId,
+        type: 'note',
+        description: `Converted to order ${order.orderNumber}`,
+        outcome: conversionOutcome,
+        completedAt: new Date(),
+        createdBy,
+      })
+      .returning({ id: opportunityActivities.id });
+
+    if (!conversionActivity) {
+      throw new ServerError(
+        'Unable to record opportunity conversion',
+        500,
+        'PIPELINE_OPPORTUNITY_CONVERSION_ACTIVITY_FAILED'
+      );
+    }
+  });
+}
+
 /**
  * Get default probability for a stage
  */
@@ -1528,6 +1624,18 @@ export const convertToOrder = createServerFn({ method: 'POST' })
     );
 
     const order = await createOrder({ data: payload });
+
+    await recordOpportunityOrderConversion({
+      organizationId: ctx.organizationId,
+      opportunityId: id,
+      quoteVersionId: latestQuote.id,
+      existingMetadata: opportunity.metadata,
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+      },
+      createdBy: ctx.user.id,
+    });
 
     return {
       success: true,
