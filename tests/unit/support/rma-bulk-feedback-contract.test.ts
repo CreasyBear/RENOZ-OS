@@ -23,9 +23,10 @@ describe('RMA bulk feedback contract', () => {
 
   it('keeps bulk receive server result messages operator-safe', () => {
     const server = read('src/server/functions/orders/rma.ts');
+    const formatter = read('src/server/functions/orders/rma-result-messages.ts');
 
-    expect(server).toContain('function formatBulkRmaReceiveFailure');
-    expect(server).toContain('function isUnsafeBulkRmaFailureMessage');
+    expect(formatter).toContain('function isUnsafeRmaResultMessage');
+    expect(formatter).toContain('export function formatBulkRmaReceiveFailure');
     expect(server).toContain('error: formatBulkRmaReceiveFailure(err)');
     expect(server).not.toContain("error: err instanceof Error ? err.message : 'Unknown error'");
   });
