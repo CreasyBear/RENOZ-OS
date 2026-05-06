@@ -49,6 +49,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { ScheduledEmailBadge } from "./scheduled-email-badge";
 
 // ============================================================================
@@ -139,7 +143,10 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
             <div>
               <p className="font-medium text-destructive">Failed to load scheduled emails</p>
               <p className="text-sm text-muted-foreground">
-                {error instanceof Error ? error.message : "An error occurred"}
+                {formatCommunicationReadError(
+                  error,
+                  COMMUNICATION_READ_MESSAGES.scheduledEmails
+                )}
               </p>
             </div>
             <Button variant="outline" onClick={() => onRefresh?.()}>

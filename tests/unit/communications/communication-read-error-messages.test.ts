@@ -61,6 +61,9 @@ describe('communication read error messages', () => {
     const scheduledEmails = read(
       'src/routes/_authenticated/communications/emails/scheduled-emails-page.tsx'
     );
+    const scheduledEmailsList = read(
+      'src/components/domain/communications/emails/scheduled-emails-list.tsx'
+    );
     const scheduledCalls = read(
       'src/routes/_authenticated/communications/calls/calls-page.tsx'
     );
@@ -108,6 +111,10 @@ describe('communication read error messages', () => {
     expect(scheduledEmails).not.toContain(
       'Scheduled emails are temporarily unavailable. Please refresh and try again."'
     );
+    expect(scheduledEmailsList).toContain('formatCommunicationReadError(');
+    expect(scheduledEmailsList).toContain('COMMUNICATION_READ_MESSAGES.scheduledEmails');
+    expect(scheduledEmailsList).not.toContain('error instanceof Error ? error.message');
+    expect(scheduledEmailsList).not.toContain('"An error occurred"');
     expect(scheduledCalls).toContain('formatCommunicationReadError(');
     expect(scheduledCalls).toContain('COMMUNICATION_READ_MESSAGES.scheduledCalls');
     expect(scheduledCalls).not.toContain('? error.message');
