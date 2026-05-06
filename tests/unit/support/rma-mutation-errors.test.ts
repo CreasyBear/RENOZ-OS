@@ -37,6 +37,16 @@ describe('RMA mutation error formatting', () => {
         'Failed to create RMA'
       )
     ).toBe('Failed to create RMA');
+
+    expect(
+      formatRmaMutationError(
+        {
+          statusCode: 400,
+          message: 'TypeError: Cannot read properties of undefined (reading remedy)',
+        },
+        'Failed to execute remedy'
+      )
+    ).toBe('Failed to execute remedy');
   });
 
   it('formats blocked remedy feedback without leaking infrastructure copy', () => {

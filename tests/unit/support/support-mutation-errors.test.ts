@@ -75,4 +75,28 @@ describe('support mutation error formatting', () => {
 
     expect(message).toBe('Failed to update issue status');
   });
+
+  it('suppresses implementation-shaped client error messages', () => {
+    expect(
+      formatSupportMutationError(
+        {
+          statusCode: 400,
+          message: 'Cannot read properties of undefined (reading issueId)',
+        },
+        'Failed to update issue status'
+      )
+    ).toBe('Failed to update issue status');
+
+    expect(
+      formatSupportMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            filter: ['SQL syntax error at or near "status"'],
+          },
+        },
+        'Failed to update issue status'
+      )
+    ).toBe('Failed to update issue status');
+  });
 });
