@@ -56,7 +56,7 @@ describe('project create/edit mutation contract', () => {
     expect(createDialog).not.toContain("err instanceof Error ? err.message : 'Failed to create project'");
     expect(editDialog).not.toContain("err instanceof Error ? err.message : 'Failed to update project'");
     expect(compactServer).toContain(
-      'const[updatedProject]=awaitdb.update(projects).set({...updates,estimatedTotalValue:updates.estimatedTotalValue?.toString(),updatedBy:ctx.user.id,updatedAt:newDate(),version:sql`${projects.version}+1`,}).where(and(eq(projects.id,projectId),eq(projects.organizationId,ctx.organizationId))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'
+      'const[updatedProject]=awaitdb.update(projects).set({...updates,estimatedTotalValue:updates.estimatedTotalValue?.toString(),updatedBy:ctx.user.id,updatedAt:newDate(),version:sql`${projects.version}+1`,}).where(and(eq(projects.id,projectId),eq(projects.organizationId,ctx.organizationId),isNull(projects.deletedAt))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'
     );
   });
 });

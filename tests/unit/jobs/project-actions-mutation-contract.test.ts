@@ -79,7 +79,7 @@ describe('project actions mutation contract', () => {
     expect(listContainer).not.toContain('toastError("Failed to delete some projects")');
     expect(server).toContain('throw new NotFoundError("Project not found", "project")');
     expect(compactServer).toContain(
-      'const[updatedProject]=awaitdb.update(projects).set(updateData).where(and(eq(projects.id,data.projectId),eq(projects.organizationId,ctx.organizationId))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'
+      'const[updatedProject]=awaitdb.update(projects).set(updateData).where(and(eq(projects.id,data.projectId),eq(projects.organizationId,ctx.organizationId),isNull(projects.deletedAt))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'
     );
     expect(compactServer).toContain(
       'const[updatedProject]=awaitdb.update(projects).set({status:"cancelled",deletedAt:newDate(),updatedBy:ctx.user.id,updatedAt:newDate(),}).where(and(eq(projects.id,data.projectId),eq(projects.organizationId,ctx.organizationId),isNull(projects.deletedAt))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'

@@ -116,8 +116,11 @@ export const getProjects = createServerFn({ method: "GET" })
       customerId,
     } = data;
 
-    // Build where conditions - ALWAYS include organizationId for isolation
-    const conditions = [eq(projects.organizationId, ctx.organizationId)];
+    // Build where conditions - ALWAYS include organizationId and active-record scope
+    const conditions = [
+      eq(projects.organizationId, ctx.organizationId),
+      isNull(projects.deletedAt),
+    ];
 
     if (search) {
       conditions.push(ilike(projects.title, containsPattern(search)));
@@ -227,8 +230,11 @@ export const getProjectsCursor = createServerFn({ method: "GET" })
       customerId,
     } = data;
 
-    // Build where conditions
-    const conditions = [eq(projects.organizationId, ctx.organizationId)];
+    // Build where conditions - ALWAYS include organizationId and active-record scope
+    const conditions = [
+      eq(projects.organizationId, ctx.organizationId),
+      isNull(projects.deletedAt),
+    ];
 
     if (search) {
       conditions.push(ilike(projects.title, containsPattern(search)));
@@ -316,7 +322,8 @@ export const getProject = createServerFn({ method: "GET" })
     const project = await db.query.projects.findFirst({
       where: and(
         eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
+        eq(projects.organizationId, ctx.organizationId),
+        isNull(projects.deletedAt)
       ),
     });
 
@@ -415,7 +422,8 @@ export const updateProject = createServerFn({ method: "POST" })
     const existingProject = await db.query.projects.findFirst({
       where: and(
         eq(projects.id, projectId),
-        eq(projects.organizationId, ctx.organizationId)
+        eq(projects.organizationId, ctx.organizationId),
+        isNull(projects.deletedAt)
       ),
     });
 
@@ -442,7 +450,8 @@ export const updateProject = createServerFn({ method: "POST" })
       .where(
         and(
           eq(projects.id, projectId),
-          eq(projects.organizationId, ctx.organizationId)
+          eq(projects.organizationId, ctx.organizationId),
+          isNull(projects.deletedAt)
         )
       )
       .returning();
@@ -708,7 +717,8 @@ export const completeProject = createServerFn({ method: "POST" })
     const existingProject = await db.query.projects.findFirst({
       where: and(
         eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
+        eq(projects.organizationId, ctx.organizationId),
+        isNull(projects.deletedAt)
       ),
     });
 
@@ -755,7 +765,8 @@ export const completeProject = createServerFn({ method: "POST" })
       .where(
         and(
           eq(projects.id, data.projectId),
-          eq(projects.organizationId, ctx.organizationId)
+          eq(projects.organizationId, ctx.organizationId),
+          isNull(projects.deletedAt)
         )
       )
       .returning();
