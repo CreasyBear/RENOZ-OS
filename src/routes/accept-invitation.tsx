@@ -18,6 +18,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useInvitationByToken, useAcceptInvitation } from '@/hooks/users/use-invitations';
 import { supabase } from '@/lib/supabase/client';
 import { useExchangeHashForSession } from '@/lib/auth/use-exchange-hash-for-session';
+import { formatAcceptInvitationError } from '@/hooks/auth';
 import { acceptInvitationSchema } from '@/lib/schemas/auth';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { z } from 'zod';
@@ -148,8 +149,8 @@ function AcceptInvitationPage() {
   const errorMessage =
     !hasValidToken
       ? 'Invalid invitation link. Please use the link from your invitation email.'
-      : invitationError instanceof Error
-        ? invitationError.message
+      : invitationError
+        ? formatAcceptInvitationError(invitationError)
         : 'Invalid or expired invitation';
 
   if (authError) {

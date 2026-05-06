@@ -5,6 +5,10 @@ export * from './use-current-org';
 export * from './use-current-user';
 export * from './use-has-permission';
 export * from './use-mfa';
+export {
+  formatAcceptInvitationError,
+  isUnsafeAcceptInvitationMessage,
+} from './accept-invitation-error-messages';
 export { formatLoginError, isUnsafeLoginMessage } from './login-error-messages';
 export {
   formatPasswordChangeError,

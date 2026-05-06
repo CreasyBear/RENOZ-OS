@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
+import { formatAcceptInvitationError } from '@/hooks/auth';
 import { getPasswordStrength } from '@/lib/auth/password-utils';
 import { cn } from '@/lib/utils';
 import type { TanStackFormApi } from '@/hooks/_shared/use-tanstack-form';
@@ -53,7 +54,7 @@ export function AcceptInvitationForm({
     setGeneralError(null);
     onClearValidationError?.();
     void form.handleSubmit().catch((err) => {
-      setGeneralError(err instanceof Error ? err.message : 'Failed to create account');
+      setGeneralError(formatAcceptInvitationError(err));
     });
   };
 
