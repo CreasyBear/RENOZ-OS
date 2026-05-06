@@ -14,8 +14,9 @@ import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { sendQuoteSchema, type SendQuoteResult } from '@/lib/schemas';
 import { formatCurrency } from '@/lib/formatters';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ServerError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
+import { pipelineLogger } from '@/lib/logger';
 import {
   customers,
   emailHistory,
@@ -28,6 +29,16 @@ import {
 import { generateQuotePdf } from './quote-pdf';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const QUOTE_PDF_FAILED_MESSAGE = 'Unable to generate quote PDF. Refresh and try again.';
+const QUOTE_ATTACHMENT_FAILED_MESSAGE =
+  'Unable to prepare the quote attachment. Refresh and try again.';
+const QUOTE_EMAIL_FAILED_MESSAGE =
+  'Quote email could not be sent. Check the recipient and email settings, then try again.';
+const QUOTE_FOLLOW_UP_FAILED_MESSAGE =
+  'Quote email was sent, but opportunity follow-up updates need review.';
+const QUOTE_FOLLOW_UP_STAGE_FAILED_MESSAGE =
+  'Activity history or stage update needs review. Refresh the opportunity before continuing.';
 
 /**
  * Send a quote to the customer via email.
@@ -151,7 +162,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
     const pdfResult = await generateQuotePdf({ data: { id: quoteVersionId } });
 
     if (pdfResult.status !== 'completed' || !pdfResult.pdfUrl) {
-      return failedStageResult('Failed to generate quote PDF', {
+      return failedStageResult(QUOTE_PDF_FAILED_MESSAGE, {
         pdf: { status: 'failed', message: 'Quote PDF could not be generated.' },
         emailHistory: { status: 'skipped', message: 'Email history was not created.' },
         email: { status: 'skipped', message: 'Email was not attempted.' },
@@ -161,7 +172,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
 
     const pdfResponse = await fetch(pdfResult.pdfUrl);
     if (!pdfResponse.ok) {
-      return failedStageResult('Failed to download quote PDF for attachment', {
+      return failedStageResult(QUOTE_ATTACHMENT_FAILED_MESSAGE, {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
         emailHistory: { status: 'skipped', message: 'Email history was not created.' },
         email: { status: 'skipped', message: 'Email was not attempted.' },
@@ -250,10 +261,17 @@ ${fromName} Team
         .set({ status: 'failed' })
         .where(and(eq(emailHistory.id, emailRecord.id), eq(emailHistory.organizationId, ctx.organizationId)));
 
-      return failedStageResult(`Failed to send email: ${sendError.message}`, {
+      pipelineLogger.error('Failed to send quote email', sendError, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+        emailHistoryId: emailRecord.id,
+      });
+
+      return failedStageResult(QUOTE_EMAIL_FAILED_MESSAGE, {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
         emailHistory: { status: 'completed', message: 'Email history recorded the send attempt.' },
-        email: { status: 'failed', message: sendError.message },
+        email: { status: 'failed', message: QUOTE_EMAIL_FAILED_MESSAGE },
         stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
       });
     }
@@ -274,16 +292,27 @@ ${fromName} Team
 
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(opportunityActivities).values({
-          organizationId: ctx.organizationId,
-          opportunityId,
-          type: 'email',
-          description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
-          createdBy: ctx.user.id,
-        });
+        const [createdActivity] = await tx
+          .insert(opportunityActivities)
+          .values({
+            organizationId: ctx.organizationId,
+            opportunityId,
+            type: 'email',
+            description: `Quote V${quoteVersion.versionNumber} sent to ${recipientEmail}`,
+            createdBy: ctx.user.id,
+          })
+          .returning({ id: opportunityActivities.id });
+
+        if (!createdActivity) {
+          throw new ServerError(
+            'Unable to record quote send activity',
+            500,
+            'PIPELINE_QUOTE_SEND_ACTIVITY_FAILED'
+          );
+        }
 
         if (opp.stage === 'new' || opp.stage === 'qualified') {
-          await tx
+          const [updatedOpportunity] = await tx
             .update(opportunities)
             .set({
               stage: 'proposal',
@@ -296,7 +325,16 @@ ${fromName} Team
                 eq(opportunities.organizationId, ctx.organizationId),
                 eq(opportunities.stage, opp.stage)
               )
-            );
+            )
+            .returning({ id: opportunities.id });
+
+          if (!updatedOpportunity) {
+            stageBumpStage = {
+              status: 'skipped',
+              message: 'Opportunity stage changed before the proposal update.',
+            };
+            return;
+          }
 
           stageBumpStage = {
             status: 'completed',
@@ -311,6 +349,14 @@ ${fromName} Team
         };
       });
     } catch (error) {
+      pipelineLogger.error('Failed to complete quote send follow-up updates', error, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+        emailHistoryId: emailRecord.id,
+        resendMessageId: sendResult?.id,
+      });
+
       return {
         quoteVersionId,
         recipientEmail,
@@ -323,14 +369,14 @@ ${fromName} Team
         resendMessageId: sendResult?.id,
         success: true,
         status: 'sent',
-        error: error instanceof Error ? error.message : 'Quote email sent, but follow-up updates failed.',
+        error: QUOTE_FOLLOW_UP_FAILED_MESSAGE,
         stages: {
           pdf: { status: 'completed', message: 'Quote PDF was generated.' },
           emailHistory: { status: 'completed', message: 'Email history recorded the sent email.' },
           email: { status: 'completed', message: 'Quote email was sent successfully.' },
           stageBump: {
             status: 'failed',
-            message: error instanceof Error ? error.message : 'Activity or stage follow-up failed.',
+            message: QUOTE_FOLLOW_UP_STAGE_FAILED_MESSAGE,
           },
         },
       };
