@@ -40,6 +40,10 @@ import {
   useUpdateOrderLineItem,
 } from '@/hooks/orders/use-orders';
 import { toastSuccess, toastError } from '@/hooks';
+import {
+  getDraftOrderItemActionErrorMessage,
+  isDraftOrderItemConflictMessage,
+} from './order-item-action-errors';
 
 // ============================================================================
 // CONSTANTS
@@ -300,8 +304,8 @@ function DraftOrderAddItemsCard({
       onOrderUpdated?.();
     } catch (error) {
       setSelectedProducts(remainingProducts);
-      const message = error instanceof Error ? error.message : 'Unable to add items to draft order.';
-      if (message.toLowerCase().includes('modified by another user')) {
+      const message = getDraftOrderItemActionErrorMessage(error, 'add');
+      if (isDraftOrderItemConflictMessage(message)) {
         onConflict(message);
       }
       if (appliedCount > 0) {
@@ -405,8 +409,8 @@ function EditableDraftLineItemRow({
       toastSuccess(`Updated "${item.description}"`);
       onOrderUpdated?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to update draft line item.';
-      if (message.toLowerCase().includes('modified by another user')) {
+      const message = getDraftOrderItemActionErrorMessage(error, 'update');
+      if (isDraftOrderItemConflictMessage(message)) {
         onConflict(message);
       }
       toastError(message);
@@ -429,8 +433,8 @@ function EditableDraftLineItemRow({
       toastSuccess(`Removed "${item.description}"`);
       onOrderUpdated?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to remove draft line item.';
-      if (message.toLowerCase().includes('modified by another user')) {
+      const message = getDraftOrderItemActionErrorMessage(error, 'remove');
+      if (isDraftOrderItemConflictMessage(message)) {
         onConflict(message);
       }
       toastError(message);
