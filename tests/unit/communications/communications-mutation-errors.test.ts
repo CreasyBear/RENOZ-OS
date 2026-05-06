@@ -245,11 +245,15 @@ describe('communications mutation error formatting', () => {
     expect(outcomeDialog).toContain(
       'formatCommunicationScheduledCallMutationError(error, "outcome")'
     );
+    expect(outcomeDialog).toContain(
+      'formatCommunicationScheduledCallMutationError(completeMutation.error, "outcome")'
+    );
     expect(actionMenu).toContain('formatCommunicationScheduledCallMutationError(error, "snooze")');
     expect(actionMenu).toContain('formatCommunicationScheduledCallMutationError(error, "cancel")');
     expect(scheduleDialog).not.toContain('getUserFriendlyMessage(error as Error)');
     expect(scheduleDialog).not.toContain('submitError={scheduleMutation.error?.message ?? null}');
     expect(outcomeDialog).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(outcomeDialog).not.toContain('submitError={completeMutation.error?.message ?? null}');
     expect(actionMenu).not.toContain('getUserFriendlyMessage(error as Error)');
     expect(page).not.toContain('toastError("Failed to complete call")');
     expect(page).not.toContain('toastError("Failed to cancel call")');

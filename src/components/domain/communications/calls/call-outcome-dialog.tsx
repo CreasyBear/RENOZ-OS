@@ -187,7 +187,11 @@ export function CallOutcomeDialog({
       submitLabel="Log Outcome"
       cancelLabel="Cancel"
       loadingLabel="Saving..."
-      submitError={completeMutation.error?.message ?? null}
+      submitError={
+        completeMutation.error
+          ? formatCommunicationScheduledCallMutationError(completeMutation.error, "outcome")
+          : null
+      }
       submitDisabled={completeMutation.isPending}
       className="sm:max-w-[500px]"
     >
