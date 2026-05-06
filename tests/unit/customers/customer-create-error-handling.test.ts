@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getCustomerCreateSubmissionState } from '@/components/domain/customers/customer-wizard/submission-state'
+import {
+  GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE,
+  getCustomerCreateSubmissionState,
+} from '@/components/domain/customers/customer-wizard/submission-state'
 
 const DUPLICATE_CUSTOMER_EMAIL_MESSAGE =
   'A customer with this email already exists. Use a different email or edit the existing customer.'
@@ -58,6 +61,30 @@ describe('customer create error handling', () => {
       submitError: 'Validation failed',
       fieldErrors: {},
       targetStepIndex: 2,
+    })
+  })
+
+  it('uses safe customer create copy instead of raw database errors', () => {
+    const submissionState = getCustomerCreateSubmissionState(
+      new Error('insert into customers violates row-level security policy')
+    )
+
+    expect(submissionState).toEqual({
+      submitError: GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE,
+      fieldErrors: {},
+      targetStepIndex: 3,
+    })
+  })
+
+  it('uses safe customer create copy instead of raw runtime errors', () => {
+    const submissionState = getCustomerCreateSubmissionState({
+      message: 'TypeError: Cannot read properties of undefined (reading customerId)',
+    })
+
+    expect(submissionState).toEqual({
+      submitError: GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE,
+      fieldErrors: {},
+      targetStepIndex: 3,
     })
   })
 })

@@ -1,4 +1,5 @@
 import type { CustomerWizardValues } from './types'
+import { isUnsafeCustomerMutationMessage } from '@/hooks/customers/_mutation-errors'
 
 const WIZARD_STEP_COUNT = 4
 
@@ -20,7 +21,9 @@ export function getCustomerCreateSubmissionState(error: unknown): CustomerWizard
         : ''
 
   const message =
-    rawMessage.trim().length > 0 ? rawMessage : GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE
+    rawMessage.trim().length > 0 && !isUnsafeCustomerMutationMessage(rawMessage)
+      ? rawMessage
+      : GENERIC_CUSTOMER_CREATE_ERROR_MESSAGE
 
   const validationErrors = (
     error as {

@@ -192,7 +192,7 @@ function extractMessage(error: unknown): string | null {
   return null;
 }
 
-function isUnsafeMessage(message: string): boolean {
+export function isUnsafeCustomerMutationMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes('duplicate key') ||
@@ -234,7 +234,7 @@ export function formatCustomerMutationError(
   const statusCode = extractStatusCode(error);
   const codeMessage = code ? lookupCodeMessage(code, options) : undefined;
 
-  if (fieldMessage && !isUnsafeMessage(fieldMessage)) {
+  if (fieldMessage && !isUnsafeCustomerMutationMessage(fieldMessage)) {
     return fieldMessage;
   }
 
@@ -245,7 +245,7 @@ export function formatCustomerMutationError(
   const message = extractMessage(error);
   if (
     message &&
-    !isUnsafeMessage(message) &&
+    !isUnsafeCustomerMutationMessage(message) &&
     (statusCode == null ||
       statusCode === 400 ||
       statusCode === 401 ||
