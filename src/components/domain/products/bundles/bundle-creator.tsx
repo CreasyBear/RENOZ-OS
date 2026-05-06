@@ -48,7 +48,12 @@ import {
   TextareaField,
 } from "@/components/shared/forms";
 import { ComponentSelector } from "./component-selector";
-import { useCreateProduct, useSetBundleComponents } from "@/hooks/products";
+import {
+  formatProductBundleMutationError,
+  formatProductCoreMutationError,
+  useCreateProduct,
+  useSetBundleComponents,
+} from "@/hooks/products";
 import { toastError, toastSuccess } from "@/hooks";
 
 // Form schema
@@ -101,6 +106,11 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   const setBundleComponents = useSetBundleComponents();
 
   const isSubmitting = createProduct.isPending || setBundleComponents.isPending;
+  const mutationSubmitError = createProduct.error
+    ? formatProductCoreMutationError(createProduct.error, "createProduct")
+    : setBundleComponents.error
+      ? formatProductBundleMutationError(setBundleComponents.error, "setComponents")
+      : null;
 
   const form = useTanStackForm<BundleFormValues>({
     schema: bundleFormSchema,
@@ -115,6 +125,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
     onSubmit: async (data) => {
       if (components.length === 0) return;
       setSubmitError(null);
+      let createdProductId: string | null = null;
       try {
         const product = await createProduct.mutateAsync({
           sku: data.sku,
@@ -128,6 +139,7 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
           isPurchasable: false,
           trackInventory: false,
         });
+        createdProductId = product.id;
         await setBundleComponents.mutateAsync({
           bundleProductId: product.id,
           components: components.map((c) => ({
@@ -142,7 +154,9 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
           description: "Configure pricing or add more products.",
         });
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "Failed to create bundle";
+        const msg = createdProductId
+          ? formatProductBundleMutationError(error, "setComponents")
+          : formatProductCoreMutationError(error, "createProduct");
         setSubmitError(msg);
         toastError(msg);
       }
@@ -223,6 +237,8 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
   // Reset and close
   const handleClose = () => {
     setSubmitError(null);
+    createProduct.reset();
+    setBundleComponents.reset();
     form.reset();
     setComponents([]);
     setStep(1);
@@ -373,29 +389,29 @@ export function BundleCreator({ open, onOpenChange, onCreated }: BundleCreatorPr
               className="space-y-6"
             >
               <FormFieldDisplayProvider form={form}>
-              <FormErrorSummary form={form} submitError={submitError ?? (createProduct.error ?? setBundleComponents.error)?.message ?? null} />
-              <div className="grid grid-cols-2 gap-4">
-                <form.Field name="sku">
-                  {(field) => (
-                    <TextField
-                      field={field}
-                      label="SKU"
-                      placeholder="BUNDLE-001"
-                      required
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="name">
-                  {(field) => (
-                    <TextField
-                      field={field}
-                      label="Bundle Name"
-                      placeholder="Starter Kit Bundle"
-                      required
-                    />
-                  )}
-                </form.Field>
-              </div>
+                <FormErrorSummary form={form} submitError={submitError ?? mutationSubmitError} />
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field name="sku">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="SKU"
+                        placeholder="BUNDLE-001"
+                        required
+                      />
+                    )}
+                  </form.Field>
+                  <form.Field name="name">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="Bundle Name"
+                        placeholder="Starter Kit Bundle"
+                        required
+                      />
+                    )}
+                  </form.Field>
+                </div>
 
               <form.Field name="description">
                 {(field) => (

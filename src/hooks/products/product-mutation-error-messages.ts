@@ -80,6 +80,17 @@ const PRODUCT_ATTRIBUTE_FALLBACKS = {
     'Product attribute value update is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const PRODUCT_BUNDLE_FALLBACKS = {
+  addComponent:
+    'Bundle component add is temporarily unavailable. Please refresh and try again.',
+  updateComponent:
+    'Bundle component update is temporarily unavailable. Please refresh and try again.',
+  removeComponent:
+    'Bundle component removal is temporarily unavailable. Please refresh and try again.',
+  setComponents:
+    'Bundle component update is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 const PRODUCT_CODE_MESSAGES: Record<string, string> = {
   NOT_FOUND: 'Product record could not be found. Refresh and try again.',
   PERMISSION_DENIED: 'You do not have permission to manage products.',
@@ -115,10 +126,20 @@ const PRODUCT_ATTRIBUTE_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Product attribute details conflict with an existing attribute.',
 };
 
+const PRODUCT_BUNDLE_CODE_MESSAGES: Record<string, string> = {
+  ...PRODUCT_CODE_MESSAGES,
+  NOT_FOUND: 'Product bundle record could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage product bundles.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing product bundles.',
+  RATE_LIMIT: 'Too many product bundle changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'Product bundle components conflict with the current bundle setup.',
+};
+
 export type ProductPricingMutationAction = keyof typeof PRODUCT_PRICING_FALLBACKS;
 export type ProductCoreMutationAction = keyof typeof PRODUCT_CORE_FALLBACKS;
 export type ProductImageMutationAction = keyof typeof PRODUCT_IMAGE_FALLBACKS;
 export type ProductAttributeMutationAction = keyof typeof PRODUCT_ATTRIBUTE_FALLBACKS;
+export type ProductBundleMutationAction = keyof typeof PRODUCT_BUNDLE_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -340,5 +361,16 @@ export function formatProductAttributeMutationError(
     error,
     PRODUCT_ATTRIBUTE_FALLBACKS[action],
     PRODUCT_ATTRIBUTE_CODE_MESSAGES
+  );
+}
+
+export function formatProductBundleMutationError(
+  error: unknown,
+  action: ProductBundleMutationAction
+): string {
+  return formatProductMutationError(
+    error,
+    PRODUCT_BUNDLE_FALLBACKS[action],
+    PRODUCT_BUNDLE_CODE_MESSAGES
   );
 }

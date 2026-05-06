@@ -108,10 +108,12 @@ export {
 
 export {
   formatProductAttributeMutationError,
+  formatProductBundleMutationError,
   formatProductCoreMutationError,
   formatProductImageMutationError,
   formatProductPricingMutationError,
   type ProductAttributeMutationAction,
+  type ProductBundleMutationAction,
   type ProductCoreMutationAction,
   type ProductImageMutationAction,
   type ProductPricingMutationAction,

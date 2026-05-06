@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from 'sonner';
+import { formatProductBundleMutationError } from './product-mutation-error-messages';
 import {
   getBundleComponents,
   addBundleComponent,
@@ -245,8 +246,8 @@ export function useAddBundleComponent() {
         queryKey: queryKeys.products.bundles.validation(variables.bundleProductId),
       });
     },
-    onError: () => {
-      toast.error('Failed to add component to bundle');
+    onError: (error) => {
+      toast.error(formatProductBundleMutationError(error, 'addComponent'));
     },
   });
 }
@@ -271,8 +272,8 @@ export function useUpdateBundleComponent() {
         queryKey: queryKeys.products.bundles.price(variables.bundleProductId),
       });
     },
-    onError: () => {
-      toast.error('Failed to update component');
+    onError: (error) => {
+      toast.error(formatProductBundleMutationError(error, 'updateComponent'));
     },
   });
 }
@@ -300,8 +301,8 @@ export function useRemoveBundleComponent() {
         queryKey: queryKeys.products.bundles.validation(variables.bundleProductId),
       });
     },
-    onError: () => {
-      toast.error('Failed to remove component');
+    onError: (error) => {
+      toast.error(formatProductBundleMutationError(error, 'removeComponent'));
     },
   });
 }
@@ -327,8 +328,8 @@ export function useSetBundleComponents() {
         queryKey: queryKeys.products.bundles.validation(variables.bundleProductId),
       });
     },
-    onError: () => {
-      toast.error('Failed to update bundle components');
+    onError: (error) => {
+      toast.error(formatProductBundleMutationError(error, 'setComponents'));
     },
   });
 }
