@@ -12,7 +12,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
   opportunities,
   quoteVersions,
@@ -21,8 +20,6 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   createQuoteVersionSchema,
-  quoteVersionFilterSchema,
-  quoteVersionParamsSchema,
   restoreQuoteVersionSchema,
   type QuoteLineItem,
 } from '@/lib/schemas';
@@ -155,78 +152,6 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
     });
 
     return { quoteVersion };
-  });
-
-// ============================================================================
-// GET QUOTE VERSION
-// ============================================================================
-
-/**
- * Get a single quote version by ID
- */
-export const getQuoteVersion = createServerFn({ method: 'GET' })
-  .inputValidator(normalizeObjectInput(quoteVersionParamsSchema))
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
-
-    const { id } = data;
-
-    const version = await db
-      .select()
-      .from(quoteVersions)
-      .where(and(eq(quoteVersions.id, id), eq(quoteVersions.organizationId, ctx.organizationId)))
-      .limit(1);
-
-    if (!version[0]) {
-      throw new NotFoundError('Quote version not found', 'quoteVersion');
-    }
-
-    return { quoteVersion: version[0] };
-  });
-
-// ============================================================================
-// LIST QUOTE VERSIONS (History)
-// ============================================================================
-
-/**
- * Get all quote versions for an opportunity (version history)
- * Returns in descending order (newest first)
- */
-export const listQuoteVersions = createServerFn({ method: 'GET' })
-  .inputValidator(normalizeObjectInput(quoteVersionFilterSchema))
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
-
-    const { opportunityId } = data;
-
-    // Verify opportunity belongs to org
-    const opportunity = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, opportunityId),
-          eq(opportunities.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
-    if (!opportunity[0]) {
-      throw new NotFoundError('Opportunity not found', 'opportunity');
-    }
-
-    // Get all versions
-    const versions = await db
-      .select()
-      .from(quoteVersions)
-      .where(eq(quoteVersions.opportunityId, opportunityId))
-      .orderBy(desc(quoteVersions.versionNumber));
-
-    return {
-      versions,
-      totalCount: versions.length,
-      latestVersion: versions[0] ?? null,
-    };
   });
 
 // ============================================================================

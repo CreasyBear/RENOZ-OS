@@ -23,7 +23,7 @@ import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import {
   listQuoteVersions,
   getQuoteVersion,
-} from '@/server/functions/pipeline/quote-versions';
+} from '@/server/functions/pipeline/quote-version-reads';
 import { compareQuoteVersions } from '@/server/functions/pipeline/quote-comparison';
 import {
   getExpiringQuotes,
