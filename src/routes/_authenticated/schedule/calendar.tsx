@@ -14,7 +14,7 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
-import { ScheduleCalendarContainer } from '@/components/domain/jobs';
+import { ScheduleCalendarContainer } from '@/components/domain/jobs/schedule';
 import { scheduleSearchSchema } from '@/lib/schemas/jobs/schedule-search';
 
 // ============================================================================

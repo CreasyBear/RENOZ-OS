@@ -10,7 +10,7 @@
  */
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
-import { ScheduleTimelineContainer } from '@/components/domain/jobs';
+import { ScheduleTimelineContainer } from '@/components/domain/jobs/schedule';
 import { scheduleSearchSchema } from '@/lib/schemas/jobs/schedule-search';
 
 // ============================================================================

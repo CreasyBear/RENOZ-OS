@@ -8,7 +8,7 @@
  */
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout } from '@/components/layout';
-import { ScheduleHub } from '@/components/domain/jobs';
+import { ScheduleHub } from '@/components/domain/jobs/schedule';
 
 export const Route = createFileRoute('/_authenticated/schedule/')({
   component: ScheduleIndexPage,

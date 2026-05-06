@@ -23,15 +23,13 @@ function sourceFiles(dir: string): string[] {
 describe('project time tracking boundary', () => {
   it('keeps project time tracking owned by the projects domain', () => {
     const sidebar = read('src/components/domain/jobs/projects/sidebar/time-card.tsx');
-    const jobsIndex = read('src/components/domain/jobs/index.ts');
     const projectTimeIndex = read('src/components/domain/jobs/projects/time-tracking/index.ts');
     const src = sourceFiles('src').map((path) => [path, read(path)] as const);
 
+    expect(existsSync(join(root, 'src/components/domain/jobs/index.ts'))).toBe(false);
     expect(sourceFiles('src/components/domain/jobs/time')).toEqual([]);
     expect(sidebar).toContain("from '../time-tracking'");
     expect(projectTimeIndex).toContain('Project-domain components for project-scoped time tracking');
-    expect(jobsIndex).toContain('Time Tracking: consolidated under projects/time-tracking');
-    expect(jobsIndex).not.toContain('Time: Will be consolidated');
 
     for (const [path, source] of src) {
       expect(source, path).not.toContain('@/components/domain/jobs/time');

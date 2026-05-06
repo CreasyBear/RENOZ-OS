@@ -23,10 +23,10 @@ function sourceFiles(dir: string): string[] {
 describe('jobs template dead surface contract', () => {
   it('keeps job template settings UI out of the broad jobs barrel and old templates path', () => {
     const templateSettingsIndex = read('src/components/domain/jobs/job-templates/index.ts');
-    const jobsIndex = read('src/components/domain/jobs/index.ts');
     const projectsIndex = read('src/components/domain/jobs/projects/index.ts');
     const route = read('src/routes/_authenticated/settings/job-templates.tsx');
 
+    expect(existsSync(join(root, 'src/components/domain/jobs/index.ts'))).toBe(false);
     expect(sourceFiles('src/components/domain/jobs/templates')).toEqual([]);
     expect(
       existsSync(join(root, 'src/components/domain/jobs/templates/job-checklist-tab.tsx'))
@@ -47,12 +47,6 @@ describe('jobs template dead surface contract', () => {
     expect(route).toContain("from '@/components/domain/jobs/job-templates'");
     expect(route).not.toContain("from '@/components/domain/jobs';");
     expect(route).not.toContain('from "@/components/domain/jobs";');
-    expect(jobsIndex).not.toContain('JobTemplateList');
-    expect(jobsIndex).not.toContain('JobTemplateFormDialog');
-    expect(jobsIndex).not.toContain('./templates/');
-    expect(jobsIndex).not.toContain('./templates/job-checklist-tab');
-    expect(jobsIndex).not.toContain('./templates/checklist-item-card');
-    expect(jobsIndex).not.toContain('./templates/apply-checklist-dialog');
 
     expect(projectsIndex).toContain("from './checklists'");
     expect(projectsIndex).toContain('ChecklistItemCard');

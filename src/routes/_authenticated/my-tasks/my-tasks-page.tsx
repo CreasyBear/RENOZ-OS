@@ -20,7 +20,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCallback, memo, useRef, useEffect, useMemo } from 'react';
 import { Calendar, Kanban } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
-import { TechnicianDashboard } from '@/components/domain/jobs';
+import { TechnicianDashboard } from '@/components/domain/jobs/technician';
 import { MyTasksKanban } from '@/components/domain/jobs/my-tasks';
 import { KanbanErrorBoundary } from '@/components/shared/kanban';
 import {
