@@ -16,6 +16,8 @@ const mockMarkShipped = vi.fn()
 const mockReopenShipment = vi.fn()
 const mockPickOrderItems = vi.fn()
 const mockUnpickOrderItems = vi.fn()
+const mockCreateOrderPayment = vi.fn()
+const mockUpdateOrderPayment = vi.fn()
 
 vi.mock('@tanstack/react-start', () => ({
   useServerFn: (fn: unknown) => mockUseServerFn(fn),
@@ -44,6 +46,16 @@ vi.mock('@/server/functions/orders/order-shipments', () => ({
 vi.mock('@/server/functions/orders/order-picking', () => ({
   pickOrderItems: (...args: unknown[]) => mockPickOrderItems(...args),
   unpickOrderItems: (...args: unknown[]) => mockUnpickOrderItems(...args),
+}))
+
+vi.mock('@/server/functions/orders/order-payments', () => ({
+  getOrderPayments: vi.fn(),
+  getOrderPayment: vi.fn(),
+  getOrderPaymentSummary: vi.fn(),
+  createOrderPayment: (...args: unknown[]) => mockCreateOrderPayment(...args),
+  updateOrderPayment: (...args: unknown[]) => mockUpdateOrderPayment(...args),
+  deleteOrderPayment: vi.fn(),
+  createRefundPayment: vi.fn(),
 }))
 
 function createWrapper(queryClient: QueryClient) {
@@ -351,6 +363,76 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
+    })
+  })
+
+  it('payment recording refreshes the full order and invoice paid-state surface', async () => {
+    mockCreateOrderPayment.mockResolvedValue({ id: 'payment-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useCreateOrderPayment } = await import('@/hooks/orders/use-order-payments')
+
+    const { result } = renderHook(() => useCreateOrderPayment('order-1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'order-1',
+        amount: 100,
+        paymentMethod: 'bank_transfer',
+        paymentDate: '2026-05-06',
+        isRefund: false,
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.paymentSummary('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.summary(),
+    })
+  })
+
+  it('payment updates refresh the specific payment detail through the shared ledger helper', async () => {
+    mockUpdateOrderPayment.mockResolvedValue({ id: 'payment-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useUpdateOrderPayment } = await import('@/hooks/orders/use-order-payments')
+
+    const { result } = renderHook(() => useUpdateOrderPayment('order-1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: 'payment-1',
+        amount: 125,
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.paymentDetail('payment-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.paymentSummary('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.detail('order-1'),
     })
   })
 })

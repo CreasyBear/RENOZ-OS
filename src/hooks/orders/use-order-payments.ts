@@ -9,6 +9,7 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,6 +29,32 @@ import type {
   UpdateOrderPayment,
   DeleteOrderPayment,
 } from "@/lib/schemas/orders/order-payments";
+
+function invalidateOrderPaymentLedger(
+  queryClient: QueryClient,
+  orderId: string,
+  options: { paymentId?: string } = {}
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.payments(orderId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.paymentSummary(orderId),
+  });
+
+  if (options.paymentId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.orders.paymentDetail(options.paymentId),
+    });
+  }
+
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.detail(orderId),
+  });
+  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+}
 
 // ============================================================================
 // QUERY HOOKS
@@ -96,7 +123,7 @@ export function useOrderPaymentSummary(
   const getSummaryFn = useServerFn(getOrderPaymentSummary);
 
   return useQuery({
-    queryKey: [...queryKeys.orders.payments(orderId), "summary"],
+    queryKey: queryKeys.orders.paymentSummary(orderId),
     queryFn: async () => {
       const result = await getSummaryFn({
         data: { orderId } 
@@ -122,20 +149,7 @@ export function useCreateOrderPayment(orderId: string) {
   return useMutation({
     mutationFn: (input: InsertOrderPayment) => createPaymentFn({ data: input }),
     onSuccess: () => {
-      // Invalidate payments list and summary
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.payments(orderId), "summary"],
-      });
-      // Invalidate order detail to refresh payment status
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(orderId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+      invalidateOrderPaymentLedger(queryClient, orderId);
     },
   });
 }
@@ -151,24 +165,7 @@ export function useUpdateOrderPayment(orderId: string) {
     mutationFn: (input: UpdateOrderPayment) => updatePaymentFn({ data: input }),
     onSuccess: (data) => {
       if (!data) return;
-
-      // Invalidate payments list and specific payment
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.paymentDetail(data.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.payments(orderId), "summary"],
-      });
-      // Invalidate order detail
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(orderId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+      invalidateOrderPaymentLedger(queryClient, orderId, { paymentId: data.id });
     },
   });
 }
@@ -183,20 +180,7 @@ export function useDeleteOrderPayment(orderId: string) {
   return useMutation({
     mutationFn: (input: DeleteOrderPayment) => deletePaymentFn({ data: input }),
     onSuccess: () => {
-      // Invalidate payments list and summary
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.payments(orderId), "summary"],
-      });
-      // Invalidate order detail
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(orderId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+      invalidateOrderPaymentLedger(queryClient, orderId);
     },
   });
 }
@@ -222,20 +206,7 @@ export function useCreateRefundPayment(orderId: string) {
         data: { orderId, originalPaymentId, amount, notes },
       }),
     onSuccess: () => {
-      // Invalidate payments list and summary
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.payments(orderId), "summary"],
-      });
-      // Invalidate order detail
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(orderId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+      invalidateOrderPaymentLedger(queryClient, orderId);
     },
   });
 }
