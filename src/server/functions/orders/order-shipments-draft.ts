@@ -164,7 +164,7 @@ export async function createShipmentHandler({
         });
       }
 
-      await tx
+      const [updatedOrder] = await tx
         .update(orders)
         .set({
           shippingAddress: {
@@ -180,7 +180,18 @@ export async function createShipmentHandler({
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
-        .where(eq(orders.id, data.orderId));
+        .where(
+          and(
+            eq(orders.id, data.orderId),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .returning({ id: orders.id });
+
+      if (!updatedOrder) {
+        throw new NotFoundError('Order not found');
+      }
     }
 
     const shipmentAddressForStorage: ShipmentAddress | undefined = shipmentShippingAddress
@@ -313,8 +324,20 @@ export async function updateShipmentHandler({
       }),
       updatedBy: ctx.user.id,
     })
-    .where(eq(orderShipments.id, id))
+    .where(
+      and(
+        eq(orderShipments.id, id),
+        eq(orderShipments.organizationId, ctx.organizationId),
+        eq(orderShipments.status, 'pending')
+      )
+    )
     .returning();
+
+  if (!shipment) {
+    throw new ValidationError('Only pending shipments can be edited directly', {
+      status: ['Shipment changed while the edit was running. Refresh shipments and try again.'],
+    });
+  }
 
   return shipment;
 }
@@ -348,11 +371,44 @@ export async function deleteShipmentHandler({
     await tx.execute(
       sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
-    await tx.delete(shipmentItems).where(eq(shipmentItems.shipmentId, data.id));
+
+    const [lockedShipment] = await tx
+      .select({ id: orderShipments.id, status: orderShipments.status })
+      .from(orderShipments)
+      .where(
+        and(eq(orderShipments.id, data.id), eq(orderShipments.organizationId, ctx.organizationId))
+      )
+      .limit(1)
+      .for('update');
+
+    if (!lockedShipment) {
+      throw new NotFoundError('Shipment not found');
+    }
+
+    if (lockedShipment.status !== 'pending') {
+      throw new ValidationError('Only pending shipments can be deleted', {
+        status: [`Current status is ${lockedShipment.status}`],
+      });
+    }
+
+    await tx
+      .delete(shipmentItems)
+      .where(
+        and(
+          eq(shipmentItems.shipmentId, data.id),
+          eq(shipmentItems.organizationId, ctx.organizationId)
+        )
+      );
 
     const [deleted] = await tx
       .delete(orderShipments)
-      .where(eq(orderShipments.id, data.id))
+      .where(
+        and(
+          eq(orderShipments.id, data.id),
+          eq(orderShipments.organizationId, ctx.organizationId),
+          eq(orderShipments.status, 'pending')
+        )
+      )
       .returning({ id: orderShipments.id });
 
     if (!deleted) {
