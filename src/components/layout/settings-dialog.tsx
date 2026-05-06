@@ -55,20 +55,11 @@ import {
   type BrandingSettingsData,
 } from '@/components/domain/settings/settings-sections'
 import { createOrganizationSectionHandlers } from '@/lib/settings/organization-section-handlers'
-import {
-  PreferencesSettingsSection,
-  SecuritySettingsSection,
-  ApiTokensSettingsSection,
-  TargetsSettingsSection,
-  type PreferencesSettingsData,
-  type SecuritySettingsData,
-  type TargetsSettingsData,
-} from '@/components/domain/settings/settings-sections-extended'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'sonner'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { OAuthConnectionManager } from '@/components/integrations/oauth/oauth-connection-manager'
+import { Button } from '@/components/ui/button'
 
 // ============================================================================
 // TYPES
@@ -245,6 +236,7 @@ export function SettingsDialog({ open, onOpenChange, initialPane }: SettingsDial
                     settings={settings}
                     updateOrganization={updateOrganization}
                     updateSettings={updateSettings}
+                    onClose={() => onOpenChange(false)}
                   />
                 )}
               </div>
@@ -267,6 +259,7 @@ interface SettingsPaneProps {
   settings: ReturnType<typeof useOrganizationSettings>
   updateOrganization: ReturnType<typeof useUpdateOrganization>
   updateSettings: ReturnType<typeof useUpdateOrganizationSettings>
+  onClose: () => void
 }
 
 function SettingsPane({
@@ -276,6 +269,7 @@ function SettingsPane({
   settings,
   updateOrganization,
   updateSettings,
+  onClose,
 }: SettingsPaneProps) {
   const navigate = useNavigate()
   const handlers = createOrganizationSectionHandlers(updateOrganization, updateSettings)
@@ -321,30 +315,29 @@ function SettingsPane({
     websiteUrl: settings.portalBranding?.websiteUrl ?? '',
   }
 
-  const preferencesData: PreferencesSettingsData = {
-    theme: 'system',
-    accentColor: 'blue',
-    density: 'comfortable',
-    notifications_email: true,
-    notifications_inApp: true,
-    notifications_sound: false,
-    tablePageSize: '25',
-    stickyHeaders: true,
-    reduceMotion: false,
+  const openProfile = () => {
+    void navigate({ to: '/profile' })
+    onClose()
   }
 
-  const securityData: SecuritySettingsData = {
-    twoFactorEnabled: false,
-    sessionTimeout: '60',
-    requirePasswordChange: false,
-    passwordExpiryDays: 'never',
+  const openPreferences = () => {
+    void navigate({ to: '/settings/preferences' })
+    onClose()
   }
 
-  const targetsData: TargetsSettingsData = {
-    salesTarget: 10,
-    leadTarget: 50,
-    conversionTarget: 20,
-    revenueTarget: 100000,
+  const openSecurity = () => {
+    void navigate({ to: '/settings/security' })
+    onClose()
+  }
+
+  const openApiTokens = () => {
+    void navigate({ to: '/settings/api-tokens' })
+    onClose()
+  }
+
+  const openTargets = () => {
+    void navigate({ to: '/settings/targets' })
+    onClose()
   }
 
   switch (pane) {
@@ -352,21 +345,28 @@ function SettingsPane({
       return (
         <AccountPane
           user={user}
-          onOpenProfile={() => navigate({ to: '/profile' })}
-          onOpenSecurity={() => navigate({ to: '/settings/security' })}
+          onOpenProfile={openProfile}
+          onOpenSecurity={openSecurity}
         />
       )
 
     case 'notifications':
-      return <NotificationsPane />
+      return (
+        <SettingsRouteShortcutPane
+          title="Notifications"
+          description="Notification preferences live in the dedicated Preferences settings page."
+          actionLabel="Open Preferences"
+          onOpen={openPreferences}
+        />
+      )
 
     case 'preferences':
       return (
-        <PreferencesSettingsSection
-          data={preferencesData}
-          onSave={async () => {
-            toast.success('Preference saved')
-          }}
+        <SettingsRouteShortcutPane
+          title="Preferences"
+          description="Personal settings, notifications, and display options are saved from the dedicated Preferences settings page."
+          actionLabel="Open Preferences"
+          onOpen={openPreferences}
         />
       )
 
@@ -412,36 +412,31 @@ function SettingsPane({
 
     case 'security':
       return (
-        <SecuritySettingsSection
-          data={securityData}
-          onSave={async () => {
-            toast.success('Setting saved')
-          }}
-          onChangePassword={() => {
-            navigate({ to: '/settings/security' })
-          }}
-          onViewSessions={() => {
-            navigate({ to: '/settings/security' })
-          }}
+        <SettingsRouteShortcutPane
+          title="Security"
+          description="Password, session, and account security controls live in the dedicated Security settings page."
+          actionLabel="Open Security"
+          onOpen={openSecurity}
         />
       )
 
     case 'api-tokens':
       return (
-        <ApiTokensSettingsSection
-          tokens={[]}
-          onCreateToken={() => navigate({ to: '/settings/api-tokens' })}
-          onRevokeToken={() => navigate({ to: '/settings/api-tokens' })}
+        <SettingsRouteShortcutPane
+          title="API Tokens"
+          description="API token creation, review, and revocation live in the dedicated API Tokens settings page."
+          actionLabel="Open API Tokens"
+          onOpen={openApiTokens}
         />
       )
 
     case 'targets':
       return (
-        <TargetsSettingsSection
-          data={targetsData}
-          onSave={async () => {
-            toast.success('Targets saved')
-          }}
+        <SettingsRouteShortcutPane
+          title="KPI Targets"
+          description="Performance targets are created and tracked from the dedicated KPI Targets settings page."
+          actionLabel="Open KPI Targets"
+          onOpen={openTargets}
         />
       )
 
@@ -463,6 +458,36 @@ function SettingsPane({
     default:
       return null
   }
+}
+
+// ============================================================================
+// ROUTE SHORTCUT PANE
+// ============================================================================
+
+function SettingsRouteShortcutPane({
+  title,
+  description,
+  actionLabel,
+  onOpen,
+}: {
+  title: string
+  description: string
+  actionLabel: string
+  onOpen: () => void
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">{title}</h3>
+        <p className="text-sm text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <Button type="button" onClick={onOpen}>
+        {actionLabel}
+      </Button>
+    </div>
+  )
 }
 
 // ============================================================================
@@ -537,98 +562,6 @@ function AccountPane({
   )
 }
 
-// ============================================================================
-// NOTIFICATIONS PANE
-// ============================================================================
-
-function NotificationsPane() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-1">Notifications</h3>
-        <p className="text-sm text-muted-foreground">
-          Configure how you receive notifications.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <NotificationRow
-          title="Email notifications"
-          description="Receive updates via email"
-          defaultChecked={true}
-        />
-        <NotificationRow
-          title="In-app notifications"
-          description="Show notifications in the app"
-          defaultChecked={true}
-        />
-        <NotificationRow
-          title="Project updates"
-          description="Get notified when projects are updated"
-          defaultChecked={true}
-        />
-        <NotificationRow
-          title="Order status changes"
-          description="Notifications when orders move through stages"
-          defaultChecked={true}
-        />
-        <NotificationRow
-          title="Quote approvals"
-          description="Get notified when quotes need approval"
-          defaultChecked={true}
-        />
-        <NotificationRow
-          title="Weekly summary"
-          description="Receive a weekly digest of activity"
-          defaultChecked={false}
-        />
-      </div>
-    </div>
-  )
-}
-
-function NotificationRow({
-  title,
-  description,
-  defaultChecked,
-}: {
-  title: string
-  description: string
-  defaultChecked: boolean
-}) {
-  const [checked, setChecked] = useState(defaultChecked)
-
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-border/40 last:border-b-0">
-      <div>
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => {
-          setChecked(!checked)
-          toast.success(checked ? 'Notification disabled' : 'Notification enabled')
-        }}
-        className={cn(
-          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-          checked ? 'bg-primary' : 'bg-muted'
-        )}
-      >
-        <span
-          className={cn(
-            'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-            checked ? 'translate-x-6' : 'translate-x-1'
-          )}
-        />
-      </button>
-    </div>
-  )
-}
-
-// ============================================================================
 // LOADING STATE
 // ============================================================================
 
