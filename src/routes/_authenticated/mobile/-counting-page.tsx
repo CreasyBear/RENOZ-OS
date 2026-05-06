@@ -43,6 +43,7 @@ import {
   OfflineIndicator,
   MobilePageHeader,
 } from "@/components/mobile/inventory-actions";
+import { formatMobileWarehouseActionError } from "./mobile-warehouse-action-errors";
 
 interface CountItem {
   inventoryId: string;
@@ -346,7 +347,7 @@ export default function MobileCountingPage() {
       }
     } catch (error: unknown) {
       logger.error("Failed to submit count", error);
-      toast.error(error instanceof Error ? error.message : "Failed to submit count");
+      toast.error(formatMobileWarehouseActionError(error, "submitCount"));
     } finally {
       setIsSubmitting(false);
     }

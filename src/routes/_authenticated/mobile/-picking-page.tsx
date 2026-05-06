@@ -36,6 +36,7 @@ import { usePickOrderItems } from "@/hooks/orders/use-picking";
 import { useAvailableSerials } from "@/hooks/inventory";
 import { SerialPicker } from "@/components/domain/orders/fulfillment/serial-picker";
 import type { PickItem, PickList, PendingPick } from "./picking-types";
+import { formatMobileWarehouseActionError } from "./mobile-warehouse-action-errors";
 
 interface PickItemRowProps {
   item: PickItem;
@@ -284,7 +285,7 @@ export default function MobilePickingPage({ orderId }: { orderId?: string }) {
       }
     } catch (error: unknown) {
       logger.error("Failed to confirm pick", error);
-      toast.error(error instanceof Error ? error.message : "Failed to confirm pick");
+      toast.error(formatMobileWarehouseActionError(error, "confirmPick"));
     } finally {
       setIsSubmitting(false);
     }
