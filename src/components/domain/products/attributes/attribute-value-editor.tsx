@@ -19,7 +19,10 @@ import {
   SwitchField,
   DateStringField,
 } from "@/components/shared/forms";
-import { useSetProductAttribute } from "@/hooks/products";
+import {
+  formatProductAttributeMutationError,
+  useSetProductAttribute,
+} from "@/hooks/products";
 import { toastError } from "@/hooks";
 
 export interface AttributeDefinition {
@@ -74,8 +77,7 @@ export function AttributeValueEditor({
         onSaved?.();
         onOpenChange(false);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to save attribute";
-        toastError(errorMessage);
+        toastError(formatProductAttributeMutationError(err, "setValue"));
       }
     },
     onSubmitInvalid: () => {},
@@ -242,7 +244,11 @@ export function AttributeValueEditor({
       description="Update the value for this product attribute"
       form={form}
       submitLabel="Save"
-      submitError={setAttributeMutation.error?.message ?? null}
+      submitError={
+        setAttributeMutation.error
+          ? formatProductAttributeMutationError(setAttributeMutation.error, "setValue")
+          : null
+      }
       size="md"
       className="max-w-md"
     >

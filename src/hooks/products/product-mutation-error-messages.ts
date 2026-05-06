@@ -63,6 +63,23 @@ const PRODUCT_IMAGE_FALLBACKS = {
     'Product image alt text update is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const PRODUCT_ATTRIBUTE_FALLBACKS = {
+  createDefinition:
+    'Product attribute creation is temporarily unavailable. Please refresh and try again.',
+  updateDefinition:
+    'Product attribute update is temporarily unavailable. Please refresh and try again.',
+  deleteDefinition:
+    'Product attribute deletion is temporarily unavailable. Please refresh and try again.',
+  toggleDefinition:
+    'Product attribute status update is temporarily unavailable. Please refresh and try again.',
+  setValue:
+    'Product attribute value update is temporarily unavailable. Please refresh and try again.',
+  deleteValue:
+    'Product attribute value removal is temporarily unavailable. Please refresh and try again.',
+  setValues:
+    'Product attribute value update is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 const PRODUCT_CODE_MESSAGES: Record<string, string> = {
   NOT_FOUND: 'Product record could not be found. Refresh and try again.',
   PERMISSION_DENIED: 'You do not have permission to manage products.',
@@ -89,9 +106,19 @@ const PRODUCT_IMAGE_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Product image details conflict with the current product gallery.',
 };
 
+const PRODUCT_ATTRIBUTE_CODE_MESSAGES: Record<string, string> = {
+  ...PRODUCT_CODE_MESSAGES,
+  NOT_FOUND: 'Product attribute record could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage product attributes.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing product attributes.',
+  RATE_LIMIT: 'Too many product attribute changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'Product attribute details conflict with an existing attribute.',
+};
+
 export type ProductPricingMutationAction = keyof typeof PRODUCT_PRICING_FALLBACKS;
 export type ProductCoreMutationAction = keyof typeof PRODUCT_CORE_FALLBACKS;
 export type ProductImageMutationAction = keyof typeof PRODUCT_IMAGE_FALLBACKS;
+export type ProductAttributeMutationAction = keyof typeof PRODUCT_ATTRIBUTE_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -302,5 +329,16 @@ export function formatProductImageMutationError(
     error,
     PRODUCT_IMAGE_FALLBACKS[action],
     PRODUCT_IMAGE_CODE_MESSAGES
+  );
+}
+
+export function formatProductAttributeMutationError(
+  error: unknown,
+  action: ProductAttributeMutationAction
+): string {
+  return formatProductMutationError(
+    error,
+    PRODUCT_ATTRIBUTE_FALLBACKS[action],
+    PRODUCT_ATTRIBUTE_CODE_MESSAGES
   );
 }

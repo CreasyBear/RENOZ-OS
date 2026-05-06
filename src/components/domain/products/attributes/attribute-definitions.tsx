@@ -56,6 +56,7 @@ import {
   CheckboxField,
 } from "@/components/shared/forms";
 import {
+  formatProductAttributeMutationError,
   useProductAttributeDefinitions,
   useCreateAttributeDefinition,
   useUpdateAttributeDefinition,
@@ -135,6 +136,13 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
   const attributes = attributesData as AttributeDefinition[];
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const isDeleting = deleteMutation.isPending;
+  const mutationSubmitError = editingAttribute
+    ? updateMutation.error
+      ? formatProductAttributeMutationError(updateMutation.error, "updateDefinition")
+      : null
+    : createMutation.error
+      ? formatProductAttributeMutationError(createMutation.error, "createDefinition")
+      : null;
 
   const getDefaultFormValues = useCallback(
     (attr?: AttributeDefinition | null): AttributeFormValues => ({
@@ -197,7 +205,8 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
         setIsFormOpen(false);
         onAttributesChange?.();
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "Failed to save attribute";
+        const action = editingAttribute ? "updateDefinition" : "createDefinition";
+        const msg = formatProductAttributeMutationError(error, action);
         setSubmitError(msg);
         toastError(msg);
       }
@@ -222,6 +231,8 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
   // Open form for new attribute
   const handleNew = () => {
     setSubmitError(null);
+    createMutation.reset();
+    updateMutation.reset();
     setEditingAttribute(null);
     form.reset(getDefaultFormValues());
     setOptionsExpanded(false);
@@ -231,6 +242,8 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
   // Open form for editing
   const handleEdit = (attr: AttributeDefinition) => {
     setSubmitError(null);
+    createMutation.reset();
+    updateMutation.reset();
     setEditingAttribute(attr);
     form.reset(getDefaultFormValues(attr));
     setOptionsExpanded(true);
@@ -246,9 +259,7 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
       setDeletingAttribute(null);
       onAttributesChange?.();
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to delete attribute"
-      );
+      toastError(formatProductAttributeMutationError(error, "deleteDefinition"));
     }
   };
 
@@ -261,9 +272,7 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
       });
       onAttributesChange?.();
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to toggle attribute"
-      );
+      toastError(formatProductAttributeMutationError(error, "toggleDefinition"));
     }
   };
 
@@ -400,7 +409,7 @@ export function AttributeDefinitions({ onAttributesChange }: AttributeDefinition
         submitLabel={editingAttribute ? "Update" : "Create"}
         cancelLabel="Cancel"
         loadingLabel="Saving..."
-        submitError={submitError ?? (createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitError={submitError ?? mutationSubmitError}
         submitDisabled={isSaving}
         className="max-w-lg max-h-[90vh] overflow-y-auto"
       >

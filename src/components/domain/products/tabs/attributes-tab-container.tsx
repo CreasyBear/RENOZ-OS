@@ -12,6 +12,7 @@
 
 import { useState, useCallback } from "react";
 import {
+  formatProductAttributeMutationError,
   useProductAttributeValues,
   useProductRequiredAttributes,
   useDeleteProductAttribute,
@@ -62,9 +63,7 @@ export function ProductAttributesTabContainer({
       setDeletingAttribute(null);
       onAttributesChange?.();
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to delete attribute"
-      );
+      toastError(formatProductAttributeMutationError(error, "deleteValue"));
     }
   }, [deletingAttribute, productId, deleteAttributeMutation, onAttributesChange]);
 

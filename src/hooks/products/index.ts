@@ -107,9 +107,11 @@ export {
 } from './use-product-pricing';
 
 export {
+  formatProductAttributeMutationError,
   formatProductCoreMutationError,
   formatProductImageMutationError,
   formatProductPricingMutationError,
+  type ProductAttributeMutationAction,
   type ProductCoreMutationAction,
   type ProductImageMutationAction,
   type ProductPricingMutationAction,
