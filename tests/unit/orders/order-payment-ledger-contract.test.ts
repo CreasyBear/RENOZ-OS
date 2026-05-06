@@ -124,6 +124,34 @@ describe('order payment ledger contract', () => {
     expect(insertIndex).toBeGreaterThan(notFoundIndex);
   });
 
+  it('does not recalculate payment projections unless create/refund insert returns a ledger row', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const createPaymentSource = sourceBetween(
+      source,
+      'export const createOrderPayment',
+      '/**\n * Update an existing payment'
+    );
+    const refundPaymentSource = sourceFrom(source, 'export const createRefundPayment');
+
+    const createInsertIndex = createPaymentSource.indexOf('.insert(orderPayments)');
+    const createGuardIndex = createPaymentSource.indexOf(
+      'throw new ValidationError("Payment could not be recorded")'
+    );
+    const createProjectionIndex = createPaymentSource.indexOf('await updateOrderPaymentStatus');
+    const refundInsertIndex = refundPaymentSource.indexOf('.insert(orderPayments)');
+    const refundGuardIndex = refundPaymentSource.indexOf(
+      'throw new ValidationError("Refund could not be recorded")'
+    );
+    const refundProjectionIndex = refundPaymentSource.indexOf('await updateOrderPaymentStatus');
+
+    expect(createInsertIndex).toBeGreaterThanOrEqual(0);
+    expect(createGuardIndex).toBeGreaterThan(createInsertIndex);
+    expect(createProjectionIndex).toBeGreaterThan(createGuardIndex);
+    expect(refundInsertIndex).toBeGreaterThanOrEqual(0);
+    expect(refundGuardIndex).toBeGreaterThan(refundInsertIndex);
+    expect(refundProjectionIndex).toBeGreaterThan(refundGuardIndex);
+  });
+
   it('keeps update and delete writes tenant-scoped and active-row scoped', () => {
     const source = read('src/server/functions/orders/order-payments.ts');
     const updatePaymentSource = sourceBetween(

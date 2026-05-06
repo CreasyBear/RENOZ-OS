@@ -234,6 +234,10 @@ export const createOrderPayment = createServerFn({ method: "POST" })
           createdAt: orderPayments.createdAt,
         });
 
+      if (!payment) {
+        throw new ValidationError("Payment could not be recorded");
+      }
+
       await updateOrderPaymentStatus(
         tx,
         data.orderId,
@@ -477,6 +481,10 @@ export const createRefundPayment = createServerFn({ method: "POST" })
           relatedPaymentId: orderPayments.relatedPaymentId,
           createdAt: orderPayments.createdAt,
         });
+
+      if (!refund) {
+        throw new ValidationError("Refund could not be recorded");
+      }
 
       await updateOrderPaymentStatus(
         tx,
