@@ -37,7 +37,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
+import { formatCommunicationQuickLogMutationError } from "@/hooks/communications";
 import { useCreateQuickLog } from "@/hooks/communications/use-quick-log";
 import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
 import type { SelectedCustomer } from "@/components/domain/orders/creation/customer-selector";
@@ -405,17 +405,16 @@ export function QuickLogDialog(props: QuickLogDialogProps) {
   const requireCustomerSelection = !customerId && !opportunityId;
 
   const handleSubmit = async (values: QuickLogFormValues & { customerId?: string }) => {
-    try {
-      // Use customerId from form values (selected in dialog) or from props
-      const finalCustomerId = values.customerId || customerId || null;
+    const quickLogInput = {
+      type: values.type,
+      notes: values.notes,
+      duration: values.duration,
+      customerId: values.customerId || customerId || null,
+      opportunityId: opportunityId ?? null,
+    };
 
-      await createQuickLogMutation.mutateAsync({
-        type: values.type,
-        notes: values.notes,
-        duration: values.duration,
-        customerId: finalCustomerId,
-        opportunityId: opportunityId ?? null,
-      });
+    try {
+      await createQuickLogMutation.mutateAsync(quickLogInput);
 
       toast.success(
         values.type === 'call'
@@ -427,17 +426,14 @@ export function QuickLogDialog(props: QuickLogDialogProps) {
 
       return true;
     } catch (error) {
-      toast.error('Failed to save log', {
-        description: getUserFriendlyMessage(error as Error),
+      toast.error(formatCommunicationQuickLogMutationError(error, "create"), {
         action: {
           label: 'Retry',
           onClick: () => {
-            createQuickLogMutation.mutate({
-              type: values.type,
-              notes: values.notes,
-              duration: values.duration,
-              customerId: values.customerId || customerId || null,
-              opportunityId: opportunityId ?? null,
+            createQuickLogMutation.mutate(quickLogInput, {
+              onError: (retryError) => {
+                toast.error(formatCommunicationQuickLogMutationError(retryError, "create"));
+              },
             });
           },
         },

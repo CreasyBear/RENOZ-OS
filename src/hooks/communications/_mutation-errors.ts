@@ -62,6 +62,10 @@ const SUPPRESSION_FALLBACKS = {
   remove: 'Unable to remove email from suppression list.',
 } as const;
 
+const QUICK_LOG_FALLBACKS = {
+  create: 'Unable to save quick log.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
@@ -70,6 +74,7 @@ export type CommunicationScheduledEmailMutationAction = keyof typeof SCHEDULED_E
 export type CommunicationScheduledCallMutationAction = keyof typeof SCHEDULED_CALL_FALLBACKS;
 export type CommunicationSignatureMutationAction = keyof typeof SIGNATURE_FALLBACKS;
 export type CommunicationSuppressionMutationAction = keyof typeof SUPPRESSION_FALLBACKS;
+export type CommunicationQuickLogMutationAction = keyof typeof QUICK_LOG_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -156,4 +161,11 @@ export function formatCommunicationSuppressionMutationError(
   action: CommunicationSuppressionMutationAction
 ): string {
   return formatCommunicationMutationError(error, SUPPRESSION_FALLBACKS[action]);
+}
+
+export function formatCommunicationQuickLogMutationError(
+  error: unknown,
+  action: CommunicationQuickLogMutationAction
+): string {
+  return formatCommunicationMutationError(error, QUICK_LOG_FALLBACKS[action]);
 }

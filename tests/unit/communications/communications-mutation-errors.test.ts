@@ -5,6 +5,7 @@ import {
   formatCommunicationCampaignMutationError,
   formatCommunicationInboxAccountMutationError,
   formatCommunicationInboxMutationError,
+  formatCommunicationQuickLogMutationError,
   formatCommunicationScheduledCallMutationError,
   formatCommunicationScheduledEmailMutationError,
   formatCommunicationSignatureMutationError,
@@ -97,6 +98,13 @@ describe('communications mutation error formatting', () => {
         'remove'
       )
     ).toBe('Unable to remove email from suppression list.');
+
+    expect(
+      formatCommunicationQuickLogMutationError(
+        new Error('postgres database stack trace while creating quick log activity'),
+        'create'
+      )
+    ).toBe('Unable to save quick log.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -272,6 +280,16 @@ describe('communications mutation error formatting', () => {
     expect(addDialog).not.toContain('toast.error("Failed to add to suppression list"');
     expect(table).not.toContain('getUserFriendlyMessage(err as Error)');
     expect(table).not.toContain('toast.error("Failed to remove from suppression list"');
+  });
+
+  it('keeps communications quick log mutations on communications-owned formatters', () => {
+    const dialog = read('src/components/domain/communications/quick-log-dialog.tsx');
+
+    expect(dialog).toContain('formatCommunicationQuickLogMutationError(error, "create")');
+    expect(dialog).toContain('formatCommunicationQuickLogMutationError(retryError, "create")');
+    expect(dialog).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(dialog).not.toContain("toast.error('Failed to save log'");
+    expect(dialog).not.toContain('description: getUserFriendlyMessage');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {
