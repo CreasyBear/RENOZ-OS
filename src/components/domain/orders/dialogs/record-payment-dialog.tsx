@@ -29,6 +29,7 @@ import {
   type PaymentMethod,
   type RecordPaymentFormValues,
 } from "@/lib/schemas/orders/order-payments";
+import { getOrderPaymentDialogErrorMessage } from "./payment-dialog-error-messages";
 
 // ============================================================================
 // TYPES
@@ -105,11 +106,7 @@ export function RecordPaymentDialog({
         form.reset();
         onOpenChange(false);
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to record payment");
-        }
+        setError(getOrderPaymentDialogErrorMessage(err, "record-payment"));
       }
     },
     onSubmitInvalid: () => {

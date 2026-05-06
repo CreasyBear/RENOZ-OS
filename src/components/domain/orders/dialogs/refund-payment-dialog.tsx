@@ -7,6 +7,7 @@ import {
   createRefundPaymentFormSchema,
   type RefundPaymentFormValues,
 } from "@/lib/schemas/orders/order-payments";
+import { getOrderPaymentDialogErrorMessage } from "./payment-dialog-error-messages";
 
 export interface RefundPaymentDialogProps {
   open: boolean;
@@ -50,7 +51,7 @@ export function RefundPaymentDialog({
         form.reset();
         onOpenChange(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to record refund");
+        setError(getOrderPaymentDialogErrorMessage(err, "record-refund"));
       }
     },
     onSubmitInvalid: () => {
