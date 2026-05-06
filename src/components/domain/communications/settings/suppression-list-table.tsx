@@ -48,7 +48,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
+import { formatCommunicationSuppressionMutationError } from "@/hooks/communications";
 import {
   useSuppressionList,
   useRemoveSuppression,
@@ -233,9 +233,7 @@ export const SuppressionListTable = memo(function SuppressionListTable({
       toast.success("Email removed from suppression list");
       setDeleteTarget(null);
     } catch (err) {
-      toast.error("Failed to remove from suppression list", {
-        description: getUserFriendlyMessage(err as Error),
-      });
+      toast.error(formatCommunicationSuppressionMutationError(err, "remove"));
     }
   }, [deleteTarget, removeMutation]);
 

@@ -8,6 +8,7 @@ import {
   formatCommunicationScheduledCallMutationError,
   formatCommunicationScheduledEmailMutationError,
   formatCommunicationSignatureMutationError,
+  formatCommunicationSuppressionMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
 import { executeBulkAction } from '@/lib/actions/bulk-action-results';
@@ -89,6 +90,13 @@ describe('communications mutation error formatting', () => {
         'setDefault'
       )
     ).toBe('Unable to set default email signature.');
+
+    expect(
+      formatCommunicationSuppressionMutationError(
+        new Error('supabase database stack trace while removing suppression'),
+        'remove'
+      )
+    ).toBe('Unable to remove email from suppression list.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -244,6 +252,26 @@ describe('communications mutation error formatting', () => {
     expect(editor).not.toContain('toast.error("Failed to update signature"');
     expect(page).not.toContain('toastError("Failed to delete signature")');
     expect(page).not.toContain('toastError("Failed to set default signature")');
+  });
+
+  it('keeps communications suppression mutations on communications-owned formatters', () => {
+    const addDialog = read(
+      'src/components/domain/communications/settings/add-suppression-dialog.tsx'
+    );
+    const table = read(
+      'src/components/domain/communications/settings/suppression-list-table.tsx'
+    );
+
+    expect(addDialog).toContain('formatCommunicationSuppressionMutationError(error, "add")');
+    expect(addDialog).toContain(
+      'formatCommunicationSuppressionMutationError(addMutation.error, "add")'
+    );
+    expect(table).toContain('formatCommunicationSuppressionMutationError(err, "remove")');
+    expect(addDialog).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(addDialog).not.toContain('submitError={addMutation.error?.message ?? null}');
+    expect(addDialog).not.toContain('toast.error("Failed to add to suppression list"');
+    expect(table).not.toContain('getUserFriendlyMessage(err as Error)');
+    expect(table).not.toContain('toast.error("Failed to remove from suppression list"');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

@@ -57,6 +57,11 @@ const SIGNATURE_FALLBACKS = {
   setDefault: 'Unable to set default email signature.',
 } as const;
 
+const SUPPRESSION_FALLBACKS = {
+  add: 'Unable to add email to suppression list.',
+  remove: 'Unable to remove email from suppression list.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
@@ -64,6 +69,7 @@ export type CommunicationInboxAccountMutationAction = keyof typeof INBOX_ACCOUNT
 export type CommunicationScheduledEmailMutationAction = keyof typeof SCHEDULED_EMAIL_FALLBACKS;
 export type CommunicationScheduledCallMutationAction = keyof typeof SCHEDULED_CALL_FALLBACKS;
 export type CommunicationSignatureMutationAction = keyof typeof SIGNATURE_FALLBACKS;
+export type CommunicationSuppressionMutationAction = keyof typeof SUPPRESSION_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -143,4 +149,11 @@ export function formatCommunicationSignatureMutationError(
   action: CommunicationSignatureMutationAction
 ): string {
   return formatCommunicationMutationError(error, SIGNATURE_FALLBACKS[action]);
+}
+
+export function formatCommunicationSuppressionMutationError(
+  error: unknown,
+  action: CommunicationSuppressionMutationAction
+): string {
+  return formatCommunicationMutationError(error, SUPPRESSION_FALLBACKS[action]);
 }

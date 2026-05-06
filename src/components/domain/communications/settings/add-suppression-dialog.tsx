@@ -8,7 +8,7 @@
 
 import { memo } from "react";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
+import { formatCommunicationSuppressionMutationError } from "@/hooks/communications";
 import { useAddSuppression } from "@/hooks/communications/use-email-suppression";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
@@ -69,9 +69,7 @@ export const AddSuppressionDialog = memo(function AddSuppressionDialog({
         form.reset();
         onOpenChange(false);
       } catch (error) {
-        toast.error("Failed to add to suppression list", {
-          description: getUserFriendlyMessage(error as Error),
-        });
+        toast.error(formatCommunicationSuppressionMutationError(error, "add"));
       }
     },
   });
@@ -84,7 +82,11 @@ export const AddSuppressionDialog = memo(function AddSuppressionDialog({
       description="Manually add an email address to prevent sending emails to it."
       form={form}
       submitLabel="Add to List"
-      submitError={addMutation.error?.message ?? null}
+      submitError={
+        addMutation.error
+          ? formatCommunicationSuppressionMutationError(addMutation.error, "add")
+          : null
+      }
       size="md"
       className="sm:max-w-[425px]"
     >
