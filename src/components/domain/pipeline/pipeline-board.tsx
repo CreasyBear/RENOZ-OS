@@ -43,7 +43,7 @@ export interface PipelineBoardProps {
     opportunityId: string,
     newStage: OpportunityStage,
     reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string }
-  ) => Promise<void>;
+  ) => Promise<boolean | void>;
   onAddOpportunity?: (stage: OpportunityStage) => void;
   onEditOpportunity?: (id: string) => void;
   isLoading?: boolean;
@@ -246,7 +246,7 @@ export function PipelineBoard({
     async (event: KanbanMoveEvent<OpportunityStage>) => {
       const { itemId, toColumn } = event;
       const opportunity = opportunities.find((o) => o.id === itemId);
-      if (!opportunity) return;
+      if (!opportunity) return false;
 
       // If moving to Won or Lost, show confirmation dialog
       if (toColumn === "won" || toColumn === "lost") {
@@ -255,15 +255,17 @@ export function PipelineBoard({
           opportunity,
           targetStage: toColumn,
         });
-        return;
+        return false;
       }
 
       // Otherwise, update stage directly
       try {
-        await onStageChange(itemId, toColumn);
+        const result = await onStageChange(itemId, toColumn);
+        return result !== false;
       } catch {
         // Error is handled by onStageChange callback (toast shown in container)
         // Silently fail here to prevent unhandled promise rejection
+        return false;
       }
     },
     [opportunities, onStageChange]
@@ -275,16 +277,18 @@ export function PipelineBoard({
       if (!pendingTransition) return;
 
       try {
-        await onStageChange(
+        const result = await onStageChange(
           pendingTransition.opportunityId,
           pendingTransition.targetStage,
           reason
         );
+        if (result === false) {
+          return;
+        }
+        setPendingTransition(null);
       } catch {
         // Error is handled by onStageChange callback (toast shown in container)
         // Silently fail here to prevent unhandled promise rejection
-      } finally {
-        setPendingTransition(null);
       }
     },
     [pendingTransition, onStageChange]

@@ -435,7 +435,7 @@ export function PipelineKanbanContainer({
         toastSuccess("Opportunity stage updated successfully.");
       } catch (error) {
         toastError(formatPipelineOpportunityMutationError(error, "stage"));
-        throw new Error("Stage change failed");
+        return false;
       }
     },
     [stageChangeMutation]

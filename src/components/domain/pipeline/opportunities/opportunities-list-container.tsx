@@ -353,7 +353,7 @@ export function OpportunitiesListContainer({
         setBulkDialogOpen(false);
       } catch (error) {
         toastError(formatPipelineOpportunityMutationError(error, "bulkStage"));
-        throw new Error("Bulk stage change failed");
+        return false;
       }
     },
     [selectedItems, bulkStageChangeMutation, clearSelection]

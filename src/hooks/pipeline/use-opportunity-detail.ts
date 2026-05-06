@@ -261,7 +261,6 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
         navigate({ to: '/pipeline' });
       } catch (error) {
         toastError(formatPipelineOpportunityMutationError(error, 'delete'));
-        throw new Error('Delete failed');
       }
     },
 

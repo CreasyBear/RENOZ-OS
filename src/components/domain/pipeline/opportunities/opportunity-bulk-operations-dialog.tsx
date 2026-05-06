@@ -65,7 +65,7 @@ export interface OpportunityBulkOperationsDialogProps {
   onOpenChange: (open: boolean) => void;
   operation: BulkOperationConfig | null;
   opportunities: OpportunityBulkOperation[];
-  onConfirm: (stage: OpportunityStage) => Promise<void>;
+  onConfirm: (stage: OpportunityStage) => Promise<boolean | void>;
   isLoading?: boolean;
 }
 
@@ -125,7 +125,10 @@ export function OpportunityBulkOperationsDialog({
 
     setIsConfirming(true);
     try {
-      await onConfirm(selectedStage);
+      const result = await onConfirm(selectedStage);
+      if (result === false) {
+        return;
+      }
       onOpenChange(false);
     } catch {
       // Parent owns user-facing mutation feedback and keeps the dialog open for retry.

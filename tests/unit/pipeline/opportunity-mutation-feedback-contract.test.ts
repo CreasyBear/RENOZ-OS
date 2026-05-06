@@ -74,6 +74,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
       'src/components/domain/pipeline/opportunities/opportunity-quick-dialog.tsx'
     );
     const kanban = read('src/components/domain/pipeline/pipeline-kanban-container.tsx');
+    const board = read('src/components/domain/pipeline/pipeline-board.tsx');
     const list = read(
       'src/components/domain/pipeline/opportunities/opportunities-list-container.tsx'
     );
@@ -98,6 +99,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(opportunityDetail).not.toContain(
       "toastError('Unable to update stage. Please refresh and try again.')"
     );
+    expect(opportunityDetail).not.toContain("throw new Error('Delete failed')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to convert to order')");
     expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "create")');
@@ -113,9 +115,14 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(kanban).not.toContain(
       'toastError("Failed to update opportunity stage. Please try again.")'
     );
+    expect(kanban).not.toContain('throw new Error("Stage change failed")');
+    expect(kanban).toContain('return false;');
     expect(kanban).not.toContain(
       'error instanceof Error ? error.message : "Failed to delete opportunity."'
     );
+    expect(board).toContain('return result !== false;');
+    expect(board).toContain('if (result === false)');
+    expect(board).toContain('setPendingTransition(null);');
     expect(list).toContain('formatPipelineOpportunityMutationError(error, "delete")');
     expect(list).toContain('formatPipelineOpportunityMutationError(error, "bulkDelete")');
     expect(list).toContain('formatPipelineOpportunityMutationError(error, "bulkStage")');
@@ -124,6 +131,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(list).not.toContain(
       'error instanceof Error ? error.message : "Failed to update opportunity stages"'
     );
+    expect(list).not.toContain('throw new Error("Bulk stage change failed")');
     expect(newOpportunityPage).toContain(
       "formatPipelineOpportunityMutationError(error, 'create')"
     );
@@ -135,5 +143,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
       "error instanceof Error ? error.message : 'Failed to complete bulk operation'"
     );
     expect(bulkDialog).toContain('Parent owns user-facing mutation feedback');
+    expect(bulkDialog).toContain('const result = await onConfirm(selectedStage)');
+    expect(bulkDialog).toContain('if (result === false)');
   });
 });
