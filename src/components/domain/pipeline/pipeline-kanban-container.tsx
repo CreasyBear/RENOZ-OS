@@ -18,7 +18,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { endOfMonth, isSameDay, startOfMonth } from "date-fns";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   formatPipelineOpportunityMutationError,
   useOpportunitiesKanban,
@@ -74,6 +74,15 @@ const KANBAN_DEFAULT_FILTERS: PipelineFiltersState = {
   ...DEFAULT_PIPELINE_FILTERS,
   assignedTo: "me", // Default to current user's opportunities
 };
+
+function invalidatePipelineBoardQueries(queryClient: QueryClient, opportunityId?: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+
+  if (opportunityId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
+  }
+}
 
 /**
  * Quick filter presets for common views
@@ -484,8 +493,7 @@ export function PipelineKanbanContainer({
         title={PIPELINE_READ_MESSAGES.pipelineBoardTitle}
         message={errorMessage}
         onRetry={() => {
-          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-          queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+          invalidatePipelineBoardQueries(queryClient);
         }}
         retryLabel="Retry"
       />
@@ -565,10 +573,7 @@ export function PipelineKanbanContainer({
         stage={quickDialogStage}
         opportunityId={quickDialogOpportunityId}
         onSuccess={(opportunityId) => {
-          // Invalidate pipeline queries to refresh the board
-          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-          queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
-          queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
+          invalidatePipelineBoardQueries(queryClient, opportunityId);
         }}
       />
     </div>
