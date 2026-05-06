@@ -7,6 +7,12 @@ const TEMPLATE_FALLBACKS = {
 
 const CAMPAIGN_FALLBACKS = {
   create: 'Unable to create communication campaign.',
+  cancel: 'Unable to cancel communication campaign.',
+  delete: 'Unable to delete communication campaign.',
+  duplicate: 'Unable to duplicate communication campaign.',
+  testSend: 'Unable to send communication campaign test email.',
+  pause: 'Unable to pause communication campaign.',
+  resume: 'Unable to resume communication campaign.',
 } as const;
 
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;

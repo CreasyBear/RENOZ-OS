@@ -21,6 +21,7 @@ import {
   useCancelCampaign,
   usePauseCampaign,
   useResumeCampaign,
+  formatCommunicationCampaignMutationError,
 } from "@/hooks/communications";
 import { CampaignsList, type CampaignListItem } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
@@ -150,7 +151,7 @@ export default function CampaignsPage() {
           },
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to cancel campaign");
+        toastError(formatCommunicationCampaignMutationError(error, "cancel"));
       }
     },
     [cancelMutation, handleView]
@@ -175,7 +176,7 @@ export default function CampaignsPage() {
           },
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to delete campaign");
+        toastError(formatCommunicationCampaignMutationError(error, "delete"));
       }
     },
     [confirm, deleteMutation, handleCreate]
@@ -198,7 +199,7 @@ export default function CampaignsPage() {
           },
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to duplicate campaign");
+        toastError(formatCommunicationCampaignMutationError(error, "duplicate"));
       }
     },
     [duplicateMutation, handleView]
@@ -214,7 +215,7 @@ export default function CampaignsPage() {
           description: `Sent to ${testEmail}`,
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to send test email");
+        toastError(formatCommunicationCampaignMutationError(error, "testSend"));
       }
     },
     [testSendMutation]
@@ -233,6 +234,7 @@ export default function CampaignsPage() {
         getId: (id) => id,
         getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
         run: (id) => deleteMutation.mutateAsync({ id }),
+        formatError: (error) => formatCommunicationCampaignMutationError(error, "delete"),
       });
 
       queryClient.invalidateQueries({
@@ -267,6 +269,7 @@ export default function CampaignsPage() {
         getId: (id) => id,
         getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
         run: (id) => pauseMutation.mutateAsync({ id }),
+        formatError: (error) => formatCommunicationCampaignMutationError(error, "pause"),
       });
 
       queryClient.invalidateQueries({
@@ -303,6 +306,7 @@ export default function CampaignsPage() {
         getId: (id) => id,
         getLabel: (id) => campaigns.find((campaign) => campaign.id === id)?.name ?? id,
         run: (id) => resumeMutation.mutateAsync({ id }),
+        formatError: (error) => formatCommunicationCampaignMutationError(error, "resume"),
       });
 
       queryClient.invalidateQueries({

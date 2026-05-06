@@ -15,6 +15,7 @@ export async function executeBulkAction<TItem, TId extends string = string>(para
   getId: (item: TItem) => TId;
   getLabel: (item: TItem) => string;
   run: (item: TItem) => Promise<unknown>;
+  formatError?: (error: unknown) => string;
 }): Promise<BulkActionResult<TId>> {
   const results = await Promise.allSettled(params.items.map((item) => params.run(item)));
   const failed: BulkActionFailure<TId>[] = [];
@@ -32,7 +33,11 @@ export async function executeBulkAction<TItem, TId extends string = string>(para
     failed.push({
       id,
       label: params.getLabel(item),
-      message: result.reason instanceof Error ? result.reason.message : "Unknown error",
+      message: params.formatError
+        ? params.formatError(result.reason)
+        : result.reason instanceof Error
+          ? result.reason.message
+          : "Unknown error",
     });
   });
 
