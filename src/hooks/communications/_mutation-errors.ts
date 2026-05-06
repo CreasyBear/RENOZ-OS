@@ -23,20 +23,40 @@ const INBOX_FALLBACKS = {
   delete: 'Unable to delete email.',
 } as const;
 
+const INBOX_ACCOUNT_FALLBACKS = {
+  connect: 'Unable to start email account connection.',
+  callback: 'Unable to connect email account.',
+  providerCallback: 'Email account connection was not completed. Please try again.',
+  sync: 'Unable to sync email account.',
+  delete: 'Unable to disconnect email account.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
+export type CommunicationInboxAccountMutationAction = keyof typeof INBOX_ACCOUNT_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
+    normalized.includes('access_denied') ||
+    normalized.includes('api key') ||
+    normalized.includes('authorization code') ||
+    normalized.includes('client id') ||
+    normalized.includes('client_secret') ||
     normalized.includes('duplicate key') ||
+    normalized.includes('invalid_client') ||
+    normalized.includes('invalid_grant') ||
+    normalized.includes('oauth') ||
+    normalized.includes('redirect_uri') ||
     normalized.includes('violates') ||
     normalized.includes('constraint') ||
     normalized.includes('postgres') ||
+    normalized.includes('resend') ||
     normalized.includes('supabase') ||
     normalized.includes('database') ||
     normalized.includes('stack') ||
+    normalized.includes('token') ||
     normalized.includes('internal server error')
   );
 }
@@ -66,4 +86,11 @@ export function formatCommunicationInboxMutationError(
   action: CommunicationInboxMutationAction
 ): string {
   return formatCommunicationMutationError(error, INBOX_FALLBACKS[action]);
+}
+
+export function formatCommunicationInboxAccountMutationError(
+  error: unknown,
+  action: CommunicationInboxAccountMutationAction
+): string {
+  return formatCommunicationMutationError(error, INBOX_ACCOUNT_FALLBACKS[action]);
 }

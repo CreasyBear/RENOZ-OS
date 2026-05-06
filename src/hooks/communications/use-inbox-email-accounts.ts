@@ -23,8 +23,8 @@ import type {
   OAuthCallbackRequest,
 } from "@/lib/schemas/communications/inbox-accounts";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { QUERY_CONFIG } from "@/lib/constants";
+import { formatCommunicationInboxAccountMutationError } from "./_mutation-errors";
 
 // ============================================================================
 // LIST EMAIL ACCOUNTS
@@ -73,9 +73,7 @@ export function useConnectInboxEmailAccount() {
       }
     },
     onError: (error) => {
-      toast.error('Failed to connect email account', {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxAccountMutationError(error, "connect"));
     },
   });
 }
@@ -134,8 +132,7 @@ export function useSyncInboxEmailAccount() {
       // when sync is in progress. This follows TanStack Query best practices.
     },
     onError: (error, variables) => {
-      toast.error('Sync failed', {
-        description: getUserFriendlyMessage(error as Error),
+      toast.error(formatCommunicationInboxAccountMutationError(error, "sync"), {
         action: {
           label: 'Retry',
           onClick: () => {

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatCommunicationCampaignMutationError,
+  formatCommunicationInboxAccountMutationError,
   formatCommunicationInboxMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
@@ -50,6 +51,13 @@ describe('communications mutation error formatting', () => {
         'archive'
       )
     ).toBe('Unable to archive email.');
+
+    expect(
+      formatCommunicationInboxAccountMutationError(
+        new Error('oauth invalid_client client_secret mismatch for redirect_uri'),
+        'callback'
+      )
+    ).toBe('Unable to connect email account.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -100,6 +108,31 @@ describe('communications mutation error formatting', () => {
     expect(hook).not.toContain('toast.error("Failed to update starred status"');
     expect(hook).not.toContain('toast.error("Failed to archive email"');
     expect(hook).not.toContain('toast.error("Failed to delete email"');
+  });
+
+  it('keeps communications inbox account actions on communications-owned formatters', () => {
+    const hook = read('src/hooks/communications/use-inbox-email-accounts.ts');
+    const settings = read(
+      'src/components/domain/communications/inbox/inbox-email-accounts-settings.tsx'
+    );
+    const callback = read(
+      'src/routes/_authenticated/communications/settings/inbox-accounts_.callback.tsx'
+    );
+
+    expect(hook).toContain('formatCommunicationInboxAccountMutationError(error, "connect")');
+    expect(hook).toContain('formatCommunicationInboxAccountMutationError(error, "sync")');
+    expect(settings).toContain('formatCommunicationInboxAccountMutationError(error, "delete")');
+    expect(callback).toContain('formatCommunicationInboxAccountMutationError(');
+    expect(callback).toContain('"providerCallback"');
+    expect(callback).toContain('"callback"');
+    expect(callback).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(settings).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(hook).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(callback).not.toContain('description: search.error_description');
+    expect(callback).not.toContain('error_description: error.message');
+    expect(hook).not.toContain("toast.error('Failed to connect email account'");
+    expect(hook).not.toContain("toast.error('Sync failed'");
+    expect(settings).not.toContain('toast.error("Disconnect Failed"');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

@@ -36,13 +36,13 @@ import {
 } from "@/components/ui/tooltip";
 import { useState, useEffect, startTransition } from "react";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import {
   useInboxEmailAccounts,
   useSyncInboxEmailAccount,
   useDeleteInboxEmailAccount,
 } from "@/hooks/communications/use-inbox-email-accounts";
+import { formatCommunicationInboxAccountMutationError } from "@/hooks/communications";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QUERY_CONFIG } from "@/lib/constants";
 import type { InboxEmailAccount } from "@/lib/schemas/communications/inbox-accounts";
@@ -312,9 +312,7 @@ export function InboxEmailAccountsSettings() {
         });
       },
       onError: (error) => {
-        toast.error("Disconnect Failed", {
-          description: getUserFriendlyMessage(error as Error),
-        });
+        toast.error(formatCommunicationInboxAccountMutationError(error, "delete"));
       },
     });
   };

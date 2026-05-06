@@ -10,9 +10,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { useHandleInboxEmailAccountCallback } from "@/hooks/communications/use-inbox-email-accounts";
+import { formatCommunicationInboxAccountMutationError } from "@/hooks/communications";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -48,14 +48,16 @@ function InboxEmailAccountsCallbackPage() {
     // Handle OAuth error
     if (search.error) {
       handledRef.current = true;
-      toast.error('Email account connection failed', {
-        description: search.error_description || 'Please try again',
-      });
+      const errorDescription = formatCommunicationInboxAccountMutationError(
+        search.error_description ?? search.error,
+        "providerCallback"
+      );
+      toast.error(errorDescription);
       navigate({
         to: "/communications/settings/inbox-accounts",
         search: {
           error: search.error,
-          error_description: search.error_description,
+          error_description: errorDescription,
         },
       });
       return;
@@ -78,15 +80,17 @@ function InboxEmailAccountsCallbackPage() {
             });
           },
           onError: (error) => {
-            toast.error('Failed to connect email account', {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            const errorDescription = formatCommunicationInboxAccountMutationError(
+              error,
+              "callback"
+            );
+            toast.error(errorDescription);
             // Redirect to settings page with error
             navigate({
               to: "/communications/settings/inbox-accounts",
               search: {
                 error: "connection_failed",
-                error_description: error.message,
+                error_description: errorDescription,
               },
             });
           },
@@ -104,7 +108,7 @@ function InboxEmailAccountsCallbackPage() {
       to: "/communications/settings/inbox-accounts",
       search: {
         error: "invalid_callback",
-        error_description: "Missing authorization code or state",
+        error_description: "Please try connecting your account again.",
       },
     });
   }, [search.code, search.state, search.error, search.error_description, callbackMutation, navigate]);
