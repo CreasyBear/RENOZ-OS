@@ -11,7 +11,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/pipeline.ts for server functions
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   createOpportunity,
@@ -35,9 +35,13 @@ import type {
 type OpportunityListResult = Awaited<ReturnType<typeof listOpportunities>>;
 type OpportunityItem = OpportunityListResult['items'][number];
 
-function invalidateOpportunityListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+function invalidateOpportunityListQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
   queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+}
+
+function invalidatePipelineMetrics(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
 }
 
 // ============================================================================
@@ -57,7 +61,7 @@ export function useCreateOpportunity() {
       queryClient.setQueryData(queryKeys.pipeline.opportunity(result.opportunity.id), result);
       // Invalidate opportunity lists and metrics
       invalidateOpportunityListQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
     },
   });
 }
@@ -79,7 +83,7 @@ export function useUpdateOpportunity() {
       // Invalidate specific opportunity and lists
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(variables.id) });
       invalidateOpportunityListQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
     },
   });
 }
@@ -100,7 +104,7 @@ export function useDeleteOpportunity() {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: queryKeys.pipeline.opportunity(id) });
       invalidateOpportunityListQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
     },
   });
 }
@@ -172,7 +176,7 @@ export function useUpdateOpportunityStage() {
       // Refetch to ensure consistency
       invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
     },
   });
 }
@@ -211,7 +215,7 @@ export function useBulkUpdateOpportunityStage() {
     onSuccess: () => {
       // Invalidate all opportunity lists and metrics
       invalidateOpportunityListQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
       // Invalidate all opportunity details (they may have been updated)
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
     },
@@ -244,7 +248,7 @@ export function useConvertToOrder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
+      invalidatePipelineMetrics(queryClient);
     },
   });
 }
