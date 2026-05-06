@@ -27,6 +27,7 @@ import { CustomerCombobox, DatePickerControl } from "@/components/shared";
 import { OpportunityForm } from "./opportunity-form";
 import { useCustomer } from "@/hooks/customers";
 import {
+  formatPipelineOpportunityMutationError,
   useCreateOpportunity,
   useUpdateOpportunity,
 } from "@/hooks/pipeline";
@@ -153,9 +154,7 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
       onOpenChange(false);
       onSuccess?.(result.opportunity.id);
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to create opportunity."
-      );
+      toastError(formatPipelineOpportunityMutationError(error, "create"));
     }
   };
 
@@ -202,9 +201,7 @@ export const OpportunityQuickDialog = memo(function OpportunityQuickDialog({
       onOpenChange(false);
       onSuccess?.(opportunityId);
     } catch (error) {
-      toastError(
-        error instanceof Error ? error.message : "Failed to update opportunity."
-      );
+      toastError(formatPipelineOpportunityMutationError(error, "update"));
     }
   }, [opportunityId, updateOpportunity, onOpenChange, onSuccess]);
 

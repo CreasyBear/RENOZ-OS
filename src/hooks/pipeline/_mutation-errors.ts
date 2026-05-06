@@ -28,10 +28,16 @@ export function formatPipelineQuoteMutationError(
   });
 }
 
-export type PipelineOpportunityMutationAction = 'stage' | 'delete' | 'update' | 'convertToOrder';
+export type PipelineOpportunityMutationAction =
+  | 'stage'
+  | 'create'
+  | 'delete'
+  | 'update'
+  | 'convertToOrder';
 
 const PIPELINE_OPPORTUNITY_MUTATION_FALLBACKS: Record<PipelineOpportunityMutationAction, string> = {
   stage: 'Unable to update opportunity stage. Refresh and try again.',
+  create: 'Unable to create opportunity. Refresh and try again.',
   delete: 'Unable to delete opportunity. Refresh and try again.',
   update: 'Unable to update opportunity. Refresh and try again.',
   convertToOrder: 'Unable to convert opportunity to an order. Refresh and try again.',

@@ -34,6 +34,13 @@ describe('pipeline opportunity mutation feedback contract', () => {
         'convertToOrder'
       )
     ).toBe('Unable to convert opportunity to an order. Refresh and try again.');
+
+    expect(
+      formatPipelineOpportunityMutationError(
+        new Error('duplicate key value violates unique constraint opportunities_title_unique'),
+        'create'
+      )
+    ).toBe('Unable to create opportunity. Refresh and try again.');
   });
 
   it('keeps safe validation and known opportunity codes useful for operators', () => {
@@ -56,6 +63,9 @@ describe('pipeline opportunity mutation feedback contract', () => {
     const index = read('src/hooks/pipeline/index.ts');
     const formatter = read('src/hooks/pipeline/_mutation-errors.ts');
     const opportunityDetail = read('src/hooks/pipeline/use-opportunity-detail.ts');
+    const quickDialog = read(
+      'src/components/domain/pipeline/opportunities/opportunity-quick-dialog.tsx'
+    );
 
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
@@ -69,5 +79,13 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(opportunityDetail).not.toContain("toastError('Failed to update stage')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to convert to order')");
+    expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "create")');
+    expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "update")');
+    expect(quickDialog).not.toContain(
+      'error instanceof Error ? error.message : "Failed to create opportunity."'
+    );
+    expect(quickDialog).not.toContain(
+      'error instanceof Error ? error.message : "Failed to update opportunity."'
+    );
   });
 });
