@@ -85,6 +85,9 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
+    expect(opportunityDetail).toContain(
+      "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"
+    );
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'delete')");
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'update')");
     expect(opportunityDetail).toContain(
@@ -92,6 +95,9 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(opportunityDetail).not.toContain("toastError('Failed to delete opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update stage')");
+    expect(opportunityDetail).not.toContain(
+      "toastError('Unable to update stage. Please refresh and try again.')"
+    );
     expect(opportunityDetail).not.toContain("toastError('Failed to update opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to convert to order')");
     expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "create")');

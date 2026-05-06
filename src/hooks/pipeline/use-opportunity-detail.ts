@@ -85,6 +85,7 @@ export interface WonLostInput {
 
 // Infer types from server function returns
 type OpportunityDetailResult = Awaited<ReturnType<typeof import('@/server/functions/pipeline').getOpportunity>>;
+const MISSING_OPPORTUNITY_VERSION_ERROR = { code: 'MISSING_OPPORTUNITY_VERSION' } as const;
 
 export interface UseOpportunityDetailReturn {
   // Core data
@@ -275,7 +276,9 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
       // Get current version for optimistic locking
       const currentVersion = opportunityData?.opportunity?.version;
       if (currentVersion === undefined) {
-        toastError('Unable to update stage. Please refresh and try again.');
+        toastError(
+          formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')
+        );
         return;
       }
 
@@ -302,7 +305,9 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
       // Get current version for optimistic locking
       const currentVersion = opportunityData?.opportunity?.version;
       if (currentVersion === undefined) {
-        toastError('Unable to update stage. Please refresh and try again.');
+        toastError(
+          formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')
+        );
         setWonLostDialogOpen(false);
         setWonLostDialogStage(null);
         return;
