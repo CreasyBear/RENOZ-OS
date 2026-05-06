@@ -17,6 +17,7 @@ import { DataTable, DataTablePagination } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { createWarrantyColumns } from "./warranty-columns";
+import { formatWarrantyReadError } from '@/lib/warranty';
 import type { CreateWarrantyColumnsOptions } from '@/lib/schemas/warranty';
 import type { WarrantyListItem } from '@/lib/schemas/warranty/warranties';
 import type { WarrantySortField, SortDirection } from '../warranty-sorting';
@@ -152,7 +153,10 @@ export function WarrantyListTable({
     return (
       <ErrorState
         title="Failed to load warranties"
-        message={error.message}
+        message={formatWarrantyReadError(
+          error,
+          'Warranties are temporarily unavailable. Please refresh and try again.'
+        )}
         onRetry={() => onRetry?.()}
         className={className}
       />
