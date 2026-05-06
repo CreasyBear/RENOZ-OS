@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const ACCEPT_INVITATION_FALLBACK =
   'Invitation acceptance is temporarily unavailable. Please try again.';

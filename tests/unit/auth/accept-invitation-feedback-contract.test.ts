@@ -63,11 +63,14 @@ describe('accept invitation feedback', () => {
     );
   });
 
-  it('leaves auth hash/session exchange as a separate explicit slice', () => {
+  it('relies on sanitized auth hash/session exchange descriptions', () => {
     const route = read('src/routes/accept-invitation.tsx');
     const exchangeHook = read('src/lib/auth/use-exchange-hash-for-session.ts');
 
     expect(route).toContain('error_description: authError.description');
-    expect(exchangeHook).toContain('description: err instanceof Error ? err.message');
+    expect(exchangeHook).toContain('formatAuthCallbackError(parsed.code, parsed.description)');
+    expect(exchangeHook).toContain("formatAuthCallbackError('token_exchange_failed', err)");
+    expect(exchangeHook).not.toContain('description: parsed.description');
+    expect(exchangeHook).not.toContain('description: err instanceof Error ? err.message');
   });
 });

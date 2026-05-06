@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const SIGN_UP_FALLBACK =
   'Account creation is temporarily unavailable. Please try again.';

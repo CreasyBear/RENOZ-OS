@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const PASSWORD_CHANGE_FALLBACK =
   'Password change is temporarily unavailable. Please refresh and try again.';

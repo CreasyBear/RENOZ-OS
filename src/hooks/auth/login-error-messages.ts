@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const LOGIN_FALLBACK = 'Sign in is temporarily unavailable. Please try again.';
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password.';

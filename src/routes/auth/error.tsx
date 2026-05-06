@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes';
+import { toAuthErrorCode } from '@/lib/auth/error-codes';
+import { formatAuthCallbackError } from '@/lib/auth/auth-callback-error-messages';
 import { AuthErrorBoundary } from '@/components/auth/auth-error-boundary';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { buttonVariants } from '@/components/ui/button';
@@ -25,7 +26,7 @@ const PASSWORD_RESET_ERROR_CODES = ['invalid_request', 'token_exchange_failed', 
 function AuthError() {
   const params = Route.useSearch();
   const errorCode = toAuthErrorCode(params?.error);
-  const displayMessage = params?.error_description ?? authErrorMessage(errorCode);
+  const displayMessage = formatAuthCallbackError(errorCode, params?.error_description);
   const showForgotPassword =
     errorCode && PASSWORD_RESET_ERROR_CODES.includes(errorCode);
 

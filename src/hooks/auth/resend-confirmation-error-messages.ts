@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const RESEND_CONFIRMATION_FALLBACK =
   'Confirmation email is temporarily unavailable. Please try again.';

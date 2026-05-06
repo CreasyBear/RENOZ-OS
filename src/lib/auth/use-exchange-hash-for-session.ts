@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { authLogger } from '@/lib/logger';
+import { formatAuthCallbackError } from '@/lib/auth/auth-callback-error-messages';
 
 export interface AuthHashError {
   code: string;
@@ -85,11 +86,13 @@ export function useExchangeHashForSession(): { authError: AuthHashError | null }
     if (parsed.kind === 'error') {
       authLogger.warn('[useExchangeHashForSession] Auth error in URL hash', {
         code: parsed.code,
-        description: parsed.description,
       });
       clearHashFromUrl();
       setTimeout(() => {
-        setAuthError({ code: parsed.code, description: parsed.description });
+        setAuthError({
+          code: parsed.code,
+          description: formatAuthCallbackError(parsed.code, parsed.description),
+        });
       }, 0);
       return;
     }
@@ -106,7 +109,7 @@ export function useExchangeHashForSession(): { authError: AuthHashError | null }
         clearHashFromUrl();
         setAuthError({
           code: 'token_exchange_failed',
-          description: err instanceof Error ? err.message : 'Failed to establish session.',
+          description: formatAuthCallbackError('token_exchange_failed', err),
         });
       });
   }, []);

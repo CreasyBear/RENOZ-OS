@@ -44,7 +44,7 @@ describe('sign-up feedback', () => {
   });
 
   it('keeps shared auth-provider safety checks centralized', () => {
-    const utility = read('src/hooks/auth/auth-error-message-utils.ts');
+    const utility = read('src/lib/auth/auth-error-message-utils.ts');
     const formatterPaths = [
       'src/hooks/auth/login-error-messages.ts',
       'src/hooks/auth/password-change-error-messages.ts',
@@ -58,7 +58,7 @@ describe('sign-up feedback', () => {
 
     for (const path of formatterPaths) {
       const source = read(path);
-      expect(source).toContain("from './auth-error-message-utils'");
+      expect(source).toContain("from '@/lib/auth/auth-error-message-utils'");
       expect(source).not.toContain('function extractMessage');
       expect(source).not.toContain("normalized.includes('api key')");
     }

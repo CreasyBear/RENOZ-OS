@@ -1,7 +1,7 @@
 import {
   extractAuthErrorMessage,
   isUnsafeAuthProviderMessage,
-} from './auth-error-message-utils';
+} from '@/lib/auth/auth-error-message-utils';
 
 const PASSWORD_RESET_FALLBACK =
   'Password reset is temporarily unavailable. Please try again.';
