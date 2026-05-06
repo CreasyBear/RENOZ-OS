@@ -17,6 +17,10 @@ import {
   useApproveAmendment,
   useApplyAmendment,
 } from "@/hooks/orders";
+import {
+  getOrderAmendmentActionErrorMessage,
+  getOrderAmendmentStepErrorMessage,
+} from "@/hooks/orders/order-amendment-action-errors";
 import type { OrderWithCustomer } from "@/hooks/orders/use-order-detail";
 import { useDebounce } from "@/hooks/_shared/use-debounce";
 import { useSearchProducts } from "@/hooks/products";
@@ -121,11 +125,20 @@ export function AmendmentRequestDialogContainer({
     applyAmendmentMutation.isPending;
 
   const [stepError, setStepError] = useState<string | null>(null);
+  const requestAmendmentError = requestAmendmentMutation.error
+    ? getOrderAmendmentActionErrorMessage(requestAmendmentMutation.error, "request")
+    : null;
+  const approveAmendmentError = approveAmendmentMutation.error
+    ? getOrderAmendmentActionErrorMessage(approveAmendmentMutation.error, "approve")
+    : null;
+  const applyAmendmentError = applyAmendmentMutation.error
+    ? getOrderAmendmentActionErrorMessage(applyAmendmentMutation.error, "apply")
+    : null;
   const submitError =
     stepError ??
-    requestAmendmentMutation.error?.message ??
-    approveAmendmentMutation.error?.message ??
-    applyAmendmentMutation.error?.message ??
+    requestAmendmentError ??
+    approveAmendmentError ??
+    applyAmendmentError ??
     null;
 
   const [productSearch, setProductSearch] = useState("");
@@ -156,7 +169,7 @@ export function AmendmentRequestDialogContainer({
         })) as Amendment;
       } catch (e) {
         setSubmissionStage("failed_request");
-        setStepError(`Request failed: ${e instanceof Error ? e.message : String(e)}`);
+        setStepError(getOrderAmendmentStepErrorMessage(e, "request"));
         return;
       }
       setSubmissionStage("requested");
@@ -171,7 +184,7 @@ export function AmendmentRequestDialogContainer({
         await approveAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
       } catch (e) {
         setSubmissionStage("failed_approval");
-        setStepError(`Approval failed: ${e instanceof Error ? e.message : String(e)}`);
+        setStepError(getOrderAmendmentStepErrorMessage(e, "approve"));
         return;
       }
       setSubmissionStage("approved");
@@ -180,7 +193,7 @@ export function AmendmentRequestDialogContainer({
         await applyAmendmentMutation.mutateAsync({ amendmentId: amendment.id });
       } catch (e) {
         setSubmissionStage("failed_apply");
-        setStepError(e instanceof Error ? e.message : `Apply failed: ${String(e)}`);
+        setStepError(getOrderAmendmentStepErrorMessage(e, "apply"));
         return;
       }
       setSubmissionStage("applied");

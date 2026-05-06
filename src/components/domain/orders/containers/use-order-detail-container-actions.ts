@@ -12,6 +12,7 @@ import {
   useCreateRefundPayment,
 } from '@/hooks/orders/use-order-payments';
 import { useApplyAmendment } from '@/hooks/orders';
+import { getOrderAmendmentActionErrorMessage } from '@/hooks/orders/order-amendment-action-errors';
 import { getOrderDocumentActionErrorMessage } from '@/hooks/orders/order-document-action-errors';
 import {
   useGenerateOrderQuote,
@@ -77,7 +78,7 @@ export function useOrderDetailContainerActions(
         toastSuccess('Amendment applied');
         options.refetch();
       } catch (error) {
-        toastError(error instanceof Error ? error.message : 'Failed to apply amendment');
+        toastError(getOrderAmendmentActionErrorMessage(error, 'apply'));
       }
     },
     [applyAmendmentMutation, options]

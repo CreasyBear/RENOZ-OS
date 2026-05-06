@@ -15,6 +15,7 @@ import { PackageCheck, Truck, Info } from 'lucide-react';
 import { ShipmentList } from '../fulfillment/shipment-list';
 import { AmendmentList } from '../amendments';
 import { useCancelAmendment, useOrderShipments } from '@/hooks/orders';
+import { getOrderAmendmentActionErrorMessage } from '@/hooks/orders/order-amendment-action-errors';
 import { OrderLineItemSerialsCell, SerialNumbersList } from '../components';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -294,7 +295,7 @@ export const OrderFulfillmentTab = memo(function OrderFulfillmentTab({
         { amendmentId },
         {
           onSuccess: () => toastSuccess('Amendment cancelled'),
-          onError: (err) => toastError(err instanceof Error ? err.message : 'Failed to cancel amendment'),
+          onError: (err) => toastError(getOrderAmendmentActionErrorMessage(err, 'cancel')),
         }
       );
     },

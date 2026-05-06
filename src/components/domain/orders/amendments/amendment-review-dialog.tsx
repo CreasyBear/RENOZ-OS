@@ -57,6 +57,7 @@ import {
   useRejectAmendment,
   useApplyAmendment,
 } from "@/hooks/orders";
+import { getOrderAmendmentActionErrorMessage } from "@/hooks/orders/order-amendment-action-errors";
 import type { AmendmentChanges, ItemChange, FinancialImpact, AmendmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -143,19 +144,13 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                 setApprovalNotes("");
               },
               onError: (error) => {
-                toastError(
-                  error instanceof Error
-                    ? error.message
-                    : "Approved, but failed to apply amendment"
-                );
+                toastError(getOrderAmendmentActionErrorMessage(error, "approve-and-apply"));
               },
             }
           );
         },
         onError: (error) => {
-          toastError(
-            error instanceof Error ? error.message : "Failed to approve amendment"
-          );
+          toastError(getOrderAmendmentActionErrorMessage(error, "approve"));
         },
       }
     );
@@ -181,9 +176,7 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
           setShowRejectForm(false);
         },
         onError: (error) => {
-          toastError(
-            error instanceof Error ? error.message : "Failed to reject amendment"
-          );
+          toastError(getOrderAmendmentActionErrorMessage(error, "reject"));
         },
       }
     );
