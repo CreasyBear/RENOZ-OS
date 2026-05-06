@@ -37,11 +37,12 @@ import {
   useDeleteTemplate,
   useCampaigns,
   useCreateCampaign,
+  formatCommunicationCampaignMutationError,
+  formatCommunicationTemplateMutationError,
 } from '@/hooks/communications';
 import { logger } from '@/lib/logger';
 import { useSegments } from '@/hooks/customers';
 import { toast } from '@/lib/toast';
-import { getUserFriendlyMessage } from '@/lib/error-handling';
 import { templateInputSchema, campaignInputSchema } from '@/lib/schemas/communications';
 
 // ============================================================================
@@ -315,7 +316,7 @@ export function CommunicationsContainer({
         const errorMessages = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
         toast.error(`Invalid template data: ${errorMessages}`);
       } else {
-        toast.error(error instanceof Error ? error.message : 'Failed to save template');
+        toast.error(formatCommunicationTemplateMutationError(error, 'save'));
       }
     }
   }, [createTemplate, updateTemplate]);
@@ -325,9 +326,7 @@ export function CommunicationsContainer({
       await deleteTemplate.mutateAsync({ id: templateId });
       toast.success('Template deleted successfully');
     } catch (error) {
-      toast.error('Failed to delete template', {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationTemplateMutationError(error, 'delete'));
     }
   }, [deleteTemplate]);
 
@@ -370,9 +369,7 @@ export function CommunicationsContainer({
           description: errorMessages,
         });
       } else {
-        toast.error('Failed to create campaign', {
-          description: getUserFriendlyMessage(error as Error),
-        });
+        toast.error(formatCommunicationCampaignMutationError(error, 'create'));
       }
     }
   }, [createCampaign]);

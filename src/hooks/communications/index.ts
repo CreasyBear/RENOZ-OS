@@ -79,3 +79,6 @@ export * from './use-email-analytics';
 
 // Domain verification (Resend integration)
 export * from './use-domain-verification';
+
+// Mutation feedback
+export * from './_mutation-errors';
