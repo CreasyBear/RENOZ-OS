@@ -46,6 +46,8 @@ const MISCONFIGURED_MESSAGE =
   'Connection setup is misconfigured. Contact support before trying again.';
 const SESSION_EXPIRED_MESSAGE =
   'Your session has expired. Sign in again before managing integrations.';
+const INVALID_INITIATE_REQUEST_MESSAGE =
+  'Connection request is invalid. Choose a provider and service before trying again.';
 
 export function toOAuthConnectionErrorCode(raw: unknown): OAuthConnectionErrorCode {
   if (typeof raw !== 'string' || raw.trim().length === 0) {
@@ -105,6 +107,10 @@ export function formatOAuthConnectionError(
 ): string {
   const message = extractAuthErrorMessage(error);
   const code = toOAuthConnectionErrorCode(message ?? error);
+
+  if (code === 'invalid_request' && context === 'initiate') {
+    return INVALID_INITIATE_REQUEST_MESSAGE;
+  }
 
   if (code === 'invalid_state' || code === 'invalid_request') {
     return INVALID_SESSION_MESSAGE;

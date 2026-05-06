@@ -31,6 +31,9 @@ describe('oauth integration feedback', () => {
     expect(formatOAuthConnectionError('rate limit exceeded', 'initiate')).toBe(
       'Too many connection attempts. Please wait before trying again.'
     );
+    expect(formatOAuthConnectionError('invalid_request', 'initiate')).toBe(
+      'Connection request is invalid. Choose a provider and service before trying again.'
+    );
     expect(formatOAuthConnectionError('No selectable Xero tenants found', 'completeTenantSelection')).toBe(
       'No selectable Xero organizations were found for this login.'
     );
@@ -57,6 +60,7 @@ describe('oauth integration feedback', () => {
 
   it('keeps oauth callback and tenant selection surfaces behind oauth-owned formatter copy', () => {
     const callbackRoute = read('src/routes/api/oauth/callback.ts');
+    const initiateRoute = read('src/routes/api/oauth/initiate.ts');
     const pendingRoute = read('src/routes/api/oauth/pending-selection.ts');
     const sidebar = read('src/components/layout/sidebar.tsx');
     const manager = read('src/components/integrations/oauth/oauth-connection-manager.tsx');
@@ -64,6 +68,12 @@ describe('oauth integration feedback', () => {
 
     expect(callbackRoute).toContain('toOAuthConnectionErrorCode(result.error)');
     expect(callbackRoute).not.toContain('toAuthErrorCode(result.error)');
+
+    expect(initiateRoute).toContain("formatOAuthConnectionError('invalid_request', 'initiate')");
+    expect(initiateRoute).toContain("formatOAuthConnectionError('rate_limited', 'initiate')");
+    expect(initiateRoute).toContain("formatOAuthConnectionError(error, 'initiate')");
+    expect(initiateRoute).not.toContain('details: parsed.error');
+    expect(initiateRoute).not.toContain("error instanceof Error ? error.message : 'Unknown error'");
 
     expect(pendingRoute).toContain("formatOAuthConnectionError(error, 'loadTenantSelection')");
     expect(pendingRoute).toContain("formatOAuthConnectionError(error, 'completeTenantSelection')");

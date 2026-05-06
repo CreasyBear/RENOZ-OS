@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS, RateLimitError } from '@/lib/server/rate-limit';
 import { OAUTH_PROVIDERS, OAUTH_SERVICE_TYPES } from '@/lib/oauth/constants';
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 
 const requestSchema = z.object({
   provider: z.enum(OAUTH_PROVIDERS),
@@ -25,7 +26,9 @@ export async function POST({ request }: { request: globalThis.Request }) {
     const parsed = requestSchema.safeParse(body);
 
     if (!parsed.success) {
-      return new globalThis.Response(JSON.stringify({ error: 'Invalid request', details: parsed.error }), {
+      return new globalThis.Response(JSON.stringify({
+        error: formatOAuthConnectionError('invalid_request', 'initiate'),
+      }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -55,7 +58,9 @@ export async function POST({ request }: { request: globalThis.Request }) {
     );
   } catch (error) {
     if (error instanceof RateLimitError) {
-      return new globalThis.Response(JSON.stringify({ error: error.message }), {
+      return new globalThis.Response(JSON.stringify({
+        error: formatOAuthConnectionError('rate_limited', 'initiate'),
+      }), {
         status: 429,
         headers: {
           'Content-Type': 'application/json',
@@ -64,8 +69,9 @@ export async function POST({ request }: { request: globalThis.Request }) {
       });
     }
 
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new globalThis.Response(JSON.stringify({ error: errorMessage }), {
+    return new globalThis.Response(JSON.stringify({
+      error: formatOAuthConnectionError(error, 'initiate'),
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
