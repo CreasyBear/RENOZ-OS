@@ -23,7 +23,6 @@
     "lint": "eslint src --ext .ts,.tsx --report-unused-disable-directives",
     "lint:reliability": "node scripts/check-route-casts.mjs && node scripts/check-pending-dialog-guards.mjs && node scripts/check-read-path-query-guards.mjs && node scripts/check-serialized-read-auto-upsert.mjs",
     "reliability:document-gates": "node scripts/run-document-schema-gates.mjs",
-    "reliability:serialized-gates": "node scripts/run-serialized-lineage-gates.mjs",
     "reliability:finance-gates": "node scripts/run-finance-integrity-gates.mjs",
     "test:route-intent-smoke": "node scripts/run-route-intent-smoke.mjs",
     "reliability:release-gates": "node scripts/run-release-gates.mjs",

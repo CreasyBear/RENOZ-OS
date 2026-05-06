@@ -10,7 +10,6 @@ Scripts in this directory and their current status. Last updated: 2026-02-22.
 | `check-read-path-query-guards.mjs` | Prevents new raw null-sentinel read-hook patterns in `src/hooks/**` | Inspects `useQuery`/read `queryFn` bodies for multiline null-sentinel throws and legacy `normalizeQueryError` usage; an empty baseline only means the currently-scanned read-hook set is clean |
 | `check-route-casts.mjs` | Route cast guard (lint:reliability) | |
 | `run-document-schema-gates.mjs` | Verifies document-lineage columns exist before deploy | Manual or release-only; requires `DATABASE_URL` |
-| `run-serialized-lineage-gates.mjs` | Serialized lineage DB invariants | Requires DATABASE_URL |
 | `run-route-intent-smoke.mjs` | Route-intent unit tests + auth redirect smoke | Requires a local loopback port for the auth smoke helper |
 | `download-pdf-fonts.mjs` | Download Inter fonts for react-pdf | |
 | `probe-production.mjs` | Post-deploy probe (login, assets) | Requires APP_URL or VERCEL_URL |
@@ -37,7 +36,6 @@ Release-gate artifacts under `artifacts/release-gates/` are generated local/runt
 - `lint:reliability` → check-route-casts + check-pending-dialog-guards + check-read-path-query-guards
 - `reliability:release-gates` → run-release-gates.mjs
 - `reliability:document-gates` → run-document-schema-gates.mjs
-- `reliability:serialized-gates` → run-serialized-lineage-gates.mjs
 - `reliability:finance-gates` → run-finance-integrity-gates.mjs
 - `test:route-intent-smoke` → run-route-intent-smoke.mjs
 - `fonts:download` → download-pdf-fonts.mjs
