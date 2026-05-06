@@ -188,10 +188,37 @@ export async function updatePaymentScheduleInstallment(
   ctx: SessionContext,
   data: UpdateInstallmentInput
 ): Promise<PaymentScheduleRecord> {
-    const { installmentId, ...updateData } = data;
+  const { installmentId, ...updateData } = data;
 
-    // Get existing
-    const existing = await db
+  const updates: Partial<PaymentScheduleRecord> = {
+    updatedBy: ctx.user.id,
+  };
+
+  if (updateData.dueDate) {
+    updates.dueDate = updateData.dueDate; // Already a string in YYYY-MM-DD format
+  }
+  if (updateData.amount !== undefined) {
+    updates.amount = updateData.amount;
+    if (!updateData.gstAmount) {
+      updates.gstAmount = calculateGst(updateData.amount);
+    }
+  }
+  if (updateData.gstAmount !== undefined) {
+    updates.gstAmount = updateData.gstAmount;
+  }
+  if (updateData.description !== undefined) {
+    updates.description = updateData.description;
+  }
+  if (updateData.notes !== undefined) {
+    updates.notes = updateData.notes;
+  }
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
+
+    const [existing] = await tx
       .select()
       .from(paymentSchedules)
       .where(
@@ -200,67 +227,56 @@ export async function updatePaymentScheduleInstallment(
           eq(paymentSchedules.organizationId, ctx.organizationId)
         )
       )
+      .for('update')
       .limit(1);
 
-    if (existing.length === 0) {
+    if (!existing) {
       throw new NotFoundError('Installment not found', 'installment');
     }
 
-    if (existing[0].status === 'paid') {
+    if (existing.status === 'paid') {
       throw new ConflictError('Paid installments cannot be updated');
     }
 
-    // Update
-    const updates: Partial<PaymentScheduleRecord> = {
-      updatedBy: ctx.user.id,
-    };
-
-    if (updateData.dueDate) {
-      updates.dueDate = updateData.dueDate; // Already a string in YYYY-MM-DD format
-    }
-    if (updateData.amount !== undefined) {
-      updates.amount = updateData.amount;
-      if (!updateData.gstAmount) {
-        updates.gstAmount = calculateGst(updateData.amount);
-      }
-    }
-    if (updateData.gstAmount !== undefined) {
-      updates.gstAmount = updateData.gstAmount;
-    }
-    if (updateData.description !== undefined) {
-      updates.description = updateData.description;
-    }
-    if (updateData.notes !== undefined) {
-      updates.notes = updateData.notes;
-    }
-
-    const [updated] = await db
+    const [updated] = await tx
       .update(paymentSchedules)
       .set(updates)
-      .where(eq(paymentSchedules.id, installmentId))
+      .where(
+        and(
+          eq(paymentSchedules.id, installmentId),
+          eq(paymentSchedules.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
-    // Activity logging
-    const logger = createActivityLoggerWithContext(ctx);
-    logger.logAsync({
-      entityType: 'order',
-      entityId: existing[0].orderId,
-      action: 'updated',
-      description: `Updated installment ${existing[0].installmentNo}`,
-      changes: computeChanges({
-        before: existing[0],
-        after: updated,
-        excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
-      }),
-      metadata: {
-        orderId: updated.orderId,
-        installmentId: updated.id,
-        installmentNo: updated.installmentNo,
-        changedFields: Object.keys(updateData),
-      },
-    });
+    if (!updated) {
+      throw new NotFoundError('Payment installment not found or already modified', 'paymentSchedule');
+    }
 
-    return updated;
+    return { existing, updated };
+  });
+
+  // Activity logging
+  const logger = createActivityLoggerWithContext(ctx);
+  logger.logAsync({
+    entityType: 'order',
+    entityId: result.existing.orderId,
+    action: 'updated',
+    description: `Updated installment ${result.existing.installmentNo}`,
+    changes: computeChanges({
+      before: result.existing,
+      after: result.updated,
+      excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
+    }),
+    metadata: {
+      orderId: result.updated.orderId,
+      installmentId: result.updated.id,
+      installmentNo: result.updated.installmentNo,
+      changedFields: Object.keys(updateData),
+    },
+  });
+
+  return result.updated;
 }
 
 export async function deletePaymentPlanForOrder(

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
+const compact = (source: string) => source.replace(/\s+/g, '');
 
 describe('finance schema trace repair', () => {
   it('projects order balances from payments and applied credits', () => {
@@ -55,6 +56,34 @@ describe('finance schema trace repair', () => {
     expect(linkGuardIndex).toBeGreaterThan(linkInsertIndex);
     expect(scheduleUpdateIndex).toBeGreaterThan(linkGuardIndex);
     expect(projectionIndex).toBeGreaterThan(scheduleUpdateIndex);
+  });
+
+  it('locks payment-plan installment edits before validating paid state', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/payment-schedule-mutations.ts',
+    );
+    const updateSource = source.slice(
+      source.indexOf('export async function updatePaymentScheduleInstallment'),
+      source.indexOf('export async function deletePaymentPlanForOrder'),
+    );
+    const transactionIndex = updateSource.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = updateSource.indexOf("set_config('app.organization_id'");
+    const lockIndex = updateSource.indexOf(".for('update')");
+    const paidStatusIndex = updateSource.indexOf('Paid installments cannot be updated');
+    const updateIndex = updateSource.indexOf('.update(paymentSchedules)');
+    const updateGuardIndex = updateSource.indexOf(
+      "throw new NotFoundError('Payment installment not found or already modified'",
+    );
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(lockIndex).toBeGreaterThan(setConfigIndex);
+    expect(paidStatusIndex).toBeGreaterThan(lockIndex);
+    expect(updateIndex).toBeGreaterThan(paidStatusIndex);
+    expect(updateGuardIndex).toBeGreaterThan(updateIndex);
+    expect(compact(updateSource)).toContain(
+      'where(and(eq(paymentSchedules.id,installmentId),eq(paymentSchedules.organizationId,ctx.organizationId)))',
+    );
   });
 
   it('records Xero payment applies through a tenant-scoped ledger insert before projection', () => {
