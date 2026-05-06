@@ -30,6 +30,8 @@ describe('pipeline read error messages', () => {
     expect(PIPELINE_READ_MESSAGES.opportunityDetails).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunityNotFound).toContain('could not be found');
     expect(PIPELINE_READ_MESSAGES.opportunitySearch).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunityAlerts).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunityActiveItems).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunityDocuments).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.opportunityDocumentsCached).toContain(
       'Showing the most recent documents'

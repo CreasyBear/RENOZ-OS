@@ -11,6 +11,9 @@ export const PIPELINE_READ_MESSAGES = {
     'Opportunity details are temporarily unavailable. Please refresh and try again.',
   opportunityNotFound: 'The requested opportunity could not be found.',
   opportunitySearch: 'Opportunity search is temporarily unavailable. Please refresh and try again.',
+  opportunityAlerts: 'Opportunity alerts are temporarily unavailable. Please refresh and try again.',
+  opportunityActiveItems:
+    'Opportunity active items are temporarily unavailable. Please refresh and try again.',
   opportunityDocumentsTitle: 'Documents unavailable',
   opportunityDocuments: 'Opportunity documents are temporarily unavailable. Please refresh and try again.',
   opportunityDocumentsCached:

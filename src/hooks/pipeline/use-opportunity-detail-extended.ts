@@ -15,6 +15,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import {
   getOpportunityAlerts,
   getOpportunityActiveItems,
@@ -67,15 +68,13 @@ export function useOpportunityAlerts({
         return requireReadResult(result, {
           message: 'Opportunity alerts returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity alerts are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityAlerts,
         }) as OpportunityAlertsResponse;
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity alerts are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityAlerts,
         });
       }
     },
@@ -125,15 +124,13 @@ export function useOpportunityActiveItems({
         return requireReadResult(result, {
           message: 'Opportunity active items returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity active items are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityActiveItems,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity active items are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.opportunityActiveItems,
         });
       }
     },

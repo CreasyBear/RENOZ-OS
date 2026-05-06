@@ -70,6 +70,9 @@ describe('pipeline read state contract', () => {
   it('keeps pipeline hook read normalization fallbacks in the pipeline message map', () => {
     const useOpportunities = read('src/hooks/pipeline/use-opportunities.ts');
     const usePipelineMetrics = read('src/hooks/pipeline/use-pipeline-metrics.ts');
+    const useOpportunityDetailExtended = read(
+      'src/hooks/pipeline/use-opportunity-detail-extended.ts'
+    );
 
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunities');
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityDetails');
@@ -81,9 +84,12 @@ describe('pipeline read state contract', () => {
     expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.revenueAttribution');
     expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineCustomers');
     expect(usePipelineMetrics).toContain('PIPELINE_READ_MESSAGES.pipelineProducts');
+    expect(useOpportunityDetailExtended).toContain('PIPELINE_READ_MESSAGES.opportunityAlerts');
+    expect(useOpportunityDetailExtended).toContain('PIPELINE_READ_MESSAGES.opportunityActiveItems');
 
     expect(useOpportunities).not.toMatch(/fallbackMessage:\s*['"]/);
     expect(usePipelineMetrics).not.toMatch(/fallbackMessage:\s*['"]/);
+    expect(useOpportunityDetailExtended).not.toMatch(/fallbackMessage:\s*['"]/);
   });
 
   it('keeps quote hook read normalization fallbacks in the pipeline message map', () => {
