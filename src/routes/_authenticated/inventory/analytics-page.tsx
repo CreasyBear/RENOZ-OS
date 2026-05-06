@@ -56,6 +56,37 @@ import type {
 // ============================================================================
 
 type AnalyticsTab = "valuation" | "aging" | "turnover" | "movements";
+type AnalyticsReadKind = AnalyticsTab;
+type AnalyticsReadVariant = 'unavailable' | 'degraded';
+
+const INVENTORY_ANALYTICS_READ_MESSAGES: Record<
+  AnalyticsReadKind,
+  Record<AnalyticsReadVariant, string>
+> = {
+  valuation: {
+    unavailable: 'Please refresh inventory valuation and try again.',
+    degraded: 'The valuation snapshot below may be stale until the next successful reload.',
+  },
+  aging: {
+    unavailable: 'Please refresh inventory aging analysis and try again.',
+    degraded: 'The aging analysis below may be stale until the next successful reload.',
+  },
+  turnover: {
+    unavailable: 'Please refresh inventory turnover analysis and try again.',
+    degraded: 'The turnover analysis below may be stale until the next successful reload.',
+  },
+  movements: {
+    unavailable: 'Please refresh inventory movement analytics and try again.',
+    degraded: 'The movement analytics below may be stale until the next successful reload.',
+  },
+};
+
+function getInventoryAnalyticsReadMessage(
+  kind: AnalyticsReadKind,
+  variant: AnalyticsReadVariant
+) {
+  return INVENTORY_ANALYTICS_READ_MESSAGES[kind][variant];
+}
 
 function AnalyticsReadState({
   title,
@@ -549,7 +580,7 @@ export default function AnalyticsPage() {
             {showValuationUnavailable ? (
               <AnalyticsReadState
                 title="Inventory valuation is temporarily unavailable."
-                message={valuationError?.message ?? 'Please refresh and try again.'}
+                message={getInventoryAnalyticsReadMessage('valuation', 'unavailable')}
                 onRetry={() => void refetchValuation()}
               />
             ) : (
@@ -557,7 +588,7 @@ export default function AnalyticsPage() {
                 {showValuationDegraded ? (
                   <AnalyticsReadState
                     title="Showing the most recent inventory valuation while refresh is unavailable."
-                    message={valuationError?.message ?? 'The valuation snapshot below may be stale until the next successful reload.'}
+                    message={getInventoryAnalyticsReadMessage('valuation', 'degraded')}
                     onRetry={() => void refetchValuation()}
                     variant="degraded"
                   />
@@ -577,7 +608,7 @@ export default function AnalyticsPage() {
             {showAgingUnavailable ? (
               <AnalyticsReadState
                 title="Inventory aging analysis is temporarily unavailable."
-                message={agingError?.message ?? 'Please refresh and try again.'}
+                message={getInventoryAnalyticsReadMessage('aging', 'unavailable')}
                 onRetry={() => void refetchAging()}
               />
             ) : (
@@ -585,7 +616,7 @@ export default function AnalyticsPage() {
                 {showAgingDegraded ? (
                   <AnalyticsReadState
                     title="Showing the most recent inventory aging analysis while refresh is unavailable."
-                    message={agingError?.message ?? 'The aging analysis below may be stale until the next successful reload.'}
+                    message={getInventoryAnalyticsReadMessage('aging', 'degraded')}
                     onRetry={() => void refetchAging()}
                     variant="degraded"
                   />
@@ -604,7 +635,7 @@ export default function AnalyticsPage() {
             {showTurnoverUnavailable ? (
               <AnalyticsReadState
                 title="Inventory turnover analysis is temporarily unavailable."
-                message={turnoverError?.message ?? 'Please refresh and try again.'}
+                message={getInventoryAnalyticsReadMessage('turnover', 'unavailable')}
                 onRetry={() => void refetchTurnover()}
               />
             ) : (
@@ -612,7 +643,7 @@ export default function AnalyticsPage() {
                 {showTurnoverDegraded ? (
                   <AnalyticsReadState
                     title="Showing the most recent inventory turnover analysis while refresh is unavailable."
-                    message={turnoverError?.message ?? 'The turnover analysis below may be stale until the next successful reload.'}
+                    message={getInventoryAnalyticsReadMessage('turnover', 'degraded')}
                     onRetry={() => void refetchTurnover()}
                     variant="degraded"
                   />
@@ -631,7 +662,7 @@ export default function AnalyticsPage() {
             {showMovementsUnavailable ? (
               <AnalyticsReadState
                 title="Inventory movement analytics are temporarily unavailable."
-                message={movementError?.message ?? 'Please refresh and try again.'}
+                message={getInventoryAnalyticsReadMessage('movements', 'unavailable')}
                 onRetry={() => void refetchMovements()}
               />
             ) : (
@@ -639,7 +670,7 @@ export default function AnalyticsPage() {
                 {showMovementsDegraded ? (
                   <AnalyticsReadState
                     title="Showing the most recent movement analytics while refresh is unavailable."
-                    message={movementError?.message ?? 'The movement analytics below may be stale until the next successful reload.'}
+                    message={getInventoryAnalyticsReadMessage('movements', 'degraded')}
                     onRetry={() => void refetchMovements()}
                     variant="degraded"
                   />

@@ -505,6 +505,131 @@ describe('inventory analytics query normalization wave 3', () => {
     expect(screen.queryByText('valuation-ready')).not.toBeInTheDocument();
   });
 
+  it('keeps inventory analytics cold-read failures operator-safe', async () => {
+    const rawMessage = 'select * from inventory_cost_layers violates row-level security policy';
+
+    mockUseInventoryValuation.mockReturnValueOnce({
+      data: undefined,
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseInventoryAging.mockReturnValueOnce({
+      data: undefined,
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseInventoryTurnover.mockReturnValueOnce({
+      data: undefined,
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseMovements.mockReturnValueOnce({
+      data: undefined,
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+
+    const { default: AnalyticsPage } = await import('@/routes/_authenticated/inventory/analytics-page');
+
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText('Inventory valuation is temporarily unavailable.')).toBeInTheDocument();
+    expect(screen.getByText('Please refresh inventory valuation and try again.')).toBeInTheDocument();
+    expect(screen.getByText('Please refresh inventory aging analysis and try again.')).toBeInTheDocument();
+    expect(screen.getByText('Please refresh inventory turnover analysis and try again.')).toBeInTheDocument();
+    expect(screen.getByText('Please refresh inventory movement analytics and try again.')).toBeInTheDocument();
+    expect(screen.queryByText(rawMessage)).not.toBeInTheDocument();
+  });
+
+  it('keeps inventory analytics degraded stale-data warnings operator-safe', async () => {
+    const rawMessage = 'database timeout including internal stack detail';
+
+    mockUseInventoryValuation.mockReturnValueOnce({
+      data: {
+        totalValue: 10,
+        totalUnits: 1,
+        averageUnitCost: 10,
+        totalSkus: 1,
+        byCategory: [],
+        byLocation: [],
+        financeIntegrity: null,
+        valuationMethod: 'fifo',
+      },
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseInventoryAging.mockReturnValueOnce({
+      data: {
+        summary: {
+          totalItems: 1,
+          totalValue: 10,
+          averageAge: 1,
+          valueAtRisk: 0,
+          riskPercentage: 0,
+        },
+        aging: [],
+      },
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseInventoryTurnover.mockReturnValueOnce({
+      data: {
+        turnover: { turnoverRate: 1, daysOnHand: 90, periodDays: 90 },
+        byProduct: [],
+        trends: [],
+      },
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+    mockUseMovements.mockReturnValueOnce({
+      data: {
+        movements: [],
+        total: 0,
+        page: 1,
+        limit: 100,
+        hasMore: false,
+        summary: { totalInbound: 0, totalOutbound: 0, netChange: 0 },
+      },
+      isLoading: false,
+      error: new Error(rawMessage),
+      refetch: vi.fn(),
+    });
+
+    const { default: AnalyticsPage } = await import('@/routes/_authenticated/inventory/analytics-page');
+
+    render(<AnalyticsPage />);
+
+    expect(
+      await screen.findByText(
+        'Showing the most recent inventory valuation while refresh is unavailable.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('The valuation snapshot below may be stale until the next successful reload.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('The aging analysis below may be stale until the next successful reload.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('The turnover analysis below may be stale until the next successful reload.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('The movement analytics below may be stale until the next successful reload.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(rawMessage)).not.toBeInTheDocument();
+    expect(screen.getByText('valuation-ready')).toBeInTheDocument();
+    expect(screen.getByText('aging-ready')).toBeInTheDocument();
+    expect(screen.getByText('turnover-ready')).toBeInTheDocument();
+    expect(screen.getByText('movement-empty')).toBeInTheDocument();
+  });
+
   it('keeps valuation tabs in the healthy path for shaped zero-state success', async () => {
     const { default: AnalyticsPage } = await import('@/routes/_authenticated/inventory/analytics-page');
 
