@@ -46,7 +46,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
 import { toastSuccess, toastError } from '@/hooks';
-import { useCreateQuoteVersion, useGenerateQuotePdf } from '@/hooks/pipeline';
+import {
+  formatPipelineQuoteMutationError,
+  useCreateQuoteVersion,
+  useGenerateQuotePdf,
+} from '@/hooks/pipeline';
 import { useProductSearch } from '@/hooks/products';
 import { GST_RATE } from '@/lib/order-calculations';
 import type { QuoteLineItem } from '@/lib/schemas/pipeline';
@@ -417,7 +421,7 @@ function QuoteEditor({ opportunityId, currentVersion, onCancel, onSaveSuccess }:
           onSaveSuccess();
         },
         onError: (error) => {
-          toastError(error instanceof Error ? error.message : 'Failed to save quote');
+          toastError(formatPipelineQuoteMutationError(error, 'save'));
         },
       }
     );
@@ -731,7 +735,7 @@ function CurrentQuoteDetail({
           }
         },
         onError: (error) => {
-          toastError(error instanceof Error ? error.message : 'Failed to generate PDF');
+          toastError(formatPipelineQuoteMutationError(error, 'generatePdf'));
         },
       }
     );
