@@ -47,15 +47,16 @@ import {
   useLoadProjectOptions,
 } from '@/hooks/jobs';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { scheduleVisitFormSchema } from '@/lib/schemas/jobs';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
 import {
-  CURRENT_USER_INSTALLER_OPTION_VALUE,
   createSiteVisitInstallerOptions,
   formatInstallerDirectoryReadError,
-  resolveSiteVisitInstallerId,
 } from '../site-visits/site-visit-installer-options';
+import {
+  buildCreateSiteVisitInput,
+  createScheduleSiteVisitFormDefaults,
+} from '../site-visits/site-visit-create-form';
 
 // ============================================================================
 // TYPES
@@ -99,15 +100,11 @@ export function ScheduleVisitCreateDialog({
 
   const form = useTanStackForm({
     schema: scheduleVisitFormSchema,
-    defaultValues: {
-      projectId: initialProjectId ?? '',
-      visitType: 'installation' as const,
-      scheduledDate: prefillDate ?? new Date(),
-      scheduledTime: prefillTime ?? '',
-      estimatedDuration: 120,
-      installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
-      notes: '',
-    },
+    defaultValues: createScheduleSiteVisitFormDefaults({
+      projectId: initialProjectId,
+      scheduledDate: prefillDate,
+      scheduledTime: prefillTime,
+    }),
     onSubmitInvalid: () => {
       toast.error('Please fix the errors below and try again.');
     },
@@ -118,15 +115,9 @@ export function ScheduleVisitCreateDialog({
         return;
       }
       try {
-        const result = await createSiteVisit.mutateAsync({
-          projectId: resolvedProjectId,
-          visitType: data.visitType,
-          scheduledDate: format(data.scheduledDate, 'yyyy-MM-dd'),
-          scheduledTime: data.scheduledTime || undefined,
-          estimatedDuration: data.estimatedDuration ?? undefined,
-          installerId: resolveSiteVisitInstallerId(data.installerId),
-          notes: data.notes,
-        });
+        const result = await createSiteVisit.mutateAsync(
+          buildCreateSiteVisitInput(resolvedProjectId, data)
+        );
 
         toast.success('Site visit scheduled successfully', {
           action: {
@@ -147,15 +138,13 @@ export function ScheduleVisitCreateDialog({
 
   useEffect(() => {
     if (open) {
-      form.reset({
-        projectId: initialProjectId ?? '',
-        visitType: 'installation',
-        scheduledDate: prefillDate ?? new Date(),
-        scheduledTime: prefillTime ?? '',
-        estimatedDuration: 120,
-        installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
-        notes: '',
-      });
+      form.reset(
+        createScheduleSiteVisitFormDefaults({
+          projectId: initialProjectId,
+          scheduledDate: prefillDate,
+          scheduledTime: prefillTime,
+        })
+      );
     }
   }, [open, initialProjectId, prefillDate, prefillTime, form]);
 

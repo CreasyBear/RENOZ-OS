@@ -28,15 +28,16 @@ import {
   useCreateSiteVisit,
 } from '@/hooks/jobs';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
 import { projectSiteVisitFormSchema } from '@/lib/schemas/jobs';
 import {
-  CURRENT_USER_INSTALLER_OPTION_VALUE,
   createSiteVisitInstallerOptions,
   formatInstallerDirectoryReadError,
-  resolveSiteVisitInstallerId,
 } from '../site-visits/site-visit-installer-options';
+import {
+  buildCreateSiteVisitInput,
+  createProjectSiteVisitFormDefaults,
+} from '../site-visits/site-visit-create-form';
 
 // ============================================================================
 // TYPES
@@ -73,29 +74,14 @@ export function SiteVisitCreateDialog({
 
   const form = useTanStackForm({
     schema: projectSiteVisitFormSchema,
-    defaultValues: {
-      visitType: 'installation' as const,
-      scheduledDate: new Date(),
-      scheduledTime: '',
-      estimatedDuration: 120,
-      installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
-      notes: '',
-    },
+    defaultValues: createProjectSiteVisitFormDefaults(),
     onSubmitInvalid: () => {
       toast.error('Please fix the errors below and try again.');
     },
     onSubmit: async (data) => {
       setSubmitError(null);
       try {
-        const result = await createSiteVisit.mutateAsync({
-          projectId,
-          visitType: data.visitType,
-          scheduledDate: format(data.scheduledDate, 'yyyy-MM-dd'),
-          scheduledTime: data.scheduledTime || undefined,
-          estimatedDuration: data.estimatedDuration ?? undefined,
-          installerId: resolveSiteVisitInstallerId(data.installerId),
-          notes: data.notes,
-        });
+        const result = await createSiteVisit.mutateAsync(buildCreateSiteVisitInput(projectId, data));
 
         toast.success('Site visit scheduled successfully', {
           action: {
@@ -117,14 +103,7 @@ export function SiteVisitCreateDialog({
   useEffect(() => {
     if (open) {
       setTimeout(() => setSubmitError(null), 0);
-      form.reset({
-        visitType: 'installation',
-        scheduledDate: new Date(),
-        scheduledTime: '',
-        estimatedDuration: 120,
-        installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
-        notes: '',
-      });
+      form.reset(createProjectSiteVisitFormDefaults());
     }
   }, [open, form]);
 

@@ -51,6 +51,9 @@ describe('site visits mutation contract', () => {
     const installerOptionHelper = read(
       'src/components/domain/jobs/site-visits/site-visit-installer-options.ts'
     );
+    const createFormHelper = read(
+      'src/components/domain/jobs/site-visits/site-visit-create-form.ts'
+    );
     const projectCreateDialog = read(
       'src/components/domain/jobs/projects/site-visit-create-dialog.tsx'
     );
@@ -74,7 +77,6 @@ describe('site visits mutation contract', () => {
     const compactSchema = compact(schema);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
-    const compactProjectCreateDialog = compact(projectCreateDialog);
     const compactScheduleCreateDialog = compact(scheduleCreateDialog);
     const compactRoute = compact(visitRoute);
     const compactSchedule = compact(scheduleContainer);
@@ -168,22 +170,27 @@ describe('site visits mutation contract', () => {
     expect(installerOptionHelper).toContain('const userId = installer.user?.id');
     expect(installerOptionHelper).toContain('value: userId');
     expect(installerOptionHelper).toContain('resolveSiteVisitInstallerId');
+    expect(createFormHelper).toContain('createProjectSiteVisitFormDefaults');
+    expect(createFormHelper).toContain('createScheduleSiteVisitFormDefaults');
+    expect(createFormHelper).toContain('buildCreateSiteVisitInput');
+    expect(createFormHelper).toContain("format(data.scheduledDate, 'yyyy-MM-dd')");
+    expect(createFormHelper).toContain('resolveSiteVisitInstallerId(data.installerId)');
     expect(projectCreateDialog).toContain('useAllInstallers');
     expect(scheduleCreateDialog).toContain('useAllInstallers');
     expect(projectCreateDialog).toContain('projectSiteVisitFormSchema');
     expect(scheduleCreateDialog).toContain('scheduleVisitFormSchema');
+    expect(projectCreateDialog).toContain('createProjectSiteVisitFormDefaults');
+    expect(scheduleCreateDialog).toContain('createScheduleSiteVisitFormDefaults');
+    expect(projectCreateDialog).toContain('buildCreateSiteVisitInput(projectId, data)');
+    expect(compactScheduleCreateDialog).toContain(
+      'buildCreateSiteVisitInput(resolvedProjectId,data)'
+    );
     expect(projectCreateDialog).toContain('Installer directory unavailable');
     expect(scheduleCreateDialog).toContain('Installer directory unavailable');
     expect(projectCreateDialog).toContain('Showing cached installers');
     expect(scheduleCreateDialog).toContain('Showing cached installers');
     expect(projectCreateDialog).toContain('void refetchInstallers()');
     expect(scheduleCreateDialog).toContain('void refetchInstallers()');
-    expect(compactProjectCreateDialog).toContain(
-      'installerId:resolveSiteVisitInstallerId(data.installerId)'
-    );
-    expect(compactScheduleCreateDialog).toContain(
-      'installerId:resolveSiteVisitInstallerId(data.installerId)'
-    );
     expect(projectCreateDialog).not.toContain('useUsers');
     expect(scheduleCreateDialog).not.toContain('useUsers');
     expect(projectCreateDialog).not.toContain('Unassigned');
@@ -192,6 +199,12 @@ describe('site visits mutation contract', () => {
     expect(scheduleCreateDialog).not.toContain("'unassigned'");
     expect(projectCreateDialog).not.toContain('createSiteVisitFormSchema');
     expect(projectCreateDialog).not.toContain("z.enum(['assessment'");
+    expect(projectCreateDialog).not.toContain("format(data.scheduledDate, 'yyyy-MM-dd')");
+    expect(scheduleCreateDialog).not.toContain("format(data.scheduledDate, 'yyyy-MM-dd')");
+    expect(projectCreateDialog).not.toContain('estimatedDuration: 120');
+    expect(scheduleCreateDialog).not.toContain('estimatedDuration: 120');
+    expect(projectCreateDialog).not.toContain('resolveSiteVisitInstallerId(data.installerId)');
+    expect(scheduleCreateDialog).not.toContain('resolveSiteVisitInstallerId(data.installerId)');
 
     expect(compactRoute).toContain('useSiteVisit({siteVisitId:visitId,projectId})');
     expect(compactRoute).toContain('checkIn.mutateAsync({siteVisitId:visitId,projectId})');
