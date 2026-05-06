@@ -57,7 +57,8 @@ describe('project member mutation contract', () => {
     );
 
     expect(jobsIndex).toContain('ProjectMutationAction');
-    expect(server).toContain('import { projects, projectMembers, users } from "drizzle/schema"');
+    expect(server).toContain('projectMembers');
+    expect(server).toContain('users');
     expect(server).toContain('async function getActiveProjectForMemberMutation');
     expect(server).toContain('async function assertUserBelongsToOrganization');
     expect(compactServer).toContain(

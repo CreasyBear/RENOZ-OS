@@ -17,7 +17,7 @@ import { eq, and, ilike, desc, asc, sql, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
-import { projects, projectMembers, users } from "drizzle/schema";
+import { projects, projectMembers, users, customers, orders } from "drizzle/schema";
 import {
   projectIdSchema,
   createProjectSchema,
@@ -35,7 +35,7 @@ import {
 } from "@/lib/db/pagination";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { NotFoundError } from "@/lib/server/errors";
+import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
 import { computeChanges } from "@/lib/activity-logger";
 import { logger as appLogger } from "@/lib/logger";
@@ -95,6 +95,54 @@ function validateStatusTransition(
 // ============================================================================
 // PROJECT CRUD
 // ============================================================================
+
+async function assertProjectCustomerScope(
+  customerId: string,
+  organizationId: string
+): Promise<void> {
+  const [customer] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.id, customerId),
+        eq(customers.organizationId, organizationId),
+        isNull(customers.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!customer) {
+    throw new ValidationError("Customer not found", {
+      customerId: ["Customer does not exist or is not accessible"],
+    });
+  }
+}
+
+async function assertProjectOrderScope(
+  orderId: string,
+  customerId: string,
+  organizationId: string
+): Promise<void> {
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.customerId, customerId),
+        eq(orders.organizationId, organizationId),
+        isNull(orders.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!order) {
+    throw new ValidationError("Order not found", {
+      orderId: ["Order does not exist for this customer or is not accessible"],
+    });
+  }
+}
 
 /**
  * Get projects with offset pagination
@@ -343,6 +391,11 @@ export const createProject = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.create });
     const logger = createActivityLoggerWithContext(ctx);
+
+    await assertProjectCustomerScope(data.customerId, ctx.organizationId);
+    if (data.orderId) {
+      await assertProjectOrderScope(data.orderId, data.customerId, ctx.organizationId);
+    }
 
     // Generate project number (PRJ-XXXX format)
     const projectNumber = await generateProjectNumber(ctx.organizationId);
