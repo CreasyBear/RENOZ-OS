@@ -77,7 +77,6 @@ export {
 // --- Bulk Operations ---
 export {
   BulkCommunications,
-  BulkExport,
   BulkImport,
   BulkOperations,
   BulkSelector,

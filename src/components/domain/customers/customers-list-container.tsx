@@ -483,6 +483,10 @@ export function CustomersListContainer({
     }
   }, [onExport, selectedIds]);
 
+  const canBulkExport = !!onExport;
+  const bulkExportUnavailableReason =
+    "Customer export is unavailable until this route provides an export workflow.";
+
   const bulkEmailUnavailableReason =
     "Bulk email is temporarily unavailable until the communications flow supports preselecting customers end-to-end.";
 
@@ -573,6 +577,8 @@ export function CustomersListContainer({
                   label: "Export",
                   icon: Download,
                   onClick: handleBulkExport,
+                  disabled: !canBulkExport,
+                  title: !canBulkExport ? bulkExportUnavailableReason : undefined,
                 },
                 {
                   label: "Bulk Actions",
@@ -612,7 +618,9 @@ export function CustomersListContainer({
                     onAssignTags={handleBulkTagAssignment}
                     onUpdateHealthScore={handleBulkHealthScoreUpdate}
                     onDelete={handleBulkDelete}
-                    onExport={handleBulkExport}
+                    onExport={canBulkExport ? handleBulkExport : undefined}
+                    canExport={canBulkExport}
+                    exportUnavailableReason={bulkExportUnavailableReason}
                     canBulkEmail={false}
                     bulkEmailUnavailableReason={bulkEmailUnavailableReason}
                     isLoading={

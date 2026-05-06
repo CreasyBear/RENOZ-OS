@@ -37,6 +37,8 @@ export interface BulkAction {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost'
   /** Disable this action */
   disabled?: boolean
+  /** Native tooltip/explanation for unavailable actions */
+  title?: string
   /** Loading state */
   loading?: boolean
 }
@@ -115,6 +117,7 @@ export function BulkActionsBar({
               size="sm"
               onClick={action.onClick}
               disabled={action.disabled || action.loading}
+              title={action.title}
               className="whitespace-nowrap"
             >
               {Icon && <Icon className="h-4 w-4" />}

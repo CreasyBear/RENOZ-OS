@@ -85,7 +85,11 @@ interface BulkOperationsProps {
   /** @source useCallback handler wrapping bulkDeleteCustomers mutation in container */
   onDelete: () => Promise<OperationResult>
   /** @source useCallback handler for export action in container */
-  onExport: () => void
+  onExport?: () => void
+  /** Whether bulk export is available for the selected customers */
+  canExport?: boolean
+  /** Explanation shown when bulk export is unavailable */
+  exportUnavailableReason?: string
   /** Whether bulk email is available for the selected customers */
   canBulkEmail?: boolean
   /** Explanation shown when bulk email is unavailable */
@@ -504,6 +508,8 @@ export function BulkOperations({
   onUpdateHealthScore,
   onDelete,
   onExport,
+  canExport = true,
+  exportUnavailableReason,
   onBulkEmail,
   canBulkEmail = false,
   bulkEmailUnavailableReason,
@@ -517,6 +523,7 @@ export function BulkOperations({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const isDisabled = selectedCount === 0 || isLoading
+  const canUseExport = canExport && !!onExport
 
   // Handle status update
   const handleStatusUpdate = async (status: string) => {
@@ -568,7 +575,13 @@ export function BulkOperations({
 
         {/* Quick Actions - compact inline buttons */}
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onExport} disabled={isDisabled}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExport}
+            disabled={isDisabled || !canUseExport}
+            title={!canUseExport ? exportUnavailableReason : undefined}
+          >
             <Download className="h-4 w-4 mr-1.5" />
             Export
           </Button>
@@ -589,6 +602,14 @@ export function BulkOperations({
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Bulk email unavailable</AlertTitle>
             <AlertDescription>{bulkEmailUnavailableReason}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!canUseExport && exportUnavailableReason ? (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Bulk export unavailable</AlertTitle>
+            <AlertDescription>{exportUnavailableReason}</AlertDescription>
           </Alert>
         ) : null}
 

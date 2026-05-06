@@ -37,6 +37,16 @@ describe('customer import surface', () => {
     expect(index).not.toContain("from './customer-table'")
   })
 
+  it('does not keep the retired customer bulk export dialog surface around', () => {
+    expect(existsSync(join(process.cwd(), 'src/components/domain/customers/bulk/bulk-export.tsx'))).toBe(false)
+
+    const bulkIndex = readFileSync(join(process.cwd(), 'src/components/domain/customers/bulk/index.ts'), 'utf8')
+    const domainIndex = readFileSync(join(process.cwd(), 'src/components/domain/customers/index.ts'), 'utf8')
+
+    expect(bulkIndex).not.toContain('BulkExport')
+    expect(domainIndex).not.toContain('BulkExport')
+  })
+
   it('does not reference the legacy customer server import path anywhere in src or tests', () => {
     const currentTestFile = join(process.cwd(), 'tests/unit/customers/customer-import-surface.test.ts')
     const files = [
@@ -64,6 +74,20 @@ describe('customer import surface', () => {
       expect(contents).not.toContain('./customer-table')
       expect(contents).not.toContain('@/components/domain/customers/customer-directory')
       expect(contents).not.toContain('@/components/domain/customers/customer-table')
+    }
+  })
+
+  it('does not reference the retired customer bulk export dialog anywhere in src or tests', () => {
+    const currentTestFile = join(process.cwd(), 'tests/unit/customers/customer-import-surface.test.ts')
+    const files = [
+      ...collectFiles(join(process.cwd(), 'src')),
+      ...collectFiles(join(process.cwd(), 'tests')),
+    ].filter((file) => file !== currentTestFile)
+
+    for (const file of files) {
+      const contents = readFileSync(file, 'utf8')
+      expect(contents).not.toContain('./bulk-export')
+      expect(contents).not.toContain('@/components/domain/customers/bulk/bulk-export')
     }
   })
 })
