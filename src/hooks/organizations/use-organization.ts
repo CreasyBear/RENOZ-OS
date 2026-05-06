@@ -40,6 +40,7 @@ import type {
   UpdateOrganization,
 } from '@/lib/schemas/auth';
 import type { Address } from '@/lib/schemas/_shared/patterns';
+import { formatOrganizationMutationError } from './_mutation-errors';
 
 // Re-export types for convenience
 export type { Organization, OrganizationSettings, OrganizationBranding, Address };
@@ -202,7 +203,7 @@ export function useUpdateOrganization(options: UseUpdateOrganizationOptions = {}
 
       if (showToast) {
         toast.error('Failed to update organization', {
-          description: error instanceof Error ? error.message : 'Please try again',
+          description: formatOrganizationMutationError(error, 'updateOrganization'),
         });
       }
 
@@ -288,7 +289,7 @@ export function useUpdateOrganizationSettings(options: UseUpdateOrganizationSett
 
       if (showToast) {
         toast.error('Failed to update settings', {
-          description: error instanceof Error ? error.message : 'Please try again',
+          description: formatOrganizationMutationError(error, 'updateSettings'),
         });
       }
 
@@ -370,7 +371,7 @@ export function useUpdateOrganizationBranding(options: UseUpdateOrganizationBran
 
       if (showToast) {
         toast.error('Failed to update branding', {
-          description: error instanceof Error ? error.message : 'Please try again',
+          description: formatOrganizationMutationError(error, 'updateBranding'),
         });
       }
 

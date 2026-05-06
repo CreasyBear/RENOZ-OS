@@ -52,6 +52,12 @@ export {
   useRemoveOrganizationLogo,
 } from './use-organization-logo-upload';
 
+export {
+  formatOrganizationMutationError,
+  formatOrganizationLogoMutationError,
+} from './_mutation-errors';
+export type { OrganizationMutationAction } from './_mutation-errors';
+
 // ============================================================================
 // COMPOSITE HOOKS (Backward Compatibility)
 // ============================================================================

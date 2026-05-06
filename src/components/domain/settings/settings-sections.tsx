@@ -25,7 +25,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Loader2, Upload, ImageIcon, ChevronDown, ChevronUp } from "lucide-react";
-import { useOrganizationLogoUpload, useRemoveOrganizationLogo } from "@/hooks/organizations";
+import {
+  formatOrganizationLogoMutationError,
+  useOrganizationLogoUpload,
+  useRemoveOrganizationLogo,
+} from "@/hooks/organizations";
 import { isAllowedLogoMimeType } from "@/lib/organization-logo";
 import { cn } from "@/lib/utils";
 import type {
@@ -66,6 +70,16 @@ function formatFieldError(err: unknown): string {
     return typeof msg === 'string' ? msg : String(msg ?? '');
   }
   return '';
+}
+
+function formatLogoUploadSectionError(uploadError: unknown, removeError: unknown): string | null {
+  if (uploadError) {
+    return formatOrganizationLogoMutationError(uploadError, "upload");
+  }
+  if (removeError) {
+    return formatOrganizationLogoMutationError(removeError, "remove");
+  }
+  return null;
 }
 
 export type { RegionalSettingsData };
@@ -557,7 +571,7 @@ export function BrandingSettingsSection({ data, onSave }: SectionProps<BrandingS
   const logoUrl = data.logoUrl ?? "";
   const hasLogo = !!logoUrl;
   const isUploading = logoUpload.isPending || removeLogo.isPending;
-  const uploadError = logoUpload.error?.message ?? removeLogo.error?.message;
+  const uploadError = formatLogoUploadSectionError(logoUpload.error, removeLogo.error);
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;

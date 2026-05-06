@@ -20,6 +20,7 @@ import {
   MAX_SIZE_BYTES,
   LOGO_ERROR_MESSAGES,
 } from '@/lib/organization-logo';
+import { formatOrganizationLogoMutationError } from './_mutation-errors';
 
 interface UseOrganizationLogoUploadOptions {
   onSuccess?: () => void;
@@ -73,7 +74,7 @@ export function useOrganizationLogoUpload(options: UseOrganizationLogoUploadOpti
       options.onSuccess?.();
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update logo');
+      toast.error(formatOrganizationLogoMutationError(error, 'upload'));
     },
   });
 }
@@ -94,7 +95,7 @@ export function useRemoveOrganizationLogo(options: UseOrganizationLogoUploadOpti
       options.onSuccess?.();
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to remove logo');
+      toast.error(formatOrganizationLogoMutationError(error, 'remove'));
     },
   });
 }
