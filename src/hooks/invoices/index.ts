@@ -33,6 +33,7 @@ export { useVoidInvoice } from './use-invoices';
 
 export { useSendInvoiceReminder } from './use-send-invoice-reminder';
 export { useBulkSendReminders, useBulkUpdateInvoiceStatus } from './use-bulk-invoice-operations';
+export { formatInvoiceMutationError } from './_mutation-errors';
 
 // ============================================================================
 // SUMMARY & ANALYTICS HOOKS

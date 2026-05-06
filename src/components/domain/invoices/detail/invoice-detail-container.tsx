@@ -53,7 +53,7 @@ import { DisabledMenuItem } from '@/components/shared/disabled-with-tooltip';
 import { useInvoiceDetail } from '@/hooks/invoices/use-invoice-detail';
 import { useCreateOrderPayment, useOrderPayments } from '@/hooks/orders/use-order-payments';
 import { useGenerateOrderInvoice } from '@/hooks/documents';
-import { useVoidInvoice } from '@/hooks/invoices';
+import { formatInvoiceMutationError, useVoidInvoice } from '@/hooks/invoices';
 import { formatCreditNoteMutationError, useCreateCreditNote } from '@/hooks/financial';
 import { toastSuccess, toastError } from '@/hooks';
 import { useTrackView } from '@/hooks/search';
@@ -393,7 +393,7 @@ export function InvoiceDetailContainer({
           detail.refetch();
         },
         onError: (error) => {
-          toastError(error.message || 'Failed to generate PDF');
+          toastError(formatInvoiceMutationError(error, 'generatePdf'));
         },
       }
     );
@@ -410,7 +410,7 @@ export function InvoiceDetailContainer({
           detail.refetch();
         },
         onError: (error) => {
-          toastError(error.message || 'Failed to void invoice');
+          toastError(formatInvoiceMutationError(error, 'void'));
         },
       }
     );
