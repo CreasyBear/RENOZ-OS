@@ -115,6 +115,29 @@ describe('communications mutation error formatting', () => {
     ).toBe('Unable to update communication preferences.');
   });
 
+  it('suppresses implementation-shaped communications mutation messages', () => {
+    expect(
+      formatCommunicationTemplateMutationError(
+        new Error('TypeError: Cannot read properties of undefined (reading templateId)'),
+        'save'
+      )
+    ).toBe('Unable to save communication template.');
+
+    expect(
+      formatCommunicationCampaignMutationError(
+        new Error('SQL syntax error at or near "recipient_status"'),
+        'testSend'
+      )
+    ).toBe('Unable to send communication campaign test email.');
+
+    expect(
+      formatCommunicationInboxAccountMutationError(
+        new Error('ReferenceError: providerToken is not defined'),
+        'sync'
+      )
+    ).toBe('Unable to sync email account.');
+  });
+
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
     const container = read(
       'src/components/domain/customers/containers/communications-container.tsx'

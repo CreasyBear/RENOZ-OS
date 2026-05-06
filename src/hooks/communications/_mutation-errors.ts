@@ -100,9 +100,15 @@ function isUnsafeMessage(message: string): boolean {
     normalized.includes('resend') ||
     normalized.includes('supabase') ||
     normalized.includes('database') ||
+    normalized.includes('sql') ||
     normalized.includes('stack') ||
     normalized.includes('token') ||
-    normalized.includes('internal server error')
+    normalized.includes('internal server error') ||
+    normalized.includes('typeerror') ||
+    normalized.includes('referenceerror') ||
+    normalized.includes('not a function') ||
+    /cannot (read|set) properties of (undefined|null)/.test(normalized) ||
+    /\bat\s+[\w.$<>]+\s*\(/.test(message)
   );
 }
 
