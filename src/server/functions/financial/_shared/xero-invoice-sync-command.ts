@@ -89,6 +89,44 @@ function extractRetryAfterSeconds(
   return /min/i.test(match[2]) ? value * 60 : value;
 }
 
+export function formatXeroSyncIssueMessage(code: string): string {
+  switch (code) {
+    case 'connection_missing':
+      return 'Connect Xero before syncing invoices and journals.';
+    case 'configuration_unavailable':
+      return 'Xero setup is incomplete. Review integration settings before syncing.';
+    case 'auth_failed':
+      return 'Xero connection needs attention before invoices and journals can sync.';
+    case 'missing_contact_mapping':
+      return 'Customer needs a trusted Xero contact mapping before this invoice can sync.';
+    case 'rate_limited':
+      return 'Xero is rate limiting sync requests. Wait before retrying this invoice.';
+    case 'forbidden':
+      return 'Reconnect Xero with the accounting organization and permissions needed for invoice sync.';
+    case 'missing_revenue_accounts':
+      return 'Xero account settings need attention before this invoice can sync.';
+    case 'validation_failed':
+      return 'Invoice data needs review before this order can sync to Xero.';
+    default:
+      return 'Xero sync is temporarily unavailable. Review the invoice and try again.';
+  }
+}
+
+export function formatXeroSyncReadError(
+  xeroSyncError?: string | null,
+  issue?: XeroSyncIssue | null,
+): string | null {
+  if (!xeroSyncError) {
+    return null;
+  }
+
+  if (issue?.code && issue.code !== 'reconciled_remote_exists') {
+    return issue.message;
+  }
+
+  return formatXeroSyncIssueMessage('validation_failed');
+}
+
 export function normalizeXeroSyncIssue(params: {
   readiness: Awaited<ReturnType<typeof getXeroSyncReadiness>>;
   xeroSyncError?: string | null;
@@ -119,7 +157,7 @@ export function normalizeXeroSyncIssue(params: {
       return {
         code: 'connection_missing',
         title: 'Connect Xero',
-        message,
+        message: formatXeroSyncIssueMessage('connection_missing'),
         severity: 'critical',
         nextAction: 'connect_xero',
         nextActionLabel: 'Connect Xero',
@@ -134,7 +172,7 @@ export function normalizeXeroSyncIssue(params: {
       return {
         code: 'configuration_unavailable',
         title: 'Configure Xero',
-        message,
+        message: formatXeroSyncIssueMessage('configuration_unavailable'),
         severity: 'critical',
         nextAction: 'open_org_settings',
         nextActionLabel: 'Open Org Settings',
@@ -151,7 +189,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'auth_failed',
       title: 'Reconnect Xero',
-      message,
+      message: formatXeroSyncIssueMessage('auth_failed'),
       severity: 'critical',
       nextAction: 'reconnect_xero',
       nextActionLabel: 'Reconnect Xero',
@@ -190,7 +228,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'missing_contact_mapping',
       title: 'Customer mapping required',
-      message: xeroSyncError,
+      message: formatXeroSyncIssueMessage('missing_contact_mapping'),
       severity: 'warning',
       nextAction: 'map_customer_contact',
       nextActionLabel: customerXeroContactId
@@ -215,7 +253,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'rate_limited',
       title: 'Retry later',
-      message: xeroSyncError,
+      message: formatXeroSyncIssueMessage('rate_limited'),
       severity: 'warning',
       nextAction: 'retry_later',
       nextActionLabel: 'Retry Later',
@@ -234,7 +272,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'forbidden',
       title: 'Reconnect with the right tenant',
-      message: xeroSyncError,
+      message: formatXeroSyncIssueMessage('forbidden'),
       severity: 'critical',
       nextAction: 'reconnect_xero',
       nextActionLabel: 'Reconnect Xero',
@@ -249,7 +287,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'auth_failed',
       title: 'Reconnect Xero',
-      message: xeroSyncError,
+      message: formatXeroSyncIssueMessage('auth_failed'),
       severity: 'critical',
       nextAction: 'reconnect_xero',
       nextActionLabel: 'Reconnect Xero',
@@ -268,7 +306,7 @@ export function normalizeXeroSyncIssue(params: {
     return {
       code: 'missing_revenue_accounts',
       title: 'Finish Xero account setup',
-      message: xeroSyncError,
+      message: formatXeroSyncIssueMessage('missing_revenue_accounts'),
       severity: 'warning',
       nextAction: 'open_org_settings',
       nextActionLabel: 'Open Org Settings',
@@ -285,7 +323,7 @@ export function normalizeXeroSyncIssue(params: {
   return {
     code: 'validation_failed',
     title: 'Review invoice data',
-    message: xeroSyncError,
+    message: formatXeroSyncIssueMessage('validation_failed'),
     severity: 'warning',
     nextAction: 'review_validation',
     nextActionLabel: 'Review Data',

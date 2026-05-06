@@ -18,7 +18,10 @@ import {
 } from '@/lib/schemas';
 import { safeNumber } from '@/lib/numeric';
 import { getXeroSyncReadiness } from '../xero-adapter';
-import { normalizeXeroSyncIssue } from './xero-invoice-sync-command';
+import {
+  formatXeroSyncReadError,
+  normalizeXeroSyncIssue,
+} from './xero-invoice-sync-command';
 import type { z } from 'zod';
 
 export async function readInvoiceXeroStatus(
@@ -68,7 +71,7 @@ export async function readInvoiceXeroStatus(
     orderNumber: order.orderNumber,
     xeroInvoiceId: order.xeroInvoiceId,
     xeroSyncStatus: order.xeroSyncStatus ?? 'pending',
-    xeroSyncError: order.xeroSyncError,
+    xeroSyncError: formatXeroSyncReadError(order.xeroSyncError, issue),
     lastXeroSyncAt: order.lastXeroSyncAt,
     xeroInvoiceUrl: order.xeroInvoiceUrl,
     integrationAvailable: readiness.available,
@@ -136,6 +139,14 @@ export async function readInvoicesBySyncStatus(
 
   const mapInvoice = (r: InvoiceStatusRow): InvoiceWithSyncStatus => {
     const syncStatus = xeroSyncStatusSchema.parse(r.xeroSyncStatus ?? 'pending');
+    const syncIssue = normalizeXeroSyncIssue({
+      readiness,
+      xeroSyncError: r.xeroSyncError,
+      customerXeroContactId: r.customerXeroContactId,
+      xeroInvoiceId: r.xeroInvoiceId,
+      orderId: r.orderId,
+      customerId: r.customerId,
+    });
 
     return {
       orderId: r.orderId,
@@ -146,20 +157,13 @@ export async function readInvoicesBySyncStatus(
       customerName: r.customerName,
       xeroInvoiceId: r.xeroInvoiceId,
       xeroSyncStatus: syncStatus,
-      xeroSyncError: r.xeroSyncError,
+      xeroSyncError: formatXeroSyncReadError(r.xeroSyncError, syncIssue),
       lastXeroSyncAt: r.lastXeroSyncAt ? new Date(r.lastXeroSyncAt) : null,
       xeroInvoiceUrl: r.xeroInvoiceUrl,
       canResync:
         readiness.available &&
         (syncStatus === 'error' || syncStatus === 'pending'),
-      issue: normalizeXeroSyncIssue({
-        readiness,
-        xeroSyncError: r.xeroSyncError,
-        customerXeroContactId: r.customerXeroContactId,
-        xeroInvoiceId: r.xeroInvoiceId,
-        orderId: r.orderId,
-        customerId: r.customerId,
-      }),
+      issue: syncIssue,
       customerXeroContactId: r.customerXeroContactId,
     };
   };
