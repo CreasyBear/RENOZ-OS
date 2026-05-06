@@ -226,7 +226,7 @@ export const createOrderPayment = createServerFn({ method: "POST" })
 export const updateOrderPayment = createServerFn({ method: "POST" })
   .inputValidator(updateOrderPaymentSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { id, ...updates } = data;
 
     // Check ownership
@@ -236,7 +236,8 @@ export const updateOrderPayment = createServerFn({ method: "POST" })
       .where(
         and(
           eq(orderPayments.id, id),
-          eq(orderPayments.organizationId, ctx.organizationId)
+          eq(orderPayments.organizationId, ctx.organizationId),
+          isNull(orderPayments.deletedAt)
         )
       )
       .limit(1);
@@ -246,6 +247,10 @@ export const updateOrderPayment = createServerFn({ method: "POST" })
     }
 
     return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
       const [payment] = await tx
         .update(orderPayments)
         .set({
@@ -253,7 +258,13 @@ export const updateOrderPayment = createServerFn({ method: "POST" })
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
-        .where(eq(orderPayments.id, id))
+        .where(
+          and(
+            eq(orderPayments.id, id),
+            eq(orderPayments.organizationId, ctx.organizationId),
+            isNull(orderPayments.deletedAt)
+          )
+        )
         .returning({
           id: orderPayments.id,
           orderId: orderPayments.orderId,
@@ -265,6 +276,10 @@ export const updateOrderPayment = createServerFn({ method: "POST" })
           isRefund: orderPayments.isRefund,
           updatedAt: orderPayments.updatedAt,
         });
+
+      if (!payment) {
+        throw new NotFoundError("Payment not found or update failed");
+      }
 
       if (payment?.orderId) {
         await updateOrderPaymentStatus(
@@ -285,7 +300,7 @@ export const updateOrderPayment = createServerFn({ method: "POST" })
 export const deleteOrderPayment = createServerFn({ method: "POST" })
   .inputValidator(deleteOrderPaymentSchema)
   .handler(async ({ data: { id } }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
     // Check ownership
     const [existing] = await db
@@ -294,7 +309,8 @@ export const deleteOrderPayment = createServerFn({ method: "POST" })
       .where(
         and(
           eq(orderPayments.id, id),
-          eq(orderPayments.organizationId, ctx.organizationId)
+          eq(orderPayments.organizationId, ctx.organizationId),
+          isNull(orderPayments.deletedAt)
         )
       )
       .limit(1);
@@ -304,13 +320,28 @@ export const deleteOrderPayment = createServerFn({ method: "POST" })
     }
 
     await db.transaction(async (tx) => {
-      await tx
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
+      const [deleted] = await tx
         .update(orderPayments)
         .set({
           deletedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(orderPayments.id, id));
+        .where(
+          and(
+            eq(orderPayments.id, id),
+            eq(orderPayments.organizationId, ctx.organizationId),
+            isNull(orderPayments.deletedAt)
+          )
+        )
+        .returning({ id: orderPayments.id });
+
+      if (!deleted) {
+        throw new NotFoundError("Payment not found or delete failed");
+      }
 
       await updateOrderPaymentStatus(
         tx,
@@ -337,7 +368,7 @@ export const createRefundPayment = createServerFn({ method: "POST" })
       })
   )
   .handler(async ({ data: { orderId, originalPaymentId, amount, notes } }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     // Get original payment
     const [original] = await db
@@ -392,6 +423,10 @@ export const createRefundPayment = createServerFn({ method: "POST" })
     const today = new Date().toISOString().split("T")[0];
 
     return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
       const [refund] = await tx
         .insert(orderPayments)
         .values({

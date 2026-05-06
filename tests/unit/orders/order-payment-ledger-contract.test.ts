@@ -18,6 +18,14 @@ function sourceBetween(source: string, startMarker: string, endMarker: string): 
   return source.slice(start, end);
 }
 
+function sourceFrom(source: string, startMarker: string): string {
+  const start = source.indexOf(startMarker);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  return source.slice(start);
+}
+
 describe('order payment ledger contract', () => {
   it('requires finance update permission before recording a real payment', () => {
     const source = read('src/server/functions/orders/order-payments.ts');
@@ -31,6 +39,34 @@ describe('order payment ledger contract', () => {
     expect(createPaymentSource).toContain(
       'withAuth({ permission: PERMISSIONS.financial.update })'
     );
+  });
+
+  it('requires explicit finance permissions for payment administration mutations', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const updatePaymentSource = sourceBetween(
+      source,
+      'export const updateOrderPayment',
+      '/**\n * Delete a payment'
+    );
+    const deletePaymentSource = sourceBetween(
+      source,
+      'export const deleteOrderPayment',
+      '/**\n * Create a refund payment'
+    );
+    const refundPaymentSource = sourceFrom(source, 'export const createRefundPayment');
+
+    expect(updatePaymentSource).toContain(
+      'withAuth({ permission: PERMISSIONS.financial.update })'
+    );
+    expect(deletePaymentSource).toContain(
+      'withAuth({ permission: PERMISSIONS.financial.delete })'
+    );
+    expect(refundPaymentSource).toContain(
+      'withAuth({ permission: PERMISSIONS.financial.update })'
+    );
+    expect(updatePaymentSource).not.toContain('withAuth();');
+    expect(deletePaymentSource).not.toContain('withAuth();');
+    expect(refundPaymentSource).not.toContain('withAuth();');
   });
 
   it('validates the tenant-owned order inside the transaction before ledger insert', () => {
@@ -52,6 +88,59 @@ describe('order payment ledger contract', () => {
     expect(orderGuardIndex).toBeGreaterThanOrEqual(0);
     expect(notFoundIndex).toBeGreaterThan(orderGuardIndex);
     expect(insertIndex).toBeGreaterThan(notFoundIndex);
+  });
+
+  it('keeps update and delete writes tenant-scoped and active-row scoped', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const updatePaymentSource = sourceBetween(
+      source,
+      'export const updateOrderPayment',
+      '/**\n * Delete a payment'
+    );
+    const deletePaymentSource = sourceBetween(
+      source,
+      'export const deleteOrderPayment',
+      '/**\n * Create a refund payment'
+    );
+
+    const updateWriteIndex = updatePaymentSource.indexOf('.update(orderPayments)');
+    const deleteWriteIndex = deletePaymentSource.indexOf('.update(orderPayments)');
+    const updateWriteSource = updatePaymentSource.slice(updateWriteIndex);
+    const deleteWriteSource = deletePaymentSource.slice(deleteWriteIndex);
+
+    expect(updatePaymentSource).toContain("set_config('app.organization_id'");
+    expect(deletePaymentSource).toContain("set_config('app.organization_id'");
+    expect(updateWriteIndex).toBeGreaterThanOrEqual(0);
+    expect(deleteWriteIndex).toBeGreaterThanOrEqual(0);
+    expect(updateWriteSource).toContain('eq(orderPayments.id, id)');
+    expect(updateWriteSource).toContain('eq(orderPayments.organizationId, ctx.organizationId)');
+    expect(updateWriteSource).toContain('isNull(orderPayments.deletedAt)');
+    expect(deleteWriteSource).toContain('eq(orderPayments.id, id)');
+    expect(deleteWriteSource).toContain('eq(orderPayments.organizationId, ctx.organizationId)');
+    expect(deleteWriteSource).toContain('isNull(orderPayments.deletedAt)');
+    expect(updateWriteSource).toContain(
+      'throw new NotFoundError("Payment not found or update failed")'
+    );
+    expect(deleteWriteSource).toContain(
+      'throw new NotFoundError("Payment not found or delete failed")'
+    );
+  });
+
+  it('keeps refund writes tenant-scoped after proving the original payment', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const refundPaymentSource = sourceFrom(source, 'export const createRefundPayment');
+
+    const originalGuardIndex = refundPaymentSource.indexOf('.from(orderPayments)');
+    const refundInsertIndex = refundPaymentSource.indexOf('.insert(orderPayments)');
+
+    expect(refundPaymentSource).toContain('eq(orderPayments.id, originalPaymentId)');
+    expect(refundPaymentSource).toContain('eq(orderPayments.orderId, orderId)');
+    expect(refundPaymentSource).toContain('eq(orderPayments.organizationId, ctx.organizationId)');
+    expect(refundPaymentSource).toContain('eq(orderPayments.isRefund, false)');
+    expect(refundPaymentSource).toContain('isNull(orderPayments.deletedAt)');
+    expect(refundPaymentSource).toContain("set_config('app.organization_id'");
+    expect(originalGuardIndex).toBeGreaterThanOrEqual(0);
+    expect(refundInsertIndex).toBeGreaterThan(originalGuardIndex);
   });
 
   it('keeps invoice payment recording on the order payment mutation spine', () => {
