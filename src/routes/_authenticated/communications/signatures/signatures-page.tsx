@@ -23,6 +23,10 @@ import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 
 export default function SignaturesPage() {
   // ============================================================================
@@ -109,7 +113,12 @@ export default function SignaturesPage() {
         <Alert className="mb-4">
           <AlertTitle>Showing cached signatures</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.emailSignatures
+              )}
+            </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>

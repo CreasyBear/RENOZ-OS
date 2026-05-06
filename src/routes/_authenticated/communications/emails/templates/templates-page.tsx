@@ -19,6 +19,10 @@ import { TemplatesList } from "@/components/domain/communications/templates-list
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { useFilterUrlState } from "@/hooks/filters/use-filter-url-state";
 import { useTemplatesPage } from "./use-templates-page";
 import {
@@ -100,7 +104,12 @@ export default function TemplatesPage({ search }: TemplatesPageProps) {
         <Alert className="mb-4">
           <AlertTitle>Showing cached templates</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.emailTemplates
+              )}
+            </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
