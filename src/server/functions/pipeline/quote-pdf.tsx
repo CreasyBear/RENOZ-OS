@@ -352,9 +352,20 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
           regenerationCount: sql`${generatedDocuments.regenerationCount} + 1`,
         },
       })
-      .returning({ regenerationCount: generatedDocuments.regenerationCount });
+      .returning({
+        id: generatedDocuments.id,
+        regenerationCount: generatedDocuments.regenerationCount,
+      });
 
-    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
+    if (!upsertResult) {
+      throw new ServerError(
+        'Unable to persist quote PDF document',
+        500,
+        'QUOTE_PDF_DOCUMENT_PERSIST_FAILED'
+      );
+    }
+
+    const isRegeneration = upsertResult.regenerationCount > 0;
 
     const [updatedOpportunity] = await db
       .update(opportunities)
@@ -376,14 +387,14 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       action: 'exported',
       entityName: opp.title,
       description: isRegeneration
-        ? `Regenerated quote PDF (version ${upsertResult?.regenerationCount ?? 1})`
+        ? `Regenerated quote PDF (version ${upsertResult.regenerationCount})`
         : `Generated quote PDF`,
       metadata: {
         documentType: 'quote',
         filename,
         fileSize: buffer.length,
         isRegeneration,
-        regenerationCount: upsertResult?.regenerationCount ?? 0,
+        regenerationCount: upsertResult.regenerationCount,
         quoteVersionId: id,
       },
     });
