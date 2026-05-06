@@ -68,12 +68,16 @@ describe('pipeline read state contract', () => {
   });
 
   it('keeps pipeline hook read normalization fallbacks in the pipeline message map', () => {
+    const server = read('src/server/functions/pipeline/pipeline.ts');
     const useOpportunities = read('src/hooks/pipeline/use-opportunities.ts');
     const usePipelineMetrics = read('src/hooks/pipeline/use-pipeline-metrics.ts');
     const useOpportunityDetailExtended = read(
       'src/hooks/pipeline/use-opportunity-detail-extended.ts'
     );
 
+    expect(server).toContain("ServerError, ValidationError } from '@/lib/server/errors'");
+    expect(server).toContain("'PIPELINE_ACTIVITY_COUNT_FAILED'");
+    expect(server).not.toContain("throw new Error('Failed to fetch activity count')");
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunities');
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityDetails');
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityNotFound');

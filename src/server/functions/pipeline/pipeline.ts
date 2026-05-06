@@ -55,7 +55,7 @@ import {
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse } from '@/lib/db/pagination';
 import { opportunityStageSchema } from '@/lib/schemas/pipeline';
 import { withAuth } from '@/lib/server/protected';
-import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
+import { ConflictError, NotFoundError, ServerError, ValidationError } from '@/lib/server/errors';
 import { verifyCustomerExists } from '@/server/functions/_shared/entity-verification';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -1577,7 +1577,11 @@ export const listActivities = createServerFn({ method: 'GET' })
 
     // Validate count result exists
     if (!countResult[0]) {
-      throw new Error('Failed to fetch activity count');
+      throw new ServerError(
+        'Unable to load opportunity activities',
+        500,
+        'PIPELINE_ACTIVITY_COUNT_FAILED'
+      );
     }
     // Drizzle's count() returns number | null, ensure we convert to number
     const totalItems = typeof countResult[0].count === 'number' ? countResult[0].count : Number(countResult[0].count) || 0;
