@@ -31,6 +31,10 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/lib/toast";
 
 import { useEmailPreview, useSendTestEmail } from "@/hooks/communications/use-email-preview";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 
 // ============================================================================
 // TYPES
@@ -174,7 +178,10 @@ export function EmailPreviewModal({
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Failed to load preview: {previewError.message}
+                  {formatCommunicationReadError(
+                    previewError,
+                    COMMUNICATION_READ_MESSAGES.emailPreview
+                  )}
                 </AlertDescription>
               </Alert>
             ) : preview ? (

@@ -15,6 +15,8 @@ export const COMMUNICATION_READ_MESSAGES = {
     'Inbox is temporarily unavailable. Please refresh and try again.',
   emailTemplates:
     'Email templates are temporarily unavailable. Please refresh and try again.',
+  emailPreview:
+    'Email preview is temporarily unavailable. Please refresh and try again.',
   emailSignatures:
     'Email signatures are temporarily unavailable. Please refresh and try again.',
   emailCampaigns:

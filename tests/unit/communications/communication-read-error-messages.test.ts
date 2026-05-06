@@ -49,6 +49,9 @@ describe('communication read error messages', () => {
     const templates = read(
       'src/routes/_authenticated/communications/emails/templates/templates-page.tsx'
     );
+    const emailPreview = read(
+      'src/components/domain/communications/templates/email-preview-modal.tsx'
+    );
     const signatures = read(
       'src/routes/_authenticated/communications/signatures/signatures-page.tsx'
     );
@@ -99,6 +102,9 @@ describe('communication read error messages', () => {
     expect(templates).toContain('formatCommunicationReadError(');
     expect(templates).toContain('COMMUNICATION_READ_MESSAGES.emailTemplates');
     expect(templates).not.toContain('<span>{error.message}</span>');
+    expect(emailPreview).toContain('formatCommunicationReadError(');
+    expect(emailPreview).toContain('COMMUNICATION_READ_MESSAGES.emailPreview');
+    expect(emailPreview).not.toContain('Failed to load preview: {previewError.message}');
     expect(signatures).toContain('formatCommunicationReadError(');
     expect(signatures).toContain('COMMUNICATION_READ_MESSAGES.emailSignatures');
     expect(signatures).not.toContain('<span>{error.message}</span>');
@@ -148,6 +154,7 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('inboxEmailAccounts');
     expect(formatter).toContain('inboxItems');
     expect(formatter).toContain('emailTemplates');
+    expect(formatter).toContain('emailPreview');
     expect(formatter).toContain('emailSignatures');
     expect(formatter).toContain('emailCampaigns');
     expect(formatter).toContain('campaignAnalytics');
