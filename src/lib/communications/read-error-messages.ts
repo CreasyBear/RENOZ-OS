@@ -1,0 +1,19 @@
+import { isReadQueryError } from '@/lib/read-path-policy';
+
+export const COMMUNICATION_READ_MESSAGES = {
+  preferences:
+    'Contact preferences are temporarily unavailable. Please refresh and try again.',
+  preferenceHistory:
+    'Preference history is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+export function formatCommunicationReadError(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  if (isReadQueryError(error) && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}

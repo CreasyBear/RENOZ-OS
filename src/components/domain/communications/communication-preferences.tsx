@@ -54,6 +54,10 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import type {
   ContactPreferences,
   PreferenceHistoryItem,
@@ -489,7 +493,12 @@ export function CommunicationPreferences({
           <Alert variant="destructive">
             <AlertTitle>Preferences unavailable</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
-              <span>{error.message}</span>
+              <span>
+                {formatCommunicationReadError(
+                  error,
+                  COMMUNICATION_READ_MESSAGES.preferences
+                )}
+              </span>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
                 Retry
               </Button>
@@ -506,7 +515,12 @@ export function CommunicationPreferences({
         <Alert>
           <AlertTitle>Showing cached preferences</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.preferences
+              )}
+            </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
@@ -584,7 +598,12 @@ export function PreferenceHistory({
           <Alert variant="destructive">
             <AlertTitle>Preference history unavailable</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
-              <span>{error.message}</span>
+              <span>
+                {formatCommunicationReadError(
+                  error,
+                  COMMUNICATION_READ_MESSAGES.preferenceHistory
+                )}
+              </span>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
                 Retry
               </Button>
@@ -601,7 +620,12 @@ export function PreferenceHistory({
         <Alert>
           <AlertTitle>Showing cached preference history</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.preferenceHistory
+              )}
+            </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
