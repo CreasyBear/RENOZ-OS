@@ -272,7 +272,7 @@ function extractMessage(error: unknown): string | null {
   return null;
 }
 
-function isUnsafeMessage(message: string): boolean {
+export function isUnsafeProductMutationMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes('api key') ||
@@ -283,9 +283,16 @@ function isUnsafeMessage(message: string): boolean {
     normalized.includes('postgres') ||
     normalized.includes('supabase') ||
     normalized.includes('database') ||
+    normalized.includes('sql') ||
     normalized.includes('stack') ||
     normalized.includes('token') ||
-    normalized.includes('internal server error')
+    normalized.includes('internal server error') ||
+    normalized.includes('typeerror') ||
+    normalized.includes('referenceerror') ||
+    normalized.includes('syntaxerror') ||
+    normalized.includes('not a function') ||
+    /cannot (read|set) properties of (undefined|null)/.test(normalized) ||
+    /\bat\s+[\w.$<>]+\s*\(/.test(message)
   );
 }
 
@@ -296,7 +303,7 @@ function formatProductMutationError(
 ): string {
   const fieldMessage = extractFieldErrorMessage(error);
 
-  if (fieldMessage && !isUnsafeMessage(fieldMessage)) {
+  if (fieldMessage && !isUnsafeProductMutationMessage(fieldMessage)) {
     return fieldMessage;
   }
 
@@ -313,7 +320,7 @@ function formatProductMutationError(
   const message = extractMessage(error);
   if (
     message &&
-    !isUnsafeMessage(message) &&
+    !isUnsafeProductMutationMessage(message) &&
     (statusCode === 400 || statusCode === 401 || statusCode === 403 || statusCode === 404)
   ) {
     return message;

@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatProductCoreMutationError } from '@/hooks/products/product-mutation-error-messages';
+import {
+  formatProductAttributeMutationError,
+  formatProductBundleMutationError,
+  formatProductCoreMutationError,
+  formatProductImageMutationError,
+  formatProductPricingMutationError,
+  isUnsafeProductMutationMessage,
+} from '@/hooks/products/product-mutation-error-messages';
 
 const root = process.cwd();
 
@@ -44,6 +51,72 @@ describe('product core mutation errors', () => {
         'deleteProduct'
       )
     ).toBe('You do not have permission to manage products.');
+  });
+
+  it('suppresses implementation-shaped messages across product mutation surfaces', () => {
+    expect(
+      formatProductCoreMutationError(
+        {
+          statusCode: 400,
+          message: 'TypeError: Cannot read properties of undefined (reading productId)',
+        },
+        'updateProduct'
+      )
+    ).toBe('Product update is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatProductCoreMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            csvContent: ['SQL syntax error at or near "products"'],
+          },
+        },
+        'parseImportProducts'
+      )
+    ).toBe('Product import preview is temporarily unavailable. Please check the CSV file and try again.');
+
+    expect(
+      formatProductPricingMutationError(
+        {
+          statusCode: 400,
+          message: 'ReferenceError: priceTier is not defined',
+        },
+        'setTiers'
+      )
+    ).toBe('Product price tier update is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatProductImageMutationError(
+        {
+          statusCode: 400,
+          message: 'SyntaxError: Unexpected token in storage response',
+        },
+        'add'
+      )
+    ).toBe('Product image upload is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatProductAttributeMutationError(
+        {
+          statusCode: 400,
+          message: 'attributeNormalizer is not a function',
+        },
+        'setValue'
+      )
+    ).toBe('Product attribute value update is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatProductBundleMutationError(
+        {
+          statusCode: 400,
+          message: 'at updateBundleComponents (bundle-service.ts:42:7)',
+        },
+        'setComponents'
+      )
+    ).toBe('Bundle component update is temporarily unavailable. Please refresh and try again.');
+
+    expect(isUnsafeProductMutationMessage('TypeError: Cannot set properties of null')).toBe(true);
   });
 
   it('keeps product core mutations behind product-owned formatters', () => {
