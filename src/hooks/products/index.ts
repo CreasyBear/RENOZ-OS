@@ -106,6 +106,11 @@ export {
   type UseResolvePriceOptions,
 } from './use-product-pricing';
 
+export {
+  formatProductPricingMutationError,
+  type ProductPricingMutationAction,
+} from './product-pricing-error-messages';
+
 // Product bundle hooks
 export {
   useBundleComponents,

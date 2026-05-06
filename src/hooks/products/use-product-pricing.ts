@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
+import { formatProductPricingMutationError } from './product-pricing-error-messages';
 import {
   resolvePrice,
   listPriceTiers,
@@ -189,8 +190,8 @@ export function useCreatePriceTier() {
         queryKey: queryKeys.products.pricing.tiers(result.productId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create price tier');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'createTier'));
     },
   });
 }
@@ -210,8 +211,8 @@ export function useUpdatePriceTier() {
         queryKey: queryKeys.products.pricing.tiers(result.productId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update price tier');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'updateTier'));
     },
   });
 }
@@ -231,8 +232,8 @@ export function useDeletePriceTier() {
         queryKey: queryKeys.products.pricing.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete price tier');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'deleteTier'));
     },
   });
 }
@@ -252,8 +253,8 @@ export function useSetPriceTiers() {
         queryKey: queryKeys.products.pricing.tiers(variables.productId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to set price tiers');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'setTiers'));
     },
   });
 }
@@ -277,8 +278,8 @@ export function useSetCustomerPrice() {
         queryKey: queryKeys.products.pricing.customer(result.productId, result.customerId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to set customer price');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'setCustomerPrice'));
     },
   });
 }
@@ -297,8 +298,8 @@ export function useDeleteCustomerPrice() {
         queryKey: queryKeys.products.pricing.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete customer price');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'deleteCustomerPrice'));
     },
   });
 }
@@ -325,8 +326,8 @@ export function useBulkUpdatePrices() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.pricing.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update prices');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'bulkUpdate'));
     },
   });
 }
@@ -349,8 +350,8 @@ export function useApplyPriceAdjustment() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.pricing.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to apply price adjustment');
+    onError: (error) => {
+      toast.error(formatProductPricingMutationError(error, 'adjust'));
     },
   });
 }
