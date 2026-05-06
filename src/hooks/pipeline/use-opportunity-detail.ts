@@ -258,8 +258,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
         toast.success('Opportunity deleted');
         setDeleteDialogOpen(false);
         navigate({ to: '/pipeline' });
-      } catch {
-        toastError('Failed to delete opportunity');
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, 'delete'));
         throw new Error('Delete failed');
       }
     },
@@ -330,8 +330,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
           ...updates,
         });
         toast.success('Opportunity updated');
-      } catch {
-        toastError('Failed to update opportunity');
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, 'update'));
       }
     },
 
@@ -388,8 +388,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
         toast.success('Order conversion initiated');
         // Note: Navigate to orders list since the integration is pending
         navigate({ to: '/orders' });
-      } catch {
-        toastError('Failed to convert to order');
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, 'convertToOrder'));
       }
     },
 

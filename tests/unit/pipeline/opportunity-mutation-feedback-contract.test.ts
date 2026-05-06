@@ -27,6 +27,13 @@ describe('pipeline opportunity mutation feedback contract', () => {
         'stage'
       )
     ).toBe('Unable to update opportunity stage. Refresh and try again.');
+
+    expect(
+      formatPipelineOpportunityMutationError(
+        new Error('SQL insert failed at convert opportunity stack frame'),
+        'convertToOrder'
+      )
+    ).toBe('Unable to convert opportunity to an order. Refresh and try again.');
   });
 
   it('keeps safe validation and known opportunity codes useful for operators', () => {
@@ -53,6 +60,14 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
+    expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'delete')");
+    expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'update')");
+    expect(opportunityDetail).toContain(
+      "formatPipelineOpportunityMutationError(error, 'convertToOrder')"
+    );
+    expect(opportunityDetail).not.toContain("toastError('Failed to delete opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update stage')");
+    expect(opportunityDetail).not.toContain("toastError('Failed to update opportunity')");
+    expect(opportunityDetail).not.toContain("toastError('Failed to convert to order')");
   });
 });
