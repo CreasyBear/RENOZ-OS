@@ -37,6 +37,8 @@ const searchSchema = z.object({
 
 type SearchParams = z.infer<typeof searchSchema>;
 
+const XERO_CONSOLE_REFETCH_INTERVAL_MS = 15 * 1000;
+
 export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
   validateSearch: (search: Record<string, unknown>): SearchParams => searchSchema.parse(search),
   component: XeroSyncStatusPage,
@@ -60,15 +62,18 @@ function XeroSyncStatusPage() {
     customerId: search.customerId,
     orderId: search.orderId,
     pageSize: 50,
+    refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS,
   });
   const { data: integration } = useXeroIntegrationStatus();
   const { data: paymentEventsData, isLoading: paymentEventsLoading } = useXeroPaymentEvents({
     page: 1,
     pageSize: 25,
+    refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS,
   });
   const { data: selectedInvoice, isLoading: selectedInvoiceLoading } = useXeroInvoiceStatus(
     search.orderId ?? '',
-    Boolean(search.orderId)
+    Boolean(search.orderId),
+    { refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS }
   );
 
   const resyncMutation = useResyncXeroInvoice();

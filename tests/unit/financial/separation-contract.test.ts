@@ -126,4 +126,16 @@ describe('financial separation contract', () => {
     expect(invoiceStatus).toContain('const { status, errorsOnly, issue, customerId, orderId');
     expect(page).not.toContain('raw.filter');
   });
+
+  it('keeps Xero console webhook freshness explicit and route-scoped', () => {
+    const hook = read('src/hooks/financial/use-xero-sync.ts');
+    const page = read('src/routes/_authenticated/financial/xero-sync.tsx');
+
+    expect(hook).toContain('refetchInterval?: number | false');
+    expect(hook).toContain('refetchInterval, ...params');
+    expect(hook).toContain('refetchInterval: options.refetchInterval');
+    expect(page).toContain('const XERO_CONSOLE_REFETCH_INTERVAL_MS = 15 * 1000');
+    expect(page).toContain('refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS');
+    expect(page).toContain('{ refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS }');
+  });
 });

@@ -44,10 +44,11 @@ export interface UseXeroSyncsOptions {
   page?: number;
   pageSize?: number;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
-  const { enabled = true, ...params } = options;
+  const { enabled = true, refetchInterval, ...params } = options;
   const fn = useServerFn(listInvoicesBySyncStatus);
 
   return useQuery({
@@ -77,6 +78,7 @@ export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
     },
     enabled,
     staleTime: 30 * 1000,
+    refetchInterval,
   });
 }
 
@@ -111,10 +113,11 @@ export interface UseXeroPaymentEventsOptions {
   page?: number;
   pageSize?: number;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 export function useXeroPaymentEvents(options: UseXeroPaymentEventsOptions = {}) {
-  const { enabled = true, page = 1, pageSize = 20 } = options;
+  const { enabled = true, page = 1, pageSize = 20, refetchInterval } = options;
   const fn = useServerFn(listRecentXeroPaymentEvents);
 
   return useQuery({
@@ -138,10 +141,15 @@ export function useXeroPaymentEvents(options: UseXeroPaymentEventsOptions = {}) 
     },
     enabled,
     staleTime: 30 * 1000,
+    refetchInterval,
   });
 }
 
-export function useXeroInvoiceStatus(orderId: string, enabled = true) {
+export function useXeroInvoiceStatus(
+  orderId: string,
+  enabled = true,
+  options: { refetchInterval?: number | false } = {}
+) {
   const fn = useServerFn(getInvoiceXeroStatus);
 
   return useQuery({
@@ -165,6 +173,7 @@ export function useXeroInvoiceStatus(orderId: string, enabled = true) {
     },
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
+    refetchInterval: options.refetchInterval,
   });
 }
 
