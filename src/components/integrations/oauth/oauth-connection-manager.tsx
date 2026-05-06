@@ -23,6 +23,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmation } from '@/hooks';
+import {
+  formatOAuthConnectionAccountDetail,
+  formatOAuthConnectionAccountLabel,
+} from '@/lib/oauth/oauth-connection-display';
 import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 import {
   formatXeroTenantDisplayName,
@@ -38,7 +42,6 @@ interface OAuthConnection {
   isActive: boolean;
   lastSyncedAt?: Date;
   lastSyncAt?: Date;
-  externalAccountId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -484,17 +487,19 @@ const {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              {connection.provider === 'xero' && (
+              {connection.provider === 'xero' ? (
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <div className="font-medium">Active tenant</div>
-                  <div className="text-muted-foreground">
-                    {connection.externalAccountId || 'Tenant ID unavailable'}
+                  <div className="font-medium">
+                    {formatOAuthConnectionAccountLabel(connection)}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {formatOAuthConnectionAccountDetail(connection)}
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Invoices and journals fail closed until this accounting connection is healthy.
+                    Reconnect if this is not the intended Xero organization.
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {connection.lastSyncedAt && (
                 <div className="text-muted-foreground text-sm">

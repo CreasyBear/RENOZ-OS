@@ -109,4 +109,78 @@ describe('oauth connections server functions', () => {
       error: 'Xero tenant assignment can only be changed through the OAuth reconnect flow',
     })
   })
+
+  it('lists connections without returning raw external account identifiers', async () => {
+    const selections: unknown[] = []
+    const db = {
+      select: (selection?: unknown) => {
+        selections.push(selection)
+
+        if (selections.length === 1) {
+          return {
+            from: () => ({
+              where: () => ({
+                orderBy: () => ({
+                  limit: () => ({
+                    offset: async () => [
+                      {
+                        id: 'conn-1',
+                        organizationId: 'org-1',
+                        provider: 'xero',
+                        serviceType: 'accounting',
+                        externalAccountId: 'tenant-secret-1',
+                        accessToken: 'access-token-secret',
+                        refreshToken: 'refresh-token-secret',
+                        scopes: ['accounting.transactions'],
+                        isActive: true,
+                        lastSyncedAt: null,
+                        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+                        updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+                      },
+                    ],
+                  }),
+                }),
+              }),
+            }),
+          }
+        }
+
+        return {
+          from: () => ({
+            where: async () => [{ count: 1 }],
+          }),
+        }
+      },
+    }
+
+    const { listOAuthConnections } = await import('@/server/functions/oauth/connections')
+    const result = await listOAuthConnections(db as never, {
+      organizationId: 'org-1',
+      provider: 'xero',
+      serviceType: 'accounting',
+    })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+
+    expect(result.connections[0]).toEqual({
+      id: 'conn-1',
+      organizationId: 'org-1',
+      provider: 'xero',
+      serviceType: 'accounting',
+      scopes: ['accounting.transactions'],
+      isActive: true,
+      lastSyncAt: undefined,
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+    })
+    expect(JSON.stringify(result)).not.toContain('tenant-secret-1')
+    expect(JSON.stringify(result)).not.toContain('access-token-secret')
+    expect(JSON.stringify(result)).not.toContain('refresh-token-secret')
+    expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('externalAccountId')
+    expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('accessToken')
+    expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('refreshToken')
+  })
 })
