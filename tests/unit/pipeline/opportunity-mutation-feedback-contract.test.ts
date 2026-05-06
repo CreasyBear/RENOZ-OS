@@ -99,6 +99,16 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(server).not.toContain('failed.push(`${existing.id}: ${errorMessage}`)');
     expect(server).toContain("pipelineLogger.error('[Bulk Update] Exception'");
+    const createOpportunityBody = sliceBetween(
+      server,
+      'export const createOpportunity = createServerFn',
+      'export const updateOpportunity = createServerFn'
+    );
+    expect(createOpportunityBody).toContain('const [createdOpportunity] = await tx');
+    expect(createOpportunityBody).toContain("'PIPELINE_OPPORTUNITY_CREATE_FAILED'");
+    expect(createOpportunityBody).toContain('entityId: createdOpportunity.id');
+    expect(createOpportunityBody).not.toContain('entityId: result[0].id');
+    expect(createOpportunityBody).not.toContain('return result[0] ?? null');
     const updateOpportunityBody = sliceBetween(
       server,
       'export const updateOpportunity = createServerFn',

@@ -710,7 +710,7 @@ export const createOpportunity = createServerFn({ method: 'POST' })
     const weightedValue = calculateWeightedValue(value, actualProbability);
 
     const created = await db.transaction(async (tx) => {
-      const result = await tx
+      const [createdOpportunity] = await tx
         .insert(opportunities)
         .values({
           organizationId: ctx.organizationId,
@@ -733,22 +733,30 @@ export const createOpportunity = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      if (!createdOpportunity) {
+        throw new ServerError(
+          'Unable to create opportunity',
+          500,
+          'PIPELINE_OPPORTUNITY_CREATE_FAILED'
+        );
+      }
+
       await enqueueSearchIndexOutbox(
         {
           organizationId: ctx.organizationId,
           entityType: 'opportunity',
-          entityId: result[0].id,
+          entityId: createdOpportunity.id,
           action: 'upsert',
           payload: {
-            title: result[0].title,
-            subtitle: result[0].customerId ?? undefined,
-            description: result[0].description ?? undefined,
+            title: createdOpportunity.title,
+            subtitle: createdOpportunity.customerId ?? undefined,
+            description: createdOpportunity.description ?? undefined,
           },
         },
         tx
       );
 
-      return result[0] ?? null;
+      return createdOpportunity;
     });
 
     // Log opportunity creation
