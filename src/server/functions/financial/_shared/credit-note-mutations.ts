@@ -40,47 +40,6 @@ export async function createCreditNoteRecord(
   ctx: SessionContext,
   data: z.infer<typeof createCreditNoteSchema>,
 ): Promise<CreditNoteRecord> {
-  // Verify customer exists and belongs to organization
-  const customer = await db
-    .select()
-    .from(customers)
-    .where(
-      and(
-        eq(customers.id, data.customerId),
-        eq(customers.organizationId, ctx.organizationId),
-        isNull(customers.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (customer.length === 0) {
-    throw new NotFoundError('Customer not found', 'customer');
-  }
-
-  // Verify order if provided
-  if (data.orderId) {
-    const order = await db
-      .select()
-      .from(orders)
-      .where(
-        and(
-          eq(orders.id, data.orderId),
-          eq(orders.organizationId, ctx.organizationId),
-          isNull(orders.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    if (order.length === 0) {
-      throw new NotFoundError('Order not found', 'order');
-    }
-
-    // Verify order belongs to customer
-    if (order[0].customerId !== data.customerId) {
-      throw new ValidationError('Order does not belong to specified customer');
-    }
-  }
-
   // Calculate GST if not provided
   const gstAmount = data.gstAmount ?? calculateGst(data.amount);
 
@@ -90,52 +49,106 @@ export async function createCreditNoteRecord(
 
   while (attempts < maxAttempts) {
     try {
-      // Generate credit note number fresh on each attempt
-      const creditNoteNumber = await generateCreditNoteNumber(
-        ctx.organizationId,
-      );
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+        );
 
-      // Create credit note
-      const [creditNote] = await db
-        .insert(creditNotes)
-        .values({
-          organizationId: ctx.organizationId,
-          creditNoteNumber,
-          customerId: data.customerId,
-          orderId: data.orderId,
-          amount: data.amount,
-          gstAmount,
-          reason: data.reason,
-          internalNotes: data.internalNotes,
-          status: 'draft',
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        })
-        .returning();
+        const [customer] = await tx
+          .select()
+          .from(customers)
+          .where(
+            and(
+              eq(customers.id, data.customerId),
+              eq(customers.organizationId, ctx.organizationId),
+              isNull(customers.deletedAt),
+            ),
+          )
+          .for('update')
+          .limit(1);
+
+        if (!customer) {
+          throw new NotFoundError('Customer not found', 'customer');
+        }
+
+        if (data.orderId) {
+          const [order] = await tx
+            .select({
+              customerId: orders.customerId,
+            })
+            .from(orders)
+            .where(
+              and(
+                eq(orders.id, data.orderId),
+                eq(orders.organizationId, ctx.organizationId),
+                isNull(orders.deletedAt),
+              ),
+            )
+            .for('update')
+            .limit(1);
+
+          if (!order) {
+            throw new NotFoundError('Order not found', 'order');
+          }
+
+          if (order.customerId !== data.customerId) {
+            throw new ValidationError('Order does not belong to specified customer');
+          }
+        }
+
+        // Generate credit note number fresh on each attempt.
+        const creditNoteNumber = await generateCreditNoteNumber(
+          ctx.organizationId,
+          tx
+        );
+
+        const [creditNote] = await tx
+          .insert(creditNotes)
+          .values({
+            organizationId: ctx.organizationId,
+            creditNoteNumber,
+            customerId: data.customerId,
+            orderId: data.orderId,
+            amount: data.amount,
+            gstAmount,
+            reason: data.reason,
+            internalNotes: data.internalNotes,
+            status: 'draft',
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          })
+          .returning();
+
+        if (!creditNote) {
+          throw new ValidationError('Credit note could not be created');
+        }
+
+        return { creditNote, customerName: customer.name };
+      });
 
       // Activity logging
       const logger = createActivityLoggerWithContext(ctx);
       logger.logAsync({
         entityType: 'order', // Credit notes relate to orders/invoices
-        entityId: creditNote.id,
+        entityId: result.creditNote.id,
         action: 'created',
-        description: `Created credit note: ${creditNote.creditNoteNumber}`,
+        description: `Created credit note: ${result.creditNote.creditNoteNumber}`,
         changes: computeChanges({
           before: null,
-          after: creditNote,
+          after: result.creditNote,
           excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
         }),
         metadata: {
-          creditNoteNumber: creditNote.creditNoteNumber ?? undefined,
-          customerId: creditNote.customerId,
-          customerName: customer[0].name,
-          orderId: creditNote.orderId ?? undefined,
-          total: Number(creditNote.amount),
-          status: creditNote.status,
+          creditNoteNumber: result.creditNote.creditNoteNumber ?? undefined,
+          customerId: result.creditNote.customerId,
+          customerName: result.customerName,
+          orderId: result.creditNote.orderId ?? undefined,
+          total: Number(result.creditNote.amount),
+          status: result.creditNote.status,
         },
       });
 
-      return creditNote;
+      return result.creditNote;
     } catch (err: unknown) {
       // PostgreSQL unique violation error code is '23505'
       const pgError = err as { code?: string };

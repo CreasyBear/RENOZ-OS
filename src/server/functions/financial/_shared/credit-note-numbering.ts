@@ -3,15 +3,18 @@
  */
 
 import { and, desc, eq, like } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { db, type TransactionExecutor } from '@/lib/db';
 import { creditNotes } from 'drizzle/schema';
 
-export async function generateCreditNoteNumber(organizationId: string): Promise<string> {
+export async function generateCreditNoteNumber(
+  organizationId: string,
+  executor: TransactionExecutor = db
+): Promise<string> {
   const now = new Date();
   const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
   const prefix = `CN-${yearMonth}-`;
 
-  const result = await db
+  const result = await executor
     .select({ creditNoteNumber: creditNotes.creditNoteNumber })
     .from(creditNotes)
     .where(

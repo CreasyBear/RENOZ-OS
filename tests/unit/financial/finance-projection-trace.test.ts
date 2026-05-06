@@ -189,6 +189,41 @@ describe('finance schema trace repair', () => {
     expect(source).not.toContain('newPaidAmount = currentPaid + creditAmount');
   });
 
+  it('creates credit notes inside a tenant-scoped transaction', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/credit-note-mutations.ts',
+    );
+    const numberingSource = read(
+      'src/server/functions/financial/_shared/credit-note-numbering.ts',
+    );
+    const createSource = source.slice(
+      source.indexOf('export async function createCreditNoteRecord'),
+      source.indexOf('export async function updateCreditNoteRecord'),
+    );
+    const createCompact = compact(createSource);
+    const transactionIndex = createCompact.indexOf('db.transaction(async(tx)');
+    const setConfigIndex = createCompact.indexOf("set_config('app.organization_id'");
+    const customerLockIndex = createCompact.indexOf(".for('update')");
+    const orderLockIndex = createCompact.indexOf(".for('update')", customerLockIndex + 1);
+    const numberIndex = createCompact.indexOf('generateCreditNoteNumber(ctx.organizationId,tx)');
+    const insertIndex = createCompact.indexOf('.insert(creditNotes)');
+    const insertGuardIndex = createCompact.indexOf(
+      "thrownewValidationError('Creditnotecouldnotbecreated')",
+    );
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(customerLockIndex).toBeGreaterThan(setConfigIndex);
+    expect(orderLockIndex).toBeGreaterThan(customerLockIndex);
+    expect(numberIndex).toBeGreaterThan(orderLockIndex);
+    expect(insertIndex).toBeGreaterThan(numberIndex);
+    expect(insertGuardIndex).toBeGreaterThan(insertIndex);
+    expect(createCompact).toContain('eq(customers.organizationId,ctx.organizationId)');
+    expect(createCompact).toContain('eq(orders.organizationId,ctx.organizationId)');
+    expect(numberingSource).toContain('executor: TransactionExecutor = db');
+    expect(numberingSource).toContain('await executor');
+  });
+
   it('locks credit-note updates before validating draft state', () => {
     const source = read(
       'src/server/functions/financial/_shared/credit-note-mutations.ts',
