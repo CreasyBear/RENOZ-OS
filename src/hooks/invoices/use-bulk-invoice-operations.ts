@@ -17,6 +17,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { toastSuccess, toastError } from '@/hooks';
 import type { InvoiceStatus } from '@/lib/constants/invoice-status';
 import type { UpdateInvoiceStatusInput } from '@/lib/schemas/invoices';
+import { formatInvoiceMutationError } from './_mutation-errors';
 
 const BATCH_SIZE = 10; // Process invoices in batches to avoid overwhelming the server
 
@@ -32,7 +33,8 @@ export interface BulkOperationResult {
 async function processBatches(
   invoiceIds: string[],
   batchSize: number,
-  processor: (invoiceId: string) => Promise<void>
+  processor: (invoiceId: string) => Promise<void>,
+  formatError: (error: unknown) => string
 ): Promise<BulkOperationResult> {
   const result: BulkOperationResult = {
     success: 0,
@@ -50,7 +52,7 @@ async function processBatches(
         result.failed++;
         result.errors.push({
           id: invoiceId,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: formatError(error),
         });
       }
     });
@@ -81,9 +83,14 @@ export function useBulkSendReminders() {
 
   return useMutation({
     mutationFn: async (invoiceIds: string[]): Promise<BulkOperationResult> => {
-      const result = await processBatches(invoiceIds, BATCH_SIZE, async (invoiceId) => {
-        await sendReminderFn({ data: { id: invoiceId } });
-      });
+      const result = await processBatches(
+        invoiceIds,
+        BATCH_SIZE,
+        async (invoiceId) => {
+          await sendReminderFn({ data: { id: invoiceId } });
+        },
+        (error) => formatInvoiceMutationError(error, 'sendReminder')
+      );
 
       invalidateInvoiceQueries(queryClient, invoiceIds);
 
@@ -97,8 +104,8 @@ export function useBulkSendReminders() {
         toastError(`Failed to send ${result.failed} reminder${result.failed === 1 ? '' : 's'}`);
       }
     },
-    onError: (error: Error) => {
-      toastError(error.message || 'Failed to send reminders');
+    onError: (error: unknown) => {
+      toastError(formatInvoiceMutationError(error, 'bulkSendReminders'));
     },
   });
 }
@@ -116,14 +123,19 @@ export function useBulkUpdateInvoiceStatus() {
     ): Promise<BulkOperationResult> => {
       const { invoiceIds, status, paidAt } = params;
 
-      const result = await processBatches(invoiceIds, BATCH_SIZE, async (invoiceId) => {
-        const input: UpdateInvoiceStatusInput = {
-          id: invoiceId,
-          status,
-          ...(paidAt && { paidAt }),
-        };
-        await updateStatusFn({ data: input });
-      });
+      const result = await processBatches(
+        invoiceIds,
+        BATCH_SIZE,
+        async (invoiceId) => {
+          const input: UpdateInvoiceStatusInput = {
+            id: invoiceId,
+            status,
+            ...(paidAt && { paidAt }),
+          };
+          await updateStatusFn({ data: input });
+        },
+        (error) => formatInvoiceMutationError(error, 'updateStatus')
+      );
 
       invalidateInvoiceQueries(queryClient, invoiceIds);
 
@@ -137,8 +149,8 @@ export function useBulkUpdateInvoiceStatus() {
         toastError(`Failed to update ${result.failed} invoice${result.failed === 1 ? '' : 's'}`);
       }
     },
-    onError: (error: Error) => {
-      toastError(error.message || 'Failed to update invoice statuses');
+    onError: (error: unknown) => {
+      toastError(formatInvoiceMutationError(error, 'bulkUpdateStatus'));
     },
   });
 }

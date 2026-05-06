@@ -5,6 +5,8 @@ const INVOICE_FALLBACKS = {
   void: 'Unable to void invoice. Refresh and review before trying again.',
   sendReminder: 'Unable to send invoice reminder. Refresh and try again.',
   updateStatus: 'Unable to update invoice status. Refresh and review before trying again.',
+  bulkSendReminders: 'Unable to send invoice reminders. Refresh and try again.',
+  bulkUpdateStatus: 'Unable to update invoice statuses. Refresh and review before trying again.',
 } as const;
 
 const INVOICE_CODE_MESSAGES: Record<string, string> = {

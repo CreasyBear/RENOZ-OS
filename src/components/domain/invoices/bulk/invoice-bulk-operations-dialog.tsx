@@ -32,7 +32,6 @@ import { Link } from '@tanstack/react-router';
 import { CheckCircle, AlertTriangle, Mail, Loader2 } from 'lucide-react';
 import { FormatAmount } from '@/components/shared/format';
 import { InvoiceStatusBadge } from '../invoice-status-badge';
-import { toastError } from '@/hooks';
 import type { InvoiceStatus } from '@/lib/constants/invoice-status';
 import { INVOICE_STATUS_VALUES, INVOICE_STATUS_CONFIG } from '@/lib/constants/invoice-status';
 
@@ -124,8 +123,8 @@ export function InvoiceBulkOperationsDialog({
     try {
       await onConfirm(selectedStatus || undefined);
       onOpenChange(false);
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to complete bulk operation');
+    } catch {
+      // The owning bulk mutation hook already surfaces operator-safe failure feedback.
     } finally {
       setIsConfirming(false);
     }
