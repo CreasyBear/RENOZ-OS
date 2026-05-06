@@ -412,7 +412,8 @@ export const updateInstallerProfile = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(installerProfiles.id, id),
-          eq(installerProfiles.organizationId, ctx.organizationId)
+          eq(installerProfiles.organizationId, ctx.organizationId),
+          isNull(installerProfiles.deletedAt)
         )
       )
       .returning();
@@ -452,7 +453,7 @@ export const deleteInstallerProfile = createServerFn({ method: 'POST' })
       throw new NotFoundError('Installer not found', 'InstallerProfile');
     }
 
-    return { success: true };
+    return profile;
   });
 
 /**
@@ -539,10 +540,15 @@ export const updateInstallerStatusBatch = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(installerProfiles.organizationId, ctx.organizationId),
-          inArray(installerProfiles.id, data.installerIds)
+          inArray(installerProfiles.id, data.installerIds),
+          isNull(installerProfiles.deletedAt)
         )
       )
       .returning({ id: installerProfiles.id });
+
+    if (result.length !== data.installerIds.length) {
+      throw new NotFoundError('Some installers not found or access denied', 'InstallerProfile');
+    }
 
     return {
       success: true,

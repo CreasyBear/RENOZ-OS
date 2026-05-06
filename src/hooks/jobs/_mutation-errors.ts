@@ -122,7 +122,26 @@ const SITE_VISIT_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the site visit details and try again.',
 };
 
+const INSTALLER_PROFILE_MUTATION_FALLBACKS = {
+  create: 'Installer profile creation is temporarily unavailable. Please refresh and try again.',
+  update: 'Installer profile update is temporarily unavailable. Please refresh and try again.',
+  delete: 'Installer profile deletion is temporarily unavailable. Please refresh and try again.',
+  statusBatch:
+    'Installer status update is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const INSTALLER_PROFILE_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing installers.',
+  CONFLICT: 'Installer profile details conflict with the current team state.',
+  NOT_FOUND: 'The installer profile could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage installers.',
+  RATE_LIMIT: 'Too many installer changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the installer profile details and try again.',
+};
+
 export type JobTemplateMutationAction = keyof typeof JOB_TEMPLATE_MUTATION_FALLBACKS;
+export type InstallerProfileMutationAction =
+  keyof typeof INSTALLER_PROFILE_MUTATION_FALLBACKS;
 export type ProjectNoteMutationAction = keyof typeof PROJECT_NOTE_MUTATION_FALLBACKS;
 export type ProjectFileMutationAction = keyof typeof PROJECT_FILE_MUTATION_FALLBACKS;
 export type ProjectWorkstreamMutationAction =
@@ -137,6 +156,15 @@ export function formatJobTemplateMutationError(
 ): string {
   return formatMutationError(error, JOB_TEMPLATE_MUTATION_FALLBACKS[action], {
     codeMessages: JOB_TEMPLATE_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatInstallerProfileMutationError(
+  error: unknown,
+  action: InstallerProfileMutationAction
+): string {
+  return formatMutationError(error, INSTALLER_PROFILE_MUTATION_FALLBACKS[action], {
+    codeMessages: INSTALLER_PROFILE_MUTATION_CODE_MESSAGES,
   });
 }
 

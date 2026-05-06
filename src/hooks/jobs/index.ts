@@ -148,6 +148,7 @@ export {
 } from './use-job-templates-config';
 
 export {
+  formatInstallerProfileMutationError,
   formatJobTemplateMutationError,
   formatProjectBomMutationError,
   formatProjectFileMutationError,
@@ -157,6 +158,7 @@ export {
   formatSiteVisitMutationError,
 } from './_mutation-errors';
 export type {
+  InstallerProfileMutationAction,
   JobTemplateMutationAction,
   ProjectBomMutationAction,
   ProjectFileMutationAction,

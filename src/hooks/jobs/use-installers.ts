@@ -11,7 +11,7 @@
  * SPRINT-03: New hooks for installer management (Stories 019)
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
@@ -225,6 +225,23 @@ export function useSuggestInstallers(
 // MUTATION HOOKS
 // ============================================================================
 
+function invalidateInstallerMutationViews(
+  queryClient: QueryClient,
+  installerIds: readonly string[] = []
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
+  queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === 'installers' && query.queryKey[1] === 'suggestions',
+  });
+
+  for (const installerId of installerIds) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.installers.detail(installerId),
+    });
+  }
+}
+
 /**
  * Create installer profile
  */
@@ -234,8 +251,8 @@ export function useCreateInstallerProfile() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
+    onSuccess: (data) => {
+      invalidateInstallerMutationViews(queryClient, data?.id ? [data.id] : []);
     },
   });
 }
@@ -250,10 +267,7 @@ export function useUpdateInstallerProfile() {
   return useMutation({
     mutationFn: serverFn,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.installers.detail(data.id),
-      });
+      invalidateInstallerMutationViews(queryClient, [data.id]);
     },
   });
 }
@@ -267,8 +281,8 @@ export function useDeleteInstallerProfile() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
+    onSuccess: (data) => {
+      invalidateInstallerMutationViews(queryClient, data?.id ? [data.id] : []);
     },
   });
 }
@@ -558,16 +572,8 @@ export function useUpdateInstallerStatusBatch() {
 
   return useMutation({
     mutationFn: serverFn,
-    onSuccess: () => {
-      // Invalidate all installer lists (status affects list display)
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.lists() });
-      // Invalidate all detail queries (status is shown in detail view)
-      queryClient.invalidateQueries({ queryKey: queryKeys.installers.details() });
-      // Invalidate suggestions (status affects availability)
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          query.queryKey[0] === 'installers' && query.queryKey[1] === 'suggestions',
-      });
+    onSuccess: (data) => {
+      invalidateInstallerMutationViews(queryClient, data.installerIds);
     },
   });
 }

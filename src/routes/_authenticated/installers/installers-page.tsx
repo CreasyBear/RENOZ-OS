@@ -50,6 +50,7 @@ import { Search, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastError, toastSuccess, useConfirmation } from '@/hooks';
 import {
+  formatInstallerProfileMutationError,
   useInstallers,
   useCreateInstallerProfile,
   useUpdateInstallerStatusBatch,
@@ -170,8 +171,7 @@ export default function InstallersPage({ search }: InstallersPageProps) {
           });
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Failed to create installer profile';
+        const message = formatInstallerProfileMutationError(error, 'create');
         toastError(message);
         setCreateError(message);
       }
@@ -249,7 +249,7 @@ export default function InstallersPage({ search }: InstallersPageProps) {
         toastSuccess(`Updated ${selectedInstallerIds.size} installer(s)`);
         setSelectedInstallerIds(new Set());
       } catch (error) {
-        toastError(error instanceof Error ? error.message : 'Failed to update installers');
+        toastError(formatInstallerProfileMutationError(error, 'statusBatch'));
       } finally {
         setIsBulkUpdating(false);
       }

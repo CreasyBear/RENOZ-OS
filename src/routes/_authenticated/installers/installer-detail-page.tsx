@@ -55,7 +55,12 @@ import {
   Link2,
   PanelRight,
 } from 'lucide-react';
-import { useInstaller, useInstallerWorkload, useUpdateInstallerProfile } from '@/hooks/jobs';
+import {
+  formatInstallerProfileMutationError,
+  useInstaller,
+  useInstallerWorkload,
+  useUpdateInstallerProfile,
+} from '@/hooks/jobs';
 import { useTrackView } from '@/hooks/search';
 import { toastError, toastSuccess } from '@/hooks';
 import { useAlertDismissals, generateAlertId } from '@/hooks/_shared/use-alert-dismissals';
@@ -174,7 +179,7 @@ function InstallerDetailPage({ search }: InstallerDetailPageProps) {
       toastSuccess('Installer profile updated');
       setEditDialogOpen(false);
     } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to update installer profile');
+      toastError(formatInstallerProfileMutationError(error, 'update'));
     }
   }, [installer, editForm, updateInstallerProfile]);
 
