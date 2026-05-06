@@ -1,5 +1,9 @@
 const PASSWORD_RESET_FALLBACK =
   'Password reset is temporarily unavailable. Please try again.';
+const PASSWORD_RESET_COMPLETION_FALLBACK =
+  'Password update is temporarily unavailable. Please refresh and try again.';
+const PASSWORD_RESET_SESSION_EXPIRED =
+  'This reset session has expired. Request a new password reset link and try again.';
 
 function extractMessage(error: unknown): string | null {
   if (typeof error === 'string' && error.trim().length > 0) {
@@ -74,4 +78,34 @@ export function formatPasswordResetRequestError(
   }
 
   return retryMessage ?? PASSWORD_RESET_FALLBACK;
+}
+
+export function formatPasswordResetCompletionError(error: unknown): string {
+  const message = extractMessage(error);
+
+  if (!message || isUnsafePasswordResetMessage(message)) {
+    return PASSWORD_RESET_COMPLETION_FALLBACK;
+  }
+
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes('auth session missing') ||
+    normalized.includes('session not found') ||
+    normalized.includes('session expired') ||
+    normalized.includes('invalid session')
+  ) {
+    return PASSWORD_RESET_SESSION_EXPIRED;
+  }
+
+  if (
+    normalized.startsWith('password should') ||
+    normalized.startsWith('password must') ||
+    normalized.startsWith('password is too weak') ||
+    normalized.startsWith('new password should') ||
+    normalized.startsWith('new password must')
+  ) {
+    return message;
+  }
+
+  return PASSWORD_RESET_COMPLETION_FALLBACK;
 }

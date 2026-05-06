@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatPasswordResetCompletionError } from '@/hooks/auth';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import { getPasswordStrength } from '@/lib/auth/password-utils';
 import { passwordWithConfirmSchema } from '@/lib/schemas/auth';
@@ -31,7 +32,7 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
     onSubmit: async (values) => {
       setSubmitError(null);
       const { error } = await supabase.auth.updateUser({ password: values.password });
-      if (error) throw error;
+      if (error) throw new Error(formatPasswordResetCompletionError(error));
       await navigate({ to: '/dashboard', search: { tab: 'overview' } });
     },
   });
@@ -46,7 +47,7 @@ export function ResetPasswordForm({ className, ...props }: React.ComponentPropsW
     e.preventDefault();
     setSubmitError(null);
     void form.handleSubmit().catch((error: unknown) => {
-      setSubmitError(error instanceof Error ? error.message : 'An error occurred');
+      setSubmitError(formatPasswordResetCompletionError(error));
     });
   };
 
