@@ -33,6 +33,12 @@ describe('pipeline quote server PDF contract', () => {
     expect(quotePdf).toContain('storageUrl: signedUrl');
     expect(quotePdf).toContain('quotePdfUrl: signedUrl');
     expect(quotePdf).toContain('pdfUrl: signedUrl');
+    expect(quotePdf).toContain('const [updatedOpportunity] = await db');
+    expect(quotePdf).toContain('.returning({ id: opportunities.id })');
+    expect(quotePdf).toContain("throw new NotFoundError('Opportunity not found', 'opportunity')");
+    expect(quotePdf.indexOf('const [updatedOpportunity]')).toBeLessThan(
+      quotePdf.indexOf('activityLogger.logAsync')
+    );
     expect(quotePdf).not.toContain('uploadError.message');
     expect(quotePdf).not.toContain('signedUrlError.message');
     expect(quotePdf).not.toContain('signedUrlData.signedUrl');

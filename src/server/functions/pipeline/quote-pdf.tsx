@@ -354,11 +354,22 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       })
       .returning({ regenerationCount: generatedDocuments.regenerationCount });
 
+    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
+
+    const [updatedOpportunity] = await db
+      .update(opportunities)
+      .set({ quotePdfUrl: signedUrl })
+      .where(and(eq(opportunities.id, opp.id), eq(opportunities.organizationId, ctx.organizationId)))
+      .returning({ id: opportunities.id });
+
+    if (!updatedOpportunity) {
+      throw new NotFoundError('Opportunity not found', 'opportunity');
+    }
+
     const activityLogger = createActivityLogger({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
     });
-    const isRegeneration = (upsertResult?.regenerationCount ?? 0) > 0;
     activityLogger.logAsync({
       entityType: 'opportunity',
       entityId: opp.id,
@@ -376,11 +387,6 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
         quoteVersionId: id,
       },
     });
-
-    await db
-      .update(opportunities)
-      .set({ quotePdfUrl: signedUrl })
-      .where(and(eq(opportunities.id, opp.id), eq(opportunities.organizationId, ctx.organizationId)));
 
     return {
       quoteVersionId: id,
