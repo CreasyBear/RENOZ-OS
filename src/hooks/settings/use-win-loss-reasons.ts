@@ -10,6 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
+import { SETTINGS_READ_MESSAGES } from '@/lib/settings/read-error-messages';
 import {
   listWinLossReasons,
   createWinLossReason,
@@ -74,7 +75,7 @@ export function useWinLossReasons({
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Win/loss reasons are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: SETTINGS_READ_MESSAGES.winLossReasons,
         });
       }
     },

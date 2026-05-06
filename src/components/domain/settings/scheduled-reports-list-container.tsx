@@ -34,6 +34,10 @@ import { ScheduledReportForm } from './scheduled-report-form';
 import type { ScheduledReport } from '@/lib/schemas/reports/scheduled-reports';
 import type { CreateScheduledReportInput } from '@/lib/schemas/reports/scheduled-reports';
 import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from '@/lib/settings/read-error-messages';
+import {
   SCHEDULED_REPORTS_FILTER_CONFIG,
   DEFAULT_SCHEDULED_REPORTS_FILTERS,
 } from './scheduled-reports-filter-config';
@@ -390,7 +394,9 @@ export function ScheduledReportsListContainer({
           <Alert>
             <AlertTitle>Showing cached scheduled reports</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
-              <span>{error.message}</span>
+              <span>
+                {formatSettingsReadError(error, SETTINGS_READ_MESSAGES.scheduledReportsCached)}
+              </span>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
                 Retry
               </Button>

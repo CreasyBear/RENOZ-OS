@@ -17,6 +17,10 @@ import { buildFilterItems } from '@/components/shared/filters/build-filter-items
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from '@/lib/settings/read-error-messages';
 import { ScheduledReportsTablePresenter } from './scheduled-reports-table-presenter';
 import { ScheduledReportsMobileCards } from './scheduled-reports-mobile-cards';
 import type { ScheduledReport } from '@/lib/schemas/reports/scheduled-reports';
@@ -154,7 +158,7 @@ export const ScheduledReportsListPresenter = memo(
         <DataTableEmpty
           variant="error"
           title="Failed to load scheduled reports"
-          description={error.message ?? 'An unexpected error occurred'}
+          description={formatSettingsReadError(error, SETTINGS_READ_MESSAGES.scheduledReports)}
           action={onRetry ? { label: 'Try again', onClick: onRetry } : undefined}
           className={className}
         />

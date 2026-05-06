@@ -7,13 +7,19 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { UnifiedSettingsContainer } from "@/components/domain/settings";
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from "@/lib/settings/read-error-messages";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
   errorComponent: ({ error }) => (
     <div className="container mx-auto py-12 text-center">
       <h2 className="text-xl font-semibold text-destructive mb-2">Failed to load settings</h2>
-      <p className="text-muted-foreground">{error.message}</p>
+      <p className="text-muted-foreground">
+        {formatSettingsReadError(error, SETTINGS_READ_MESSAGES.organizationSettings)}
+      </p>
     </div>
   ),
 });

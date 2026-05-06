@@ -36,6 +36,10 @@ import {
 } from 'lucide-react'
 import { useOrganizationQuery, useUpdateOrganization, useUpdateOrganizationSettings } from '@/hooks/organizations'
 import { queryKeys } from '@/lib/query-keys'
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from '@/lib/settings/read-error-messages'
 import { useOrganizationSettings } from '@/contexts/organization-settings-context'
 import { useCurrentUser } from '@/hooks'
 import {
@@ -665,7 +669,9 @@ function ErrorPane({
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
       <h3 className="text-lg font-medium text-foreground">Failed to load settings</h3>
-      <p className="text-sm mt-1">{error.message}</p>
+      <p className="text-sm mt-1">
+        {formatSettingsReadError(error, SETTINGS_READ_MESSAGES.organizationSettings)}
+      </p>
       <button
         type="button"
         onClick={onRetry}

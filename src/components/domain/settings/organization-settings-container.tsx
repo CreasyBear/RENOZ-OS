@@ -32,6 +32,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Building2, MapPin, Globe, DollarSign, Palette } from "lucide-react";
 import { queryKeys } from "@/lib/query-keys";
 import { createOrganizationSectionHandlers } from "@/lib/settings/organization-section-handlers";
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from "@/lib/settings/read-error-messages";
 
 // ============================================================================
 // SIDEBAR CONFIGURATION - All inline, no hrefs
@@ -256,7 +260,9 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
       <h3 className="text-lg font-medium text-foreground">Failed to load settings</h3>
-      <p className="text-sm mt-1">{error.message}</p>
+      <p className="text-sm mt-1">
+        {formatSettingsReadError(error, SETTINGS_READ_MESSAGES.organizationSettings)}
+      </p>
       <button
         type="button"
         onClick={onRetry}

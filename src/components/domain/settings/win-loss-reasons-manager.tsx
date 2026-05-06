@@ -48,6 +48,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ErrorState } from "@/components/shared/error-state";
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from "@/lib/settings/read-error-messages";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
@@ -275,7 +279,10 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
         {error && !data ? (
           <ErrorState
             title="Failed to load reasons"
-            message={error.message}
+            message={formatSettingsReadError(
+              error,
+              SETTINGS_READ_MESSAGES.winLossReasons
+            )}
           />
         ) : null}
 
