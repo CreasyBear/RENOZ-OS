@@ -99,6 +99,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(server).not.toContain('failed.push(`${existing.id}: ${errorMessage}`)');
     expect(server).toContain("pipelineLogger.error('[Bulk Update] Exception'");
+    expect(server).not.toContain('CONVERT TO ORDER (Stub)');
     const createOpportunityBody = sliceBetween(
       server,
       'export const createOpportunity = createServerFn',
@@ -153,6 +154,13 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(error, 'convertToOrder')"
     );
+    expect(opportunityDetail).toContain(
+      'const result = await convertMutation.mutateAsync({ opportunityId });'
+    );
+    expect(opportunityDetail).toContain('toast.success(`Order ${result.order.orderNumber} created`)');
+    expect(opportunityDetail).toContain(
+      "navigate({ to: '/orders/$orderId', params: { orderId: result.order.id } });"
+    );
     expect(opportunityDetail).not.toContain("toastError('Failed to delete opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update stage')");
     expect(opportunityDetail).not.toContain(
@@ -161,6 +169,8 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(opportunityDetail).not.toContain("throw new Error('Delete failed')");
     expect(opportunityDetail).not.toContain("toastError('Failed to update opportunity')");
     expect(opportunityDetail).not.toContain("toastError('Failed to convert to order')");
+    expect(opportunityDetail).not.toContain("toast.success('Order conversion initiated')");
+    expect(opportunityDetail).not.toContain('Navigate to orders list since the integration is pending');
     expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "create")');
     expect(quickDialog).toContain('formatPipelineOpportunityMutationError(error, "update")');
     expect(quickDialog).not.toContain(

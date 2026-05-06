@@ -284,10 +284,6 @@ export function useBulkUpdateOpportunityStage() {
 
 export interface ConvertToOrderInput {
   opportunityId: string;
-  options?: {
-    createJob?: boolean;
-    depositPercentage?: number;
-  };
 }
 
 /**
@@ -297,13 +293,15 @@ export function useConvertToOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ opportunityId, options }: ConvertToOrderInput) =>
-      convertToOrder({ data: { id: opportunityId, ...options } }),
-    onSuccess: (_, { opportunityId }) => {
+    mutationFn: ({ opportunityId }: ConvertToOrderInput) =>
+      convertToOrder({ data: { id: opportunityId } }),
+    onSuccess: (result, { opportunityId }) => {
       // Invalidate opportunity and order caches
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
       invalidateOpportunityListQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.order.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(result.order.id) });
       invalidatePipelineMetrics(queryClient);
     },
   });

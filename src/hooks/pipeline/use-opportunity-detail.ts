@@ -388,10 +388,9 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
 
     onConvertToOrder: async () => {
       try {
-        await convertMutation.mutateAsync({ opportunityId });
-        toast.success('Order conversion initiated');
-        // Note: Navigate to orders list since the integration is pending
-        navigate({ to: '/orders' });
+        const result = await convertMutation.mutateAsync({ opportunityId });
+        toast.success(`Order ${result.order.orderNumber} created`);
+        navigate({ to: '/orders/$orderId', params: { orderId: result.order.id } });
       } catch (error) {
         toastError(formatPipelineOpportunityMutationError(error, 'convertToOrder'));
       }

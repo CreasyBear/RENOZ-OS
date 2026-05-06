@@ -27,6 +27,11 @@ describe('pipeline opportunity mutation cache contract', () => {
     expect(count(source, 'queryKeys.opportunities.lists()')).toBe(4);
     expect(count(source, 'queryKeys.opportunities.infiniteLists()')).toBe(2);
     expect(count(source, 'queryKeys.pipeline.metrics()')).toBe(1);
+    expect(source).toContain('convertToOrder({ data: { id: opportunityId } })');
+    expect(source).toContain('queryKeys.orders.detail(result.order.id)');
+    expect(source).toContain('queryKeys.orders.withCustomer(result.order.id)');
+    expect(source).not.toContain('options?:');
+    expect(source).not.toContain('...options');
     expect(source).toContain('export function useBulkDeleteOpportunities()');
     expect(source).toContain('Promise.allSettled');
     expect(source).toContain('deleteOpportunity({ data: { id } })');
