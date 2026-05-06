@@ -8,13 +8,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { changePassword } from "@/server/functions/auth/change-password";
 import { toast } from "@/hooks/_shared/use-toast";
+import { formatPasswordChangeError } from "@/hooks/auth/password-change-error-messages";
 
 export function useChangePassword() {
   return useMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
-      const result = await changePassword({ data });
+      const result = await changePassword({ data }).catch((error) => {
+        throw new Error(formatPasswordChangeError(error));
+      });
       if (!result.success) {
-        throw new Error(result.error || "Failed to change password");
+        throw new Error(formatPasswordChangeError(result.error));
       }
       return result;
     },
@@ -22,7 +25,7 @@ export function useChangePassword() {
       toast.success("Password changed successfully");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to change password");
+      toast.error(formatPasswordChangeError(error));
     },
   });
 }
