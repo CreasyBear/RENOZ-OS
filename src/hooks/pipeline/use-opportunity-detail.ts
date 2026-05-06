@@ -26,6 +26,7 @@ import {
   useConvertToOrder,
 } from './use-opportunity-mutations';
 import { useSendQuote } from './use-quote-mutations';
+import { formatPipelineQuoteMutationError } from './_mutation-errors';
 import { useOpportunityAlerts, useOpportunityActiveItems } from './use-opportunity-detail-extended';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { toast } from '@/lib/toast';
@@ -358,7 +359,7 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
         });
 
         if (!result.success) {
-          toastError(result.error ?? 'Failed to send quote');
+          toastError(formatPipelineQuoteMutationError(result.error, 'send'));
           return;
         }
 
@@ -374,7 +375,7 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
           },
         });
       } catch (error) {
-        toastError(error instanceof Error ? error.message : 'Failed to send quote');
+        toastError(formatPipelineQuoteMutationError(error, 'send'));
       }
     },
 
