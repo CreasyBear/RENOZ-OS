@@ -18,11 +18,11 @@ import {
   createQuoteVersion,
   restoreQuoteVersion,
   updateQuoteExpiration,
-  extendQuoteValidity,
   generateQuotePdf,
   sendQuote,
 } from '@/server/functions/pipeline/quote-versions';
 import { deleteQuote } from '@/server/functions/pipeline/quote-delete';
+import { extendQuoteValidity } from '@/server/functions/pipeline/quote-validity';
 import type {
   GenerateQuotePdfResult,
   QuoteLineItem,

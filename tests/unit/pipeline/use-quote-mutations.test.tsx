@@ -12,9 +12,12 @@ vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   createQuoteVersion: vi.fn(),
   restoreQuoteVersion: vi.fn(),
   updateQuoteExpiration: vi.fn(),
-  extendQuoteValidity: vi.fn(),
   generateQuotePdf: (args: unknown) => generateQuotePdfMock(args),
   sendQuote: (args: unknown) => sendQuoteMock(args),
+}));
+
+vi.mock('@/server/functions/pipeline/quote-validity', () => ({
+  extendQuoteValidity: vi.fn(),
 }));
 
 vi.mock('@/server/functions/pipeline/quote-delete', () => ({

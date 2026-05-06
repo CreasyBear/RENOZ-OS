@@ -33,12 +33,18 @@ describe('pipeline quote server validity contract', () => {
     expect(quoteVersioning).not.toContain('export const getExpiringQuotes');
     expect(quoteVersioning).not.toContain('export const getExpiredQuotes');
     expect(quoteVersioning).not.toContain('export const getQuoteValidityStats');
+    expect(quoteVersioning).not.toContain('export const extendQuoteValidity');
+    expect(quoteVersioning).not.toContain('export const validateQuoteForConversion');
 
     expect(quoteValidity).toContain('export const getExpiringQuotes');
     expect(quoteValidity).toContain('export const getExpiredQuotes');
     expect(quoteValidity).toContain('export const getQuoteValidityStats');
     expect(quoteValidity).toContain('export const getQuoteValidityStatsSchema');
+    expect(quoteValidity).toContain('export const extendQuoteValidity');
+    expect(quoteValidity).toContain('export const validateQuoteForConversion');
     expect(quoteValidity).toContain("notInArray(opportunities.stage, ['won', 'lost'])");
+    expect(quoteValidity).toContain("throw new ValidationError('New expiration date must be in the future')");
+    expect(quoteValidity).toContain("message: 'No quote has been created for this opportunity'");
 
     expect(useQuotes).toContain("} from '@/server/functions/pipeline/quote-validity'");
   });
