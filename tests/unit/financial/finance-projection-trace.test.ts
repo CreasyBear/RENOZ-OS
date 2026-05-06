@@ -188,4 +188,43 @@ describe('finance schema trace repair', () => {
     expect(source).toContain('recalculateOrderFinancialProjection');
     expect(source).not.toContain('newPaidAmount = currentPaid + creditAmount');
   });
+
+  it('locks credit-note application before updating financial projection', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/credit-note-mutations.ts',
+    );
+    const applySource = source.slice(
+      source.indexOf('export async function applyCreditNoteRecordToInvoice'),
+      source.indexOf('export async function voidCreditNoteRecord'),
+    );
+    const transactionIndex = applySource.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = applySource.indexOf("set_config('app.organization_id'");
+    const creditNoteLockIndex = applySource.indexOf(".for('update')");
+    const issuedStatusIndex = applySource.indexOf('Only issued credit notes can be applied');
+    const orderLockIndex = applySource.indexOf(".for('update')", creditNoteLockIndex + 1);
+    const customerCheckIndex = applySource.indexOf(
+      'Credit note and order must belong to the same customer',
+    );
+    const updateIndex = applySource.indexOf('.update(creditNotes)');
+    const returningIndex = applySource.indexOf('.returning()');
+    const projectionIndex = applySource.indexOf('await recalculateOrderFinancialProjection');
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(creditNoteLockIndex).toBeGreaterThan(setConfigIndex);
+    expect(issuedStatusIndex).toBeGreaterThan(creditNoteLockIndex);
+    expect(orderLockIndex).toBeGreaterThan(issuedStatusIndex);
+    expect(customerCheckIndex).toBeGreaterThan(orderLockIndex);
+    expect(updateIndex).toBeGreaterThan(customerCheckIndex);
+    expect(returningIndex).toBeGreaterThan(updateIndex);
+    expect(projectionIndex).toBeGreaterThan(returningIndex);
+    expect(compact(applySource)).toContain('eq(creditNotes.id,data.creditNoteId)');
+    expect(compact(applySource)).toContain(
+      'eq(creditNotes.organizationId,ctx.organizationId)',
+    );
+    expect(compact(applySource)).toContain('isNull(creditNotes.deletedAt)');
+    expect(compact(applySource)).toContain('eq(orders.id,data.orderId)');
+    expect(compact(applySource)).toContain('eq(orders.organizationId,ctx.organizationId)');
+    expect(compact(applySource)).toContain('isNull(orders.deletedAt)');
+  });
 });

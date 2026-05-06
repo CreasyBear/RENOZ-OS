@@ -2,7 +2,7 @@
  * Credit note mutation helpers.
  */
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { creditNotes, customers, orders } from 'drizzle/schema';
 import {
@@ -285,53 +285,59 @@ export async function applyCreditNoteRecordToInvoice(
   ctx: SessionContext,
   data: z.infer<typeof applyCreditNoteSchema>,
 ): Promise<CreditNoteRecord> {
-  // Get credit note
-  const creditNote = await db
-    .select()
-    .from(creditNotes)
-    .where(
-      and(
-        eq(creditNotes.id, data.creditNoteId),
-        eq(creditNotes.organizationId, ctx.organizationId),
-        isNull(creditNotes.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (creditNote.length === 0) {
-    throw new NotFoundError('Credit note not found', 'credit_note');
-  }
-
-  if (creditNote[0].status !== 'issued') {
-    throw new ConflictError('Only issued credit notes can be applied');
-  }
-
-  // Get target order
-  const order = await db
-    .select()
-    .from(orders)
-    .where(
-      and(
-        eq(orders.id, data.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-        isNull(orders.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (order.length === 0) {
-    throw new NotFoundError('Order not found', 'order');
-  }
-
-  // Verify order belongs to same customer
-  if (order[0].customerId !== creditNote[0].customerId) {
-    throw new ValidationError(
-      'Credit note and order must belong to the same customer',
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
-  }
 
-  await db.transaction(async (tx) => {
-    await tx
+    const [creditNote] = await tx
+      .select()
+      .from(creditNotes)
+      .where(
+        and(
+          eq(creditNotes.id, data.creditNoteId),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
+
+    if (!creditNote) {
+      throw new NotFoundError('Credit note not found', 'credit_note');
+    }
+
+    if (creditNote.status !== 'issued') {
+      throw new ConflictError('Only issued credit notes can be applied');
+    }
+
+    const [order] = await tx
+      .select({
+        customerId: orders.customerId,
+        orderNumber: orders.orderNumber,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, data.orderId),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
+
+    if (!order) {
+      throw new NotFoundError('Order not found', 'order');
+    }
+
+    if (order.customerId !== creditNote.customerId) {
+      throw new ValidationError(
+        'Credit note and order must belong to the same customer',
+      );
+    }
+
+    const [updated] = await tx
       .update(creditNotes)
       .set({
         status: 'applied',
@@ -339,45 +345,52 @@ export async function applyCreditNoteRecordToInvoice(
         appliedAt: new Date(),
         updatedBy: ctx.user.id,
       })
-      .where(eq(creditNotes.id, data.creditNoteId));
+      .where(
+        and(
+          eq(creditNotes.id, data.creditNoteId),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundError('Credit note not found or already modified', 'credit_note');
+    }
 
     await recalculateOrderFinancialProjection(tx, {
       orderId: data.orderId,
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
     });
-  });
 
-  // Return updated credit note
-  const [updated] = await db
-    .select()
-    .from(creditNotes)
-    .where(eq(creditNotes.id, data.creditNoteId));
+    return { before: creditNote, updated, order };
+  });
 
   // Activity logging
   const logger = createActivityLoggerWithContext(ctx);
   logger.logAsync({
     entityType: 'order',
-    entityId: updated.id,
+    entityId: result.updated.id,
     action: 'updated',
-    description: `Applied credit note ${updated.creditNoteNumber} to order`,
+    description: `Applied credit note ${result.updated.creditNoteNumber} to order`,
     changes: computeChanges({
-      before: creditNote[0],
-      after: updated,
+      before: result.before,
+      after: result.updated,
       excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
     }),
     metadata: {
-      creditNoteNumber: updated.creditNoteNumber ?? undefined,
-      customerId: updated.customerId,
+      creditNoteNumber: result.updated.creditNoteNumber ?? undefined,
+      customerId: result.updated.customerId,
       orderId: data.orderId,
-      orderNumber: order[0].orderNumber ?? undefined,
-      previousStatus: creditNote[0].status,
-      newStatus: updated.status,
-      total: Number(updated.amount),
+      orderNumber: result.order.orderNumber ?? undefined,
+      previousStatus: result.before.status,
+      newStatus: result.updated.status,
+      total: Number(result.updated.amount),
     },
   });
 
-  return updated;
+  return result.updated;
 }
 
 export async function voidCreditNoteRecord(
