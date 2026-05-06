@@ -24,4 +24,22 @@ describe('pipeline quote server validity contract', () => {
       'new Date(issueDate.getTime() + DEFAULT_QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000)'
     );
   });
+
+  it('keeps quote validity alert and stats reads out of quote versioning', () => {
+    const quoteVersioning = read('src/server/functions/pipeline/quote-versions.tsx');
+    const quoteValidity = read('src/server/functions/pipeline/quote-validity.ts');
+    const useQuotes = read('src/hooks/pipeline/use-quotes.ts');
+
+    expect(quoteVersioning).not.toContain('export const getExpiringQuotes');
+    expect(quoteVersioning).not.toContain('export const getExpiredQuotes');
+    expect(quoteVersioning).not.toContain('export const getQuoteValidityStats');
+
+    expect(quoteValidity).toContain('export const getExpiringQuotes');
+    expect(quoteValidity).toContain('export const getExpiredQuotes');
+    expect(quoteValidity).toContain('export const getQuoteValidityStats');
+    expect(quoteValidity).toContain('export const getQuoteValidityStatsSchema');
+    expect(quoteValidity).toContain("notInArray(opportunities.stage, ['won', 'lost'])");
+
+    expect(useQuotes).toContain("} from '@/server/functions/pipeline/quote-validity'");
+  });
 });

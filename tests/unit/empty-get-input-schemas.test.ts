@@ -26,7 +26,7 @@ describe('empty GET input schemas', () => {
   });
 
   it('treat omitted quote validity stats input as an empty object', async () => {
-    const { getQuoteValidityStatsSchema } = await import('@/server/functions/pipeline/quote-versions');
+    const { getQuoteValidityStatsSchema } = await import('@/server/functions/pipeline/quote-validity');
     expect(getQuoteValidityStatsSchema.parse(undefined)).toEqual({});
   });
 

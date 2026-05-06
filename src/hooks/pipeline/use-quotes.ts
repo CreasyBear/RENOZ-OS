@@ -22,10 +22,12 @@ import {
   listQuoteVersions,
   getQuoteVersion,
   compareQuoteVersions,
+} from '@/server/functions/pipeline/quote-versions';
+import {
   getExpiringQuotes,
   getExpiredQuotes,
   getQuoteValidityStats,
-} from '@/server/functions/pipeline/quote-versions';
+} from '@/server/functions/pipeline/quote-validity';
 import type { QuoteVersion } from '@/lib/schemas/pipeline';
 
 // ============================================================================
