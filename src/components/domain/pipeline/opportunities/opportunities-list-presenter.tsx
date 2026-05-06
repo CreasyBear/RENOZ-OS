@@ -16,6 +16,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormatAmount } from "@/components/shared/format";
 import { cn } from "@/lib/utils";
+import {
+  PIPELINE_READ_MESSAGES,
+  formatPipelineReadError,
+} from "@/lib/pipeline/read-error-messages";
 import type { SortDirection } from "@/components/shared/data-table/server-sorting";
 import { OpportunitiesTablePresenter } from "./opportunities-table-presenter";
 import { OpportunitiesMobileCards } from "./opportunities-mobile-cards";
@@ -231,8 +235,8 @@ export const OpportunitiesListPresenter = memo(function OpportunitiesListPresent
     return (
       <DataTableEmpty
         variant="error"
-        title="Failed to load opportunities"
-        description={error.message ?? "An unexpected error occurred"}
+        title={PIPELINE_READ_MESSAGES.opportunitiesTitle}
+        description={formatPipelineReadError(error, PIPELINE_READ_MESSAGES.opportunities)}
         className={className}
       />
     );

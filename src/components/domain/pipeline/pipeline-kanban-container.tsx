@@ -56,6 +56,10 @@ import {
 } from "lucide-react";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
 import { queryKeys } from "@/lib/query-keys";
+import {
+  PIPELINE_READ_MESSAGES,
+  formatPipelineReadError,
+} from "@/lib/pipeline/read-error-messages";
 
 // ============================================================================
 // DEFAULT FILTERS - Keep result set manageable
@@ -473,10 +477,12 @@ export function PipelineKanbanContainer({
 
   // Handle error state
   if (error && !isLoading) {
+    const errorMessage = formatPipelineReadError(error, PIPELINE_READ_MESSAGES.pipelineBoard);
+
     return (
       <ErrorState
-        title="Failed to load pipeline"
-        message={error.message || "An unexpected error occurred"}
+        title={PIPELINE_READ_MESSAGES.pipelineBoardTitle}
+        message={errorMessage}
         onRetry={() => {
           queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
           queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });

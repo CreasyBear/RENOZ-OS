@@ -24,4 +24,46 @@ describe('pipeline read state contract', () => {
     expect(quoteVersionHistory).toContain('PIPELINE_READ_MESSAGES.quoteVersionHistory');
     expect(quoteVersionHistory).not.toContain('Failed to load version history.');
   });
+
+  it('keeps board, list, and document read states behind the pipeline read formatter', () => {
+    const formatter = read('src/lib/pipeline/read-error-messages.ts');
+    const pipelineBoard = read('src/components/domain/pipeline/pipeline-kanban-container.tsx');
+    const opportunitiesContainer = read(
+      'src/components/domain/pipeline/opportunities/opportunities-list-container.tsx'
+    );
+    const opportunitiesPresenter = read(
+      'src/components/domain/pipeline/opportunities/opportunities-list-presenter.tsx'
+    );
+    const documentsTab = read(
+      'src/components/domain/pipeline/opportunities/tabs/opportunity-documents-tab.tsx'
+    );
+
+    expect(formatter).toContain('pipelineBoard:');
+    expect(formatter).toContain('opportunities:');
+    expect(formatter).toContain('opportunitiesCached:');
+    expect(formatter).toContain('opportunityDocuments:');
+    expect(formatter).toContain('opportunityDocumentsCached:');
+
+    for (const source of [
+      pipelineBoard,
+      opportunitiesContainer,
+      opportunitiesPresenter,
+      documentsTab,
+    ]) {
+      expect(source).toContain('formatPipelineReadError');
+    }
+
+    expect(pipelineBoard).toContain('PIPELINE_READ_MESSAGES.pipelineBoard');
+    expect(opportunitiesContainer).toContain('PIPELINE_READ_MESSAGES.opportunitiesCached');
+    expect(opportunitiesPresenter).toContain('PIPELINE_READ_MESSAGES.opportunities');
+    expect(documentsTab).toContain('PIPELINE_READ_MESSAGES.opportunityDocuments');
+    expect(documentsTab).toContain('PIPELINE_READ_MESSAGES.opportunityDocumentsCached');
+
+    expect(pipelineBoard).not.toContain('Failed to load pipeline');
+    expect(pipelineBoard).not.toContain('message={error.message');
+    expect(opportunitiesPresenter).not.toContain('Failed to load opportunities');
+    expect(opportunitiesPresenter).not.toContain('description={error.message');
+    expect(documentsTab).not.toContain('Failed to load documents');
+    expect(documentsTab).not.toContain('error.message ||');
+  });
 });

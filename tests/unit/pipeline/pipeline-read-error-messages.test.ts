@@ -22,4 +22,14 @@ describe('pipeline read error messages', () => {
       'Fallback copy'
     );
   });
+
+  it('keeps board, opportunity, and document read fallbacks in the domain map', () => {
+    expect(PIPELINE_READ_MESSAGES.pipelineBoard).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunities).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunitiesCached).toContain('Showing cached opportunities');
+    expect(PIPELINE_READ_MESSAGES.opportunityDocuments).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.opportunityDocumentsCached).toContain(
+      'Showing the most recent documents'
+    );
+  });
 });

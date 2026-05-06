@@ -27,6 +27,10 @@ import {
   formatFileSize,
   getDocumentTypeLabel,
 } from '@/hooks/documents';
+import {
+  PIPELINE_READ_MESSAGES,
+  formatPipelineReadError,
+} from '@/lib/pipeline/read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -161,6 +165,12 @@ export const OpportunityDocumentsTab = memo(function OpportunityDocumentsTab({
   });
 
   const documents = data?.documents ?? [];
+  const errorMessage = error
+    ? formatPipelineReadError(error, PIPELINE_READ_MESSAGES.opportunityDocuments)
+    : null;
+  const cachedErrorMessage = error
+    ? formatPipelineReadError(error, PIPELINE_READ_MESSAGES.opportunityDocumentsCached)
+    : null;
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -188,7 +198,8 @@ export const OpportunityDocumentsTab = memo(function OpportunityDocumentsTab({
         <LoadingSkeleton />
       ) : error && !data ? (
         <div className="text-center py-8 text-destructive">
-          <p>Failed to load documents</p>
+          <p>{PIPELINE_READ_MESSAGES.opportunityDocumentsTitle}</p>
+          <p className="text-sm text-muted-foreground">{errorMessage}</p>
           <Button variant="link" onClick={() => refetch()}>
             Try again
           </Button>
@@ -200,7 +211,7 @@ export const OpportunityDocumentsTab = memo(function OpportunityDocumentsTab({
           {error ? (
             <Alert>
               <AlertDescription>
-                {error.message || 'Documents are temporarily unavailable. Showing the most recent documents.'}
+                {cachedErrorMessage}
               </AlertDescription>
             </Alert>
           ) : null}

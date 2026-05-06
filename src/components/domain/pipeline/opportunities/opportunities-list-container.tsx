@@ -48,6 +48,10 @@ import {
   resolveOpportunitySortState,
   type SortDirection,
 } from "./opportunity-sorting";
+import {
+  PIPELINE_READ_MESSAGES,
+  formatPipelineReadError,
+} from "@/lib/pipeline/read-error-messages";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -371,9 +375,10 @@ export function OpportunitiesListContainer({
             <ArrowRightLeft className="h-4 w-4" />
             <AlertTitle>Showing cached opportunities</AlertTitle>
             <AlertDescription>
-              {opportunitiesError instanceof Error
-                ? opportunitiesError.message
-                : 'Opportunity data is temporarily unavailable. Please refresh and try again.'}
+              {formatPipelineReadError(
+                opportunitiesError,
+                PIPELINE_READ_MESSAGES.opportunitiesCached
+              )}
             </AlertDescription>
           </Alert>
         ) : null}
