@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { useProjects, useDeleteProject } from "@/hooks/jobs";
+import { formatProjectMutationError, useProjects, useDeleteProject } from "@/hooks/jobs";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import type {
   ProjectListQuery,
@@ -223,8 +223,8 @@ export function ProjectsListContainer({
       try {
         await deleteMutation.mutateAsync(projectId);
         toastSuccess("Project deleted");
-      } catch {
-        toastError("Failed to delete project");
+      } catch (error) {
+        toastError(formatProjectMutationError(error, "delete"));
       }
     },
     [deleteMutation, projects, confirmation]
@@ -247,8 +247,8 @@ export function ProjectsListContainer({
       await Promise.all(selectedItems.map((item) => deleteMutation.mutateAsync(item.id)));
       toastSuccess(`Deleted ${count} project${count > 1 ? "s" : ""}`);
       clearSelection();
-    } catch {
-      toastError("Failed to delete some projects");
+    } catch (error) {
+      toastError(formatProjectMutationError(error, "bulkDelete"));
     }
   }, [selectedItems, deleteMutation, confirmation, clearSelection]);
 

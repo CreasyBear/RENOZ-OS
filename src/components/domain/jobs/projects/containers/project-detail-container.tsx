@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toast } from '@/lib/toast';
 import {
+  formatProjectMutationError,
   formatSiteVisitMutationError,
   useProjectDetail,
   useUpdateProjectTask,
@@ -145,8 +146,8 @@ export function ProjectDetailContainer({
       await detail.actions.onDelete();
       toast.success('Project deleted successfully');
       onBack?.();
-    } catch {
-      toast.error('Failed to delete project');
+    } catch (error) {
+      toast.error(formatProjectMutationError(error, 'delete'));
     }
   }, [detail.actions, onBack]);
 
@@ -156,8 +157,8 @@ export function ProjectDetailContainer({
     try {
       await detail.actions.onGenerateWorkOrder();
       toast.success('Work order generated');
-    } catch {
-      toast.error('Failed to generate work order');
+    } catch (error) {
+      toast.error(formatProjectMutationError(error, 'generateWorkOrder'));
     } finally {
       setIsGeneratingWorkOrder(false);
     }
@@ -169,8 +170,8 @@ export function ProjectDetailContainer({
     try {
       await detail.actions.onGenerateCompletionCertificate();
       toast.success('Completion certificate generated');
-    } catch {
-      toast.error('Failed to generate completion certificate');
+    } catch (error) {
+      toast.error(formatProjectMutationError(error, 'generateCompletionCertificate'));
     } finally {
       setIsGeneratingCompletionCertificate(false);
     }

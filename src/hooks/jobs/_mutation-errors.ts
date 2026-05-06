@@ -102,6 +102,24 @@ const PROJECT_BOM_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the project BOM details and try again.',
 };
 
+const PROJECT_MUTATION_FALLBACKS = {
+  delete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
+  bulkDelete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
+  generateWorkOrder:
+    'Work order generation is temporarily unavailable. Please refresh and try again.',
+  generateCompletionCertificate:
+    'Completion certificate generation is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const PROJECT_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing projects.',
+  CONFLICT: 'Project details conflict with the current workspace state.',
+  NOT_FOUND: 'The project could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage projects.',
+  RATE_LIMIT: 'Too many project changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the project details and try again.',
+};
+
 const SITE_VISIT_MUTATION_FALLBACKS = {
   create: 'Site visit scheduling is temporarily unavailable. Please refresh and try again.',
   update: 'Site visit update is temporarily unavailable. Please refresh and try again.',
@@ -166,6 +184,7 @@ export type ProjectWorkstreamMutationAction =
   keyof typeof PROJECT_WORKSTREAM_MUTATION_FALLBACKS;
 export type ProjectTaskMutationAction = keyof typeof PROJECT_TASK_MUTATION_FALLBACKS;
 export type ProjectBomMutationAction = keyof typeof PROJECT_BOM_MUTATION_FALLBACKS;
+export type ProjectMutationAction = keyof typeof PROJECT_MUTATION_FALLBACKS;
 export type SiteVisitMutationAction = keyof typeof SITE_VISIT_MUTATION_FALLBACKS;
 export type JobTimeMutationAction = keyof typeof JOB_TIME_MUTATION_FALLBACKS;
 
@@ -229,6 +248,15 @@ export function formatProjectBomMutationError(
 ): string {
   return formatMutationError(error, PROJECT_BOM_MUTATION_FALLBACKS[action], {
     codeMessages: PROJECT_BOM_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatProjectMutationError(
+  error: unknown,
+  action: ProjectMutationAction
+): string {
+  return formatMutationError(error, PROJECT_MUTATION_FALLBACKS[action], {
+    codeMessages: PROJECT_MUTATION_CODE_MESSAGES,
   });
 }
 
