@@ -1,12 +1,13 @@
 import { formatMutationError } from '@/lib/mutation-error-feedback';
 
-export type PipelineQuoteMutationAction = 'generatePdf' | 'send' | 'delete' | 'save';
+export type PipelineQuoteMutationAction = 'generatePdf' | 'send' | 'delete' | 'save' | 'restore';
 
 const PIPELINE_QUOTE_MUTATION_FALLBACKS: Record<PipelineQuoteMutationAction, string> = {
   generatePdf: 'Unable to generate quote PDF. Refresh and try again.',
   send: 'Unable to send quote. Refresh and try again.',
   delete: 'Unable to delete quote. Refresh and try again.',
   save: 'Unable to save quote. Refresh and try again.',
+  restore: 'Unable to restore quote version. Refresh and try again.',
 };
 
 const PIPELINE_QUOTE_CODE_MESSAGES: Record<string, string> = {

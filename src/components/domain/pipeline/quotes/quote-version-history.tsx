@@ -59,7 +59,10 @@ import { toastSuccess, toastError } from "@/hooks";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
 import { useOrgFormat } from "@/hooks/use-org-format";
-import type { RestoreQuoteVersionInput } from "@/hooks/pipeline";
+import {
+  formatPipelineQuoteMutationError,
+  type RestoreQuoteVersionInput,
+} from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
@@ -153,8 +156,8 @@ export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPre
           setVersionToRestore(null);
           onRestore?.(data.quoteVersion);
         },
-        onError: () => {
-          toastError("Failed to restore quote version");
+        onError: (error) => {
+          toastError(formatPipelineQuoteMutationError(error, "restore"));
         },
       }
     );

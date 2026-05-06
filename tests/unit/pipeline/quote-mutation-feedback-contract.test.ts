@@ -34,6 +34,13 @@ describe('pipeline quote mutation feedback contract', () => {
         'delete'
       )
     ).toBe('Unable to delete quote. Refresh and try again.');
+
+    expect(
+      formatPipelineQuoteMutationError(
+        new Error('duplicate key value violates unique constraint quote_versions_restore_pkey'),
+        'restore'
+      )
+    ).toBe('Unable to restore quote version. Refresh and try again.');
   });
 
   it('keeps safe validation and known pipeline quote codes useful for operators', () => {
@@ -64,6 +71,9 @@ describe('pipeline quote mutation feedback contract', () => {
       'src/components/domain/pipeline/opportunities/tabs/opportunity-quote-tab.tsx'
     );
     const quoteBuilder = read('src/components/domain/pipeline/quotes/quote-builder.tsx');
+    const quoteVersionHistory = read(
+      'src/components/domain/pipeline/quotes/quote-version-history.tsx'
+    );
 
     expect(index).toContain('formatPipelineQuoteMutationError');
     expect(formatter).toContain('PIPELINE_QUOTE_CODE_MESSAGES');
@@ -76,6 +86,7 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'save')");
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'generatePdf')");
     expect(quoteBuilder).toContain('formatPipelineQuoteMutationError(error, "save")');
+    expect(quoteVersionHistory).toContain('formatPipelineQuoteMutationError(error, "restore")');
 
     expect(quoteDetail).not.toContain(
       "error instanceof Error ? error.message : 'Failed to generate PDF'"
@@ -99,5 +110,6 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(quoteBuilder).not.toContain(
       'error instanceof Error ? error.message : "Failed to save quote"'
     );
+    expect(quoteVersionHistory).not.toContain('toastError("Failed to restore quote version")');
   });
 });
