@@ -22,7 +22,7 @@ import {
   winLossReasonParamsSchema,
   type WinLossReasonType,
 } from '@/lib/schemas';
-import { NotFoundError, ConflictError } from '@/lib/server/errors';
+import { NotFoundError, ConflictError, ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // LIST WIN/LOSS REASONS
@@ -116,7 +116,7 @@ export const createWinLossReason = createServerFn({ method: 'POST' })
       order = (maxOrder[0]?.max ?? 0) + 1;
     }
 
-    const result = await db
+    const [createdReason] = await db
       .insert(winLossReasons)
       .values({
         organizationId: ctx.organizationId,
@@ -129,7 +129,15 @@ export const createWinLossReason = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return { reason: result[0] };
+    if (!createdReason) {
+      throw new ServerError(
+        'Unable to create Win/Loss reason',
+        500,
+        'PIPELINE_WIN_LOSS_REASON_CREATE_FAILED'
+      );
+    }
+
+    return { reason: createdReason };
   });
 
 // ============================================================================
@@ -167,7 +175,7 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
     // Optimistic locking: include version in WHERE clause to ensure atomicity.
     // If another request updated the row between our read and write, the
     // UPDATE will match zero rows and we throw a conflict error.
-    const result = await db
+    const [updatedReason] = await db
       .update(winLossReasons)
       .set({
         ...updateData,
@@ -183,11 +191,11 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
       )
       .returning();
 
-    if (!result[0]) {
+    if (!updatedReason) {
       throw new ConflictError('Win/Loss reason has been modified by another user');
     }
 
-    return { reason: result[0] };
+    return { reason: updatedReason };
   });
 
 // ============================================================================
@@ -224,11 +232,17 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
       const [usageRow] = await tx
         .select({ count: count() })
         .from(opportunities)
-        .where(eq(opportunities.winLossReasonId, id));
+        .where(
+          and(
+            eq(opportunities.winLossReasonId, id),
+            eq(opportunities.organizationId, ctx.organizationId),
+            isNull(opportunities.deletedAt)
+          )
+        );
 
       if (Number(usageRow?.count ?? 0) > 0) {
         // Soft delete by setting isActive = false
-        await tx
+        const [deactivatedReason] = await tx
           .update(winLossReasons)
           .set({
             isActive: false,
@@ -239,18 +253,30 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
               eq(winLossReasons.id, id),
               eq(winLossReasons.organizationId, ctx.organizationId)
             )
-          );
+          )
+          .returning({ id: winLossReasons.id });
+
+        if (!deactivatedReason) {
+          throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
+        }
 
         return { deleted: false, deactivated: true, usageCount: Number(usageRow?.count ?? 0) };
       }
 
       // Hard delete if not in use
-      await tx.delete(winLossReasons).where(
-        and(
-          eq(winLossReasons.id, id),
-          eq(winLossReasons.organizationId, ctx.organizationId)
+      const [deletedReason] = await tx
+        .delete(winLossReasons)
+        .where(
+          and(
+            eq(winLossReasons.id, id),
+            eq(winLossReasons.organizationId, ctx.organizationId)
+          )
         )
-      );
+        .returning({ id: winLossReasons.id });
+
+      if (!deletedReason) {
+        throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
+      }
 
       return { deleted: true, deactivated: false };
     });
