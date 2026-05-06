@@ -2,7 +2,7 @@
  * Credit note hooks.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { isReadQueryError, normalizeReadQueryError, requireReadResult } from '@/lib/read-path-policy';
@@ -30,6 +30,43 @@ function rethrowFinancialReadError(
   }
 
   throw normalizeReadQueryError(error, options);
+}
+
+function invalidateCreditNoteQueries(
+  queryClient: QueryClient,
+  options: {
+    creditNoteId?: string | null;
+    customerId?: string | null;
+    orderId?: string | null;
+    appliedOrderId?: string | null;
+  } = {}
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+
+  if (options.creditNoteId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.financial.creditNoteDetail(options.creditNoteId),
+    });
+  }
+
+  if (options.customerId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.customers.detail(options.customerId),
+    });
+  }
+
+  const affectedOrderIds = new Set<string>();
+  for (const orderId of [options.orderId, options.appliedOrderId]) {
+    if (orderId) affectedOrderIds.add(orderId);
+  }
+
+  for (const orderId of affectedOrderIds) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+  }
+
+  if (affectedOrderIds.size > 0) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  }
 }
 
 // ============================================================================
@@ -108,8 +145,12 @@ export function useCreateCreditNote() {
 
   return useMutation({
     mutationFn: (data: CreateCreditNoteInput) => fn({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+    onSuccess: (result) => {
+      invalidateCreditNoteQueries(queryClient, {
+        creditNoteId: result.id,
+        customerId: result.customerId,
+        orderId: result.orderId,
+      });
     },
   });
 }
@@ -120,11 +161,13 @@ export function useApplyCreditNote() {
 
   return useMutation({
     mutationFn: (data: ApplyCreditNoteInput) => fn({ data }),
-    onSuccess: (_, data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(data.creditNoteId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(data.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+    onSuccess: (result, data) => {
+      invalidateCreditNoteQueries(queryClient, {
+        creditNoteId: result.id,
+        customerId: result.customerId,
+        orderId: result.orderId,
+        appliedOrderId: result.appliedToOrderId ?? data.orderId,
+      });
     },
   });
 }
@@ -135,9 +178,12 @@ export function useIssueCreditNote() {
 
   return useMutation({
     mutationFn: (id: string) => fn({ data: { id } }),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(id) });
+    onSuccess: (result, id) => {
+      invalidateCreditNoteQueries(queryClient, {
+        creditNoteId: result.id ?? id,
+        customerId: result.customerId,
+        orderId: result.orderId,
+      });
     },
   });
 }
@@ -149,9 +195,12 @@ export function useVoidCreditNote() {
   return useMutation({
     mutationFn: (params: { id: string; voidReason?: string }) =>
       fn({ data: { id: params.id, voidReason: params.voidReason ?? 'Voided by user' } }),
-    onSuccess: (_, params) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNoteDetail(params.id) });
+    onSuccess: (result, params) => {
+      invalidateCreditNoteQueries(queryClient, {
+        creditNoteId: result.id ?? params.id,
+        customerId: result.customerId,
+        orderId: result.orderId,
+      });
     },
   });
 }
@@ -163,4 +212,3 @@ export function useGenerateCreditNotePdf() {
     mutationFn: (creditNoteId: string) => fn({ data: { id: creditNoteId } }),
   });
 }
-

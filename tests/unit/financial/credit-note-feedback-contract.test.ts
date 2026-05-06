@@ -75,6 +75,7 @@ describe('credit note mutation feedback contract', () => {
   it('keeps list and detail credit note actions on the formatter boundary', () => {
     const index = read('src/hooks/financial/index.ts');
     const formatter = read('src/hooks/financial/_mutation-errors.ts');
+    const hooks = read('src/hooks/financial/use-credit-notes.ts');
     const route = read('src/routes/_authenticated/financial/credit-notes/index.tsx');
     const invoiceDetail = read('src/components/domain/invoices/detail/invoice-detail-container.tsx');
     const dialog = read('src/components/domain/financial/credit-note-dialogs.tsx');
@@ -84,6 +85,13 @@ describe('credit note mutation feedback contract', () => {
 
     expect(index).toContain('formatCreditNoteMutationError');
     expect(formatter).toContain('CREDIT_NOTE_CODE_MESSAGES');
+    expect(hooks).toContain('invalidateCreditNoteQueries');
+    expect(hooks).toContain('queryKeys.financial.creditNotes()');
+    expect(hooks).toContain('queryKeys.financial.creditNoteDetail(options.creditNoteId)');
+    expect(hooks).toContain('queryKeys.customers.detail(options.customerId)');
+    expect(hooks).toContain('queryKeys.orders.detail(orderId)');
+    expect(hooks).toContain('queryKeys.orders.lists()');
+    expect(hooks).toContain('appliedOrderId: result.appliedToOrderId ?? data.orderId');
 
     expect(route).toContain("formatCreditNoteMutationError(error, 'create')");
     expect(route).not.toContain("error.message || 'Failed to create credit note'");
@@ -99,6 +107,8 @@ describe('credit note mutation feedback contract', () => {
     expect(list).toContain("formatCreditNoteMutationError(error, 'apply')");
     expect(list).toContain("formatCreditNoteMutationError(error, 'void')");
     expect(list).toContain("formatCreditNoteMutationError(error, 'pdf')");
+    expect(list).not.toContain('queryClient.invalidateQueries');
+    expect(list).not.toContain('queryKeys.financial.creditNotes()');
     expect(list).not.toContain("error.message || 'Failed to issue credit note'");
     expect(list).not.toContain("error.message || 'Failed to apply credit note'");
     expect(list).not.toContain("error.message || 'Failed to void credit note'");

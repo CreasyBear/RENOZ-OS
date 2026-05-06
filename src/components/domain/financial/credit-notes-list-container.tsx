@@ -36,8 +36,6 @@ import type {
   CreditNoteSortField as SortField,
 } from '@/lib/schemas/financial/credit-notes';
 import type { CreditNoteTableItem } from './credit-note-columns';
-import { queryKeys } from '@/lib/query-keys';
-import { useQueryClient } from '@tanstack/react-query';
 import type { OrderSummary } from '@/components/shared';
 import {
   DEFAULT_CREDIT_NOTE_SORT_DIRECTION,
@@ -73,7 +71,6 @@ export function CreditNotesListContainer({
 }: CreditNotesListContainerProps) {
   const confirmation = useConfirmation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>(DEFAULT_CREDIT_NOTE_SORT_FIELD);
   const [sortDirection, setSortDirection] = useState<SortDirection>(
@@ -219,12 +216,7 @@ export function CreditNotesListContainer({
             setApplyDialogOpen(false);
             setSelectedCreditNoteId(null);
             setSelectedOrder(null);
-            
-            // Invalidate both credit notes and the affected order
-            queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-            queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-            
+
             toastSuccess('Credit note applied successfully', {
               description: 'Invoice balance has been updated.',
               action: {
@@ -243,7 +235,7 @@ export function CreditNotesListContainer({
         }
       );
     },
-    [applyMutation, refetchCreditNotes, queryClient, navigate]
+    [applyMutation, refetchCreditNotes, navigate]
   );
 
   // Handle void credit note with confirmation
