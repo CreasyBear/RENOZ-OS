@@ -420,7 +420,7 @@ export const updateProject = createServerFn({ method: "POST" })
     });
 
     if (!existingProject) {
-      throw new Error("Project not found");
+      throw new NotFoundError("Project not found", "project");
     }
 
     // Validate status transition if status is being changed
@@ -439,8 +439,17 @@ export const updateProject = createServerFn({ method: "POST" })
         updatedAt: new Date(),
         version: sql`${projects.version} + 1`,
       })
-      .where(eq(projects.id, projectId))
+      .where(
+        and(
+          eq(projects.id, projectId),
+          eq(projects.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
+
+    if (!updatedProject) {
+      throw new NotFoundError("Project not found", "project");
+    }
 
     // Log project update
     const changes = computeChanges({

@@ -21,7 +21,7 @@ import {
   NumberField,
   DateField,
 } from '@/components/shared/forms';
-import { useUpdateProject } from '@/hooks/jobs';
+import { formatProjectMutationError, useUpdateProject } from '@/hooks/jobs';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import {
@@ -153,7 +153,7 @@ export function ProjectEditDialog({
         onOpenChange(false);
         onSuccess?.();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to update project';
+        const msg = formatProjectMutationError(err, 'update');
         setSubmitError(msg);
         toast.error(msg);
       }

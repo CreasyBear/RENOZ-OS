@@ -24,7 +24,12 @@ import {
   FormField,
   extractFieldError,
 } from '@/components/shared/forms';
-import { useCreateProject, useJobTemplates, useJobTemplate } from '@/hooks/jobs';
+import {
+  formatProjectMutationError,
+  useCreateProject,
+  useJobTemplate,
+  useJobTemplates,
+} from '@/hooks/jobs';
 import { useCustomer } from '@/hooks/customers';
 import { CustomerCombobox } from '@/components/shared';
 import type { Customer } from '@/lib/schemas/customers';
@@ -119,7 +124,7 @@ export function ProjectCreateDialog({
         form.reset();
         onSuccess?.(result.id);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to create project';
+        const msg = formatProjectMutationError(err, 'create');
         setSubmitError(msg);
         toast.error(msg);
       }
