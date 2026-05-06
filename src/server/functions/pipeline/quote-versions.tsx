@@ -13,15 +13,13 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt, notInArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { quoteVersions, opportunities, opportunityActivities, generatedDocuments, quotes } from 'drizzle/schema';
+import { quoteVersions, opportunities, opportunityActivities, generatedDocuments } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   createQuoteVersionSchema,
   quoteVersionFilterSchema,
-  quoteParamsSchema,
   quoteVersionParamsSchema,
   restoreQuoteVersionSchema,
   updateQuoteExpirationSchema,
@@ -33,8 +31,7 @@ import {
 import { GST_RATE } from '@/lib/order-calculations';
 import { formatCurrency } from '@/lib/formatters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { createActivityLogger, computeChanges } from '@/lib/activity-logger';
-import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { createActivityLogger } from '@/lib/activity-logger';
 
 // ============================================================================
 // CONSTANTS
@@ -42,17 +39,6 @@ import { createActivityLoggerWithContext } from '@/server/middleware/activity-co
 
 /** Default quote validity in days */
 const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
-
-/**
- * Fields to exclude from quote activity change tracking (system-managed)
- */
-const QUOTE_EXCLUDED_FIELDS: string[] = [
-  'updatedAt',
-  'updatedBy',
-  'createdAt',
-  'createdBy',
-  'deletedAt',
-];
 
 /** Raw quote line item from DB (supports legacy cents and new dollars format) */
 interface QuoteVersionItemRaw {
@@ -70,14 +56,6 @@ interface QuoteVersionItemRaw {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function buildQuoteByIdWhere(id: string, organizationId: string) {
-  return and(
-    eq(quotes.id, id),
-    eq(quotes.organizationId, organizationId),
-    isNull(quotes.deletedAt)
-  )!;
-}
 
 /**
  * Calculate line item total from quantity and unit price, applying discount
@@ -1184,79 +1162,6 @@ ${fromName} Team
         stageBump: stageBumpStage,
       },
     };
-  });
-
-// ============================================================================
-// DELETE QUOTE (Soft Delete)
-// ============================================================================
-
-/**
- * Soft delete a quote.
- * Cannot delete quotes that have been accepted.
- */
-export const deleteQuote = createServerFn({ method: 'POST' })
-  .inputValidator(quoteParamsSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({
-      permission: PERMISSIONS.quote.delete,
-    });
-    const logger = createActivityLoggerWithContext(ctx);
-
-    const { id } = data;
-
-    const current = await db
-      .select()
-      .from(quotes)
-      .where(buildQuoteByIdWhere(id, ctx.organizationId))
-      .limit(1);
-
-    if (!current[0]) {
-      throw new NotFoundError('Quote not found', 'quote');
-    }
-
-    const quoteToDelete = current[0];
-
-    if (quoteToDelete.status === 'accepted') {
-      throw new ValidationError('Cannot delete an accepted quote');
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(quotes)
-        .set({
-          deletedAt: new Date(),
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(quotes.id, id));
-
-      await enqueueSearchIndexOutbox(
-        {
-          organizationId: ctx.organizationId,
-          entityType: 'quote',
-          entityId: id,
-          action: 'delete',
-        },
-        tx
-      );
-    });
-
-    logger.logAsync({
-      entityType: 'quote',
-      entityId: id,
-      action: 'deleted',
-      changes: computeChanges({
-        before: quoteToDelete,
-        after: null,
-        excludeFields: QUOTE_EXCLUDED_FIELDS as never[],
-      }),
-      description: `Deleted quote: ${quoteToDelete.quoteNumber}`,
-      metadata: {
-        status: quoteToDelete.status,
-        total: quoteToDelete.total,
-      },
-    });
-
-    return { success: true };
   });
 
 // ============================================================================

@@ -21,8 +21,8 @@ import {
   extendQuoteValidity,
   generateQuotePdf,
   sendQuote,
-  deleteQuote,
 } from '@/server/functions/pipeline/quote-versions';
+import { deleteQuote } from '@/server/functions/pipeline/quote-delete';
 import type {
   GenerateQuotePdfResult,
   QuoteLineItem,

@@ -51,25 +51,28 @@ describe('pipeline quote mutation cache contract', () => {
     expect(readSource).not.toContain('useDeleteQuote');
 
     expect(mutationSource).toContain('export function useDeleteQuote()');
-    expect(mutationSource).toContain('deleteQuote,');
-    expect(mutationSource).toContain("} from '@/server/functions/pipeline/quote-versions'");
+    expect(mutationSource).toContain("import { deleteQuote } from '@/server/functions/pipeline/quote-delete'");
     expect(barrelSource).toContain("useDeleteQuote,\n  type CreateQuoteVersionInput");
   });
 
-  it('keeps delete quote server ownership with quote server functions', () => {
+  it('keeps delete quote server ownership isolated from broad quote versioning', () => {
     const pipelineServerSource = read('src/server/functions/pipeline/pipeline.ts');
     const quoteServerSource = read('src/server/functions/pipeline/quote-versions.tsx');
+    const quoteDeleteSource = read('src/server/functions/pipeline/quote-delete.ts');
 
     expect(pipelineServerSource).not.toContain('export const deleteQuote');
     expect(pipelineServerSource).not.toContain('QUOTE_EXCLUDED_FIELDS');
     expect(pipelineServerSource).not.toContain('buildQuoteByIdWhere');
+    expect(quoteServerSource).not.toContain('export const deleteQuote');
+    expect(quoteServerSource).not.toContain('QUOTE_EXCLUDED_FIELDS');
+    expect(quoteServerSource).not.toContain('buildQuoteByIdWhere');
 
-    expect(quoteServerSource).toContain('export const deleteQuote');
-    expect(quoteServerSource).toContain('permission: PERMISSIONS.quote.delete');
-    expect(quoteServerSource).toContain('buildQuoteByIdWhere(id, ctx.organizationId)');
-    expect(quoteServerSource).toContain("throw new ValidationError('Cannot delete an accepted quote')");
-    expect(quoteServerSource).toContain("entityType: 'quote'");
-    expect(quoteServerSource).toContain("action: 'delete'");
-    expect(quoteServerSource).toContain('computeChanges({');
+    expect(quoteDeleteSource).toContain('export const deleteQuote');
+    expect(quoteDeleteSource).toContain('permission: PERMISSIONS.quote.delete');
+    expect(quoteDeleteSource).toContain('buildQuoteByIdWhere(id, ctx.organizationId)');
+    expect(quoteDeleteSource).toContain("throw new ValidationError('Cannot delete an accepted quote')");
+    expect(quoteDeleteSource).toContain("entityType: 'quote'");
+    expect(quoteDeleteSource).toContain("action: 'delete'");
+    expect(quoteDeleteSource).toContain('computeChanges({');
   });
 });
