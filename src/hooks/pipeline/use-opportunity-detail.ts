@@ -26,7 +26,10 @@ import {
   useConvertToOrder,
 } from './use-opportunity-mutations';
 import { useSendQuote } from './use-quote-mutations';
-import { formatPipelineQuoteMutationError } from './_mutation-errors';
+import {
+  formatPipelineOpportunityMutationError,
+  formatPipelineQuoteMutationError,
+} from './_mutation-errors';
 import { useOpportunityAlerts, useOpportunityActiveItems } from './use-opportunity-detail-extended';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { toast } from '@/lib/toast';
@@ -288,8 +291,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
             onClick: () => navigate({ to: '/pipeline/$opportunityId', params: { opportunityId } }),
           },
         });
-      } catch {
-        toastError('Failed to update stage');
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, 'stage'));
       }
     },
 
@@ -315,8 +318,8 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
         toast.success(wonLostDialogStage === 'won' ? 'Opportunity marked as won!' : 'Opportunity marked as lost');
         setWonLostDialogOpen(false);
         setWonLostDialogStage(null);
-      } catch {
-        toastError('Failed to update stage');
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, 'stage'));
       }
     },
 

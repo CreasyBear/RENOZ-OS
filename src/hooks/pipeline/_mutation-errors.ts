@@ -27,3 +27,27 @@ export function formatPipelineQuoteMutationError(
     codeMessages: PIPELINE_QUOTE_CODE_MESSAGES,
   });
 }
+
+export type PipelineOpportunityMutationAction = 'stage';
+
+const PIPELINE_OPPORTUNITY_MUTATION_FALLBACKS: Record<PipelineOpportunityMutationAction, string> = {
+  stage: 'Unable to update opportunity stage. Refresh and try again.',
+};
+
+const PIPELINE_OPPORTUNITY_CODE_MESSAGES: Record<string, string> = {
+  CONFLICT: 'Opportunity changed since this page loaded. Refresh and review before trying again.',
+  FORBIDDEN: 'You do not have permission to update opportunities.',
+  NOT_FOUND: 'Opportunity was not found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to update opportunities.',
+  VALIDATION_ERROR: 'Opportunity details need review before continuing.',
+  VERSION_CONFLICT: 'Opportunity changed since this page loaded. Refresh and review before trying again.',
+};
+
+export function formatPipelineOpportunityMutationError(
+  error: unknown,
+  action: PipelineOpportunityMutationAction
+): string {
+  return formatMutationError(error, PIPELINE_OPPORTUNITY_MUTATION_FALLBACKS[action], {
+    codeMessages: PIPELINE_OPPORTUNITY_CODE_MESSAGES,
+  });
+}

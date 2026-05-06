@@ -112,7 +112,9 @@ export {
 } from './use-quote-mutations';
 
 export {
+  formatPipelineOpportunityMutationError,
   formatPipelineQuoteMutationError,
+  type PipelineOpportunityMutationAction,
   type PipelineQuoteMutationAction,
 } from './_mutation-errors';
 
