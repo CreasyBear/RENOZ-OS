@@ -30,6 +30,7 @@ import {
 import { useConfirmation } from '@/hooks';
 import { toast } from '@/hooks/_shared/use-toast';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
+import { formatSupportReadError } from '@/lib/support/read-error-messages';
 
 export const Route = createFileRoute('/_authenticated/settings/knowledge-base')({
   component: KnowledgeBaseSettingsPage,
@@ -52,6 +53,9 @@ const KB_CATEGORY_ERROR_MESSAGES = {
   AUTH_ERROR: 'Your session has expired. Sign in again before managing categories.',
   RATE_LIMIT: 'Too many category updates were attempted. Wait a moment and retry.',
 };
+
+const KB_CATEGORY_READ_UNAVAILABLE =
+  'Knowledge base categories are temporarily unavailable. Please refresh and try again.';
 
 function formatKbCategoryMutationError(error: unknown, fallback: string): string {
   return formatSupportMutationError(error, fallback, {
@@ -237,7 +241,7 @@ function KnowledgeBaseSettingsPage() {
           ) : categoriesError ? (
             <ErrorState
               title="Failed to load categories"
-              message={categoriesError.message}
+              message={formatSupportReadError(categoriesError, KB_CATEGORY_READ_UNAVAILABLE)}
               onRetry={() => void refetch()}
             />
           ) : categories && categories.length > 0 ? (

@@ -11,6 +11,7 @@ function read(path: string): string {
 describe('knowledge base category tree read-state contract', () => {
   it('keeps category tree hard and stale read states operator-safe', () => {
     const route = read('src/routes/_authenticated/support/knowledge-base.tsx');
+    const settingsRoute = read('src/routes/_authenticated/settings/knowledge-base.tsx');
     const hook = read('src/hooks/support/use-knowledge-base.ts');
     const queryKeys = read('src/lib/query-keys.ts');
     const server = read('src/server/functions/support/knowledge-base.ts');
@@ -26,6 +27,9 @@ describe('knowledge base category tree read-state contract', () => {
     expect(route).toContain('Showing the most recent categories while refresh is unavailable.');
     expect(route).toContain('void refetchCategories();');
     expect(route).not.toContain('message={categoryTreeError.message}');
+    expect(settingsRoute).toContain('formatSupportReadError');
+    expect(settingsRoute).toContain('KB_CATEGORY_READ_UNAVAILABLE');
+    expect(settingsRoute).not.toContain('message={categoriesError.message}');
 
     expect(formatter).toContain('formatSupportReadError');
     expect(hook).toContain('useKbCategories');
