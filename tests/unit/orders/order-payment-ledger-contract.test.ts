@@ -152,6 +152,29 @@ describe('order payment ledger contract', () => {
     expect(refundProjectionIndex).toBeGreaterThan(refundGuardIndex);
   });
 
+  it('keeps direct payment and refund ledger inserts audit-attributed', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const createPaymentSource = sourceBetween(
+      source,
+      'export const createOrderPayment',
+      '/**\n * Update an existing payment'
+    );
+    const refundPaymentSource = sourceFrom(source, 'export const createRefundPayment');
+    const createInsertSource = createPaymentSource.slice(
+      createPaymentSource.indexOf('.insert(orderPayments)')
+    );
+    const refundInsertSource = refundPaymentSource.slice(
+      refundPaymentSource.indexOf('.insert(orderPayments)')
+    );
+
+    expect(createInsertSource).toContain('recordedBy: ctx.user.id');
+    expect(createInsertSource).toContain('createdBy: ctx.user.id');
+    expect(createInsertSource).toContain('updatedBy: ctx.user.id');
+    expect(refundInsertSource).toContain('recordedBy: ctx.user.id');
+    expect(refundInsertSource).toContain('createdBy: ctx.user.id');
+    expect(refundInsertSource).toContain('updatedBy: ctx.user.id');
+  });
+
   it('keeps update and delete writes tenant-scoped and active-row scoped', () => {
     const source = read('src/server/functions/orders/order-payments.ts');
     const updatePaymentSource = sourceBetween(

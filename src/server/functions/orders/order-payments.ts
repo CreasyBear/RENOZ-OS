@@ -221,6 +221,8 @@ export const createOrderPayment = createServerFn({ method: "POST" })
           ...data,
           organizationId: ctx.organizationId,
           recordedBy: ctx.user.id,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
         })
         .returning({
           id: orderPayments.id,
@@ -469,6 +471,8 @@ export const createRefundPayment = createServerFn({ method: "POST" })
           relatedPaymentId: originalPaymentId,
           organizationId: ctx.organizationId,
           recordedBy: ctx.user.id,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
         })
         .returning({
           id: orderPayments.id,
