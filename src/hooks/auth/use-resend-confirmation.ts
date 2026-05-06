@@ -15,6 +15,7 @@ import {
   type ResendConfirmationResult,
 } from '@/server/functions/auth/resend-confirmation';
 import type { ResendConfirmationInput } from '@/lib/schemas/auth';
+import { formatResendConfirmationError } from './resend-confirmation-error-messages';
 
 /**
  * Resend signup confirmation email.
@@ -27,7 +28,18 @@ export function useResendConfirmationEmail() {
 
   return useMutation<ResendConfirmationResult, Error, ResendConfirmationInput>({
     mutationFn: async (input) => {
-      return await resendConfirmationFn({ data: input });
+      const result = await resendConfirmationFn({ data: input }).catch((error) => {
+        throw new Error(formatResendConfirmationError(error));
+      });
+
+      if (!result.success) {
+        return {
+          ...result,
+          error: formatResendConfirmationError(result.error, result.retryAfter),
+        };
+      }
+
+      return result;
     },
   });
 }

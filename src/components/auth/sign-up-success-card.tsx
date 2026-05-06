@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link } from '@tanstack/react-router';
 import { useResendConfirmationEmail } from '@/hooks/auth/use-resend-confirmation';
+import { formatResendConfirmationError } from '@/hooks/auth/resend-confirmation-error-messages';
 import { useCooldown } from '@/hooks/_shared/use-cooldown';
 
 const COOLDOWN_SECONDS = 60;
@@ -195,14 +196,9 @@ export function SignUpSuccessCard({ email: emailProp }: SignUpSuccessCardProps) 
 
   let errorMessage: string | null = null;
   if (hasError && mutationData) {
-    errorMessage =
-      mutationData.retryAfter
-        ? `${mutationData.error ?? ''} Try again in ${Math.ceil(mutationData.retryAfter / 60)} minutes.`
-        : (mutationData.error ?? null);
-  } else if (resendMutation.error instanceof Error) {
-    errorMessage = resendMutation.error.message;
+    errorMessage = formatResendConfirmationError(mutationData.error, mutationData.retryAfter);
   } else if (resendMutation.error) {
-    errorMessage = 'Failed to send confirmation email. Please try again.';
+    errorMessage = formatResendConfirmationError(resendMutation.error);
   }
 
   const displayEmail = lastSentEmail ?? emailProp ?? emailInput ?? '';
