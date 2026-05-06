@@ -64,6 +64,11 @@ export interface CustomerFilters {
   cursor?: string
 }
 
+export interface CustomerBulkOperationFilters {
+  entityType?: string
+  hours?: number
+}
+
 export interface OrderFilters {
   search?: string
   status?: string
@@ -496,8 +501,10 @@ export const queryKeys = {
       all: () => [...queryKeys.customers.all, 'health'] as const,
       metrics: (customerId: string) =>
         [...queryKeys.customers.health.all(), 'metrics', customerId] as const,
+      historyLists: (customerId: string) =>
+        [...queryKeys.customers.health.all(), 'history', customerId] as const,
       history: (customerId: string, months?: number) =>
-        [...queryKeys.customers.health.all(), 'history', customerId, months] as const,
+        [...queryKeys.customers.health.historyLists(customerId), months] as const,
     },
     segments: {
       all: () => [...queryKeys.customers.all, 'segments'] as const,
@@ -519,6 +526,12 @@ export const queryKeys = {
         [...queryKeys.customers.duplicates.all(), 'history', filters] as const,
       check: (input?: Record<string, unknown>) =>
         [...queryKeys.customers.duplicates.all(), 'check', input] as const,
+    },
+    bulkOperations: {
+      all: () => [...queryKeys.customers.all, 'bulk-operations'] as const,
+      recentLists: () => [...queryKeys.customers.bulkOperations.all(), 'recent'] as const,
+      recent: (filters?: CustomerBulkOperationFilters) =>
+        [...queryKeys.customers.bulkOperations.recentLists(), filters ?? {}] as const,
     },
     // Detail view extended data (alerts, active items, order summary)
     alerts: (customerId: string) =>

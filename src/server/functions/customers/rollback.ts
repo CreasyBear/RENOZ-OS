@@ -21,6 +21,12 @@ import {
   rollbackBulkOperationSchema,
 } from '@/lib/schemas/customers/rollback';
 
+interface RollbackBulkOperationResult {
+  success: boolean;
+  restored: number;
+  restoredCustomerIds: string[];
+}
+
 // ============================================================================
 // LIST RECENT BULK OPERATIONS
 // ============================================================================
@@ -92,7 +98,7 @@ export const listRecentBulkOperations = createServerFn({ method: 'GET' })
  */
 export const rollbackBulkOperation = createServerFn({ method: 'POST' })
   .inputValidator(rollbackBulkOperationSchema)
-  .handler(async ({ data }): Promise<{ success: boolean; restored: number }> => {
+  .handler(async ({ data }): Promise<RollbackBulkOperationResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
     const { auditLogId } = data;
@@ -115,7 +121,9 @@ export const rollbackBulkOperation = createServerFn({ method: 'POST' })
 
     // Check if rollback is possible
     if (!auditLog.oldValues || typeof auditLog.oldValues !== 'object') {
-      throw new ValidationError('Cannot rollback: no previous state available', { rollback: ['Cannot rollback: no previous state available'] });
+      throw new ValidationError('Cannot rollback: no previous state available', {
+        rollback: ['Cannot rollback: no previous state available'],
+      });
     }
 
     // Check if operation is too old (24 hour limit)
@@ -136,12 +144,14 @@ export const rollbackBulkOperation = createServerFn({ method: 'POST' })
       // Rollback health score updates
       const customerIds = newValues?.customerIds as string[] | undefined;
       if (!customerIds || !Array.isArray(customerIds)) {
-        throw new ValidationError('Invalid audit log: missing customer IDs', { rollback: ['Invalid audit log: missing customer IDs'] });
+        throw new ValidationError('Invalid audit log: missing customer IDs', {
+          rollback: ['Invalid audit log: missing customer IDs'],
+        });
       }
 
       // C29: Wrap loop in transaction to avoid N+1 partial failures
-      const restored = await db.transaction(async (tx) => {
-        let count = 0;
+      const restoredCustomerIds = await db.transaction(async (tx) => {
+        const restoredIds: string[] = [];
         interface CustomerRollbackState {
           healthScore?: number | null;
           healthScoreUpdatedAt?: string | Date | null;
@@ -155,7 +165,7 @@ export const rollbackBulkOperation = createServerFn({ method: 'POST' })
                   ? oldState.healthScoreUpdatedAt
                   : oldState.healthScoreUpdatedAt.toISOString()
                 : null;
-            await tx
+            const restoredRows = await tx
               .update(customers)
               .set({
                 healthScore: oldState.healthScore ?? null,
@@ -167,8 +177,11 @@ export const rollbackBulkOperation = createServerFn({ method: 'POST' })
                   eq(customers.id, customerId),
                   eq(customers.organizationId, ctx.organizationId)
                 )
-              );
-            count++;
+              )
+              .returning({ id: customers.id });
+            if (restoredRows[0]) {
+              restoredIds.push(restoredRows[0].id);
+            }
           }
         }
 
@@ -184,14 +197,18 @@ export const rollbackBulkOperation = createServerFn({ method: 'POST' })
           metadata: {
             rolledBackAuditLogId: auditLogId,
             originalAction: auditLog.action,
-            restoredCount: count,
+            restoredCount: restoredIds.length,
           },
         });
 
-        return count;
+        return restoredIds;
       });
 
-      return { success: true, restored };
+      return {
+        success: true,
+        restored: restoredCustomerIds.length,
+        restoredCustomerIds,
+      };
     }
 
     // Add more operation types as needed

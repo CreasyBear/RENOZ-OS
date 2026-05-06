@@ -131,6 +131,7 @@ describe('customer mutation error formatting', () => {
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
     const hierarchy = read('src/components/domain/customers/containers/customer-hierarchy-container.tsx');
+    const rollback = read('src/hooks/customers/use-rollback.ts');
     const savedFilters = read('src/hooks/customers/use-saved-filters.ts');
     const xeroContactManager = read('src/components/domain/customers/components/xero-contact-manager.tsx');
     const index = read('src/hooks/customers/index.ts');
@@ -173,6 +174,13 @@ describe('customer mutation error formatting', () => {
     expect(duplicates).not.toContain('error instanceof Error ? error.message');
     expect(duplicates).not.toContain("error.message : 'Failed to dismiss duplicate'");
 
+    expect(rollback).toContain(
+      "formatCustomerMutationError(error, 'Unable to roll back customer bulk operation.')"
+    );
+    expect(rollback).not.toContain(
+      "error instanceof Error ? error.message : 'Failed to rollback operation'"
+    );
+
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'save')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'update')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'delete')");
@@ -197,5 +205,32 @@ describe('customer mutation error formatting', () => {
     expect(source).toContain('isNull(customers.deletedAt)');
     expect(source).toContain("thrownewNotFoundError('Oneormorecustomersnotfound','customer')");
     expect(source).toContain('awaitdb.insert(customerMergeAudit).values');
+  });
+
+  it('keeps customer rollback cache invalidation centralized and health-aware', () => {
+    const queryKeys = read('src/lib/query-keys.ts');
+    const healthHook = read('src/hooks/customers/use-customer-health.ts');
+    const rollbackHook = read('src/hooks/customers/use-rollback.ts');
+    const rollbackServer = compact(read('src/server/functions/customers/rollback.ts'));
+
+    expect(queryKeys).toContain('bulkOperations: {');
+    expect(queryKeys).toContain('recentLists: () => [...queryKeys.customers.bulkOperations.all(),');
+    expect(queryKeys).toContain('recent: (filters?: CustomerBulkOperationFilters) =>');
+    expect(queryKeys).toContain('historyLists: (customerId: string) =>');
+
+    expect(rollbackHook).toContain('queryKeys.customers.bulkOperations.recent(filters)');
+    expect(rollbackHook).toContain('queryKeys.customers.bulkOperations.recentLists()');
+    expect(rollbackHook).toContain('result.restoredCustomerIds.forEach((customerId)');
+    expect(rollbackHook).toContain('queryKeys.customers.detail(customerId)');
+    expect(rollbackHook).toContain('queryKeys.customers.health.metrics(customerId)');
+    expect(rollbackHook).toContain('queryKeys.customers.health.historyLists(customerId)');
+    expect(rollbackHook).toContain('queryKeys.customers.health.all()');
+    expect(rollbackHook).toContain('queryKeys.customerAnalytics.all');
+    expect(rollbackHook).not.toContain("[...queryKeys.customers.all, 'bulk-operations', 'recent'");
+    expect(healthHook).toContain('queryKeys.customers.health.historyLists(variables.customerId)');
+
+    expect(rollbackServer).toContain('restoredCustomerIds:string[]');
+    expect(rollbackServer).toContain('.returning({id:customers.id})');
+    expect(rollbackServer).toContain('restoredCustomerIds.length');
   });
 });

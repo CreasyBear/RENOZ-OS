@@ -7,6 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
+import type { CustomerBulkOperationFilters } from '@/lib/query-keys';
 import {
   isReadQueryError,
   normalizeReadQueryError,
@@ -16,6 +17,7 @@ import {
   listRecentBulkOperations,
   rollbackBulkOperation,
 } from '@/server/functions/customers/rollback';
+import { formatCustomerMutationError } from './_mutation-errors';
 
 // ============================================================================
 // HOOKS
@@ -24,14 +26,9 @@ import {
 /**
  * Get recent bulk operations that can be rolled back
  */
-export function useRecentBulkOperations(
-  filters?: {
-    entityType?: string;
-    hours?: number;
-  }
-) {
+export function useRecentBulkOperations(filters?: CustomerBulkOperationFilters) {
   return useQuery({
-    queryKey: [...queryKeys.customers.all, 'bulk-operations', 'recent', filters],
+    queryKey: queryKeys.customers.bulkOperations.recent(filters),
     queryFn: async () => {
       try {
         const result = await listRecentBulkOperations({
@@ -71,17 +68,34 @@ export function useRollbackBulkOperation() {
       return await rollbackBulkOperation({ data: { auditLogId } });
     },
     onSuccess: (result) => {
-      // Invalidate customer queries
+      // Rollback can alter list, detail, health, and analytics projections.
       queryClient.invalidateQueries({
         queryKey: queryKeys.customers.lists(),
       });
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.customers.all, 'bulk-operations', 'recent'],
+        queryKey: queryKeys.customers.bulkOperations.recentLists(),
       });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.health.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.all });
+
+      if (result.restoredCustomerIds.length === 0) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
+      } else {
+        result.restoredCustomerIds.forEach((customerId) => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.customers.health.metrics(customerId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.customers.health.historyLists(customerId),
+          });
+        });
+      }
+
       toast.success(`Rolled back ${result.restored} customer(s)`);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to rollback operation');
+      toast.error(formatCustomerMutationError(error, 'Unable to roll back customer bulk operation.'));
     },
   });
 }

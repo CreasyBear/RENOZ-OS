@@ -140,7 +140,7 @@ export function useCreateHealthMetric() {
         queryKey: queryKeys.customers.health.metrics(variables.customerId),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.customers.health.history(variables.customerId),
+        queryKey: queryKeys.customers.health.historyLists(variables.customerId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(variables.customerId) });
     },
