@@ -56,6 +56,10 @@ import {
   getCustomerAddressesFromApi,
   validateOrderCreationForm,
 } from "@/hooks/orders/use-order-creation-form";
+import {
+  getOrderCreationFieldErrors,
+  getOrderCreationSubmitErrorMessage,
+} from "./order-creation-errors";
 import type {
   OrderCreationFormValues,
   OrderSubmitData,
@@ -821,9 +825,9 @@ const StepReview = memo(function StepReview({ form }: StepReviewProps) {
 // MAIN COMPONENT
 // ============================================================================
 
-/** Map validation error messages to the step index (0-based) that needs fixing */
-function getStepFromError(error: unknown): number {
-  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+/** Map safe validation error messages to the step index (0-based) that needs fixing */
+function getStepFromErrorMessage(message: string): number {
+  const msg = message.toLowerCase();
   if (msg.includes("customer") && (msg.includes("required") || msg.includes("invalid"))) return 0;
   if (msg.includes("item") || msg.includes("lineitem") || msg.includes("line item")) return 1;
   if (msg.includes("address") || msg.includes("shipping") || msg.includes("billing")) return 3;
@@ -866,27 +870,6 @@ function zodErrorToFieldErrors(error: z.ZodError): Record<string, string> {
     if (!(key in out) && issue.message) out[key] = issue.message;
   }
   return out;
-}
-
-function mutationErrorToFieldErrors(error: unknown): Record<string, string> {
-  const validationErrors = (
-    error as {
-      fieldErrors?: Record<string, string[]>;
-      details?: { validationErrors?: Record<string, string[]> };
-    }
-  )?.fieldErrors ?? (
-    error as {
-      details?: { validationErrors?: Record<string, string[]> };
-    }
-  )?.details?.validationErrors;
-
-  if (!validationErrors) return {};
-
-  return Object.fromEntries(
-    Object.entries(validationErrors)
-      .filter(([, messages]) => Array.isArray(messages) && typeof messages[0] === "string")
-      .map(([key, messages]) => [key, messages[0] as string])
-  );
 }
 
 function getStepFromFieldErrors(fieldErrors: Record<string, string>): number {
@@ -997,13 +980,13 @@ export const OrderCreationWizard = memo(function OrderCreationWizard({
     try {
       await form.handleSubmit();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create order";
-      const fieldErrors = mutationErrorToFieldErrors(error);
+      const message = getOrderCreationSubmitErrorMessage(error);
+      const fieldErrors = getOrderCreationFieldErrors(error);
       if (Object.keys(fieldErrors).length > 0) {
         setValidationErrors(fieldErrors);
       }
       const targetStep =
-        Object.keys(fieldErrors).length > 0 ? getStepFromFieldErrors(fieldErrors) : getStepFromError(error);
+        Object.keys(fieldErrors).length > 0 ? getStepFromFieldErrors(fieldErrors) : getStepFromErrorMessage(message);
       toast.error(message);
       form.setFieldValue("currentStep", targetStep);
       setTimeout(
