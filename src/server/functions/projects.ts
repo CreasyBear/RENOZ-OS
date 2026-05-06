@@ -27,6 +27,7 @@ import {
   addProjectMemberSchema,
   removeProjectMemberSchema,
   completeProjectSchema,
+  type CreateProjectInput,
 } from "@/lib/schemas/jobs/projects";
 import {
   decodeCursor,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/db/pagination";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { NotFoundError, ValidationError } from "@/lib/server/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/server/errors";
 import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
 import { computeChanges } from "@/lib/activity-logger";
 import { logger as appLogger } from "@/lib/logger";
@@ -72,6 +73,17 @@ const PROJECT_STATUS_TRANSITIONS: Record<string, string[]> = {
   completed: [], // Terminal state
   cancelled: [], // Terminal state
 };
+
+const MAX_PROJECT_NUMBER_RETRIES = 5;
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
+}
 
 /**
  * Validates that a status transition is allowed.
@@ -397,44 +409,8 @@ export const createProject = createServerFn({ method: "POST" })
       await assertProjectOrderScope(data.orderId, data.customerId, ctx.organizationId);
     }
 
-    // Generate project number (PRJ-XXXX format)
-    const projectNumber = await generateProjectNumber(ctx.organizationId);
-
     // Create project and add owner atomically
-    const project = await db.transaction(async (tx) => {
-      const [newProject] = await tx
-        .insert(projects)
-        .values({
-          organizationId: ctx.organizationId,
-          projectNumber,
-          title: data.title,
-          description: data.description,
-          projectType: data.projectType,
-          priority: data.priority,
-          customerId: data.customerId,
-          orderId: data.orderId,
-          siteAddress: data.siteAddress,
-          scope: data.scope,
-          outcomes: data.outcomes,
-          keyFeatures: data.keyFeatures,
-          startDate: data.startDate,
-          targetCompletionDate: data.targetCompletionDate,
-          estimatedTotalValue: data.estimatedTotalValue?.toString(),
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        })
-        .returning();
-
-      // Add creator as project owner
-      await tx.insert(projectMembers).values({
-        organizationId: ctx.organizationId,
-        projectId: newProject.id,
-        userId: ctx.user.id,
-        role: "owner",
-      });
-
-      return newProject;
-    });
+    const project = await createProjectWithUniqueNumber(data, ctx);
 
     // Log project creation
     logger.logAsync({
@@ -459,6 +435,59 @@ export const createProject = createServerFn({ method: "POST" })
 
     return project;
   });
+
+async function createProjectWithUniqueNumber(
+  data: CreateProjectInput,
+  ctx: Awaited<ReturnType<typeof withAuth>>
+) {
+  for (let attempt = 0; attempt < MAX_PROJECT_NUMBER_RETRIES; attempt++) {
+    const projectNumber = await generateProjectNumber(ctx.organizationId, attempt);
+
+    try {
+      return await db.transaction(async (tx) => {
+        const [newProject] = await tx
+          .insert(projects)
+          .values({
+            organizationId: ctx.organizationId,
+            projectNumber,
+            title: data.title,
+            description: data.description,
+            projectType: data.projectType,
+            priority: data.priority,
+            customerId: data.customerId,
+            orderId: data.orderId,
+            siteAddress: data.siteAddress,
+            scope: data.scope,
+            outcomes: data.outcomes,
+            keyFeatures: data.keyFeatures,
+            startDate: data.startDate,
+            targetCompletionDate: data.targetCompletionDate,
+            estimatedTotalValue: data.estimatedTotalValue?.toString(),
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          })
+          .returning();
+
+        // Add creator as project owner
+        await tx.insert(projectMembers).values({
+          organizationId: ctx.organizationId,
+          projectId: newProject.id,
+          userId: ctx.user.id,
+          role: "owner",
+        });
+
+        return newProject;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new ConflictError("Project number already exists. Please retry project creation.");
+}
 
 /**
  * Update a project
@@ -865,7 +894,10 @@ export const completeProject = createServerFn({ method: "POST" })
 /**
  * Generate a unique project number
  */
-async function generateProjectNumber(organizationId: string): Promise<string> {
+async function generateProjectNumber(
+  organizationId: string,
+  attemptOffset = 0
+): Promise<string> {
   const prefix = "PRJ";
 
   // Get the latest project number for this organization
@@ -883,7 +915,7 @@ async function generateProjectNumber(organizationId: string): Promise<string> {
   const lastNumber = result[0].projectNumber;
   const match = lastNumber.match(/(\d+)$/);
   const lastSeq = match ? parseInt(match[1], 10) : 0;
-  const nextSeq = lastSeq + 1;
+  const nextSeq = lastSeq + 1 + attemptOffset;
 
   return `${prefix}-${nextSeq.toString().padStart(4, "0")}`;
 }
