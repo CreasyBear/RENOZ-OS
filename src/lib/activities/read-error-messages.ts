@@ -3,6 +3,7 @@ import { isReadQueryError } from '@/lib/read-path-policy';
 export const ACTIVITY_READ_MESSAGES = {
   feed: 'Activity feed is temporarily unavailable. Please refresh and try again.',
   history: 'Activity history is temporarily unavailable. Please refresh and try again.',
+  followUps: 'Follow-ups are temporarily unavailable. Please refresh and try again.',
   statistics: 'Activity statistics are temporarily unavailable. Please refresh and try again.',
   leaderboard: 'Activity leaderboard is temporarily unavailable. Please refresh and try again.',
 } as const;

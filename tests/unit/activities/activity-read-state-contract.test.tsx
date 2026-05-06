@@ -37,10 +37,12 @@ describe('activity read state contract', () => {
     const activityCharts = read('src/components/shared/activity/activity-charts.tsx');
     const activityHeatmap = read('src/components/shared/activity/activity-heatmap.tsx');
     const activityLeaderboard = read('src/components/shared/activity/activity-leaderboard.tsx');
+    const followUpScheduler = read('src/components/domain/pipeline/activities/follow-up-scheduler.tsx');
     const activityHooks = read('src/hooks/activities/use-activities.ts');
     const unifiedHooks = read('src/hooks/activities/use-unified-activities.ts');
 
     expect(formatter).toContain('formatActivityReadError');
+    expect(formatter).toContain('followUps:');
     expect(formatter).toContain('statistics:');
     expect(formatter).toContain('leaderboard:');
     expect(barrel).toContain('formatActivityReadError');
@@ -55,6 +57,10 @@ describe('activity read state contract', () => {
       expect(source).not.toContain('Failed to load activities');
       expect(source).not.toContain('{error.message}');
     }
+
+    expect(followUpScheduler).toContain('formatActivityReadError');
+    expect(followUpScheduler).toContain('ACTIVITY_READ_MESSAGES.followUps');
+    expect(followUpScheduler).not.toContain('Failed to load follow-ups.');
 
     for (const source of [activityCharts, activityHeatmap, activityLeaderboard]) {
       expect(source).toContain('formatActivityReadError');

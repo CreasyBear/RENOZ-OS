@@ -44,6 +44,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
 import {
+  ACTIVITY_READ_MESSAGES,
+  formatActivityReadError,
+} from "@/lib/activities/read-error-messages";
+import {
   formatPipelineActivityMutationError,
   useFollowUps,
   useLogActivity,
@@ -233,6 +237,8 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
 
   // Error state
   if (error) {
+    const errorMessage = formatActivityReadError(error, ACTIVITY_READ_MESSAGES.followUps);
+
     return (
       <Card className={className}>
         <CardHeader className={compact ? "pb-2" : undefined}>
@@ -242,7 +248,7 @@ export const FollowUpScheduler = memo(function FollowUpScheduler({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Failed to load follow-ups.
+            {errorMessage}
           </p>
         </CardContent>
       </Card>

@@ -66,4 +66,21 @@ describe('activity read error messages', () => {
       'Fallback copy'
     );
   });
+
+  it('keeps follow-up read copy centralized', () => {
+    const normalized = normalizeReadQueryError(
+      { statusCode: 503, code: 'INTERNAL_ERROR', message: 'follow-up query failed' },
+      {
+        contractType: 'always-shaped',
+        fallbackMessage: ACTIVITY_READ_MESSAGES.followUps,
+      }
+    );
+
+    expect(formatActivityReadError(normalized, 'Fallback copy')).toBe(
+      ACTIVITY_READ_MESSAGES.followUps
+    );
+    expect(formatActivityReadError(new Error('follow-up query failed'), 'Fallback copy')).toBe(
+      'Fallback copy'
+    );
+  });
 });
