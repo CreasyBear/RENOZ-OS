@@ -107,6 +107,47 @@ describe('order mutation invalidation', () => {
     )
   })
 
+  it('managed status changes invalidate centralized status option keys', async () => {
+    const orderId = 'order-1'
+    mockChangeOrderStatusManaged.mockResolvedValue({ success: true })
+
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(queryKeys.orders.managedStatusOptions(orderId), {
+      orderId,
+      currentStatus: 'draft',
+      options: [],
+    })
+    queryClient.setQueryData(queryKeys.orders.workflowOptions(orderId), {
+      orderId,
+      currentStatus: 'draft',
+      actions: [],
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useChangeOrderStatusManaged } = await import('@/hooks/orders/use-order-status')
+
+    const { result } = renderHook(() => useChangeOrderStatusManaged(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId,
+        targetStatus: 'confirmed',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.managedStatusOptions(orderId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.workflowOptions(orderId),
+    })
+    expect(queryClient.getQueryState(queryKeys.orders.managedStatusOptions(orderId))?.isInvalidated)
+      .toBe(true)
+    expect(queryClient.getQueryState(queryKeys.orders.workflowOptions(orderId))?.isInvalidated)
+      .toBe(true)
+  })
+
   it('shipment status updates also refresh infinite order collections', async () => {
     mockUpdateShipmentStatus.mockResolvedValue({ id: 'shipment-1' })
 

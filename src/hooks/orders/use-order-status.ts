@@ -115,7 +115,7 @@ export function useManagedOrderStatusOptions(orderId: string, enabled = true) {
   const getOptionsFn = useServerFn(getOrderStatusOptions);
 
   return useQuery<ManagedOrderStatusOptionsResult>({
-    queryKey: [...queryKeys.orders.detail(orderId), 'managed-status-options'],
+    queryKey: queryKeys.orders.managedStatusOptions(orderId),
     queryFn: () => getOptionsFn({ data: { orderId } }),
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -126,7 +126,7 @@ export function useOrderWorkflowOptions(orderId: string, enabled = true) {
   const getOptionsFn = useServerFn(getOrderWorkflowOptions);
 
   return useQuery<OrderWorkflowOptionsResult>({
-    queryKey: [...queryKeys.orders.detail(orderId), 'workflow-options'],
+    queryKey: queryKeys.orders.workflowOptions(orderId),
     queryFn: () => getOptionsFn({ data: { orderId } }),
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
@@ -145,10 +145,10 @@ export function useChangeOrderStatusManaged(options: UseUpdateOrderStatusOptions
         queryKey: queryKeys.orders.withCustomer(variables.orderId),
       });
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.detail(variables.orderId), 'managed-status-options'],
+        queryKey: queryKeys.orders.managedStatusOptions(variables.orderId),
       });
       queryClient.invalidateQueries({
-        queryKey: [...queryKeys.orders.detail(variables.orderId), 'workflow-options'],
+        queryKey: queryKeys.orders.workflowOptions(variables.orderId),
       });
       invalidateOrderCollectionQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });

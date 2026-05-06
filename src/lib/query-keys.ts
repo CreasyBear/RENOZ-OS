@@ -619,6 +619,10 @@ export const queryKeys = {
       [...queryKeys.orders.all, 'payments', 'detail', id] as const,
     withCustomer: (orderId: string) =>
       [...queryKeys.orders.details(), orderId, 'withCustomer'] as const,
+    managedStatusOptions: (orderId: string) =>
+      [...queryKeys.orders.detail(orderId), 'managed-status-options'] as const,
+    workflowOptions: (orderId: string) =>
+      [...queryKeys.orders.detail(orderId), 'workflow-options'] as const,
     assignees: (orgId?: string, roles?: readonly string[]) =>
       [...queryKeys.orders.all, 'assignees', orgId, roles] as const,
     stats: () => [...queryKeys.orders.all, 'stats'] as const,
