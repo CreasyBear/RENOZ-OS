@@ -1670,6 +1670,14 @@ export const logActivity = createServerFn({ method: 'POST' })
         })
         .returning();
 
+      if (!activity) {
+        throw new ServerError(
+          'Unable to log opportunity activity',
+          500,
+          'PIPELINE_ACTIVITY_LOG_FAILED'
+        );
+      }
+
       return activity;
     });
 

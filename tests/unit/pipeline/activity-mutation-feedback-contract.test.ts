@@ -66,6 +66,8 @@ describe('pipeline activity mutation feedback contract', () => {
 
     expect(index).toContain('formatPipelineActivityMutationError');
     expect(formatter).toContain('PIPELINE_ACTIVITY_CODE_MESSAGES');
+    expect(server).toContain('const [activity] = await tx');
+    expect(server).toContain("'PIPELINE_ACTIVITY_LOG_FAILED'");
     expect(server).toContain('const [activity] = await db');
     expect(server).toContain('const [deletedActivity] = await db');
     expect(server).toContain('.returning({ id: opportunityActivities.id })');
