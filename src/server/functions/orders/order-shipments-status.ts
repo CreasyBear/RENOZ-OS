@@ -247,8 +247,20 @@ export async function updateShipmentStatusHandler({
       const [updatedShipment] = await tx
         .update(orderShipments)
         .set(updateValues)
-        .where(eq(orderShipments.id, data.id))
+        .where(
+          and(
+            eq(orderShipments.id, data.id),
+            eq(orderShipments.organizationId, ctx.organizationId),
+            eq(orderShipments.status, existing.status)
+          )
+        )
         .returning();
+
+      if (!updatedShipment) {
+        throw new ValidationError('Shipment status changed while updating return status', {
+          status: ['Shipment changed while the return update was running. Refresh and try again.'],
+        });
+      }
 
       const items = await tx
         .select({
@@ -256,7 +268,12 @@ export async function updateShipmentStatusHandler({
           serialNumbers: shipmentItems.serialNumbers,
         })
         .from(shipmentItems)
-        .where(eq(shipmentItems.shipmentId, data.id));
+        .where(
+          and(
+            eq(shipmentItems.shipmentId, data.id),
+            eq(shipmentItems.organizationId, ctx.organizationId)
+          )
+        );
 
       for (const item of items) {
         const serials = ((item.serialNumbers as string[] | null) ?? [])
@@ -276,7 +293,7 @@ export async function updateShipmentStatusHandler({
             });
           }
 
-          await tx
+          const [updatedSerializedItem] = await tx
             .update(serializedItems)
             .set({
               status: 'returned',
@@ -284,7 +301,21 @@ export async function updateShipmentStatusHandler({
               updatedAt: new Date(),
               updatedBy: ctx.user.id,
             })
-            .where(eq(serializedItems.id, serializedItem.id));
+            .where(
+              and(
+                eq(serializedItems.id, serializedItem.id),
+                eq(serializedItems.organizationId, ctx.organizationId)
+              )
+            )
+            .returning({ id: serializedItems.id });
+
+          if (!updatedSerializedItem) {
+            throw new ValidationError('Serialized item record not found', {
+              serialNumbers: [
+                `Serial "${serial}" could not be updated while marking the shipment returned.`,
+              ],
+            });
+          }
 
           await addSerializedItemEvent(tx, {
             organizationId: ctx.organizationId,
@@ -327,26 +358,46 @@ export async function updateShipmentStatusHandler({
     });
   }
 
-  const [shipment] = await db
-    .update(orderShipments)
-    .set(updateValues)
-    .where(eq(orderShipments.id, data.id))
-    .returning();
+  const shipment = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
 
-  await db.insert(activities).values({
-    organizationId: ctx.organizationId,
-    userId: ctx.user.id,
-    entityType: 'shipment',
-    entityId: shipment.id,
-    action: 'updated',
-    description: `Shipment status updated: ${existing.status} -> ${data.status}`,
-    metadata: {
-      shipmentNumber: shipment.shipmentNumber,
-      previousStatus: existing.status,
-      newStatus: data.status,
-      idempotencyKey: idempotencyKey ?? undefined,
-    },
-    createdBy: ctx.user.id,
+    const [updatedShipment] = await tx
+      .update(orderShipments)
+      .set(updateValues)
+      .where(
+        and(
+          eq(orderShipments.id, data.id),
+          eq(orderShipments.organizationId, ctx.organizationId),
+          eq(orderShipments.status, existing.status)
+        )
+      )
+      .returning();
+
+    if (!updatedShipment) {
+      throw new ValidationError('Shipment status changed while updating shipment', {
+        status: ['Shipment changed while the status update was running. Refresh and try again.'],
+      });
+    }
+
+    await tx.insert(activities).values({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      entityType: 'shipment',
+      entityId: updatedShipment.id,
+      action: 'updated',
+      description: `Shipment status updated: ${existing.status} -> ${data.status}`,
+      metadata: {
+        shipmentNumber: updatedShipment.shipmentNumber,
+        previousStatus: existing.status,
+        newStatus: data.status,
+        idempotencyKey: idempotencyKey ?? undefined,
+      },
+      createdBy: ctx.user.id,
+    });
+
+    return updatedShipment;
   });
 
   return serializedMutationSuccess(shipment, `Shipment status updated to ${data.status}.`, {
@@ -509,8 +560,17 @@ export async function addTrackingEventHandler({
       trackingEvents,
       updatedBy: ctx.user.id,
     })
-    .where(eq(orderShipments.id, data.shipmentId))
+    .where(
+      and(
+        eq(orderShipments.id, data.shipmentId),
+        eq(orderShipments.organizationId, ctx.organizationId)
+      )
+    )
     .returning();
+
+  if (!shipment) {
+    throw new NotFoundError('Shipment not found');
+  }
 
   return shipment;
 }
