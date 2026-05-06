@@ -51,6 +51,12 @@ describe('communication read error messages', () => {
     const signatures = read(
       'src/routes/_authenticated/communications/signatures/signatures-page.tsx'
     );
+    const scheduledEmails = read(
+      'src/routes/_authenticated/communications/emails/scheduled-emails-page.tsx'
+    );
+    const scheduledCalls = read(
+      'src/routes/_authenticated/communications/calls/calls-page.tsx'
+    );
     const formatter = read('src/lib/communications/read-error-messages.ts');
 
     expect(preferences).toContain('formatCommunicationReadError(');
@@ -71,10 +77,24 @@ describe('communication read error messages', () => {
     expect(signatures).toContain('formatCommunicationReadError(');
     expect(signatures).toContain('COMMUNICATION_READ_MESSAGES.emailSignatures');
     expect(signatures).not.toContain('<span>{error.message}</span>');
+    expect(scheduledEmails).toContain('formatCommunicationReadError(');
+    expect(scheduledEmails).toContain('COMMUNICATION_READ_MESSAGES.scheduledEmails');
+    expect(scheduledEmails).not.toContain('? error.message');
+    expect(scheduledEmails).not.toContain(
+      'Scheduled emails are temporarily unavailable. Please refresh and try again."'
+    );
+    expect(scheduledCalls).toContain('formatCommunicationReadError(');
+    expect(scheduledCalls).toContain('COMMUNICATION_READ_MESSAGES.scheduledCalls');
+    expect(scheduledCalls).not.toContain('? error.message');
+    expect(scheduledCalls).not.toContain(
+      'Scheduled calls are temporarily unavailable. Please refresh and try again."'
+    );
     expect(formatter).toContain('isReadQueryError(error)');
     expect(formatter).toContain('suppressionList');
     expect(formatter).toContain('inboxEmailAccounts');
     expect(formatter).toContain('emailTemplates');
     expect(formatter).toContain('emailSignatures');
+    expect(formatter).toContain('scheduledEmails');
+    expect(formatter).toContain('scheduledCalls');
   });
 });

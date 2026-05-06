@@ -23,6 +23,10 @@ import { toastSuccess, toastError } from "@/hooks";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shared";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 
 export default function CallsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -132,9 +136,10 @@ export default function CallsPage() {
           <AlertTitle>Showing cached scheduled calls</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              {error instanceof Error
-                ? error.message
-                : "Scheduled calls are temporarily unavailable. Please refresh and try again."}
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.scheduledCalls
+              )}
             </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
