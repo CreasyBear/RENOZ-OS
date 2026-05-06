@@ -8,7 +8,9 @@
  * - Expiring/expired quotes alerts
  *
  * @see src/lib/query-keys.ts for centralized query keys
- * @see src/server/functions/pipeline/quote-versions.ts for server functions
+ * @see src/server/functions/pipeline/quote-versions.ts for quote version server functions
+ * @see src/server/functions/pipeline/quote-comparison.ts for quote comparison server functions
+ * @see src/server/functions/pipeline/quote-validity.ts for quote validity server functions
  */
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
@@ -21,8 +23,8 @@ import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import {
   listQuoteVersions,
   getQuoteVersion,
-  compareQuoteVersions,
 } from '@/server/functions/pipeline/quote-versions';
+import { compareQuoteVersions } from '@/server/functions/pipeline/quote-comparison';
 import {
   getExpiringQuotes,
   getExpiredQuotes,
