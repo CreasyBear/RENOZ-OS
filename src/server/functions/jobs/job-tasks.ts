@@ -384,11 +384,19 @@ export const updateTask = createServerFn({ method: 'POST' })
     });
     const logger = createActivityLoggerWithContext(ctx);
 
+    const taskScope = [
+      eq(jobTasks.id, data.taskId),
+      eq(jobTasks.organizationId, ctx.organizationId),
+    ];
+    if (data.jobId) {
+      taskScope.push(eq(jobTasks.jobId, data.jobId));
+    }
+
     // Get existing task for change tracking
     const [existingTask] = await db
       .select()
       .from(jobTasks)
-      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
+      .where(and(...taskScope))
       .limit(1);
 
     if (!existingTask) {
@@ -418,7 +426,7 @@ export const updateTask = createServerFn({ method: 'POST' })
     const [task] = await db
       .update(jobTasks)
       .set(updateValues)
-      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
+      .where(and(...taskScope))
       .returning();
 
     // Log task update
@@ -474,7 +482,13 @@ export const deleteTask = createServerFn({ method: 'POST' })
     const [existingTask] = await db
       .select()
       .from(jobTasks)
-      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(jobTasks.id, data.taskId),
+          eq(jobTasks.jobId, data.jobId),
+          eq(jobTasks.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!existingTask) {
@@ -487,7 +501,13 @@ export const deleteTask = createServerFn({ method: 'POST' })
     // Delete task
     await db
       .delete(jobTasks)
-      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)));
+      .where(
+        and(
+          eq(jobTasks.id, data.taskId),
+          eq(jobTasks.jobId, data.jobId),
+          eq(jobTasks.organizationId, ctx.organizationId)
+        )
+      );
 
     // Log task deletion
     logger.logAsync({
@@ -533,7 +553,7 @@ export const reorderTasks = createServerFn({ method: 'POST' })
     // Update positions in a transaction
     await db.transaction(async (tx) => {
       for (let i = 0; i < data.taskIds.length; i++) {
-        await tx
+        const [updated] = await tx
           .update(jobTasks)
           .set({
             position: i,
@@ -545,7 +565,12 @@ export const reorderTasks = createServerFn({ method: 'POST' })
               eq(jobTasks.organizationId, ctx.organizationId),
               eq(jobTasks.jobId, data.jobId)
             )
-          );
+          )
+          .returning({ id: jobTasks.id });
+
+        if (!updated) {
+          throw new NotFoundError('Task not found');
+        }
       }
     });
 

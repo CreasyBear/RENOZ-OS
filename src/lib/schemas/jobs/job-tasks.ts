@@ -84,6 +84,7 @@ export type CreateTaskInput = z.infer<typeof createTaskSchema>;
  */
 export const updateTaskSchema = z.object({
   taskId: z.string().uuid('Invalid task ID format'),
+  jobId: z.string().uuid('Invalid job ID format').optional(),
   title: z
     .string()
     .min(1, 'Title is required')
@@ -113,6 +114,7 @@ export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
  */
 export const deleteTaskSchema = z.object({
   taskId: z.string().uuid('Invalid task ID format'),
+  jobId: z.string().uuid('Invalid job ID format'),
 });
 
 export type DeleteTaskInput = z.infer<typeof deleteTaskSchema>;

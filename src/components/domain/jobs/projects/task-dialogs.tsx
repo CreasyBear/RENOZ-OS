@@ -40,7 +40,14 @@ import {
   NumberField,
   FormField,
 } from '@/components/shared/forms';
-import { useUpdateTask, useCreateTask, useSiteVisitsByProject, useWorkstreams, useJobTemplates } from '@/hooks/jobs';
+import {
+  formatProjectTaskMutationError,
+  useUpdateTask,
+  useCreateTask,
+  useSiteVisitsByProject,
+  useWorkstreams,
+  useJobTemplates,
+} from '@/hooks/jobs';
 import { SiteVisitCreateDialog } from './site-visit-create-dialog';
 import { WorkstreamCreateDialog } from './workstream-dialogs';
 import { UserInviteDialog } from '@/components/domain/users/user-invite-dialog';
@@ -182,10 +189,10 @@ export function TaskCreateDialog({
         }
 
         onSuccess?.();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      } catch (error) {
+        const message = formatProjectTaskMutationError(error, 'create');
         setSubmitError(message);
-        toast.error(`Failed to create task: ${message}`);
+        toast.error(message);
       }
     },
   });
@@ -601,6 +608,7 @@ export function TaskEditDialog({
       try {
         await updateTask.mutateAsync({
           taskId: task.id,
+          jobId: task.jobId,
           title: data.title,
           description: data.description,
           status: data.status,
@@ -614,10 +622,10 @@ export function TaskEditDialog({
         form.reset();
         onOpenChange(false);
         onSuccess?.();
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+      } catch (error) {
+        const message = formatProjectTaskMutationError(error, 'update');
         setSubmitError(message);
-        toast.error(`Failed to update task: ${message}`);
+        toast.error(message);
       }
     },
   });

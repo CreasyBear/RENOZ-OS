@@ -87,6 +87,7 @@ import { toastError } from '@/hooks';
 
 // Hooks
 import {
+  formatProjectTaskMutationError,
   useProjectTasks,
   useUpdateProjectTaskStatus,
   useDeleteProjectTask,
@@ -998,8 +999,8 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
         queryClient.invalidateQueries({
           queryKey: queryKeys.projectTasks.byProject(projectId),
         });
-      } catch {
-        toastError('Failed to create task. Please try again.');
+      } catch (error) {
+        toastError(formatProjectTaskMutationError(error, 'create'));
       }
     },
     [createTask, defaultSiteVisitId, projectId, queryClient]
@@ -1222,6 +1223,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     try {
       await updateStatus.mutateAsync({
         taskId: task.id,
+        jobId: task.jobId,
         status: newStatus,
       });
       if (newStatus === 'completed') {
@@ -1242,19 +1244,19 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       } else {
         toast.success('Task reopened');
       }
-    } catch {
+    } catch (error) {
       // Rollback on error
       if (previousProjectTasks) {
         queryClient.setQueryData(projectTasksKey, previousProjectTasks);
       }
-      toast.error('Failed to update task');
+      toast.error(formatProjectTaskMutationError(error, 'status'));
     }
   };
 
   const handleDeleteTask = useCallback(
     (task: TaskWithWorkstream) => {
       const taskId = task.id;
-      const jobId = task.siteVisitId || '';
+      const jobId = task.jobId;
 
       // Add to pending deletions immediately (optimistic)
       setPendingDeletions((prev) => new Set(prev).add(taskId));
@@ -1271,14 +1273,14 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             return next;
           });
           refetch();
-        } catch {
+        } catch (error) {
           // On error, restore the task
           setPendingDeletions((prev) => {
             const next = new Set(prev);
             next.delete(taskId);
             return next;
           });
-          toast.error('Failed to delete task');
+          toast.error(formatProjectTaskMutationError(error, 'delete'));
         }
       }, 5000);
 
@@ -1313,18 +1315,18 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   // Handle task reordering within a workstream
   const handleReorderTasks = useCallback(
     async (_workstreamName: string, taskIds: string[]) => {
-      // Find the first task to get the jobId (site visit ID)
+      // Find the first task to get the job assignment id.
       const firstTask = tasks.find(t => t.id === taskIds[0]);
-      if (!firstTask?.siteVisitId) return;
+      if (!firstTask?.jobId) return;
 
       try {
         await reorderTasks.mutateAsync({
-          jobId: firstTask.siteVisitId,
+          jobId: firstTask.jobId,
           taskIds,
         });
         toast.success('Task order updated');
-      } catch {
-        toast.error('Failed to reorder tasks');
+      } catch (error) {
+        toast.error(formatProjectTaskMutationError(error, 'reorder'));
       }
     },
     [reorderTasks, tasks]

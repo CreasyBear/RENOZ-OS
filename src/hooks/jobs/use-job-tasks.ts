@@ -273,7 +273,8 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId }: { taskId: string; jobId: string }) => deleteTask({ data: { taskId } }),
+    mutationFn: ({ taskId, jobId }: { taskId: string; jobId: string }) =>
+      deleteTask({ data: { taskId, jobId } }),
     onSuccess: (_data, variables) => {
       // Invalidate the task list for this job
       queryClient.invalidateQueries({
@@ -462,10 +463,15 @@ export function useUpdateJobTaskStatus(options: UseUpdateJobTaskStatusOptions = 
   return {
     ...updateTaskMutation,
 
-    mutateAsync: async (input: { taskId: string; status: KanbanTask['status'] }) => {
+    mutateAsync: async (input: {
+      taskId: string;
+      status: KanbanTask['status'];
+      jobId?: string;
+    }) => {
       try {
         await updateTaskMutation.mutateAsync({
           taskId: input.taskId,
+          jobId: input.jobId,
           status: input.status,
         });
 
@@ -480,7 +486,7 @@ export function useUpdateJobTaskStatus(options: UseUpdateJobTaskStatusOptions = 
       }
     },
 
-    mutate: (input: { taskId: string; status: KanbanTask['status'] }) => {
+    mutate: (input: { taskId: string; status: KanbanTask['status']; jobId?: string }) => {
       const previousData = queryClient.getQueryData(queryKeys.jobTasks.kanban.list());
 
       if (previousData) {
@@ -520,6 +526,7 @@ export function useUpdateJobTaskStatus(options: UseUpdateJobTaskStatusOptions = 
       updateTaskMutation.mutate(
         {
           taskId: input.taskId,
+          jobId: input.jobId,
           status: input.status,
         },
         {
