@@ -12,11 +12,20 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
-import { usePreferences, useSetPreference } from '@/hooks/users';
+import {
+  formatUserMutationError,
+  usePreferences,
+  useSetPreference,
+} from '@/hooks/users';
 import { PREFERENCE_CATEGORIES, type PreferenceCategory } from '@/lib/schemas/users/users';
+import {
+  formatUserReadError,
+  USER_READ_MESSAGES,
+} from '@/lib/users/read-error-messages';
 import { toast } from '@/hooks';
 
 // UI Components
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -31,6 +40,7 @@ import { Separator } from '@/components/ui/separator';
 
 // Icons
 import {
+  AlertCircle,
   Palette,
   Bell,
   Globe,
@@ -97,7 +107,12 @@ const CATEGORIES = [
 ];
 
 function PreferencesSettings() {
-  const { data: preferences, isLoading } = usePreferences();
+  const {
+    data: preferences,
+    isLoading,
+    error: preferencesError,
+    refetch,
+  } = usePreferences();
   const setPreferenceMutation = useSetPreference();
 
   const [activeCategory, setActiveCategory] = useState<PreferenceCategory>(
@@ -146,7 +161,7 @@ function PreferencesSettings() {
         }
         return updated;
       });
-    } catch {
+    } catch (error) {
       // Revert on error
       setLocalPreferences((prev) => {
         const updated = { ...prev };
@@ -155,7 +170,7 @@ function PreferencesSettings() {
         }
         return updated;
       });
-      toast.error('Failed to save preference');
+      toast.error(formatUserMutationError(error, 'updatePreference'));
     } finally {
       setSaving(null);
     }
@@ -532,6 +547,29 @@ function PreferencesSettings() {
     return <SettingsCardsSkeleton sections={3} showSidebar />;
   }
 
+  if (preferencesError && !preferences) {
+    return (
+      <PageLayout variant="full-width">
+        <PageLayout.Header
+          title="Preferences"
+          description="Personalize your experience. Changes are saved automatically."
+        />
+        <PageLayout.Content>
+          <Card className="flex flex-col items-center justify-center py-12">
+            <AlertCircle className="text-muted-foreground mb-4 h-12 w-12" />
+            <h3 className="text-lg font-medium">Preferences unavailable</h3>
+            <p className="text-muted-foreground mt-1 max-w-sm text-center">
+              {formatUserReadError(preferencesError, USER_READ_MESSAGES.preferences)}
+            </p>
+            <Button className="mt-4" onClick={() => void refetch()}>
+              Try again
+            </Button>
+          </Card>
+        </PageLayout.Content>
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -539,6 +577,13 @@ function PreferencesSettings() {
         description="Personalize your experience. Changes are saved automatically."
       />
       <PageLayout.Content>
+        {preferencesError ? (
+          <Card className="mb-6 border-amber-200 bg-amber-50">
+            <CardContent className="py-4 text-sm text-amber-900">
+              {formatUserReadError(preferencesError, USER_READ_MESSAGES.preferencesCached)}
+            </CardContent>
+          </Card>
+        ) : null}
         <div className="flex gap-6">
           {/* Sidebar */}
           <div className="w-64 flex-shrink-0">

@@ -9,6 +9,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import { USER_READ_MESSAGES } from '@/lib/users/read-error-messages';
 import {
   getPreferences,
   setPreference,
@@ -27,8 +29,17 @@ export function usePreferences(category?: string) {
   return useQuery({
     queryKey: queryKeys.user.preferences(category),
     queryFn: async () => {
-      const result = await getPreferencesFn({ data: {} });
-      return result.grouped;
+      try {
+        const result = await getPreferencesFn({
+          data: category ? { category } : {},
+        });
+        return result.grouped;
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage: USER_READ_MESSAGES.preferences,
+        });
+      }
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });

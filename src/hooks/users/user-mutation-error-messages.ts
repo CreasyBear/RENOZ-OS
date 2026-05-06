@@ -9,6 +9,8 @@ const USER_MUTATION_FALLBACKS = {
   transferOwnership: 'Ownership transfer is temporarily unavailable. Please refresh and try again.',
   addGroupMember: 'Group membership update is temporarily unavailable. Please refresh and try again.',
   updateProfile: 'Profile update is temporarily unavailable. Please refresh and try again.',
+  updatePreference:
+    'Preference update is temporarily unavailable. Please refresh and try again.',
   updateAvatar: 'Avatar update is temporarily unavailable. Please refresh and try again.',
   removeAvatar: 'Avatar removal is temporarily unavailable. Please refresh and try again.',
   updateNotificationPreference:
