@@ -13,7 +13,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, isNull, sql, inArray, not } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { db, type TransactionExecutor } from '@/lib/db';
 import {
   orders,
   orderLineItems,
@@ -54,6 +54,45 @@ const PICK_UNPICK_ALLOWED_STATUSES: OrderStatus[] = [
   'shipped',
 ];
 
+type PickOrderAction = 'pickable' | 'unpickable';
+
+async function lockActiveOrderForPicking(
+  tx: TransactionExecutor,
+  params: {
+    orderId: string;
+    organizationId: string;
+    action: PickOrderAction;
+  }
+): Promise<OrderStatus> {
+  const [lockedOrder] = await tx
+    .select({ status: orders.status })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, params.orderId),
+        eq(orders.organizationId, params.organizationId),
+        isNull(orders.deletedAt)
+      )
+    )
+    .limit(1)
+    .for('update');
+
+  if (!lockedOrder) {
+    throw new NotFoundError('Order not found', 'order');
+  }
+
+  const currentStatus = lockedOrder.status as OrderStatus;
+  if (!PICK_UNPICK_ALLOWED_STATUSES.includes(currentStatus)) {
+    throw new ValidationError(`Order is not in a ${params.action} status`, {
+      status: [
+        `Order must be in a pre-delivery status (confirmed, picking, picked, partially_shipped, or shipped), currently '${currentStatus}'`,
+      ],
+    });
+  }
+
+  return currentStatus;
+}
+
 /**
  * Pick items from an order.
  *
@@ -90,7 +129,7 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
     }
 
     // Guard: order must be in a pre-delivery status (pick/unpick freely until delivered)
-    const currentStatus = order.status as OrderStatus;
+    let currentStatus = order.status as OrderStatus;
     if (!PICK_UNPICK_ALLOWED_STATUSES.includes(currentStatus)) {
       throw new ValidationError('Order is not in a pickable status', {
         status: [
@@ -104,6 +143,12 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+      currentStatus = await lockActiveOrderForPicking(tx, {
+        orderId: data.orderId,
+        organizationId: ctx.organizationId,
+        action: 'pickable',
+      });
+
       // Get all line items for the order with product info
       // Select only the columns needed for pick validation and updates
       const allLineItems = await tx
@@ -389,8 +434,18 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
             allocatedSerialNumbers: mergedSerials.length > 0 ? mergedSerials : null,
             updatedAt: new Date(),
           })
-          .where(eq(orderLineItems.id, pickItem.lineItemId))
+          .where(
+            and(
+              eq(orderLineItems.id, pickItem.lineItemId),
+              eq(orderLineItems.orderId, data.orderId),
+              eq(orderLineItems.organizationId, ctx.organizationId)
+            )
+          )
           .returning();
+
+        if (!updated) {
+          throw new NotFoundError('Line item not found', 'orderLineItem');
+        }
 
         updatedLineItems.push(updated);
 
@@ -473,7 +528,12 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
       const refreshedItems = await tx
         .select()
         .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, data.orderId));
+        .where(
+          and(
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        );
 
       const allFullyPicked = refreshedItems.every(
         (li) => Number(li.qtyPicked) >= Number(li.quantity)
@@ -490,14 +550,25 @@ export const pickOrderItems = createServerFn({ method: 'POST' })
       }
 
       if (newOrderStatus !== currentStatus) {
-        await tx
+        const [updatedOrder] = await tx
           .update(orders)
           .set({
             status: newOrderStatus,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(orders.id, data.orderId));
+          .where(
+            and(
+              eq(orders.id, data.orderId),
+              eq(orders.organizationId, ctx.organizationId),
+              isNull(orders.deletedAt)
+            )
+          )
+          .returning({ id: orders.id });
+
+        if (!updatedOrder) {
+          throw new NotFoundError('Order not found', 'order');
+        }
       }
 
       return withFulfillmentInventoryMutationIdentity(
@@ -555,7 +626,7 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
       throw new NotFoundError('Order not found', 'order');
     }
 
-    const currentStatus = order.status as OrderStatus;
+    let currentStatus = order.status as OrderStatus;
     if (!PICK_UNPICK_ALLOWED_STATUSES.includes(currentStatus)) {
       throw new ValidationError('Order is not in an unpickable status', {
         status: [
@@ -568,6 +639,11 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+      currentStatus = await lockActiveOrderForPicking(tx, {
+        orderId: data.orderId,
+        organizationId: ctx.organizationId,
+        action: 'unpickable',
+      });
 
       const allLineItems = await tx
         .select({
@@ -804,8 +880,18 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
             allocatedSerialNumbers: newAllocatedSerials,
             updatedAt: new Date(),
           })
-          .where(eq(orderLineItems.id, unpickItem.lineItemId))
+          .where(
+            and(
+              eq(orderLineItems.id, unpickItem.lineItemId),
+              eq(orderLineItems.orderId, data.orderId),
+              eq(orderLineItems.organizationId, ctx.organizationId)
+            )
+          )
           .returning();
+
+        if (!updated) {
+          throw new NotFoundError('Line item not found', 'orderLineItem');
+        }
 
         updatedLineItems.push(updated);
 
@@ -819,7 +905,12 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
       const refreshedItems = await tx
         .select()
         .from(orderLineItems)
-        .where(eq(orderLineItems.orderId, data.orderId));
+        .where(
+          and(
+            eq(orderLineItems.orderId, data.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        );
 
       const allFullyPicked = refreshedItems.every(
         (li) => Number(li.qtyPicked) >= Number(li.quantity)
@@ -836,14 +927,25 @@ export const unpickOrderItems = createServerFn({ method: 'POST' })
       }
 
       if (newOrderStatus !== currentStatus) {
-        await tx
+        const [updatedOrder] = await tx
           .update(orders)
           .set({
             status: newOrderStatus,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
           })
-          .where(eq(orders.id, data.orderId));
+          .where(
+            and(
+              eq(orders.id, data.orderId),
+              eq(orders.organizationId, ctx.organizationId),
+              isNull(orders.deletedAt)
+            )
+          )
+          .returning({ id: orders.id });
+
+        if (!updatedOrder) {
+          throw new NotFoundError('Order not found', 'order');
+        }
       }
 
       return withFulfillmentInventoryMutationIdentity(
