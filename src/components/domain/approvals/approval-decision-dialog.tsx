@@ -54,6 +54,7 @@ import { StatusCell } from '@/components/shared/data-table';
 import { APPROVAL_PRIORITY_CONFIG } from './approval-status-config';
 import type { ApprovalItem } from '@/lib/schemas/approvals';
 import { formatApprovalDecisionMutationError } from '@/hooks/suppliers/approval-mutation-errors';
+import { getApprovalDetailsReadErrorMessage } from './approval-dashboard-error-messages';
 
 // ============================================================================
 // TYPES
@@ -281,7 +282,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                     {!isLoadingApprovalDetails && approvalDetailsError && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-destructive text-sm">
-                          {approvalDetailsError.message}
+                          {getApprovalDetailsReadErrorMessage(approvalDetailsError)}
                         </TableCell>
                       </TableRow>
                     )}

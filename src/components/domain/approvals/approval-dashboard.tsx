@@ -21,6 +21,7 @@ import { FilterEmptyState } from '@/components/shared/filter-empty-state';
 import { DomainFilterBar } from '@/components/shared/filters/domain-filter-bar';
 import { buildFilterItems } from '@/components/shared/filters/build-filter-items';
 import type { FilterBarConfig } from '@/components/shared/filters/types';
+import { getApprovalDashboardReadErrorMessage } from './approval-dashboard-error-messages';
 
 // ============================================================================
 // TYPES
@@ -253,7 +254,7 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
         <EmptyState
           icon={XCircle}
           title="Failed to load approvals"
-          message={error instanceof Error ? error.message : 'An unexpected error occurred'}
+          message={getApprovalDashboardReadErrorMessage(error)}
           primaryAction={{
             label: 'Try Again',
             onClick: onRefresh,
