@@ -472,7 +472,6 @@ import { fetchOrganizationForDocument } from '@/server/functions/documents/organ
 import { customers, addresses, organizations } from 'drizzle/schema';
 
 const STORAGE_BUCKET = 'documents';
-const QUOTE_VALIDITY_DAYS = 30;
 
 /**
  * Generate a PDF for a quote version.
@@ -622,7 +621,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
     const issueDate = new Date(quoteVersion.createdAt);
     const validUntil = opp.quoteExpiresAt
       ? new Date(opp.quoteExpiresAt)
-      : new Date(issueDate.getTime() + QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000);
+      : new Date(issueDate.getTime() + DEFAULT_QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000);
 
     // Build document data
     const quoteData: QuoteDocumentData = {
