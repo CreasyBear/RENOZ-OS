@@ -31,7 +31,12 @@ import {
   type SupplierFiltersState,
 } from '@/components/domain/suppliers';
 import { useTableSelection } from '@/components/shared/data-table';
-import { useSuppliers, useDeleteSupplier, useUpdateSupplier } from '@/hooks/suppliers';
+import {
+  formatSupplierMutationError,
+  useSuppliers,
+  useDeleteSupplier,
+  useUpdateSupplier,
+} from '@/hooks/suppliers';
 import { useTransformedFilterUrlState } from '@/hooks/filters/use-filter-url-state';
 import type { supplierSearchSchema } from './index';
 import type { z } from 'zod';
@@ -223,7 +228,10 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
         });
       } catch (error) {
         toastError(
-          error instanceof Error ? error.message : 'Failed to delete supplier'
+          formatSupplierMutationError(
+            error,
+            'Supplier could not be deleted. Refresh and try again.'
+          )
         );
       }
     },
@@ -247,6 +255,11 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
       getId: (supplier) => supplier.id,
       getLabel: (supplier) => supplier.name,
       run: (supplier) => deleteMutation.mutateAsync({ data: { id: supplier.id } }),
+      formatError: (error) =>
+        formatSupplierMutationError(
+          error,
+          'Supplier could not be deleted. Refresh and try again.'
+        ),
     });
 
     if (result.succeededIds.length > 0) {
@@ -284,6 +297,11 @@ export default function SuppliersPage({ search }: SuppliersPageProps) {
         getLabel: (supplier) => supplier.name,
         run: (supplier) =>
           updateMutation.mutateAsync({ data: { id: supplier.id, status } }),
+        formatError: (error) =>
+          formatSupplierMutationError(
+            error,
+            'Supplier status could not be updated. Refresh and try again.'
+          ),
       });
 
       if (result.succeededIds.length > 0) {

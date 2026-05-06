@@ -51,6 +51,7 @@ describe('supplier mutation error formatting', () => {
     const create = read('src/components/domain/suppliers/supplier-create-container.tsx');
     const edit = read('src/components/domain/suppliers/supplier-edit-container.tsx');
     const list = read('src/components/domain/suppliers/suppliers-list-container.tsx');
+    const routeList = read('src/routes/_authenticated/suppliers/suppliers-page.tsx');
     const detail = read('src/components/domain/suppliers/containers/supplier-detail-container.tsx');
     const index = read('src/hooks/suppliers/index.ts');
 
@@ -58,13 +59,20 @@ describe('supplier mutation error formatting', () => {
     expect(create).toContain('formatSupplierMutationError(');
     expect(edit).toContain('formatSupplierMutationError(');
     expect(list).toContain('formatSupplierMutationError(');
+    expect(routeList).toContain('formatSupplierMutationError(');
     expect(detail).toContain('formatSupplierMutationError(');
+    expect(routeList).toContain('formatError: (error) =>');
+    expect(routeList).toContain('Supplier could not be deleted. Refresh and try again.');
+    expect(routeList).toContain('Supplier status could not be updated. Refresh and try again.');
 
     expect(create).not.toContain('description: error instanceof Error ? error.message');
     expect(edit).not.toContain('description: error instanceof Error ? error.message');
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to delete supplier"');
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to delete some suppliers"');
     expect(list).not.toContain('error instanceof Error ? error.message : "Failed to update supplier status"');
+    expect(routeList).not.toContain('error instanceof Error ? error.message');
+    expect(routeList).not.toContain("result.reason instanceof Error");
+    expect(routeList).not.toContain("'Failed to delete supplier'");
     expect(detail).not.toContain("error instanceof Error ? error.message : 'Failed to delete supplier'");
   });
 });
