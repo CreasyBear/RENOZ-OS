@@ -91,6 +91,8 @@ export interface InvoiceDetailContainerProps {
   className?: string;
 }
 
+const INVOICE_PAYMENT_REFETCH_INTERVAL_MS = 30 * 1000;
+
 // ============================================================================
 // HEADER ACTIONS
 // ============================================================================
@@ -345,9 +347,12 @@ export function InvoiceDetailContainer({
   className,
 }: InvoiceDetailContainerProps) {
   const navigate = useNavigate();
-  const detail = useInvoiceDetail(invoiceId);
+  const detail = useInvoiceDetail(invoiceId, {
+    refetchInterval: INVOICE_PAYMENT_REFETCH_INTERVAL_MS,
+  });
   const orderPaymentsQuery = useOrderPayments(invoiceId, {
     enabled: Boolean(detail.invoice?.id),
+    refetchInterval: INVOICE_PAYMENT_REFETCH_INTERVAL_MS,
   });
   useTrackView(
     'invoice',

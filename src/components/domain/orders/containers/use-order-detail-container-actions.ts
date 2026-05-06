@@ -31,6 +31,7 @@ interface UseOrderDetailContainerActionsOptions {
   orderId: string;
   orderStatus?: string;
   orderVersion?: number;
+  refetchInterval?: number | false;
   refetch: () => void;
 }
 
@@ -49,11 +50,15 @@ export function useOrderDetailContainerActions(
   const {
     data: payments = [],
     refetch: refetchPayments,
-  } = useOrderPayments(options.orderId);
+  } = useOrderPayments(options.orderId, {
+    refetchInterval: options.refetchInterval,
+  });
   const {
     data: paymentSummary,
     refetch: refetchSummary,
-  } = useOrderPaymentSummary(options.orderId);
+  } = useOrderPaymentSummary(options.orderId, {
+    refetchInterval: options.refetchInterval,
+  });
   const createPaymentMutation = useCreateOrderPayment(options.orderId);
   const createRefundMutation = useCreateRefundPayment(options.orderId);
 

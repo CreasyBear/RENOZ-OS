@@ -82,13 +82,22 @@ export interface UseInvoiceDetailReturn {
   actions: InvoiceDetailActions;
 }
 
+export interface UseInvoiceDetailOptions {
+  refetchInterval?: number | false;
+}
+
 // ============================================================================
 // HOOK
 // ============================================================================
 
-export function useInvoiceDetail(invoiceId: string): UseInvoiceDetailReturn {
+export function useInvoiceDetail(
+  invoiceId: string,
+  options: UseInvoiceDetailOptions = {}
+): UseInvoiceDetailReturn {
   // Data fetching
-  const { data: invoice, isLoading, error, refetch } = useInvoice(invoiceId);
+  const { data: invoice, isLoading, error, refetch } = useInvoice(invoiceId, {
+    refetchInterval: options.refetchInterval,
+  });
   const currentInvoiceStatus = useMemo<InvoiceStatus | null>(() => {
     if (!invoice) return null;
     // Legacy rows may have null invoiceStatus; treat as draft for transitions/actions.

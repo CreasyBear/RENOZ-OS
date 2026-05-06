@@ -263,4 +263,28 @@ describe('order payment ledger contract', () => {
     expect(orderPaymentCache).toContain('queryKeys.invoices.summary()');
     expect(orderPaymentCache).toContain('invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true })');
   });
+
+  it('keeps externally applied payment ledger surfaces on explicit detail polling', () => {
+    const orderDetail = read('src/components/domain/orders/containers/order-detail-container.tsx');
+    const orderActions = read('src/components/domain/orders/containers/use-order-detail-container-actions.ts');
+    const invoiceDetail = read('src/components/domain/invoices/detail/invoice-detail-container.tsx');
+    const invoiceHook = read('src/hooks/invoices/use-invoice-detail.ts');
+    const invoiceQueries = read('src/hooks/invoices/use-invoices.ts');
+
+    expect(orderDetail).toContain('const PAYMENT_LEDGER_REFETCH_INTERVAL_MS = 30 * 1000');
+    expect(orderDetail).toContain('refetchInterval: isInteractionDialogOpen ? false : PAYMENT_LEDGER_REFETCH_INTERVAL_MS');
+    expect(orderActions).toContain('refetchInterval?: number | false');
+    expect(orderActions).toContain('useOrderPayments(options.orderId, {');
+    expect(orderActions).toContain('useOrderPaymentSummary(options.orderId, {');
+    expect(orderActions).toContain('refetchInterval: options.refetchInterval');
+
+    expect(invoiceDetail).toContain('const INVOICE_PAYMENT_REFETCH_INTERVAL_MS = 30 * 1000');
+    expect(invoiceDetail).toContain('useInvoiceDetail(invoiceId, {');
+    expect(invoiceDetail).toContain('useOrderPayments(invoiceId, {');
+    expect(invoiceDetail).toContain('refetchInterval: INVOICE_PAYMENT_REFETCH_INTERVAL_MS');
+    expect(invoiceHook).toContain('export interface UseInvoiceDetailOptions');
+    expect(invoiceHook).toContain('refetchInterval: options.refetchInterval');
+    expect(invoiceQueries).toContain('refetchInterval?: number | false');
+    expect(invoiceQueries).toContain('refetchInterval,');
+  });
 });

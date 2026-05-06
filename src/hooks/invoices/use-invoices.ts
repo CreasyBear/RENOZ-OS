@@ -68,6 +68,7 @@ export function useInvoices(options: UseInvoicesOptions = {}) {
 
 export interface UseInvoiceOptions {
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
@@ -79,7 +80,7 @@ export interface UseInvoiceOptions {
  * ```
  */
 export function useInvoice(id: string, options: UseInvoiceOptions = {}) {
-  const { enabled = true } = options;
+  const { enabled = true, refetchInterval } = options;
 
   const getInvoiceFn = useServerFn(getInvoice);
 
@@ -98,6 +99,7 @@ export function useInvoice(id: string, options: UseInvoiceOptions = {}) {
     },
     enabled: enabled && !!id,
     staleTime: 30 * 1000,
+    refetchInterval,
   });
 }
 

@@ -82,6 +82,8 @@ import {
   useChangeOrderStatusManaged,
 } from '@/hooks/orders/use-order-status';
 
+const PAYMENT_LEDGER_REFETCH_INTERVAL_MS = 30 * 1000;
+
 export interface OrderDetailContainerRenderProps {
   /** Header actions (CTAs) for PageLayout.Header when using layout pattern */
   headerActions?: React.ReactNode;
@@ -468,6 +470,7 @@ export function OrderDetailContainer({
     orderId,
     orderStatus: detail.order?.status,
     orderVersion: detail.order?.version,
+    refetchInterval: isInteractionDialogOpen ? false : PAYMENT_LEDGER_REFETCH_INTERVAL_MS,
     refetch: detail.refetch,
   });
   const refundPayment = useMemo(
