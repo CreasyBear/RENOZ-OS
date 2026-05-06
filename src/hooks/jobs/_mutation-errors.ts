@@ -103,6 +103,7 @@ const PROJECT_BOM_MUTATION_CODE_MESSAGES: Record<string, string> = {
 };
 
 const PROJECT_MUTATION_FALLBACKS = {
+  complete: 'Project completion is temporarily unavailable. Please refresh and try again.',
   delete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
   bulkDelete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
   generateWorkOrder:

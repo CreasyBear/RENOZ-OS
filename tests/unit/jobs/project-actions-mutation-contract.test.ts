@@ -9,14 +9,18 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
+function compact(source: string): string {
+  return source.replace(/\s+/g, '');
+}
+
 describe('project actions mutation contract', () => {
   it('formats project action failures without leaking unsafe internals', () => {
     expect(
       formatProjectMutationError(
         new Error('duplicate key violates projects_project_number_idx postgres stack'),
-        'delete'
+        'complete'
       )
-    ).toBe('Project deletion is temporarily unavailable. Please refresh and try again.');
+    ).toBe('Project completion is temporarily unavailable. Please refresh and try again.');
 
     expect(
       formatProjectMutationError(
@@ -42,9 +46,18 @@ describe('project actions mutation contract', () => {
     const detailContainer = read(
       'src/components/domain/jobs/projects/containers/project-detail-container.tsx'
     );
+    const completionDialog = read(
+      'src/components/domain/jobs/projects/project-completion-dialog.tsx'
+    );
     const listContainer = read('src/components/domain/jobs/projects/projects-list-container.tsx');
     const jobsIndex = read('src/hooks/jobs/index.ts');
+    const server = read('src/server/functions/projects.ts');
+    const compactServer = compact(server);
 
+    expect(completionDialog).toContain("formatProjectMutationError(error, 'complete')");
+    expect(completionDialog).toContain('submitError={submitError}');
+    expect(completionDialog).not.toContain('Failed to complete project');
+    expect(completionDialog).not.toContain('completeProject.error?.message');
     expect(detailContainer).toContain("formatProjectMutationError(error, 'delete')");
     expect(detailContainer).toContain(
       "formatProjectMutationError(error, 'generateWorkOrder')"
@@ -64,5 +77,9 @@ describe('project actions mutation contract', () => {
     );
     expect(listContainer).not.toContain('toastError("Failed to delete project")');
     expect(listContainer).not.toContain('toastError("Failed to delete some projects")');
+    expect(server).toContain('throw new NotFoundError("Project not found", "project")');
+    expect(compactServer).toContain(
+      'const[updatedProject]=awaitdb.update(projects).set(updateData).where(and(eq(projects.id,data.projectId),eq(projects.organizationId,ctx.organizationId))).returning();if(!updatedProject){thrownewNotFoundError("Projectnotfound","project");}'
+    );
   });
 });

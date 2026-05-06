@@ -491,7 +491,7 @@ export const deleteProject = createServerFn({ method: "POST" })
     });
 
     if (!existingProject) {
-      throw new Error("Project not found");
+      throw new NotFoundError("Project not found", "project");
     }
 
     // Soft delete by marking as cancelled
@@ -697,8 +697,17 @@ export const completeProject = createServerFn({ method: "POST" })
     const [updatedProject] = await db
       .update(projects)
       .set(updateData)
-      .where(eq(projects.id, data.projectId))
+      .where(
+        and(
+          eq(projects.id, data.projectId),
+          eq(projects.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
+
+    if (!updatedProject) {
+      throw new NotFoundError("Project not found", "project");
+    }
 
     // Log project completion
     const changes = computeChanges({

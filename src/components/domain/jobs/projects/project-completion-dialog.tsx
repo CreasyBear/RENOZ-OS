@@ -40,7 +40,7 @@ import {
   CheckboxField,
   DateStringField,
 } from '@/components/shared/forms';
-import { useCompleteProject } from '@/hooks/jobs';
+import { formatProjectMutationError, useCompleteProject } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import { DisabledButtonWithTooltip } from '@/components/shared/disabled-with-tooltip';
 import { cn } from '@/lib/utils';
@@ -125,9 +125,9 @@ export function ProjectCompletionDialog({
           setShowCelebration(false);
         }, 1500);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message = formatProjectMutationError(error, 'complete');
         setSubmitError(message);
-        toast.error(`Failed to complete project: ${message}`);
+        toast.error(message);
       }
     },
     onSubmitInvalid: () => {},
@@ -222,7 +222,7 @@ export function ProjectCompletionDialog({
           className="space-y-6"
         >
           <FormFieldDisplayProvider form={form}>
-            <FormErrorSummary form={form} submitError={submitError ?? completeProject.error?.message ?? null} />
+            <FormErrorSummary form={form} submitError={submitError} />
             {/* Status Selection */}
             <form.Field name="status">
               {(field) => (
