@@ -6,6 +6,20 @@ import {
   type FulfillmentImport,
   type FulfillmentImportRow,
 } from '@/lib/schemas/orders/shipments';
+import {
+  getClientErrorMessage,
+  normalizeShipmentMutationError,
+} from './order-mutation-client-errors';
+
+export const FULFILLMENT_IMPORT_PARSE_FAILED_MESSAGE =
+  'Fulfillment import file could not be parsed. Check the CSV format and try again.';
+
+export const FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE =
+  'Fulfillment import could not be completed.';
+
+const SAFE_PARSE_ERROR_MESSAGES = new Set([
+  'CSV must include a header row and at least one data row.',
+]);
 
 export interface FulfillmentImportResult {
   imported: number;
@@ -136,6 +150,22 @@ export function parseFulfillmentImport(content: string): FulfillmentImportPrevie
   };
 }
 
+export function formatFulfillmentImportParseError(error: unknown): string {
+  if (
+    error instanceof Error &&
+    SAFE_PARSE_ERROR_MESSAGES.has(error.message)
+  ) {
+    return error.message;
+  }
+
+  return FULFILLMENT_IMPORT_PARSE_FAILED_MESSAGE;
+}
+
+export function formatFulfillmentImportSubmitError(error: unknown): string {
+  const normalized = normalizeShipmentMutationError(error, FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE);
+  return getClientErrorMessage(normalized, FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE);
+}
+
 export function getValidFulfillmentImportRows(
   preview: FulfillmentImportPreview
 ): FulfillmentImportRow[] {
@@ -206,7 +236,7 @@ export function useFulfillmentImportWorkflow({
       setParseError(null);
       setStep('preview');
     } catch (error) {
-      setParseError(error instanceof Error ? error.message : 'Failed to parse CSV file.');
+      setParseError(formatFulfillmentImportParseError(error));
     }
   }, []);
 
@@ -232,7 +262,7 @@ export function useFulfillmentImportWorkflow({
       setStep('complete');
       toastSuccess(dryRun ? 'Dry run complete' : 'Fulfillment import complete');
     } catch (error) {
-      setParseError(error instanceof Error ? error.message : 'Import failed.');
+      setParseError(formatFulfillmentImportSubmitError(error));
       setStep('preview');
     }
   }, [dryRun, importMutation, preview]);

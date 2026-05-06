@@ -5,6 +5,10 @@ import { FulfillmentImportDialog } from '@/components/domain/orders/fulfillment/
 import type { FulfillmentImport } from '@/lib/schemas/orders/shipments';
 import {
   buildFulfillmentImportResultsCsv,
+  formatFulfillmentImportParseError,
+  formatFulfillmentImportSubmitError,
+  FULFILLMENT_IMPORT_PARSE_FAILED_MESSAGE,
+  FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE,
   parseFulfillmentImport,
   type FulfillmentImportResult,
 } from '@/hooks/orders/use-fulfillment-import-workflow';
@@ -51,6 +55,33 @@ describe('fulfillment import workflow', () => {
     expect(preview.rows[0].data?.shippedAt).toEqual(new Date('2026-05-03'));
     expect(preview.rows[1].errors.join(' ')).toContain('carrier: Invalid input');
     expect(preview.rows[1].errors.join(' ')).toContain('trackingNumber: Invalid input');
+  });
+
+  it('keeps fulfillment import parse feedback safe', () => {
+    expect(
+      formatFulfillmentImportParseError(
+        new Error('CSV must include a header row and at least one data row.')
+      )
+    ).toBe('CSV must include a header row and at least one data row.');
+
+    expect(
+      formatFulfillmentImportParseError(new Error('NotReadableError: filesystem stack trace'))
+    ).toBe(FULFILLMENT_IMPORT_PARSE_FAILED_MESSAGE);
+  });
+
+  it('keeps fulfillment import submit feedback behind shipment mutation normalization', () => {
+    expect(
+      formatFulfillmentImportSubmitError(new Error('duplicate key violates shipment constraint'))
+    ).toBe(FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE);
+
+    expect(
+      formatFulfillmentImportSubmitError({
+        statusCode: 400,
+        errors: {
+          trackingNumber: ['Tracking number is required.'],
+        },
+      })
+    ).toBe('Tracking number is required.');
   });
 
   it('escapes import result CSV output for operator download', () => {
@@ -136,5 +167,38 @@ describe('fulfillment import workflow', () => {
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Fulfillment import complete');
     expect(screen.getByText('Imported 1 of 1')).toBeInTheDocument();
+  }, 20000);
+
+  it('shows safe import failure copy in the extracted dialog workflow', async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(new Error('database driver stack leaked'));
+    const onOpenChange = vi.fn();
+    const file = new File([''], 'shipments.csv', { type: 'text/csv' });
+
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue('orderNumber,carrier,trackingNumber\nORD-001,DHL,TRACK-1'),
+    });
+
+    render(
+      <FulfillmentImportDialog
+        open
+        onOpenChange={onOpenChange}
+        importMutation={createImportMutation(mutateAsync)}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Choose file'), {
+        target: { files: [file] },
+      });
+    });
+
+    expect(await screen.findByText('Valid: 1')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Import Shipments' }));
+    });
+
+    expect(await screen.findByText(FULFILLMENT_IMPORT_SUBMIT_FAILED_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(/database driver stack leaked/i)).not.toBeInTheDocument();
   }, 20000);
 });
