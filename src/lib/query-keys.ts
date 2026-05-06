@@ -1198,6 +1198,7 @@ export const queryKeys = {
     // Product search
     search: (query: string, options?: Record<string, unknown>) =>
       [...queryKeys.products.all, 'search', query, options ?? {}] as const,
+    facets: () => [...queryKeys.products.all, 'facets'] as const,
     // Product attributes
     attributes: {
       all: ['products', 'attributes'] as const,

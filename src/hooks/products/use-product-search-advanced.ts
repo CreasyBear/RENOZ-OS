@@ -87,7 +87,7 @@ export function useSearchFacets() {
   const getFacetsFn = useServerFn(getSearchFacets);
 
   return useQuery({
-    queryKey: [...queryKeys.products.all, 'facets'] as const,
+    queryKey: queryKeys.products.facets(),
     queryFn: async () => {
       try {
         return await getFacetsFn({
