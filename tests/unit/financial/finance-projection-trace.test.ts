@@ -86,6 +86,38 @@ describe('finance schema trace repair', () => {
     );
   });
 
+  it('locks payment-plan deletion and blocks any recorded installment payment', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/payment-schedule-mutations.ts',
+    );
+    const deleteSource = source.slice(
+      source.indexOf('export async function deletePaymentPlanForOrder'),
+    );
+    const transactionIndex = deleteSource.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = deleteSource.indexOf("set_config('app.organization_id'");
+    const lockIndex = deleteSource.indexOf(".for('update')");
+    const recordedPaymentIndex = deleteSource.indexOf(
+      'Number(installment.paidAmount ?? 0) > 0',
+    );
+    const conflictIndex = deleteSource.indexOf(
+      'Cannot delete payment plan with recorded installment payments',
+    );
+    const deleteIndex = deleteSource.indexOf('.delete(paymentSchedules)');
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(lockIndex).toBeGreaterThan(setConfigIndex);
+    expect(recordedPaymentIndex).toBeGreaterThan(lockIndex);
+    expect(conflictIndex).toBeGreaterThan(recordedPaymentIndex);
+    expect(deleteIndex).toBeGreaterThan(conflictIndex);
+    expect(deleteSource).toContain('const deleteCount = lockedInstallments.length');
+    expect(deleteSource).toContain('planType: lockedInstallments[0]?.planType');
+    expect(deleteSource).not.toContain('count()');
+    expect(compact(deleteSource)).toContain(
+      'where(and(eq(paymentSchedules.orderId,data.orderId),eq(paymentSchedules.organizationId,ctx.organizationId)))',
+    );
+  });
+
   it('records Xero payment applies through a tenant-scoped ledger insert before projection', () => {
     const source = read(
       'src/server/functions/financial/_shared/xero-payment-reconciliation.ts',

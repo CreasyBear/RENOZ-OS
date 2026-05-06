@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { SessionContext } from '@/lib/server/protected';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -283,10 +283,13 @@ export async function deletePaymentPlanForOrder(
   ctx: SessionContext,
   data: DeletePaymentPlanInput
 ): Promise<{ deleted: number }> {
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
 
-    // Get plan type before deleting for logging
-    const [existingPlan] = await db
-      .select({ planType: paymentSchedules.planType })
+    const lockedInstallments = await tx
+      .select()
       .from(paymentSchedules)
       .where(
         and(
@@ -294,82 +297,60 @@ export async function deletePaymentPlanForOrder(
           eq(paymentSchedules.organizationId, ctx.organizationId)
         )
       )
-      .limit(1);
+      .for('update');
 
-    // Wrap in transaction to prevent race condition between check and delete
-    const result = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
-      );
-      // Check for any paid installments
-      const paidInstallments = await tx
-        .select()
-        .from(paymentSchedules)
-        .where(
-          and(
-            eq(paymentSchedules.orderId, data.orderId),
-            eq(paymentSchedules.organizationId, ctx.organizationId),
-            eq(paymentSchedules.status, 'paid')
-          )
-        )
-        .limit(1);
+    const hasRecordedPayment = lockedInstallments.some(
+      (installment) =>
+        installment.status === 'paid' || Number(installment.paidAmount ?? 0) > 0
+    );
 
-      if (paidInstallments.length > 0) {
-        throw new ConflictError('Cannot delete payment plan with paid installments');
-      }
+    if (hasRecordedPayment) {
+      throw new ConflictError('Cannot delete payment plan with recorded installment payments');
+    }
 
-      // Count before delete
-      const countResult = await tx
-        .select({ count: count() })
-        .from(paymentSchedules)
-        .where(
-          and(
-            eq(paymentSchedules.orderId, data.orderId),
-            eq(paymentSchedules.organizationId, ctx.organizationId)
-          )
-        );
+    const deleteCount = lockedInstallments.length;
 
-      const deleteCount = countResult[0]?.count ?? 0;
-
-      // Delete all installments
-      await tx
-        .delete(paymentSchedules)
-        .where(
-          and(
-            eq(paymentSchedules.orderId, data.orderId),
-            eq(paymentSchedules.organizationId, ctx.organizationId)
-          )
-        );
-
-      return { deleted: deleteCount };
-    });
-
-    // Get order for customerId — scoped by organizationId for multi-tenant safety
-    const [order] = await db
-      .select({ customerId: orders.customerId })
-      .from(orders)
+    await tx
+      .delete(paymentSchedules)
       .where(
         and(
-          eq(orders.id, data.orderId),
-          eq(orders.organizationId, ctx.organizationId)
+          eq(paymentSchedules.orderId, data.orderId),
+          eq(paymentSchedules.organizationId, ctx.organizationId)
         )
+      );
+
+    return {
+      deleted: deleteCount,
+      planType: lockedInstallments[0]?.planType,
+    };
+  });
+
+  // Get order for customerId — scoped by organizationId for multi-tenant safety
+  const [order] = await db
+    .select({ customerId: orders.customerId })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, data.orderId),
+        eq(orders.organizationId, ctx.organizationId)
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    // Activity logging
-    const logger = createActivityLoggerWithContext(ctx);
-    logger.logAsync({
-      entityType: 'order',
-      entityId: data.orderId,
-      action: 'deleted',
-      description: `Deleted payment plan (${result.deleted} installments)`,
-      metadata: {
-        orderId: data.orderId,
-        customerId: order?.customerId, // Include for customer timeline visibility
-        planType: existingPlan?.planType,
-        deletedCount: result.deleted,
-      },
-    });
+  // Activity logging
+  const logger = createActivityLoggerWithContext(ctx);
+  logger.logAsync({
+    entityType: 'order',
+    entityId: data.orderId,
+    action: 'deleted',
+    description: `Deleted payment plan (${result.deleted} installments)`,
+    metadata: {
+      orderId: data.orderId,
+      customerId: order?.customerId, // Include for customer timeline visibility
+      planType: result.planType,
+      deletedCount: result.deleted,
+    },
+  });
 
-    return result;
+  return { deleted: result.deleted };
 }
