@@ -5,6 +5,8 @@ export const COMMUNICATION_READ_MESSAGES = {
     'Contact preferences are temporarily unavailable. Please refresh and try again.',
   preferenceHistory:
     'Preference history is temporarily unavailable. Please refresh and try again.',
+  suppressionList:
+    'Suppression list data is temporarily unavailable. Please refresh and try again.',
 } as const;
 
 export function formatCommunicationReadError(

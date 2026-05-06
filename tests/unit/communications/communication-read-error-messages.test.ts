@@ -35,9 +35,12 @@ describe('communication read error messages', () => {
     );
   });
 
-  it('keeps preference read states behind communications-owned copy', () => {
+  it('keeps preference and suppression read states behind communications-owned copy', () => {
     const preferences = read(
       'src/components/domain/communications/communication-preferences.tsx'
+    );
+    const suppression = read(
+      'src/components/domain/communications/settings/suppression-list-table.tsx'
     );
     const formatter = read('src/lib/communications/read-error-messages.ts');
 
@@ -45,6 +48,10 @@ describe('communication read error messages', () => {
     expect(preferences).toContain('COMMUNICATION_READ_MESSAGES.preferences');
     expect(preferences).toContain('COMMUNICATION_READ_MESSAGES.preferenceHistory');
     expect(preferences).not.toContain('<span>{error.message}</span>');
+    expect(suppression).toContain('formatCommunicationReadError(');
+    expect(suppression).toContain('COMMUNICATION_READ_MESSAGES.suppressionList');
+    expect(suppression).not.toContain('<span>{error.message}</span>');
     expect(formatter).toContain('isReadQueryError(error)');
+    expect(formatter).toContain('suppressionList');
   });
 });

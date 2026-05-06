@@ -50,6 +50,10 @@ import { format } from "date-fns";
 import { toast } from "@/lib/toast";
 import { formatCommunicationSuppressionMutationError } from "@/hooks/communications";
 import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
+import {
   useSuppressionList,
   useRemoveSuppression,
 } from "@/hooks/communications/use-email-suppression";
@@ -280,7 +284,12 @@ export const SuppressionListTable = memo(function SuppressionListTable({
       <Alert variant="destructive">
         <AlertTitle>Suppression list unavailable</AlertTitle>
         <AlertDescription className="flex items-center justify-between gap-3">
-          <span>{error.message}</span>
+          <span>
+            {formatCommunicationReadError(
+              error,
+              COMMUNICATION_READ_MESSAGES.suppressionList
+            )}
+          </span>
           <Button variant="outline" size="sm" onClick={() => void refetch()}>
             Retry
           </Button>
@@ -300,7 +309,12 @@ export const SuppressionListTable = memo(function SuppressionListTable({
         <Alert className="mb-4">
           <AlertTitle>Showing cached suppression entries</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.suppressionList
+              )}
+            </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
