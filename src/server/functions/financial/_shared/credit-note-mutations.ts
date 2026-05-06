@@ -226,59 +226,76 @@ export async function issueCreditNoteRecord(
   ctx: SessionContext,
   data: z.infer<typeof idParamSchema>,
 ): Promise<CreditNoteRecord> {
-  // Get existing credit note
-  const existing = await db
-    .select()
-    .from(creditNotes)
-    .where(
-      and(
-        eq(creditNotes.id, data.id),
-        eq(creditNotes.organizationId, ctx.organizationId),
-        isNull(creditNotes.deletedAt),
-      ),
-    )
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
 
-  if (existing.length === 0) {
-    throw new NotFoundError('Credit note not found', 'credit_note');
-  }
+    const [existing] = await tx
+      .select()
+      .from(creditNotes)
+      .where(
+        and(
+          eq(creditNotes.id, data.id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
 
-  if (existing[0].status !== 'draft') {
-    throw new ConflictError('Only draft credit notes can be issued');
-  }
+    if (!existing) {
+      throw new NotFoundError('Credit note not found', 'credit_note');
+    }
 
-  // Issue
-  const [issued] = await db
-    .update(creditNotes)
-    .set({
-      status: 'issued',
-      updatedBy: ctx.user.id,
-    })
-    .where(eq(creditNotes.id, data.id))
-    .returning();
+    if (existing.status !== 'draft') {
+      throw new ConflictError('Only draft credit notes can be issued');
+    }
+
+    const [issued] = await tx
+      .update(creditNotes)
+      .set({
+        status: 'issued',
+        updatedBy: ctx.user.id,
+      })
+      .where(
+        and(
+          eq(creditNotes.id, data.id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .returning();
+
+    if (!issued) {
+      throw new NotFoundError('Credit note not found or already modified', 'credit_note');
+    }
+
+    return { existing, issued };
+  });
 
   // Activity logging
   const logger = createActivityLoggerWithContext(ctx);
   logger.logAsync({
     entityType: 'order',
-    entityId: issued.id,
+    entityId: result.issued.id,
     action: 'updated',
-    description: `Issued credit note: ${issued.creditNoteNumber}`,
+    description: `Issued credit note: ${result.issued.creditNoteNumber}`,
     changes: computeChanges({
-      before: existing[0],
-      after: issued,
+      before: result.existing,
+      after: result.issued,
       excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
     }),
     metadata: {
-      creditNoteNumber: issued.creditNoteNumber ?? undefined,
-      customerId: issued.customerId,
-      previousStatus: existing[0].status,
-      newStatus: issued.status,
-      total: Number(issued.amount),
+      creditNoteNumber: result.issued.creditNoteNumber ?? undefined,
+      customerId: result.issued.customerId,
+      previousStatus: result.existing.status,
+      newStatus: result.issued.status,
+      total: Number(result.issued.amount),
     },
   });
 
-  return issued;
+  return result.issued;
 }
 
 export async function applyCreditNoteRecordToInvoice(
