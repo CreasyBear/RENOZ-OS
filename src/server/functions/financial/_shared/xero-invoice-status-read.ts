@@ -18,10 +18,8 @@ import {
 } from '@/lib/schemas';
 import { safeNumber } from '@/lib/numeric';
 import { getXeroSyncReadiness } from '../xero-adapter';
-import {
-  formatXeroSyncReadError,
-  normalizeXeroSyncIssue,
-} from './xero-invoice-sync-command';
+import { normalizeXeroSyncIssue } from './xero-invoice-sync-command';
+import { formatXeroSyncReadError } from './xero-sync-feedback';
 import type { z } from 'zod';
 
 export async function readInvoiceXeroStatus(

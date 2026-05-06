@@ -47,10 +47,12 @@ describe('xero sync issue feedback contract', () => {
   });
 
   it('maps stored provider and database errors to finance-owned operator issue copy', async () => {
-    const {
-      formatXeroSyncReadError,
-      normalizeXeroSyncIssue,
-    } = await import('@/server/functions/financial/_shared/xero-invoice-sync-command');
+    const { normalizeXeroSyncIssue } = await import(
+      '@/server/functions/financial/_shared/xero-invoice-sync-command'
+    );
+    const { formatXeroSyncReadError } = await import(
+      '@/server/functions/financial/_shared/xero-sync-feedback'
+    );
 
     const validationIssue = normalizeXeroSyncIssue({
       readiness: { available: true },
@@ -126,7 +128,9 @@ describe('xero sync issue feedback contract', () => {
   it('keeps Xero status read models behind finance-owned safe message helpers', () => {
     const command = read('src/server/functions/financial/_shared/xero-invoice-sync-command.ts');
     const statusRead = read('src/server/functions/financial/_shared/xero-invoice-status-read.ts');
+    const feedback = read('src/server/functions/financial/_shared/xero-sync-feedback.ts');
 
+    expect(feedback).toContain('formatXeroSyncIssueMessage');
     expect(command).toContain('formatXeroSyncIssueMessage');
     expect(command).not.toContain('message: xeroSyncError');
     expect(statusRead).toContain('xeroSyncError: formatXeroSyncReadError(order.xeroSyncError, issue)');

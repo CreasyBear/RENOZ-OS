@@ -24,6 +24,7 @@ import {
   getXeroSyncReadiness,
   syncInvoiceWithXero,
 } from '../xero-adapter';
+import { formatXeroSyncIssueMessage } from './xero-sync-feedback';
 import type { z } from 'zod';
 
 // ============================================================================
@@ -87,44 +88,6 @@ function extractRetryAfterSeconds(
   }
 
   return /min/i.test(match[2]) ? value * 60 : value;
-}
-
-export function formatXeroSyncIssueMessage(code: string): string {
-  switch (code) {
-    case 'connection_missing':
-      return 'Connect Xero before syncing invoices and journals.';
-    case 'configuration_unavailable':
-      return 'Xero setup is incomplete. Review integration settings before syncing.';
-    case 'auth_failed':
-      return 'Xero connection needs attention before invoices and journals can sync.';
-    case 'missing_contact_mapping':
-      return 'Customer needs a trusted Xero contact mapping before this invoice can sync.';
-    case 'rate_limited':
-      return 'Xero is rate limiting sync requests. Wait before retrying this invoice.';
-    case 'forbidden':
-      return 'Reconnect Xero with the accounting organization and permissions needed for invoice sync.';
-    case 'missing_revenue_accounts':
-      return 'Xero account settings need attention before this invoice can sync.';
-    case 'validation_failed':
-      return 'Invoice data needs review before this order can sync to Xero.';
-    default:
-      return 'Xero sync is temporarily unavailable. Review the invoice and try again.';
-  }
-}
-
-export function formatXeroSyncReadError(
-  xeroSyncError?: string | null,
-  issue?: XeroSyncIssue | null,
-): string | null {
-  if (!xeroSyncError) {
-    return null;
-  }
-
-  if (issue?.code && issue.code !== 'reconciled_remote_exists') {
-    return issue.message;
-  }
-
-  return formatXeroSyncIssueMessage('validation_failed');
 }
 
 export function normalizeXeroSyncIssue(params: {

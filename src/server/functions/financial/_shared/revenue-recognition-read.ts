@@ -23,6 +23,7 @@ import {
   type RevenueRecognitionRecord,
 } from '@/lib/schemas';
 import { safeNumber } from '@/lib/numeric';
+import { formatRevenueRecognitionXeroSyncError } from './xero-sync-feedback';
 import type { z } from 'zod';
 
 export async function readOrderRecognitions(
@@ -62,6 +63,10 @@ export async function readOrderRecognitions(
 
   return results.map((r) => ({
     ...r,
+    xeroSyncError: formatRevenueRecognitionXeroSyncError(
+      r.xeroSyncError,
+      r.state,
+    ),
     recognitionDate: new Date(r.recognitionDate),
     createdAt: new Date(r.createdAt),
   }));
@@ -207,6 +212,10 @@ export async function readRecognitionsByState(
   return {
     records: results.map((r) => ({
       ...r,
+      xeroSyncError: formatRevenueRecognitionXeroSyncError(
+        r.xeroSyncError,
+        r.state,
+      ),
       recognitionDate: new Date(r.recognitionDate),
       createdAt: new Date(r.createdAt),
     })),
