@@ -42,7 +42,13 @@ export const resyncInvoiceToXero = createServerFn({ method: 'POST' })
 
 export const handleXeroPaymentUpdate = createServerFn({ method: 'POST' })
   .inputValidator(xeroPaymentUpdateSchema)
-  .handler(async ({ data }) => applyXeroPaymentUpdate(data));
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
+    return applyXeroPaymentUpdate({
+      ...data,
+      organizationId: ctx.organizationId,
+    });
+  });
 
 export {
   applyXeroPaymentUpdate,

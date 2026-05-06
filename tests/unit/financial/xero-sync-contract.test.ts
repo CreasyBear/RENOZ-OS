@@ -14,6 +14,14 @@ const getXeroSyncReadinessMock = vi.hoisted(() => vi.fn(async () => ({
   message: 'Xero is disconnected',
 })));
 
+const applyXeroPaymentUpdateMock = vi.hoisted(() => vi.fn(async () => ({
+  success: true,
+  resultState: 'applied',
+})));
+
+const applyXeroPaymentWebhookEventMock = vi.hoisted(() => vi.fn());
+const processXeroPaymentWebhookEventsMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({
     inputValidator: () => ({
@@ -49,11 +57,20 @@ vi.mock('@/server/functions/financial/xero-adapter', () => ({
   syncInvoiceWithXero: vi.fn(),
 }));
 
+vi.mock('@/server/functions/financial/_shared/xero-payment-reconciliation', () => ({
+  applyXeroPaymentUpdate: applyXeroPaymentUpdateMock,
+  applyXeroPaymentWebhookEvent: applyXeroPaymentWebhookEventMock,
+  processXeroPaymentWebhookEvents: processXeroPaymentWebhookEventsMock,
+}));
+
 describe('xero invoice sync hardening', () => {
   beforeEach(() => {
     state.updateSets = [];
     withAuthMock.mockClear();
     getXeroSyncReadinessMock.mockClear();
+    applyXeroPaymentUpdateMock.mockClear();
+    applyXeroPaymentWebhookEventMock.mockClear();
+    processXeroPaymentWebhookEventsMock.mockClear();
   });
 
   it('requires financial.update and returns staged readiness failure', async () => {
@@ -77,6 +94,31 @@ describe('xero invoice sync hardening', () => {
     expect(state.updateSets[0]).toMatchObject({
       xeroSyncStatus: 'error',
       xeroSyncError: 'Xero is disconnected',
+    });
+  });
+
+  it('requires financial.update and ignores caller-supplied organization for payment applies', async () => {
+    const { handleXeroPaymentUpdate } = await import('@/server/functions/financial/xero-invoice-sync');
+
+    await handleXeroPaymentUpdate({
+      data: {
+        organizationId: 'attacker-org',
+        xeroInvoiceId: 'invoice-1',
+        paymentId: 'payment-1',
+        amountPaid: 100,
+        paymentDate: '2026-04-01',
+        reference: 'PAY-1',
+      },
+    });
+
+    expect(withAuthMock).toHaveBeenCalledWith({ permission: 'financial.update' });
+    expect(applyXeroPaymentUpdateMock).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      xeroInvoiceId: 'invoice-1',
+      paymentId: 'payment-1',
+      amountPaid: 100,
+      paymentDate: '2026-04-01',
+      reference: 'PAY-1',
     });
   });
 });
