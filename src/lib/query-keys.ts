@@ -1603,6 +1603,8 @@ export const queryKeys = {
     paymentSchedules: () => [...queryKeys.financial.all, 'paymentSchedules'] as const,
     paymentScheduleDetail: (orderId: string) =>
       [...queryKeys.financial.paymentSchedules(), 'detail', orderId] as const,
+    overdueInstallments: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.paymentSchedules(), 'overdue', filters ?? {}] as const,
 
     // Revenue
     revenue: () => [...queryKeys.financial.all, 'revenue'] as const,

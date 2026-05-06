@@ -64,4 +64,22 @@ describe('financial query key contract', () => {
       queryKeys.financial.reminderCandidates()
     );
   });
+
+  it('keeps overdue installment workbench keys under the payment schedule root', () => {
+    const root = queryKeys.financial.paymentSchedules();
+    const firstPage = queryKeys.financial.overdueInstallments({
+      page: 1,
+      limit: 20,
+      minDaysOverdue: 1,
+    });
+    const secondPage = queryKeys.financial.overdueInstallments({
+      page: 2,
+      limit: 20,
+      minDaysOverdue: 1,
+    });
+
+    expect(firstPage.slice(0, root.length)).toEqual(root);
+    expect(secondPage.slice(0, root.length)).toEqual(root);
+    expect(firstPage).not.toEqual(secondPage);
+  });
 });

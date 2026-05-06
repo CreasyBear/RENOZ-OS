@@ -102,7 +102,7 @@ export function useOverdueInstallments(options: {
   const fn = useServerFn(getOverdueInstallments);
 
   return useQuery({
-    queryKey: [...queryKeys.financial.paymentSchedules(), 'overdue', params],
+    queryKey: queryKeys.financial.overdueInstallments(params),
     queryFn: async () => {
       try {
         const result = await fn({
