@@ -36,6 +36,8 @@ const PRODUCT_CORE_FALLBACKS = {
     'Product category update is temporarily unavailable. Please refresh and try again.',
   deleteCategory:
     'Product category deletion is temporarily unavailable. Please refresh and try again.',
+  parseImportProducts:
+    'Product import preview is temporarily unavailable. Please check the CSV file and try again.',
   importProducts:
     'Product import is temporarily unavailable. Please refresh and try again.',
   bulkUpdateProducts:

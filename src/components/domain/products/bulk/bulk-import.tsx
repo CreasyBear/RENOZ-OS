@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import {
+  formatProductCoreMutationError,
   useParseImportFile,
   useImportProducts,
   useImportTemplate,
@@ -142,7 +143,7 @@ export function ProductBulkImport({
           setStep("preview");
         },
         onError: (err) => {
-          const errorMessage = err instanceof Error ? err.message : "Failed to parse file";
+          const errorMessage = formatProductCoreMutationError(err, "parseImportProducts");
           toastError(errorMessage);
           setError(errorMessage);
         },
@@ -225,9 +226,7 @@ export function ProductBulkImport({
         },
         onError: (err) => {
           clearInterval(progressInterval);
-          const errorMessage = err instanceof Error ? err.message : "Import failed";
-          toastError(errorMessage);
-          setError(errorMessage);
+          setError(formatProductCoreMutationError(err, "importProducts"));
           setStep("preview");
         },
       }

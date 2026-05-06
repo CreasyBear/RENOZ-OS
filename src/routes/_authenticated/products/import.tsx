@@ -19,7 +19,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useParseImportFile, useImportProducts, type ImportProductsResult, type ImportPreviewRow } from '@/hooks/products';
+import {
+  formatProductCoreMutationError,
+  useParseImportFile,
+  useImportProducts,
+  type ImportProductsResult,
+  type ImportPreviewRow,
+} from '@/hooks/products';
 import { toast } from '@/lib/toast';
 
 // ============================================================================
@@ -90,7 +96,7 @@ function ProductImportPage() {
       setCurrentStep('preview');
     } catch (error) {
       toast.error('Failed to parse file', {
-        description: error instanceof Error ? error.message : 'Please check the file format',
+        description: formatProductCoreMutationError(error, 'parseImportProducts'),
       });
     }
   }, [selectedFile, parseMutation]);
@@ -112,11 +118,8 @@ function ProductImportPage() {
       
       setImportResults(result);
       setCurrentStep('results');
-    } catch (error) {
+    } catch {
       setCurrentStep('preview');
-      toast.error('Import failed', {
-        description: error instanceof Error ? error.message : 'Please try again',
-      });
     }
   }, [previewData, updateExisting, importMutation]);
   
