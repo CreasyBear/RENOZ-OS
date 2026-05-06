@@ -15,10 +15,10 @@ describe('pipeline quote server import order contract', () => {
 
     expect(firstSectionIndex).toBeGreaterThan(0);
     expect(source.slice(firstSectionIndex)).not.toMatch(/^import\s/m);
-    expect(source).toContain("import { Resend } from 'resend';");
-    expect(source).toContain("import { generateQuotePdf } from './quote-pdf';");
-    expect(source).toContain('emailHistory,');
-    expect(source).toContain('type NewEmailHistory,');
+    expect(source).not.toContain("import { Resend } from 'resend';");
+    expect(source).not.toContain("import { generateQuotePdf } from './quote-pdf';");
+    expect(source).not.toContain('emailHistory,');
+    expect(source).not.toContain('type NewEmailHistory,');
     expect(source).not.toContain("import { createAdminSupabase } from '@/lib/supabase/server';");
     expect(source).not.toContain("import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';");
   });

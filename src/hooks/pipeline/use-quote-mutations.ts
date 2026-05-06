@@ -12,6 +12,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/quote-versions.ts for quote version server functions
  * @see src/server/functions/pipeline/quote-pdf.tsx for quote PDF server functions
+ * @see src/server/functions/pipeline/quote-send.ts for quote send server functions
  * @see src/server/functions/pipeline/quote-validity.ts for quote expiration server functions
  */
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -19,9 +20,9 @@ import { queryKeys } from '@/lib/query-keys';
 import {
   createQuoteVersion,
   restoreQuoteVersion,
-  sendQuote,
 } from '@/server/functions/pipeline/quote-versions';
 import { generateQuotePdf } from '@/server/functions/pipeline/quote-pdf';
+import { sendQuote } from '@/server/functions/pipeline/quote-send';
 import { deleteQuote } from '@/server/functions/pipeline/quote-delete';
 import {
   extendQuoteValidity,

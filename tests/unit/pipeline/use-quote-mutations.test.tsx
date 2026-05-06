@@ -11,11 +11,14 @@ const deleteQuoteMock = vi.fn();
 vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   createQuoteVersion: vi.fn(),
   restoreQuoteVersion: vi.fn(),
-  sendQuote: (args: unknown) => sendQuoteMock(args),
 }));
 
 vi.mock('@/server/functions/pipeline/quote-pdf', () => ({
   generateQuotePdf: (args: unknown) => generateQuotePdfMock(args),
+}));
+
+vi.mock('@/server/functions/pipeline/quote-send', () => ({
+  sendQuote: (args: unknown) => sendQuoteMock(args),
 }));
 
 vi.mock('@/server/functions/pipeline/quote-validity', () => ({

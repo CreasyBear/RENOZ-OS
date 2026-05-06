@@ -18,7 +18,7 @@ describe('pipeline quote server PDF contract', () => {
     expect(quoteVersioning).not.toContain('renderPdfToBuffer');
     expect(quoteVersioning).not.toContain('createAdminSupabase');
     expect(quoteVersioning).not.toContain('generatedDocuments');
-    expect(quoteVersioning).toContain("import { generateQuotePdf } from './quote-pdf';");
+    expect(quoteVersioning).not.toContain("import { generateQuotePdf } from './quote-pdf';");
 
     expect(quotePdf).toContain('export const generateQuotePdf');
     expect(quotePdf).toContain('renderPdfToBuffer(');
