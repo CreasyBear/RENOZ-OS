@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const generateQuotePdfMock = vi.fn();
 const sendQuoteMock = vi.fn();
@@ -55,16 +56,22 @@ describe('useQuoteMutations hardening', () => {
     });
 
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['pipeline', 'quoteVersions', 'opp-1'],
+      queryKey: queryKeys.pipeline.quoteVersions('opp-1'),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['pipeline', 'opportunity', 'opp-1'],
+      queryKey: queryKeys.pipeline.opportunity('opp-1'),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['opportunities', 'list'],
+      queryKey: queryKeys.opportunities.lists(),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['documents', 'history', 'opportunity', 'opp-1', ''],
+      queryKey: queryKeys.opportunities.infiniteLists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.documents.history('opportunity', 'opp-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.activities.byOpportunity('opp-1'),
     });
   });
 
@@ -90,13 +97,13 @@ describe('useQuoteMutations hardening', () => {
     });
 
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['documents'],
+      queryKey: queryKeys.documents.all,
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['pipeline'],
+      queryKey: queryKeys.pipeline.all,
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: ['pipeline', 'quote-version', 'quote-1'],
+      queryKey: queryKeys.pipeline.quoteVersion('quote-1'),
     });
   });
 });
