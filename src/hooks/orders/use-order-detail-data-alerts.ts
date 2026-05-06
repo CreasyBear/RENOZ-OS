@@ -11,6 +11,10 @@ import {
   useOrderWithCustomer,
   type OrderWithCustomer,
 } from './use-order-detail';
+import {
+  getOrderXeroAlertMessage,
+  type OrderXeroAlertIssue,
+} from './order-xero-alert-messages';
 
 export type OrderAlertSeverity = 'critical' | 'warning' | 'info';
 
@@ -39,13 +43,7 @@ const STATUS_NEXT_ACTIONS: Record<OrderStatus, OrderStatus[]> = {
 
 function buildXeroAlert(
   order: OrderWithCustomer,
-  xeroIssue?: {
-    code: string;
-    title?: string;
-    message: string;
-    nextAction: string | null;
-    nextActionLabel: string | null;
-  } | null
+  xeroIssue?: OrderXeroAlertIssue | null
 ): OrderAlert | null {
   if (order.xeroSyncStatus !== 'error') {
     return null;
@@ -57,7 +55,7 @@ function buildXeroAlert(
       type: 'xero_sync_error',
       severity: 'warning',
       title: 'Xero Contact Mapping Required',
-      message: xeroIssue.message,
+      message: getOrderXeroAlertMessage(xeroIssue),
       action: {
         label: xeroIssue.nextActionLabel ?? 'Map Customer Contact',
         href: `/customers/${order.customerId}/edit`,
@@ -71,7 +69,7 @@ function buildXeroAlert(
       type: 'xero_sync_error',
       severity: 'warning',
       title: 'Reconnect Xero',
-      message: xeroIssue.message,
+      message: getOrderXeroAlertMessage(xeroIssue),
       action: {
         label: xeroIssue.nextActionLabel ?? 'Reconnect Xero',
         href: '/?settingsOpen=integrations',
@@ -84,7 +82,7 @@ function buildXeroAlert(
     type: 'xero_sync_error',
     severity: 'warning',
     title: 'Xero Sync Failed',
-    message: xeroIssue?.message ?? order.xeroSyncError ?? 'Invoice sync requires attention.',
+    message: getOrderXeroAlertMessage(xeroIssue),
     action:
       xeroIssue?.nextAction === 'open_org_settings'
         ? {
@@ -100,13 +98,7 @@ function buildXeroAlert(
 
 function generateOrderAlerts(
   order: OrderWithCustomer | undefined,
-  xeroIssue?: {
-    code: string;
-    title?: string;
-    message: string;
-    nextAction: string | null;
-    nextActionLabel: string | null;
-  } | null
+  xeroIssue?: OrderXeroAlertIssue | null
 ): OrderAlert[] {
   if (!order) return [];
 
