@@ -56,6 +56,37 @@ describe('customer mutation error formatting', () => {
     ).toBe('Unable to update customer.');
   });
 
+  it('suppresses implementation-shaped customer mutation messages', () => {
+    expect(
+      formatCustomerMutationError(
+        {
+          statusCode: 400,
+          message: 'TypeError: Cannot read properties of undefined (reading customerId)',
+        },
+        'Unable to update customer.'
+      )
+    ).toBe('Unable to update customer.');
+
+    expect(
+      formatCustomerSavedFilterMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            filter: ['SQL syntax error at or near "customer_status"'],
+          },
+        },
+        'save'
+      )
+    ).toBe('Unable to save customer filter.');
+
+    expect(
+      formatCustomerXeroContactMutationError(
+        new Error('ReferenceError: xeroContact is not defined'),
+        'link'
+      )
+    ).toBe('Unable to link Xero contact.');
+  });
+
   it('uses saved-filter-specific fallbacks and code copy', () => {
     expect(
       formatCustomerSavedFilterMutationError(
