@@ -21,9 +21,21 @@ describe('pipeline quote server PDF contract', () => {
     expect(quoteVersioning).not.toContain("import { generateQuotePdf } from './quote-pdf';");
 
     expect(quotePdf).toContain('export const generateQuotePdf');
+    expect(quotePdf).toContain("import { NotFoundError, ServerError } from '@/lib/server/errors'");
     expect(quotePdf).toContain('renderPdfToBuffer(');
     expect(quotePdf).toContain('createAdminSupabase()');
     expect(quotePdf).toContain('.insert(generatedDocuments)');
+    expect(quotePdf).toContain(
+      "throw new ServerError('Unable to upload quote PDF', 500, 'QUOTE_PDF_UPLOAD_FAILED')"
+    );
+    expect(quotePdf).toContain('if (signedUrlError || !signedUrl)');
+    expect(quotePdf).toContain("'QUOTE_PDF_URL_FAILED'");
+    expect(quotePdf).toContain('storageUrl: signedUrl');
+    expect(quotePdf).toContain('quotePdfUrl: signedUrl');
+    expect(quotePdf).toContain('pdfUrl: signedUrl');
+    expect(quotePdf).not.toContain('uploadError.message');
+    expect(quotePdf).not.toContain('signedUrlError.message');
+    expect(quotePdf).not.toContain('signedUrlData.signedUrl');
     expect(quotePdf).toContain('DEFAULT_QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000');
     expect(quotePdf).toContain('eq(quoteVersions.organizationId, ctx.organizationId)');
     expect(quotePdf).toContain('eq(opportunities.organizationId, ctx.organizationId)');

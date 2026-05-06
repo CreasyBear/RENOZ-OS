@@ -12,7 +12,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { quoteVersionParamsSchema, type GenerateQuotePdfResult } from '@/lib/schemas';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ServerError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
 import { createActivityLogger } from '@/lib/activity-logger';
 import { createAdminSupabase } from '@/lib/supabase/server';
@@ -306,15 +306,20 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       });
 
     if (uploadError) {
-      throw new Error(`Failed to upload PDF: ${uploadError.message}`);
+      throw new ServerError('Unable to upload quote PDF', 500, 'QUOTE_PDF_UPLOAD_FAILED');
     }
 
     const { data: signedUrlData, error: signedUrlError } = await supabase
       .storage.from(STORAGE_BUCKET)
       .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
 
-    if (signedUrlError) {
-      throw new Error(`Failed to generate signed URL: ${signedUrlError.message}`);
+    const signedUrl = signedUrlData?.signedUrl;
+    if (signedUrlError || !signedUrl) {
+      throw new ServerError(
+        'Unable to prepare quote PDF download',
+        500,
+        'QUOTE_PDF_URL_FAILED'
+      );
     }
 
     const [upsertResult] = await db
@@ -325,7 +330,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
         entityType: 'opportunity',
         entityId: opp.id,
         filename,
-        storageUrl: signedUrlData.signedUrl,
+        storageUrl: signedUrl,
         fileSize: buffer.length,
         generatedById: ctx.user.id,
         regenerationCount: 0,
@@ -339,7 +344,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
         ],
         set: {
           filename,
-          storageUrl: signedUrlData.signedUrl,
+          storageUrl: signedUrl,
           fileSize: buffer.length,
           generatedById: ctx.user.id,
           generatedAt: new Date(),
@@ -374,12 +379,12 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     await db
       .update(opportunities)
-      .set({ quotePdfUrl: signedUrlData.signedUrl })
+      .set({ quotePdfUrl: signedUrl })
       .where(and(eq(opportunities.id, opp.id), eq(opportunities.organizationId, ctx.organizationId)));
 
     return {
       quoteVersionId: id,
-      pdfUrl: signedUrlData.signedUrl,
+      pdfUrl: signedUrl,
       filename,
       fileSize: buffer.length,
       checksum,
