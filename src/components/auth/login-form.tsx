@@ -6,6 +6,7 @@ import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { formatLoginError } from '@/hooks/auth';
 import { getPostLoginTarget } from '@/lib/auth/route-policy';
 import { loginSchema } from '@/lib/schemas/auth';
 import { supabase } from '@/lib/supabase/client';
@@ -58,17 +59,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       'success' in loginRateLimit &&
       !loginRateLimit.success
     ) {
-      throw new Error(
-        (typeof loginRateLimit.error === 'string' && loginRateLimit.error) ||
-          'Too many login attempts. Please try again later.'
-      );
+      throw new Error(formatLoginError(loginRateLimit.error));
     }
 
     const { error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
     });
-    if (error) throw error;
+    if (error) throw new Error(formatLoginError(error));
 
     const {
       data: { session },
@@ -76,7 +74,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     const user = session?.user;
     if (!user) {
       await supabase.auth.signOut();
-      throw new Error('Login succeeded but no session was found.');
+      throw new Error(formatLoginError('Login succeeded but no session was found.'));
     }
 
     const { data: appUser, error: appUserError } = await supabase
@@ -87,7 +85,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
     if (appUserError || !appUser) {
       await supabase.auth.signOut();
-      throw new Error('Account setup is incomplete. Please sign up again or contact support.');
+      throw new Error(formatLoginError('Account setup is incomplete. Please contact support.'));
     }
 
     await clearLoginAttempt({
@@ -111,7 +109,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     e.preventDefault();
     setAuthError(null);
     void form.handleSubmit().catch((err) => {
-      setAuthError(err instanceof Error ? err.message : 'An error occurred');
+      setAuthError(formatLoginError(err));
     });
   };
 
