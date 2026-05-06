@@ -13,6 +13,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { sendInvoiceReminder } from '@/server/functions/invoices';
 import { toastSuccess, toastError } from '@/hooks';
+import { formatInvoiceMutationError } from './_mutation-errors';
 
 export function useSendInvoiceReminder() {
   const queryClient = useQueryClient();
@@ -25,8 +26,8 @@ export function useSendInvoiceReminder() {
       // Invalidate invoice detail to refresh reminder timestamp
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(invoiceId) });
     },
-    onError: (error: Error) => {
-      toastError(error.message || 'Failed to send reminder');
+    onError: (error: unknown) => {
+      toastError(formatInvoiceMutationError(error, 'sendReminder'));
     },
   });
 }

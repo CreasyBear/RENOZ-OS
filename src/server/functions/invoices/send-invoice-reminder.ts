@@ -21,6 +21,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { orders, customers, organizations, emailHistory, type NewEmailHistory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { getAppUrl } from '@/lib/server/app-url';
@@ -51,7 +52,7 @@ export interface SendInvoiceReminderResponse {
 export const sendInvoiceReminder = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }): Promise<SendInvoiceReminderResponse> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { organizationId } = ctx;
     const userId = ctx.user.id;
 
