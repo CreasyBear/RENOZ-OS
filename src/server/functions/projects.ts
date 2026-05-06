@@ -512,8 +512,18 @@ export const deleteProject = createServerFn({ method: "POST" })
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
       })
-      .where(eq(projects.id, data.projectId))
+      .where(
+        and(
+          eq(projects.id, data.projectId),
+          eq(projects.organizationId, ctx.organizationId),
+          isNull(projects.deletedAt)
+        )
+      )
       .returning();
+
+    if (!updatedProject) {
+      throw new NotFoundError("Project not found", "project");
+    }
 
     // Log project deletion (cancellation)
     logger.logAsync({
