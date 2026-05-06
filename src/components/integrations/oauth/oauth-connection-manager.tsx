@@ -501,7 +501,10 @@ const {
               {healthStatuses?.[connection.id]?.errorMessage && (
                 <Alert variant="destructive">
                   <AlertDescription className="text-sm">
-                    {healthStatuses[connection.id].errorMessage}
+                    {formatOAuthConnectionError(
+                      healthStatuses[connection.id].errorMessage,
+                      'sync'
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

@@ -21,6 +21,10 @@ import {
   RefreshCw,
   TrendingUp,
 } from 'lucide-react';
+import {
+  formatOAuthStatusDetailValue,
+  formatOAuthStatusMessage,
+} from '@/lib/oauth/oauth-error-messages';
 
 // Mock data interfaces (would be replaced with real API calls)
 interface DashboardMetrics {
@@ -111,8 +115,9 @@ export function OAuthStatusDashboard({
   const formatActivityDescription = useCallback((activity: RecentActivity) => {
     const timeAgo = Math.floor((Date.now() - activity.timestamp.getTime()) / (1000 * 60));
     const timeString = timeAgo < 60 ? `${timeAgo}m ago` : `${Math.floor(timeAgo / 60)}h ago`;
+    const message = formatOAuthStatusMessage(activity.description, activity.status);
 
-    return `${activity.description} (${timeString})`;
+    return `${message} (${timeString})`;
   }, []);
 
   if (isLoading) {
@@ -274,41 +279,48 @@ export function OAuthStatusDashboard({
             </div>
           ) : (
             <div className="space-y-3">
-              {data?.recentActivity?.map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3 rounded-lg border p-3">
-                  <div className={`mt-1 ${getStatusColor(activity.status)}`}>
-                    {getStatusIcon(activity.status)}
-                  </div>
+              {data?.recentActivity?.map((activity) => {
+                const activityMessage = formatOAuthStatusMessage(
+                  activity.description,
+                  activity.status
+                );
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="text-xs">
-                        {activity.service}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {activity.provider.replace('_', ' ')}
-                      </Badge>
-                      <span className="text-muted-foreground text-xs">
-                        {formatActivityDescription(activity)}
-                      </span>
+                return (
+                  <div key={activity.id} className="flex items-start space-x-3 rounded-lg border p-3">
+                    <div className={`mt-1 ${getStatusColor(activity.status)}`}>
+                      {getStatusIcon(activity.status)}
                     </div>
 
-                    <p className="mt-1 text-sm">{activity.description}</p>
-
-                    {activity.details && (
-                      <div className="text-muted-foreground mt-2 text-xs">
-                        {Object.entries(activity.details)
-                          .slice(0, 3)
-                          .map(([key, value]) => (
-                            <span key={key} className="mr-3">
-                              {key}: {String(value)}
-                            </span>
-                          ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="text-xs">
+                          {activity.service}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {activity.provider.replace('_', ' ')}
+                        </Badge>
+                        <span className="text-muted-foreground text-xs">
+                          {formatActivityDescription(activity)}
+                        </span>
                       </div>
-                    )}
+
+                      <p className="mt-1 text-sm">{activityMessage}</p>
+
+                      {activity.details && (
+                        <div className="text-muted-foreground mt-2 text-xs">
+                          {Object.entries(activity.details)
+                            .slice(0, 3)
+                            .map(([key, value]) => (
+                              <span key={key} className="mr-3">
+                                {key}: {formatOAuthStatusDetailValue(value)}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )) || (
+                );
+              }) || (
                 <div className="text-muted-foreground py-6 text-center">No recent activity</div>
               )}
             </div>

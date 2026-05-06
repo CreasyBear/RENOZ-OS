@@ -153,3 +153,40 @@ export function formatOAuthConnectionError(
 
   return OAUTH_FALLBACKS[context];
 }
+
+export function formatOAuthStatusMessage(message: unknown, status?: string): string {
+  const extracted = extractAuthErrorMessage(message);
+
+  if (status === 'success') {
+    return extracted && !isUnsafeOAuthConnectionMessage(extracted)
+      ? extracted
+      : 'Integration activity completed.';
+  }
+
+  if (!extracted || isUnsafeOAuthConnectionMessage(extracted)) {
+    return formatOAuthConnectionError(extracted, 'sync');
+  }
+
+  if (status === 'error') {
+    return formatOAuthConnectionError(extracted, 'sync');
+  }
+
+  return extracted;
+}
+
+export function formatOAuthStatusDetailValue(value: unknown): string {
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  const extracted = extractAuthErrorMessage(value);
+  if (!extracted) {
+    return 'Unavailable';
+  }
+
+  if (isUnsafeOAuthConnectionMessage(extracted)) {
+    return 'Hidden for safety';
+  }
+
+  return extracted.length > 80 ? `${extracted.slice(0, 77)}...` : extracted;
+}

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatOAuthConnectionError,
+  formatOAuthStatusDetailValue,
+  formatOAuthStatusMessage,
   isUnsafeOAuthConnectionMessage,
   toOAuthConnectionErrorCode,
 } from '@/lib/oauth/oauth-error-messages';
@@ -42,11 +44,23 @@ describe('oauth integration feedback', () => {
     expect(isUnsafeOAuthConnectionMessage('PKCE code verifier with client_secret leaked')).toBe(true);
   });
 
+  it('formats oauth status read-state messages without leaking provider detail', () => {
+    expect(formatOAuthStatusMessage('Sync completed', 'success')).toBe('Sync completed');
+    expect(
+      formatOAuthStatusMessage('duplicate key violates oauth_sync_logs access_token_key', 'error')
+    ).toBe('Integration sync is temporarily unavailable. Please try again.');
+    expect(formatOAuthStatusDetailValue('bearer access_token from provider')).toBe(
+      'Hidden for safety'
+    );
+    expect(formatOAuthStatusDetailValue(42)).toBe('42');
+  });
+
   it('keeps oauth callback and tenant selection surfaces behind oauth-owned formatter copy', () => {
     const callbackRoute = read('src/routes/api/oauth/callback.ts');
     const pendingRoute = read('src/routes/api/oauth/pending-selection.ts');
     const sidebar = read('src/components/layout/sidebar.tsx');
     const manager = read('src/components/integrations/oauth/oauth-connection-manager.tsx');
+    const dashboard = read('src/components/integrations/oauth/oauth-status-dashboard.tsx');
 
     expect(callbackRoute).toContain('toOAuthConnectionErrorCode(result.error)');
     expect(callbackRoute).not.toContain('toAuthErrorCode(result.error)');
@@ -68,6 +82,13 @@ describe('oauth integration feedback', () => {
     expect(manager).toContain("formatOAuthConnectionError(error, 'initiate')");
     expect(manager).toContain("formatOAuthConnectionError(error, 'disconnect')");
     expect(manager).toContain("formatOAuthConnectionError(error, 'sync')");
+    expect(manager).toContain('formatOAuthConnectionError(');
+    expect(manager).toContain('healthStatuses[connection.id].errorMessage');
     expect(manager).not.toContain("description: error instanceof Error ? error.message : 'Unknown error'");
+
+    expect(dashboard).toContain('formatOAuthStatusMessage(activity.description, activity.status)');
+    expect(dashboard).toContain('formatOAuthStatusDetailValue(value)');
+    expect(dashboard).not.toContain('<p className="mt-1 text-sm">{activity.description}</p>');
+    expect(dashboard).not.toContain('{key}: {String(value)}');
   });
 });
