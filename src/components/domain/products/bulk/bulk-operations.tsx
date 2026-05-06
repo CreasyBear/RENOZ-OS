@@ -41,12 +41,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
+  formatProductCoreMutationError,
   useBulkUpdateProducts,
   useBulkAdjustPrices,
   useBulkDeleteProducts,
   useExportProducts,
 } from "@/hooks/products";
-import { toastError } from "@/hooks";
 
 interface ProductBulkOperationsProps {
   selectedIds: string[];
@@ -110,9 +110,7 @@ export function ProductBulkOperations({
           onClearSelection?.();
         },
         onError: (err) => {
-          const errorMessage = err instanceof Error ? err.message : "Failed to update products";
-          toastError(errorMessage);
-          setError(errorMessage);
+          setError(formatProductCoreMutationError(err, "bulkUpdateProducts"));
         },
       }
     );
@@ -152,9 +150,7 @@ export function ProductBulkOperations({
           onClearSelection?.();
         },
         onError: (err) => {
-          const errorMessage = err instanceof Error ? err.message : "Failed to update prices";
-          toastError(errorMessage);
-          setError(errorMessage);
+          setError(formatProductCoreMutationError(err, "bulkAdjustPrices"));
         },
       }
     );
@@ -171,9 +167,7 @@ export function ProductBulkOperations({
         onClearSelection?.();
       },
       onError: (err) => {
-        const errorMessage = err instanceof Error ? err.message : "Failed to delete products";
-        toastError(errorMessage);
-        setError(errorMessage);
+        setError(formatProductCoreMutationError(err, "bulkDelete"));
       },
     });
   };
@@ -199,9 +193,7 @@ export function ProductBulkOperations({
           URL.revokeObjectURL(url);
         },
         onError: (err) => {
-          const errorMessage = err instanceof Error ? err.message : "Failed to export products";
-          toastError(errorMessage);
-          setError(errorMessage);
+          setError(formatProductCoreMutationError(err, "exportProducts"));
         },
       }
     );
