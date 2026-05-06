@@ -34,7 +34,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { FormatAmount } from '@/components/shared/format';
-import { toastError } from '@/hooks';
 import type { OpportunityStage } from '@/lib/schemas/pipeline';
 import { isValidOpportunityStage } from '@/lib/schemas/pipeline';
 import { PIPELINE_STAGE_OPTIONS } from '../pipeline-filter-config';
@@ -119,15 +118,17 @@ export function OpportunityBulkOperationsDialog({
       return;
     }
 
+    if (!isValidOpportunityStage(selectedStage)) {
+      setStageError('Invalid stage selected');
+      return;
+    }
+
     setIsConfirming(true);
     try {
-      if (!isValidOpportunityStage(selectedStage)) {
-        throw new Error('Invalid opportunity stage');
-      }
       await onConfirm(selectedStage);
       onOpenChange(false);
-    } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to complete bulk operation');
+    } catch {
+      // Parent owns user-facing mutation feedback and keeps the dialog open for retry.
     } finally {
       setIsConfirming(false);
     }

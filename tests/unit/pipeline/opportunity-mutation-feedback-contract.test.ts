@@ -77,6 +77,9 @@ describe('pipeline opportunity mutation feedback contract', () => {
     const list = read(
       'src/components/domain/pipeline/opportunities/opportunities-list-container.tsx'
     );
+    const bulkDialog = read(
+      'src/components/domain/pipeline/opportunities/opportunity-bulk-operations-dialog.tsx'
+    );
 
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
@@ -114,5 +117,10 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(list).not.toContain(
       'error instanceof Error ? error.message : "Failed to update opportunity stages"'
     );
+    expect(bulkDialog).not.toContain('toastError');
+    expect(bulkDialog).not.toContain(
+      "error instanceof Error ? error.message : 'Failed to complete bulk operation'"
+    );
+    expect(bulkDialog).toContain('Parent owns user-facing mutation feedback');
   });
 });
