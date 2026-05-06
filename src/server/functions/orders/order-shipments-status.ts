@@ -1,8 +1,8 @@
 'use server'
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/lib/db';
+import { db, type TransactionExecutor } from '@/lib/db';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
 import {
@@ -37,6 +37,49 @@ const _addTrackingEventInputSchema = z.object({
     description: z.string().max(500).optional(),
   }),
 });
+
+const DELIVERABLE_SHIPMENT_STATUSES = ['in_transit', 'out_for_delivery'] as const;
+
+async function incrementDeliveredQuantitiesForShipment(
+  tx: TransactionExecutor,
+  params: {
+    shipmentId: string;
+    orderId: string;
+    organizationId: string;
+  }
+) {
+  const items = await tx
+    .select()
+    .from(shipmentItems)
+    .where(
+      and(
+        eq(shipmentItems.shipmentId, params.shipmentId),
+        eq(shipmentItems.organizationId, params.organizationId)
+      )
+    );
+
+  for (const item of items) {
+    const [updatedLineItem] = await tx
+      .update(orderLineItems)
+      .set({
+        qtyDelivered: sql`${orderLineItems.qtyDelivered} + ${item.quantity}`,
+      })
+      .where(
+        and(
+          eq(orderLineItems.id, item.orderLineItemId),
+          eq(orderLineItems.orderId, params.orderId),
+          eq(orderLineItems.organizationId, params.organizationId)
+        )
+      )
+      .returning({ id: orderLineItems.id });
+
+    if (!updatedLineItem) {
+      throw new ValidationError('Line item not found or does not belong to order', {
+        [item.orderLineItemId]: ['Line item not found'],
+      });
+    }
+  }
+}
 
 export async function updateShipmentStatusHandler({
   data,
@@ -129,31 +172,36 @@ export async function updateShipmentStatusHandler({
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
-      const items = await tx
-        .select()
-        .from(shipmentItems)
-        .where(eq(shipmentItems.shipmentId, data.id));
 
-      for (const item of items) {
-        await tx
-          .update(orderLineItems)
-          .set({
-            qtyDelivered: sql`${orderLineItems.qtyDelivered} + ${item.quantity}`,
-          })
-          .where(eq(orderLineItems.id, item.orderLineItemId));
+      const [updatedShipment] = await tx
+        .update(orderShipments)
+        .set(updateValues)
+        .where(
+          and(
+            eq(orderShipments.id, data.id),
+            eq(orderShipments.organizationId, ctx.organizationId),
+            eq(orderShipments.status, existing.status)
+          )
+        )
+        .returning();
+
+      if (!updatedShipment) {
+        throw new ValidationError('Shipment status changed while updating delivery', {
+          status: ['Shipment changed while the delivery update was running. Refresh and try again.'],
+        });
       }
+
+      await incrementDeliveredQuantitiesForShipment(tx, {
+        shipmentId: data.id,
+        orderId: existing.orderId,
+        organizationId: ctx.organizationId,
+      });
 
       await bumpOrderAggregateVersion(tx, {
         orderId: existing.orderId,
         organizationId: ctx.organizationId,
         userId: ctx.user.id,
       });
-
-      const [updatedShipment] = await tx
-        .update(orderShipments)
-        .set(updateValues)
-        .where(eq(orderShipments.id, data.id))
-        .returning();
 
       await tx.insert(activities).values({
         organizationId: ctx.organizationId,
@@ -376,22 +424,26 @@ export async function confirmDeliveryHandler({
         trackingEvents,
         updatedBy: ctx.user.id,
       })
-      .where(eq(orderShipments.id, data.id))
+      .where(
+        and(
+          eq(orderShipments.id, data.id),
+          eq(orderShipments.organizationId, ctx.organizationId),
+          inArray(orderShipments.status, DELIVERABLE_SHIPMENT_STATUSES)
+        )
+      )
       .returning();
 
-    const items = await tx
-      .select()
-      .from(shipmentItems)
-      .where(eq(shipmentItems.shipmentId, data.id));
-
-    for (const item of items) {
-      await tx
-        .update(orderLineItems)
-        .set({
-          qtyDelivered: sql`${orderLineItems.qtyDelivered} + ${item.quantity}`,
-        })
-        .where(eq(orderLineItems.id, item.orderLineItemId));
+    if (!updatedShipment) {
+      throw new ValidationError('Shipment cannot be confirmed as delivered', {
+        status: ['Shipment changed while delivery confirmation was running. Refresh and try again.'],
+      });
     }
+
+    await incrementDeliveredQuantitiesForShipment(tx, {
+      shipmentId: data.id,
+      orderId: existing.orderId,
+      organizationId: ctx.organizationId,
+    });
 
     await recomputeOrderFulfillmentStatus(tx, {
       organizationId: ctx.organizationId,

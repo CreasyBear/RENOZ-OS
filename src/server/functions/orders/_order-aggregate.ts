@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { orders } from 'drizzle/schema';
 import type { TransactionExecutor } from '@/lib/db';
-import { ConflictError } from '@/lib/server/errors';
+import { ConflictError, NotFoundError } from '@/lib/server/errors';
 
 type DbExecutor = TransactionExecutor;
 
@@ -53,13 +53,21 @@ export async function bumpOrderAggregateVersion(
     userId: string;
   }
 ) {
-  await executor
+  const [updated] = await executor
     .update(orders)
     .set(buildOrderAggregateVersionUpdate(params.userId))
     .where(
       and(
         eq(orders.id, params.orderId),
-        eq(orders.organizationId, params.organizationId)
+        eq(orders.organizationId, params.organizationId),
+        isNull(orders.deletedAt)
       )
-    );
+    )
+    .returning({ id: orders.id });
+
+  if (!updated) {
+    throw new NotFoundError('Order not found', 'order');
+  }
+
+  return updated;
 }
