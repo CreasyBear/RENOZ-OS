@@ -39,7 +39,13 @@ import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ErrorState } from '@/components/shared/error-state';
 import { OrderCombobox, type OrderSummary } from '@/components/shared';
-import { useCreditNote, useIssueCreditNote, useApplyCreditNote, useVoidCreditNote } from '@/hooks/financial';
+import {
+  formatCreditNoteMutationError,
+  useCreditNote,
+  useIssueCreditNote,
+  useApplyCreditNote,
+  useVoidCreditNote,
+} from '@/hooks/financial';
 import { toastSuccess, toastError } from '@/hooks';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import { cn } from '@/lib/utils';
@@ -96,7 +102,7 @@ export function CreditNoteDetailContainer({
         toastSuccess('Credit note issued successfully');
         refetch();
       },
-      onError: (err) => toastError(err.message || 'Failed to issue credit note'),
+      onError: (err) => toastError(formatCreditNoteMutationError(err, 'issue')),
     });
   }, [creditNoteId, issueMutation, refetch]);
 
@@ -122,7 +128,7 @@ export function CreditNoteDetailContainer({
           });
           refetch();
         },
-        onError: (err) => toastError(err.message || 'Failed to apply credit note'),
+        onError: (err) => toastError(formatCreditNoteMutationError(err, 'apply')),
       }
     );
   }, [creditNoteId, selectedOrder, applyMutation, refetch, navigate]);
@@ -138,7 +144,7 @@ export function CreditNoteDetailContainer({
           toastSuccess('Credit note voided successfully');
           refetch();
         },
-        onError: (err) => toastError(err.message || 'Failed to void credit note'),
+        onError: (err) => toastError(formatCreditNoteMutationError(err, 'void')),
       }
     );
   }, [creditNoteId, voidMutation, refetch]);

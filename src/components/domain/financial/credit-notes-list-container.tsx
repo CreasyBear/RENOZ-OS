@@ -20,6 +20,7 @@ import {
   useApplyCreditNote,
   useVoidCreditNote,
   useGenerateCreditNotePdf,
+  formatCreditNoteMutationError,
 } from '@/hooks/financial';
 import { useTableSelection } from '@/components/shared/data-table';
 import { DomainFilterBar } from '@/components/shared/filters';
@@ -185,7 +186,7 @@ export function CreditNotesListContainer({
           refetchCreditNotes();
         },
         onError: (error) => {
-          toastError(error.message || 'Failed to issue credit note');
+          toastError(formatCreditNoteMutationError(error, 'issue'));
         },
       });
     },
@@ -236,7 +237,7 @@ export function CreditNotesListContainer({
             refetchCreditNotes();
           },
           onError: (error) => {
-            toastError(error.message || 'Failed to apply credit note');
+            toastError(formatCreditNoteMutationError(error, 'apply'));
             // Keep dialog open on error so user can retry
           },
         }
@@ -268,7 +269,7 @@ export function CreditNotesListContainer({
             refetchCreditNotes();
           },
           onError: (error) => {
-            toastError(error.message || 'Failed to void credit note');
+            toastError(formatCreditNoteMutationError(error, 'void'));
           },
         }
       );
@@ -295,7 +296,7 @@ export function CreditNotesListContainer({
           });
         },
         onError: (error) => {
-          toastError(error.message || 'Failed to generate PDF');
+          toastError(formatCreditNoteMutationError(error, 'pdf'));
         },
       });
     },
