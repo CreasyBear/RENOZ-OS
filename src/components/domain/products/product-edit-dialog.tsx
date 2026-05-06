@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { FormDialog } from "@/components/shared/forms";
+import { formatProductCoreMutationError } from "@/hooks/products";
 import type { ProductWithRelations, ProductStatus, TaxType } from "@/lib/schemas/products";
 import type { UpdateProduct } from "@/lib/schemas/products";
 
@@ -88,9 +89,7 @@ export function ProductEditDialog({
         await onSubmit(value);
         onClose();
       } catch (error) {
-        setSubmitError(
-          error instanceof Error ? error.message : "Failed to update product"
-        );
+        setSubmitError(formatProductCoreMutationError(error, "updateProduct"));
       }
     },
     onValidationError: (errors) => {

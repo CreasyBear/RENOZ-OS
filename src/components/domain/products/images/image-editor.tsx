@@ -6,7 +6,10 @@
 import { useEffect, useCallback, useState } from "react";
 import { Image, Info, Star, FileImage } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useUpdateProductImage } from "@/hooks/products";
+import {
+  formatProductImageMutationError,
+  useUpdateProductImage,
+} from "@/hooks/products";
 import { useTanStackForm } from "@/hooks/_shared/use-tanstack-form";
 import {
   FormDialog,
@@ -71,9 +74,7 @@ export function ImageEditor({
         onSaved?.();
         onOpenChange(false);
       } catch (err) {
-        setSubmitError(
-          err instanceof Error ? err.message : "Failed to update image"
-        );
+        setSubmitError(formatProductImageMutationError(err, "update"));
       }
     },
   });

@@ -16,6 +16,7 @@ import {
   SelectField,
   SwitchField,
 } from "@/components/shared/forms";
+import { formatProductCoreMutationError } from "@/hooks/products";
 import { toastError } from "@/hooks";
 import type { CategoryNode } from "@/lib/schemas/products";
 
@@ -99,7 +100,8 @@ export function CategoryEditor({
         await onSave(data);
         onOpenChange(false);
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "Failed to save category";
+        const action = mode === "create" ? "createCategory" : "updateCategory";
+        const msg = formatProductCoreMutationError(error, action);
         setSubmitError(msg);
         toastError(msg);
       } finally {
