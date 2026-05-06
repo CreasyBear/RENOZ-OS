@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { z } from 'zod';
 import { Calendar } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -31,25 +30,13 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
+import { projectSiteVisitFormSchema } from '@/lib/schemas/jobs';
 import {
   CURRENT_USER_INSTALLER_OPTION_VALUE,
   createSiteVisitInstallerOptions,
   formatInstallerDirectoryReadError,
   resolveSiteVisitInstallerId,
 } from '../site-visits/site-visit-installer-options';
-
-// ============================================================================
-// SCHEMA
-// ============================================================================
-
-const createSiteVisitFormSchema = z.object({
-  visitType: z.enum(['assessment', 'installation', 'commissioning', 'service', 'warranty', 'inspection', 'maintenance']),
-  scheduledDate: z.date(),
-  scheduledTime: z.string().optional(),
-  estimatedDuration: z.number().min(15).max(480).optional().nullable(),
-  installerId: z.string().optional(),
-  notes: z.string().optional(),
-});
 
 // ============================================================================
 // TYPES
@@ -85,7 +72,7 @@ export function SiteVisitCreateDialog({
   const installerDirectoryMessage = formatInstallerDirectoryReadError(installersError);
 
   const form = useTanStackForm({
-    schema: createSiteVisitFormSchema,
+    schema: projectSiteVisitFormSchema,
     defaultValues: {
       visitType: 'installation' as const,
       scheduledDate: new Date(),

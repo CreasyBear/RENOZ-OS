@@ -101,6 +101,9 @@ describe('site visits mutation contract', () => {
     expect(compactSchema).toContain(
       'exportconstcustomerSignOffSchema=z.object({siteVisitId:z.string().uuid(),projectId:z.string().uuid().optional()'
     );
+    expect(compactSchema).toContain(
+      'exportconstprojectSiteVisitFormSchema=scheduleVisitFormSchema.omit({projectId:true,})'
+    );
 
     expect(compactHooks).toContain(
       'data:{siteVisitId,...(projectId?{projectId}:{})}'
@@ -167,6 +170,8 @@ describe('site visits mutation contract', () => {
     expect(installerOptionHelper).toContain('resolveSiteVisitInstallerId');
     expect(projectCreateDialog).toContain('useAllInstallers');
     expect(scheduleCreateDialog).toContain('useAllInstallers');
+    expect(projectCreateDialog).toContain('projectSiteVisitFormSchema');
+    expect(scheduleCreateDialog).toContain('scheduleVisitFormSchema');
     expect(projectCreateDialog).toContain('Installer directory unavailable');
     expect(scheduleCreateDialog).toContain('Installer directory unavailable');
     expect(projectCreateDialog).toContain('Showing cached installers');
@@ -185,6 +190,8 @@ describe('site visits mutation contract', () => {
     expect(scheduleCreateDialog).not.toContain('Unassigned');
     expect(projectCreateDialog).not.toContain("'unassigned'");
     expect(scheduleCreateDialog).not.toContain("'unassigned'");
+    expect(projectCreateDialog).not.toContain('createSiteVisitFormSchema');
+    expect(projectCreateDialog).not.toContain("z.enum(['assessment'");
 
     expect(compactRoute).toContain('useSiteVisit({siteVisitId:visitId,projectId})');
     expect(compactRoute).toContain('checkIn.mutateAsync({siteVisitId:visitId,projectId})');

@@ -118,6 +118,14 @@ export const scheduleVisitFormSchema = z.object({
   notes: z.string().optional(),
 });
 
+/**
+ * Form schema for project-scoped site visit creation.
+ * The project ID is supplied by the owning project route/container.
+ */
+export const projectSiteVisitFormSchema = scheduleVisitFormSchema.omit({
+  projectId: true,
+});
+
 export const rescheduleSiteVisitSchema = z.object({
   siteVisitId: z.string().uuid(),
   projectId: z.string().uuid().optional(),
@@ -196,6 +204,7 @@ export type SiteVisitListQuery = z.infer<typeof siteVisitListQuerySchema>;
 export type CheckInInput = z.infer<typeof checkInSchema>;
 export type CheckOutInput = z.infer<typeof checkOutSchema>;
 export type CustomerSignOffInput = z.infer<typeof customerSignOffSchema>;
+export type ProjectSiteVisitFormInput = z.infer<typeof projectSiteVisitFormSchema>;
 
 // ============================================================================
 // RESPONSE TYPES (for hooks - explicit types matching server function returns)
