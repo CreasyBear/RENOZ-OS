@@ -21,6 +21,7 @@ import {
   getXeroSyncReadiness,
   syncManualJournalWithXero,
 } from '../xero-adapter';
+import { formatRevenueRecognitionXeroSyncError } from './xero-sync-feedback';
 import type { z } from 'zod';
 
 const MAX_SYNC_RETRIES = 5;
@@ -112,9 +113,10 @@ export async function syncRevenueRecognitionToXero(
 
   const readiness = await getXeroSyncReadiness(ctx.organizationId);
   if (!readiness.available) {
+    const errorMessage = readiness.message ?? 'Xero integration unavailable';
     return {
       success: false,
-      error: readiness.message ?? 'Xero integration unavailable',
+      error: formatRevenueRecognitionXeroSyncError(errorMessage, recognition.state),
       state: recognition.state,
       integrationAvailable: false,
     };
@@ -152,7 +154,7 @@ export async function syncRevenueRecognitionToXero(
 
     return {
       success: false,
-      error: errorMessage,
+      error: formatRevenueRecognitionXeroSyncError(errorMessage, recognition.state),
       state: recognition.state,
       integrationAvailable: readiness.available,
     };
@@ -281,7 +283,7 @@ export async function syncRevenueRecognitionToXero(
 
     return {
       success: false,
-      error: errorMessage,
+      error: formatRevenueRecognitionXeroSyncError(errorMessage, newState),
       state: newState,
       attempts: newAttempts,
       integrationAvailable: readiness.available,

@@ -117,7 +117,7 @@ describe("revenue recognition Xero sync behavior", () => {
       syncRevenueRecognitionToXero(ctx, { recognitionId: "recognition-1", force: false }),
     ).resolves.toMatchObject({
       success: false,
-      error: expect.stringContaining("Xero revenue recognition accounts are not configured"),
+      error: "Xero revenue recognition account settings need attention before journals can sync.",
     });
     expect(dbState.updates).toEqual(
       expect.arrayContaining([
@@ -126,6 +126,26 @@ describe("revenue recognition Xero sync behavior", () => {
         }),
       ]),
     );
+  });
+
+  it("returns safe copy when Xero readiness is unavailable", async () => {
+    dbState.selectQueue = [[recognition()]];
+    mockReadiness.mockResolvedValue({
+      available: false,
+      message: "No active Xero accounting connection with refresh_token provider stack",
+    });
+
+    const { syncRevenueRecognitionToXero } = await import(
+      "@/server/functions/financial/_shared/revenue-recognition-xero-sync"
+    );
+
+    await expect(
+      syncRevenueRecognitionToXero(ctx, { recognitionId: "recognition-1", force: false }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: "Xero connection needs attention before revenue journals can sync.",
+      integrationAvailable: false,
+    });
   });
 
   it("reconciles an existing manual journal without creating a duplicate", async () => {
@@ -154,13 +174,15 @@ describe("revenue recognition Xero sync behavior", () => {
       "@/server/functions/financial/_shared/revenue-recognition-xero-sync"
     );
 
-    await expect(
-      syncRevenueRecognitionToXero(ctx, { recognitionId: "recognition-1", force: false }),
-    ).resolves.toMatchObject({
+    const result = await syncRevenueRecognitionToXero(ctx, { recognitionId: "recognition-1", force: false });
+
+    expect(result).toMatchObject({
       success: false,
+      error: "Revenue recognition needs manual accounting review before another Xero sync attempt.",
       state: "manual_override",
       attempts: 5,
     });
+    expect(JSON.stringify(result)).not.toContain("Xero validation failed");
     expect(dbState.updates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

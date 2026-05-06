@@ -150,10 +150,15 @@ describe('revenue recognition feedback contract', () => {
 
   it('keeps revenue-recognition Xero reads behind the shared feedback helper', () => {
     const readModel = read('src/server/functions/financial/_shared/revenue-recognition-read.ts');
+    const mutation = read('src/server/functions/financial/_shared/revenue-recognition-xero-sync.ts');
     const feedback = read('src/server/functions/financial/_shared/xero-sync-feedback.ts');
 
     expect(feedback).toContain('formatRevenueRecognitionXeroSyncError');
     expect(readModel).toContain('formatRevenueRecognitionXeroSyncError(');
     expect(readModel).not.toMatch(/\n\s+xeroSyncError:\s+r\.xeroSyncError,\n\s+lastXeroSyncAt/);
+    expect(mutation).toContain('error: formatRevenueRecognitionXeroSyncError(errorMessage, recognition.state)');
+    expect(mutation).toContain('error: formatRevenueRecognitionXeroSyncError(errorMessage, newState)');
+    expect(mutation).not.toContain('error: errorMessage');
+    expect(mutation).not.toContain('error: readiness.message');
   });
 });

@@ -57,6 +57,14 @@ export function formatRevenueRecognitionXeroSyncError(
   }
 
   if (
+    normalized.includes('no active xero') ||
+    normalized.includes('oauth is not configured') ||
+    normalized.includes('xero integration unavailable')
+  ) {
+    return 'Xero connection needs attention before revenue journals can sync.';
+  }
+
+  if (
     normalized.includes('auth') ||
     normalized.includes('expired') ||
     normalized.includes('refresh token') ||
