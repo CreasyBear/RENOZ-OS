@@ -11,6 +11,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectNotes, type AudioNoteData } from 'drizzle/schema';
@@ -18,10 +19,12 @@ import {
   createNoteSchema,
   updateNoteSchema,
   noteIdSchema,
+  projectScopedNoteIdSchema,
   notesListQuerySchema,
 } from '@/lib/schemas/jobs/workstreams-notes';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // NOTE CRUD
@@ -101,7 +104,7 @@ export const getNote = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!note) {
-      throw new Error('Note not found');
+      throw new NotFoundError('Project note not found', 'projectNote');
     }
 
     return {
@@ -148,7 +151,7 @@ export const updateNote = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    const { id, ...updates } = data;
+    const { id, projectId, ...updates } = data;
 
     const [note] = await db
       .update(projectNotes)
@@ -160,13 +163,14 @@ export const updateNote = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(projectNotes.id, id),
+          eq(projectNotes.projectId, projectId),
           eq(projectNotes.organizationId, ctx.organizationId)
         )
       )
       .returning();
 
     if (!note) {
-      throw new Error('Note not found');
+      throw new NotFoundError('Project note not found', 'projectNote');
     }
 
     return {
@@ -179,18 +183,24 @@ export const updateNote = createServerFn({ method: 'POST' })
  * Delete a note
  */
 export const deleteNote = createServerFn({ method: 'POST' })
-  .inputValidator(noteIdSchema)
+  .inputValidator(projectScopedNoteIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
 
-    await db
+    const [note] = await db
       .delete(projectNotes)
       .where(
         and(
           eq(projectNotes.id, data.id),
+          eq(projectNotes.projectId, data.projectId),
           eq(projectNotes.organizationId, ctx.organizationId)
         )
-      );
+      )
+      .returning({ id: projectNotes.id });
+
+    if (!note) {
+      throw new NotFoundError('Project note not found', 'projectNote');
+    }
 
     return {
       success: true,
@@ -284,7 +294,7 @@ export const processAudioNote = createServerFn({ method: 'POST' })
       .returning();
 
     if (!note) {
-      throw new Error('Note not found');
+      throw new NotFoundError('Project note not found', 'projectNote');
     }
 
     return {
@@ -292,6 +302,3 @@ export const processAudioNote = createServerFn({ method: 'POST' })
       data: note,
     };
   });
-
-// Import z for input schemas
-import { z } from 'zod';

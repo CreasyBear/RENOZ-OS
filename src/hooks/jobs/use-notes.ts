@@ -24,6 +24,8 @@ import type {
   ListNotesResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
+type UpdateNoteMutationInput = Omit<UpdateNoteInput, 'projectId'>;
+
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
@@ -122,8 +124,8 @@ export function useUpdateNote(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateNoteInput) =>
-      updateNote({ data }),
+    mutationFn: (data: UpdateNoteMutationInput) =>
+      updateNote({ data: { ...data, projectId } }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectNotes.byProject(projectId),
@@ -144,7 +146,7 @@ export function useDeleteNote(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteNote({ data: { id } }),
+    mutationFn: (id: string) => deleteNote({ data: { id, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectNotes.byProject(projectId),

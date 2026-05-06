@@ -57,7 +57,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/lib/toast';
 
 // Hooks
-import { useNotes, useDeleteNote } from '@/hooks/jobs';
+import { formatProjectNoteMutationError, useNotes, useDeleteNote } from '@/hooks/jobs';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { useUserLookup } from '@/hooks/users';
 
@@ -609,8 +609,8 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
     try {
       await deleteNote.mutateAsync(note.id);
       toast.success('Note deleted');
-    } catch {
-      toast.error('Failed to delete note');
+    } catch (error) {
+      toast.error(formatProjectNoteMutationError(error, 'delete'));
     }
   };
 

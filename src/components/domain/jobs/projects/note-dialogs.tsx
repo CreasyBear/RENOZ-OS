@@ -20,7 +20,7 @@ import {
   TextareaField,
   SelectField,
 } from '@/components/shared/forms';
-import { useCreateNote, useUpdateNote } from '@/hooks/jobs';
+import { formatProjectNoteMutationError, useCreateNote, useUpdateNote } from '@/hooks/jobs';
 import { toast } from 'sonner';
 import type { ProjectNote } from '@/lib/schemas/jobs';
 
@@ -92,8 +92,8 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
         onOpenChange(false);
         form.reset();
         onSuccess?.();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to create note';
+      } catch (error) {
+        const msg = formatProjectNoteMutationError(error, 'create');
         setSubmitError(msg);
         toast.error(msg);
       }
@@ -314,8 +314,8 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
         form.reset();
         onOpenChange(false);
         onSuccess?.();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to update note';
+      } catch (error) {
+        const msg = formatProjectNoteMutationError(error, 'update');
         setSubmitError(msg);
         toast.error(msg);
       }

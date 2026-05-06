@@ -98,6 +98,7 @@ export const createNoteSchema = z.object({
 
 export const updateNoteSchema = z.object({
   id: z.string().uuid(),
+  projectId: z.string().uuid(),
   title: z.string().min(1).max(255).optional(),
   content: z.string().optional(),
   noteType: noteTypeSchema.optional(),
@@ -107,6 +108,11 @@ export const updateNoteSchema = z.object({
 
 export const noteIdSchema = z.object({
   id: z.string().uuid(),
+});
+
+export const projectScopedNoteIdSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
 });
 
 export const notesListQuerySchema = normalizeObjectInput(
@@ -121,6 +127,7 @@ export const notesListQuerySchema = normalizeObjectInput(
 
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;
 export type UpdateNoteInput = z.infer<typeof updateNoteSchema>;
+export type ProjectScopedNoteIdInput = z.infer<typeof projectScopedNoteIdSchema>;
 export type NotesListQuery = z.infer<typeof notesListQuerySchema>;
 export type AudioNoteData = z.infer<typeof audioNoteDataSchema>;
 export type NoteTranscriptSegment = z.infer<typeof transcriptSegmentSchema>;

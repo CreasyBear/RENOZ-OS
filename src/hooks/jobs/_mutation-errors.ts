@@ -17,7 +17,23 @@ const JOB_TEMPLATE_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the job template details and try again.',
 };
 
+const PROJECT_NOTE_MUTATION_FALLBACKS = {
+  create: 'Project note creation is temporarily unavailable. Please refresh and try again.',
+  update: 'Project note update is temporarily unavailable. Please refresh and try again.',
+  delete: 'Project note deletion is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const PROJECT_NOTE_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing project notes.',
+  CONFLICT: 'Project note details conflict with the current workspace state.',
+  NOT_FOUND: 'The project note could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage project notes.',
+  RATE_LIMIT: 'Too many project note changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the project note details and try again.',
+};
+
 export type JobTemplateMutationAction = keyof typeof JOB_TEMPLATE_MUTATION_FALLBACKS;
+export type ProjectNoteMutationAction = keyof typeof PROJECT_NOTE_MUTATION_FALLBACKS;
 
 export function formatJobTemplateMutationError(
   error: unknown,
@@ -25,5 +41,14 @@ export function formatJobTemplateMutationError(
 ): string {
   return formatMutationError(error, JOB_TEMPLATE_MUTATION_FALLBACKS[action], {
     codeMessages: JOB_TEMPLATE_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatProjectNoteMutationError(
+  error: unknown,
+  action: ProjectNoteMutationAction
+): string {
+  return formatMutationError(error, PROJECT_NOTE_MUTATION_FALLBACKS[action], {
+    codeMessages: PROJECT_NOTE_MUTATION_CODE_MESSAGES,
   });
 }
