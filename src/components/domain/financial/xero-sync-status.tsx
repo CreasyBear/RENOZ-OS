@@ -587,7 +587,7 @@ function PaymentEventSheet({
         <SheetHeader>
           <SheetTitle>{event?.outcomeTitle ?? 'Payment event'}</SheetTitle>
           <SheetDescription>
-            Review replay-safe payment handling, linked order context, and the exact dedupe key used.
+            Review replay-safe payment handling, linked order context, and safe event details.
           </SheetDescription>
         </SheetHeader>
 
@@ -620,16 +620,20 @@ function PaymentEventSheet({
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Identifiers</CardTitle>
+                  <CardTitle className="text-base">Audit context</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="space-y-1">
                     <div className="text-muted-foreground">Xero invoice</div>
-                    <div className="font-mono text-xs">{event.xeroInvoiceId}</div>
+                    <div>{event.xeroInvoiceLabel}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-muted-foreground">Payment ID / dedupe key</div>
-                    <div className="font-mono text-xs break-all">{event.paymentId ?? event.dedupeKey}</div>
+                    <div className="text-muted-foreground">Payment source</div>
+                    <div>{event.paymentSourceLabel}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground">Reference</div>
+                    <div className="break-words">{event.reference ?? 'Not provided'}</div>
                   </div>
                   {event.orderId ? (
                     <Link
@@ -647,12 +651,29 @@ function PaymentEventSheet({
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Payload summary</CardTitle>
+                <CardTitle className="text-base">Event summary</CardTitle>
               </CardHeader>
-              <CardContent>
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-                  {JSON.stringify(event.payloadSummary, null, 2)}
-                </pre>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="text-right">Xero payment event</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Invoice</span>
+                  <span className="text-right">{event.payloadSummary.invoice.status}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Payment</span>
+                  <span className="text-right">{event.payloadSummary.payment.status}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Payment date</span>
+                  <span className="text-right">{event.payloadSummary.payment.date}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">Handling</span>
+                  <span className="max-w-[18rem] text-right">{event.payloadSummary.handling.message}</span>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -914,7 +935,7 @@ export const XeroSyncStatus = memo(function XeroSyncStatus({
                           <p className="text-xs text-muted-foreground">{event.outcomeTitle}</p>
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{event.xeroInvoiceId}</TableCell>
+                      <TableCell className="max-w-[11rem] text-xs">{event.xeroInvoiceLabel}</TableCell>
                       <TableCell className="text-right">
                         <FormatAmount amount={event.amount} />
                       </TableCell>

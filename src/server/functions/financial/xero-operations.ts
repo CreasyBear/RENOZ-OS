@@ -14,13 +14,12 @@ import {
 } from './xero-adapter';
 import type {
   SearchXeroContactResult,
-  XeroPaymentEventRecord,
   XeroCustomerMappingStatus,
   XeroIntegrationStatus,
 } from '@/lib/schemas/settings/xero-sync';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { safeNumber } from '@/lib/numeric';
 import { z } from 'zod';
+import { buildXeroPaymentEventRecord } from './_shared/xero-payment-event-read';
 
 const customerIdSchema = z.object({
   customerId: z.string().uuid(),
@@ -273,7 +272,6 @@ export const listRecentXeroPaymentEvents = createServerFn({ method: 'GET' })
           reference: xeroPaymentEvents.reference,
           resultState: xeroPaymentEvents.resultState,
           processedAt: xeroPaymentEvents.processedAt,
-          payload: xeroPaymentEvents.payload,
         })
         .from(xeroPaymentEvents)
         .where(eq(xeroPaymentEvents.organizationId, ctx.organizationId))
@@ -282,44 +280,7 @@ export const listRecentXeroPaymentEvents = createServerFn({ method: 'GET' })
         .offset(offset),
     ]);
 
-    const normalizedItems: XeroPaymentEventRecord[] = items.map((item) => ({
-        ...item,
-        amount: safeNumber(item.amount),
-        processedAt: item.processedAt.toISOString(),
-        resultState: (item.resultState as XeroPaymentEventRecord['resultState']) ?? 'processing',
-        payloadSummary: {
-          payload:
-            typeof item.payload === 'object' && item.payload
-            ? (item.payload as Record<string, object>)
-              : {},
-          invoice: { id: item.xeroInvoiceId },
-          payment: {
-            id: item.paymentId ?? '',
-            date: item.paymentDate,
-            reference: item.reference ?? '',
-          },
-        },
-        outcomeTitle:
-          item.resultState === 'duplicate'
-            ? 'Duplicate replay'
-            : item.resultState === 'applied'
-              ? 'Payment applied'
-              : item.resultState === 'unknown_invoice'
-                ? 'Invoice not found'
-                : item.resultState === 'rejected'
-                  ? 'Payment rejected'
-                  : 'Payment processing',
-        outcomeMessage:
-          item.resultState === 'duplicate'
-            ? 'This webhook event was already processed. No payment was applied twice.'
-            : item.resultState === 'applied'
-              ? 'The payment was recorded on the linked order.'
-              : item.resultState === 'unknown_invoice'
-                ? 'No local order matched this Xero invoice ID.'
-                : item.resultState === 'rejected'
-                  ? 'The webhook was accepted but the payment could not be safely applied.'
-                  : 'This payment event is still being processed.',
-      }));
+    const normalizedItems = items.map((item) => buildXeroPaymentEventRecord(item));
 
     return {
       total: Number(countResult[0]?.count ?? 0),

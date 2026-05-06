@@ -307,23 +307,28 @@ export interface XeroSyncSummary {
 export interface XeroPaymentEventRecord {
   id: string;
   orderId: string | null;
-  dedupeKey: string;
-  xeroInvoiceId: string;
-  paymentId: string | null;
+  eventKeyLabel: string;
+  xeroInvoiceLabel: string;
+  paymentSourceLabel: string;
   amount: number;
   paymentDate: string;
   reference: string | null;
   resultState: 'processing' | 'applied' | 'duplicate' | 'unknown_invoice' | 'rejected';
   processedAt: string;
   payloadSummary: {
-    payload: Record<string, object>;
+    source: 'xero_payment_event';
     invoice: {
-      id: string;
+      status: string;
+      linkedOrder: boolean;
     };
     payment: {
-      id: string;
+      status: string;
       date: string;
-      reference: string;
+      reference: string | null;
+    };
+    handling: {
+      state: XeroPaymentEventRecord['resultState'];
+      message: string;
     };
   };
   outcomeTitle: string;
