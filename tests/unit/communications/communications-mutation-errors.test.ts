@@ -141,12 +141,15 @@ describe('communications mutation error formatting', () => {
 
     expect(editor).toContain('formatCommunicationTemplateMutationError(error, "update")');
     expect(editor).toContain('formatCommunicationTemplateMutationError(error, "create")');
+    expect(editor).toContain('formatCommunicationTemplateMutationError(createTemplate.error, "create")');
+    expect(editor).toContain('formatCommunicationTemplateMutationError(updateTemplate.error, "update")');
     expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "delete")');
     expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "clone")');
     expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "restore")');
     expect(editor).not.toContain('getUserFriendlyMessage(error as Error)');
     expect(editor).not.toContain('toast.error("Failed to update template"');
     expect(editor).not.toContain('toast.error("Failed to create template"');
+    expect(editor).not.toContain('(createTemplate.error ?? updateTemplate.error)?.message');
     expect(pageHook).not.toContain('toastError("Failed to delete template")');
     expect(pageHook).not.toContain('toastError("Failed to clone template")');
     expect(pageHook).not.toContain('toastError("Failed to restore template version")');

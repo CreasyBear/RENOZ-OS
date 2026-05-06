@@ -189,6 +189,11 @@ export function TemplateEditor({
   });
 
   const isPending = createTemplate.isPending || updateTemplate.isPending;
+  const submitError = createTemplate.error
+    ? formatCommunicationTemplateMutationError(createTemplate.error, "create")
+    : updateTemplate.error
+      ? formatCommunicationTemplateMutationError(updateTemplate.error, "update")
+      : null;
   const { showErrorsAfterSubmit } = useFormFieldDisplay();
 
   // Format command helper
@@ -277,7 +282,7 @@ export function TemplateEditor({
             }}
             className="space-y-4"
           >
-            <FormErrorSummary form={form} submitError={(createTemplate.error ?? updateTemplate.error)?.message ?? null} />
+            <FormErrorSummary form={form} submitError={submitError} />
             {/* Name & Category Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <form.Field name="name">
