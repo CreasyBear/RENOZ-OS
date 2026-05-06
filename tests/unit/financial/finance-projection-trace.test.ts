@@ -28,6 +28,35 @@ describe('finance schema trace repair', () => {
     expect(source).toContain('recalculateOrderFinancialProjection');
   });
 
+  it('locks payment-plan installment state before recording ledger payment', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/payment-schedule-mutations.ts',
+    );
+    const lockIndex = source.indexOf(".for('update')");
+    const paidStatusIndex = source.indexOf('Installment is already paid');
+    const remainingDueIndex = source.indexOf('exceeds remaining due');
+    const ledgerInsertIndex = source.indexOf('.insert(orderPayments)');
+    const paymentGuardIndex = source.indexOf("throw new ValidationError('Payment could not be recorded')");
+    const linkInsertIndex = source.indexOf('.insert(paymentSchedulePayments)');
+    const linkGuardIndex = source.indexOf(
+      "throw new ValidationError('Installment payment link could not be recorded')",
+    );
+    const scheduleUpdateIndex = source.indexOf('.update(paymentSchedules)');
+    const projectionIndex = source.indexOf('await recalculateOrderFinancialProjection');
+
+    expect(source).toContain("set_config('app.organization_id'");
+    expect(source).toContain('eq(paymentSchedules.organizationId, ctx.organizationId)');
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(paidStatusIndex).toBeGreaterThan(lockIndex);
+    expect(remainingDueIndex).toBeGreaterThan(lockIndex);
+    expect(ledgerInsertIndex).toBeGreaterThan(remainingDueIndex);
+    expect(paymentGuardIndex).toBeGreaterThan(ledgerInsertIndex);
+    expect(linkInsertIndex).toBeGreaterThan(paymentGuardIndex);
+    expect(linkGuardIndex).toBeGreaterThan(linkInsertIndex);
+    expect(scheduleUpdateIndex).toBeGreaterThan(linkGuardIndex);
+    expect(projectionIndex).toBeGreaterThan(scheduleUpdateIndex);
+  });
+
   it('records Xero payment applies through a tenant-scoped ledger insert before projection', () => {
     const source = read(
       'src/server/functions/financial/_shared/xero-payment-reconciliation.ts',

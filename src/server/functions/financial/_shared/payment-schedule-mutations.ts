@@ -24,8 +24,12 @@ export async function recordPaymentScheduleInstallmentPayment(
   ctx: SessionContext,
   data: RecordInstallmentPaymentInput
 ): Promise<PaymentScheduleRecord> {
-    // Get installment
-    const installment = await db
+  const updated = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
+
+    const [installment] = await tx
       .select()
       .from(paymentSchedules)
       .where(
@@ -34,19 +38,19 @@ export async function recordPaymentScheduleInstallmentPayment(
           eq(paymentSchedules.organizationId, ctx.organizationId)
         )
       )
+      .for('update')
       .limit(1);
 
-    if (installment.length === 0) {
+    if (!installment) {
       throw new NotFoundError('Installment not found', 'installment');
     }
 
-    if (installment[0].status === 'paid') {
+    if (installment.status === 'paid') {
       throw new ConflictError('Installment is already paid');
     }
 
-    // Validate payment doesn't exceed remaining amount
-    const currentPaid = installment[0].paidAmount || 0;
-    const remainingDue = installment[0].amount - currentPaid;
+    const currentPaid = installment.paidAmount || 0;
+    const remainingDue = installment.amount - currentPaid;
 
     if (data.paidAmount > remainingDue + 0.01) {
       throw new ValidationError(
@@ -54,118 +58,130 @@ export async function recordPaymentScheduleInstallmentPayment(
       );
     }
 
-    // Calculate new paid amount
     const newPaidAmount = currentPaid + data.paidAmount;
-    const isPaid = newPaidAmount >= installment[0].amount - 0.01;
-    const orderId = installment[0].orderId;
+    const isPaid = newPaidAmount >= installment.amount - 0.01;
+    const orderId = installment.orderId;
+    const paymentReference =
+      data.reference ?? data.paymentReference ?? `Installment ${installment.installmentNo}`;
 
-    // Wrap all updates in a transaction for atomicity
-    const updated = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
-      );
-      const paymentReference =
-        data.reference ?? data.paymentReference ?? `Installment ${installment[0].installmentNo}`;
+    const [payment] = await tx
+      .insert(orderPayments)
+      .values({
+        orderId,
+        amount: data.paidAmount,
+        paymentMethod: data.paymentMethod,
+        paymentDate: data.paymentDate,
+        reference: paymentReference,
+        notes: data.notes,
+        isRefund: false,
+        organizationId: ctx.organizationId,
+        recordedBy: ctx.user.id,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      })
+      .returning({
+        id: orderPayments.id,
+        orderId: orderPayments.orderId,
+      });
 
-      const [payment] = await tx
-        .insert(orderPayments)
-        .values({
-          orderId,
-          amount: data.paidAmount,
-          paymentMethod: data.paymentMethod,
-          paymentDate: data.paymentDate,
-          reference: paymentReference,
-          notes: data.notes,
-          isRefund: false,
-          organizationId: ctx.organizationId,
-          recordedBy: ctx.user.id,
-          createdBy: ctx.user.id,
-          updatedBy: ctx.user.id,
-        })
-        .returning({
-          id: orderPayments.id,
-          orderId: orderPayments.orderId,
-        });
+    if (!payment) {
+      throw new ValidationError('Payment could not be recorded');
+    }
 
-      if (!payment) {
-        throw new ValidationError('Payment could not be recorded');
-      }
-
-      await tx.insert(paymentSchedulePayments).values({
+    const [paymentSchedulePayment] = await tx
+      .insert(paymentSchedulePayments)
+      .values({
         organizationId: ctx.organizationId,
         paymentScheduleId: data.installmentId,
         orderPaymentId: payment.id,
         amount: data.paidAmount,
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
-      });
+      })
+      .returning({ id: paymentSchedulePayments.id });
 
-      // Update installment promise state after the real payment ledger row exists.
-      const [updatedInstallment] = await tx
-        .update(paymentSchedules)
-        .set({
-          paidAmount: newPaidAmount,
-          status: isPaid ? 'paid' : 'due',
-          paidAt: isPaid ? new Date() : null,
-          paymentReference,
-          notes: data.notes
-            ? installment[0].notes
-              ? `${installment[0].notes}\n${data.notes}`
-              : data.notes
-            : installment[0].notes,
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(paymentSchedules.id, data.installmentId))
-        .returning();
+    if (!paymentSchedulePayment) {
+      throw new ValidationError('Installment payment link could not be recorded');
+    }
 
-      if (!updatedInstallment) {
-        throw new NotFoundError('Payment installment not found or already modified', 'paymentSchedule');
-      }
-
-      await recalculateOrderFinancialProjection(tx, {
-        orderId,
-        organizationId: ctx.organizationId,
-        userId: ctx.user.id,
-      });
-
-      // Get order for customerId (inside transaction to avoid extra query) — scoped by organizationId
-      const [orderRecord] = await tx
-        .select({ customerId: orders.customerId })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.id, orderId),
-            eq(orders.organizationId, ctx.organizationId)
-          )
+    // Update installment promise state after the real payment ledger row exists.
+    const [updatedInstallment] = await tx
+      .update(paymentSchedules)
+      .set({
+        paidAmount: newPaidAmount,
+        status: isPaid ? 'paid' : 'due',
+        paidAt: isPaid ? new Date() : null,
+        paymentReference,
+        notes: data.notes
+          ? installment.notes
+            ? `${installment.notes}\n${data.notes}`
+            : data.notes
+          : installment.notes,
+        updatedBy: ctx.user.id,
+      })
+      .where(
+        and(
+          eq(paymentSchedules.id, data.installmentId),
+          eq(paymentSchedules.organizationId, ctx.organizationId)
         )
-        .limit(1);
+      )
+      .returning();
 
-      return { updatedInstallment, customerId: orderRecord?.customerId };
+    if (!updatedInstallment) {
+      throw new NotFoundError('Payment installment not found or already modified', 'paymentSchedule');
+    }
+
+    await recalculateOrderFinancialProjection(tx, {
+      orderId,
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
     });
 
-    // Activity logging
-    const logger = createActivityLoggerWithContext(ctx);
-    logger.logAsync({
-      entityType: 'order',
-      entityId: orderId,
-      action: 'updated',
-      description: `Recorded payment of ${formatAmount({ currency: 'AUD', amount: data.paidAmount })} for installment`,
-      changes: computeChanges({
-        before: installment[0],
-        after: updated.updatedInstallment,
-        excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
-      }),
-      metadata: {
-        orderId,
-        customerId: updated.customerId, // Include for customer timeline visibility
-        installmentId: data.installmentId,
-        installmentNo: installment[0].installmentNo,
-        paidAmount: newPaidAmount, // Total paid amount after this payment
-        amount: data.paidAmount,   // This specific payment amount
-      },
-    });
+    // Get order for customerId (inside transaction to avoid extra query) — scoped by organizationId
+    const [orderRecord] = await tx
+      .select({ customerId: orders.customerId })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.id, orderId),
+          eq(orders.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
 
-    return updated.updatedInstallment;
+    return {
+      beforeInstallment: installment,
+      updatedInstallment,
+      customerId: orderRecord?.customerId,
+      orderId,
+      installmentNo: installment.installmentNo,
+      newPaidAmount,
+    };
+  });
+
+  // Activity logging
+  const logger = createActivityLoggerWithContext(ctx);
+  logger.logAsync({
+    entityType: 'order',
+    entityId: updated.orderId,
+    action: 'updated',
+    description: `Recorded payment of ${formatAmount({ currency: 'AUD', amount: data.paidAmount })} for installment`,
+    changes: computeChanges({
+      before: updated.beforeInstallment,
+      after: updated.updatedInstallment,
+      excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
+    }),
+    metadata: {
+      orderId: updated.orderId,
+      customerId: updated.customerId, // Include for customer timeline visibility
+      installmentId: data.installmentId,
+      installmentNo: updated.installmentNo,
+      paidAmount: updated.newPaidAmount, // Total paid amount after this payment
+      amount: data.paidAmount,   // This specific payment amount
+    },
+  });
+
+  return updated.updatedInstallment;
 }
 
 export async function updatePaymentScheduleInstallment(
