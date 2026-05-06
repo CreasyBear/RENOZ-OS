@@ -47,8 +47,13 @@ import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toastSuccess, toastError } from '@/hooks';
-import { useQuoteVersion, useQuoteVersions, useDeleteQuote } from '@/hooks/pipeline';
-import { useOpportunity } from '@/hooks/pipeline';
+import {
+  formatPipelineQuoteMutationError,
+  useOpportunity,
+  useQuoteVersion,
+  useQuoteVersions,
+  useDeleteQuote,
+} from '@/hooks/pipeline';
 import { useGenerateQuotePdf, useSendQuote } from '@/hooks/pipeline/use-quote-mutations';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
@@ -196,7 +201,7 @@ export function QuoteDetailContainer({
         toastSuccess('PDF generated successfully');
       }
     } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to generate PDF');
+      toastError(formatPipelineQuoteMutationError(error, 'generatePdf'));
     }
   }, [generatePdfMutation, quoteData]);
 
@@ -217,7 +222,7 @@ export function QuoteDetailContainer({
         subject: `Quote for ${opportunityData.opportunity.title}`,
       });
       if (!result.success) {
-        toastError(result.error ?? 'Failed to send quote');
+        toastError(formatPipelineQuoteMutationError(result.error, 'send'));
         return;
       }
       toastSuccess(
@@ -226,7 +231,7 @@ export function QuoteDetailContainer({
           : 'Quote sent successfully'
       );
     } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to send quote');
+      toastError(formatPipelineQuoteMutationError(error, 'send'));
     }
   }, [opportunityData, quoteData, sendQuoteMutation]);
 
@@ -256,7 +261,7 @@ export function QuoteDetailContainer({
       setDeleteDialogOpen(false);
       navigate({ to: '/pipeline' });
     } catch (error) {
-      toastError(error instanceof Error ? error.message : 'Failed to delete quote');
+      toastError(formatPipelineQuoteMutationError(error, 'delete'));
     }
   }, [deleteMutation, quote, navigate]);
   // Transform opportunity to handle Date/string differences from server

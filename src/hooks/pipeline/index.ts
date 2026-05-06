@@ -111,6 +111,11 @@ export {
   type SendQuoteInput,
 } from './use-quote-mutations';
 
+export {
+  formatPipelineQuoteMutationError,
+  type PipelineQuoteMutationAction,
+} from './_mutation-errors';
+
 // ============================================================================
 // ACTIVITY HOOKS
 // ============================================================================
