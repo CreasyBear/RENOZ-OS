@@ -16,6 +16,7 @@ import {
   useCreateDelegation,
   useCancelDelegation,
   useUsers,
+  formatUserMutationError,
 } from '@/hooks/users';
 import { z } from 'zod';
 import { format, isBefore, isAfter, addDays } from 'date-fns';
@@ -185,7 +186,7 @@ function DelegationsPage() {
       setIsCreateOpen(false);
       resetForm();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create delegation');
+      toast.error(formatUserMutationError(err, 'createDelegation'));
     }
   };
 
@@ -202,7 +203,7 @@ function DelegationsPage() {
       try {
         await cancelDelegationMutation.mutateAsync(delegation.id);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to cancel delegation');
+        toast.error(formatUserMutationError(err, 'cancelDelegation'));
       }
     }
   };

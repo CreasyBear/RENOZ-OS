@@ -22,6 +22,8 @@ const USER_MUTATION_FALLBACKS = {
   batchSendInvitations: 'Bulk invitation sending is temporarily unavailable. Please refresh and try again.',
   terminateSession: 'Session termination is temporarily unavailable. Please refresh and try again.',
   terminateOtherSessions: 'Session cleanup is temporarily unavailable. Please refresh and try again.',
+  createDelegation: 'Delegation creation is temporarily unavailable. Please refresh and try again.',
+  cancelDelegation: 'Delegation cancellation is temporarily unavailable. Please refresh and try again.',
 } as const;
 
 const USER_MUTATION_CODE_MESSAGES: Record<string, string> = {
