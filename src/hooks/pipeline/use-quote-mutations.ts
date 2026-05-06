@@ -44,6 +44,12 @@ function invalidateQuoteExpiryCaches(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
 }
 
+function invalidateQuoteExpirationCaches(queryClient: QueryClient, opportunityId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+  invalidateQuoteExpiryCaches(queryClient);
+  invalidateOpportunityListCaches(queryClient);
+}
+
 function invalidateDeletedQuoteCaches(queryClient: QueryClient, quoteId: string) {
   queryClient.invalidateQueries({ queryKey: queryKeys.quotes.lists() });
   queryClient.invalidateQueries({ queryKey: queryKeys.quotes.detail(quoteId) });
@@ -119,9 +125,7 @@ export function useUpdateQuoteExpiration() {
     mutationFn: ({ opportunityId, quoteExpiresAt }: UpdateQuoteExpirationInput) =>
       updateQuoteExpiration({ data: { opportunityId, quoteExpiresAt } }),
     onSuccess: (_, { opportunityId }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      invalidateQuoteExpiryCaches(queryClient);
-      invalidateOpportunityListCaches(queryClient);
+      invalidateQuoteExpirationCaches(queryClient, opportunityId);
     },
   });
 }
@@ -146,9 +150,7 @@ export function useExtendQuoteValidity() {
     mutationFn: ({ opportunityId, newExpirationDate, reason }: ExtendQuoteValidityInput) =>
       extendQuoteValidity({ data: { opportunityId, newExpirationDate, reason } }),
     onSuccess: (_, { opportunityId }) => {
-      invalidateQuoteExpiryCaches(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      invalidateOpportunityListCaches(queryClient);
+      invalidateQuoteExpirationCaches(queryClient, opportunityId);
     },
   });
 }
