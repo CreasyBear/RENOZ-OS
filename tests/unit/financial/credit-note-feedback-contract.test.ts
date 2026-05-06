@@ -76,6 +76,7 @@ describe('credit note mutation feedback contract', () => {
     const index = read('src/hooks/financial/index.ts');
     const formatter = read('src/hooks/financial/_mutation-errors.ts');
     const hooks = read('src/hooks/financial/use-credit-notes.ts');
+    const reportingCache = read('src/hooks/financial/_reporting-cache.ts');
     const route = read('src/routes/_authenticated/financial/credit-notes/index.tsx');
     const invoiceDetail = read('src/components/domain/invoices/detail/invoice-detail-container.tsx');
     const dialog = read('src/components/domain/financial/credit-note-dialogs.tsx');
@@ -94,12 +95,14 @@ describe('credit note mutation feedback contract', () => {
     expect(hooks).toContain('appliedOrderId: result.appliedToOrderId ?? data.orderId');
     expect(hooks).toContain('refreshReporting?: boolean');
     expect(hooks).toContain('if (options.refreshReporting)');
-    expect(hooks).toContain('queryKeys.financial.arAging()');
-    expect(hooks).toContain('queryKeys.financial.dashboard()');
-    expect(hooks).toContain('queryKeys.financial.outstandingInvoices()');
-    expect(hooks).toContain('queryKeys.financial.topCustomers()');
-    expect(hooks).toContain('queryKeys.financial.reminderCandidates()');
+    expect(hooks).toContain('invalidateOrderBalanceReportingQueries(queryClient)');
     expect(hooks).toContain('refreshReporting: true');
+    expect(reportingCache).toContain('invalidateOrderBalanceReportingQueries');
+    expect(reportingCache).toContain('queryKeys.financial.arAging()');
+    expect(reportingCache).toContain('queryKeys.financial.dashboard()');
+    expect(reportingCache).toContain('queryKeys.financial.outstandingInvoices()');
+    expect(reportingCache).toContain('queryKeys.financial.topCustomers()');
+    expect(reportingCache).toContain('queryKeys.financial.reminderCandidates()');
 
     expect(route).toContain("formatCreditNoteMutationError(error, 'create')");
     expect(route).not.toContain("error.message || 'Failed to create credit note'");

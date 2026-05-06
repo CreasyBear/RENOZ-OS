@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { isReadQueryError, normalizeReadQueryError, requireReadResult } from '@/lib/read-path-policy';
+import { invalidateOrderBalanceReportingQueries } from './_reporting-cache';
 import {
   getPaymentSchedule,
   getOverdueInstallments,
@@ -32,7 +33,10 @@ function rethrowFinancialReadError(
 
 function invalidatePaymentScheduleQueries(
   queryClient: QueryClient,
-  orderId?: string | null
+  orderId?: string | null,
+  options: {
+    refreshReporting?: boolean;
+  } = {}
 ) {
   queryClient.invalidateQueries({
     queryKey: queryKeys.financial.paymentSchedules(),
@@ -42,6 +46,15 @@ function invalidatePaymentScheduleQueries(
     queryClient.invalidateQueries({
       queryKey: queryKeys.financial.paymentScheduleDetail(orderId),
     });
+  }
+
+  if (options.refreshReporting) {
+    if (orderId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+    }
+
+    invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true });
   }
 }
 
@@ -165,7 +178,9 @@ export function useRecordInstallmentPayment() {
       notes?: string;
     }) => fn({ data }),
     onSuccess: (result) => {
-      invalidatePaymentScheduleQueries(queryClient, result.orderId);
+      invalidatePaymentScheduleQueries(queryClient, result.orderId, {
+        refreshReporting: true,
+      });
     },
   });
 }

@@ -66,6 +66,7 @@ describe('payment plan mutation feedback contract', () => {
     const index = read('src/hooks/financial/index.ts');
     const formatter = read('src/hooks/financial/_mutation-errors.ts');
     const hooks = read('src/hooks/financial/use-payment-schedules.ts');
+    const reportingCache = read('src/hooks/financial/_reporting-cache.ts');
     const server = read('src/server/functions/financial/payment-schedules.ts');
     const mutations = read('src/server/functions/financial/_shared/payment-schedule-mutations.ts');
 
@@ -81,8 +82,16 @@ describe('payment plan mutation feedback contract', () => {
     expect(hooks).toContain('invalidatePaymentScheduleQueries(queryClient, variables.orderId)');
     expect(hooks).toContain('useRecordInstallmentPayment');
     expect(hooks).toContain('queryKeys.financial.paymentScheduleDetail(orderId)');
-    expect(hooks).toContain('invalidatePaymentScheduleQueries(queryClient, result.orderId)');
+    expect(hooks).toContain('invalidatePaymentScheduleQueries(queryClient, result.orderId, {');
     expect(hooks).toContain('queryKeys.financial.paymentSchedules()');
+    expect(hooks).toContain('refreshReporting?: boolean');
+    expect(hooks).toContain('queryKeys.orders.detail(orderId)');
+    expect(hooks).toContain('queryKeys.orders.lists()');
+    expect(hooks).toContain('invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true })');
+    expect(hooks).toContain('refreshReporting: true');
+    expect(reportingCache).toContain('invalidateOrderBalanceReportingQueries');
+    expect(reportingCache).toContain('includeCashRevenue?: boolean');
+    expect(reportingCache).toContain('queryKeys.financial.revenue()');
     expect(server).toContain('createPaymentPlanForOrder');
     expect(server).toContain('recordPaymentScheduleInstallmentPayment');
     expect(mutations).toContain('.insert(orderPayments)');

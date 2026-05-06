@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { isReadQueryError, normalizeReadQueryError, requireReadResult } from '@/lib/read-path-policy';
+import { invalidateOrderBalanceReportingQueries } from './_reporting-cache';
 import {
   listCreditNotes,
   getCreditNote,
@@ -70,11 +71,7 @@ function invalidateCreditNoteQueries(
   }
 
   if (options.refreshReporting) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.arAging() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.dashboard() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.outstandingInvoices() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.topCustomers() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderCandidates() });
+    invalidateOrderBalanceReportingQueries(queryClient);
   }
 }
 
