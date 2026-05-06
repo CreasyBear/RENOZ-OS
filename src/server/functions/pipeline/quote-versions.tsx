@@ -33,7 +33,6 @@ import {
   quoteVersionFilterSchema,
   quoteVersionParamsSchema,
   restoreQuoteVersionSchema,
-  updateQuoteExpirationSchema,
   sendQuoteSchema,
   type QuoteLineItem,
   type GenerateQuotePdfResult,
@@ -377,55 +376,6 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
     });
 
     return result;
-  });
-
-// ============================================================================
-// UPDATE QUOTE EXPIRATION
-// ============================================================================
-
-/**
- * Set or update the quote expiration date on the opportunity.
- * This affects when the quote is considered expired.
- */
-export const updateQuoteExpiration = createServerFn({ method: 'POST' })
-  .inputValidator(updateQuoteExpirationSchema)
-  .handler(async ({ data }): Promise<{ opportunity: typeof opportunities.$inferSelect }> => {
-    const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
-    });
-
-    const { opportunityId, quoteExpiresAt } = data;
-
-    // Verify opportunity exists and belongs to org
-    const opportunity = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, opportunityId),
-          eq(opportunities.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
-    if (!opportunity[0]) {
-      throw new NotFoundError('Opportunity not found', 'opportunity');
-    }
-
-    // Update expiration - convert string (YYYY-MM-DD) to Date
-    const result = await db
-      .update(opportunities)
-      .set({
-        quoteExpiresAt: new Date(quoteExpiresAt),
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(opportunities.id, opportunityId))
-      .returning();
-
-    if (!result[0]) {
-      throw new Error('Failed to update quote expiration');
-    }
-    return { opportunity: result[0] };
   });
 
 // ============================================================================

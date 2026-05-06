@@ -1,8 +1,8 @@
 /**
  * Quote Validity Server Functions
  *
- * Owns quote expiry alerts, validity statistics, validity extension, and
- * conversion validation for Pipeline views.
+ * Owns quote expiry alerts, validity statistics, expiration writes, validity
+ * extension, and conversion validation for Pipeline views.
  */
 
 'use server';
@@ -12,6 +12,7 @@ import { and, desc, eq, gt, isNotNull, lt, lte, notInArray, sql } from 'drizzle-
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { updateQuoteExpirationSchema } from '@/lib/schemas';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -159,6 +160,39 @@ export const getQuoteValidityStats = createServerFn({ method: 'GET' })
       noExpiration: Number(stats?.noExpiration ?? 0),
       total: Number(stats?.total ?? 0),
     };
+  });
+
+/**
+ * Set or update the quote expiration date on the opportunity.
+ */
+export const updateQuoteExpiration = createServerFn({ method: 'POST' })
+  .inputValidator(updateQuoteExpirationSchema)
+  .handler(async ({ data }): Promise<{ opportunity: typeof opportunities.$inferSelect }> => {
+    const ctx = await withAuth({
+      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+    });
+
+    const { opportunityId, quoteExpiresAt } = data;
+
+    const result = await db
+      .update(opportunities)
+      .set({
+        quoteExpiresAt: new Date(quoteExpiresAt),
+        updatedBy: ctx.user.id,
+      })
+      .where(
+        and(
+          eq(opportunities.id, opportunityId),
+          eq(opportunities.organizationId, ctx.organizationId)
+        )
+      )
+      .returning();
+
+    if (!result[0]) {
+      throw new NotFoundError('Opportunity not found', 'opportunity');
+    }
+
+    return { opportunity: result[0]! };
   });
 
 /**
