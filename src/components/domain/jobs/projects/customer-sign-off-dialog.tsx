@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from "react";
 import { CheckCircle, Star } from "lucide-react";
-import { useCustomerSignOff } from "@/hooks/jobs";
+import { formatSiteVisitMutationError, useCustomerSignOff } from "@/hooks/jobs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +36,7 @@ export interface CustomerSignOffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   siteVisitId: string;
+  projectId?: string;
   visitNumber: string;
   /** Pre-filled customer name from project context (site visit → project → customer) */
   defaultCustomerName?: string;
@@ -51,6 +52,7 @@ export function CustomerSignOffDialog({
   open,
   onOpenChange,
   siteVisitId,
+  projectId,
   visitNumber,
   defaultCustomerName,
   onSuccess,
@@ -75,6 +77,7 @@ export function CustomerSignOffDialog({
       try {
         await signOff.mutateAsync({
           siteVisitId,
+          ...(projectId ? { projectId } : {}),
           customerName: values.customerName,
           customerRating: values.customerRating,
           customerFeedback: values.customerFeedback,
@@ -85,10 +88,9 @@ export function CustomerSignOffDialog({
         onSuccess?.();
         onOpenChange(false);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
+        const message = formatSiteVisitMutationError(error, "signOff");
         setSubmitError(message);
-        toast.error(`Failed to record sign-off: ${message}`);
+        toast.error(message);
       }
     },
   });

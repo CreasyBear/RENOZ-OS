@@ -17,18 +17,23 @@
  */
 
 import { useNavigate } from '@tanstack/react-router';
-import { useCallback, memo, useRef, useEffect } from 'react';
+import { useCallback, memo, useRef, useEffect, useMemo } from 'react';
 import { Calendar, Kanban } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { TechnicianDashboard } from '@/components/domain/jobs';
 import { MyTasksKanban } from '@/components/domain/jobs/my-tasks';
 import { KanbanErrorBoundary } from '@/components/shared/kanban';
-import { useSiteVisitsByInstaller, useCheckIn, useCheckOut } from '@/hooks/jobs';
+import {
+  formatSiteVisitMutationError,
+  useSiteVisitsByInstaller,
+  useCheckIn,
+  useCheckOut,
+} from '@/hooks/jobs';
 import { useAuth } from '@/lib/auth/hooks';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { normalizeError, getUserFriendlyMessage, isRetryableError } from '@/lib/error-handling';
+import { normalizeError, isRetryableError } from '@/lib/error-handling';
 import { logger } from '@/lib/logger';
 import type { SiteVisit } from '@/lib/schemas/jobs';
 
@@ -114,11 +119,19 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
     !!user?.id && viewMode === 'schedule'
   );
   const isLoading = isAuthLoading || isDataLoading;
-  const visits = (data as { items: TechnicianVisit[] } | undefined)?.items ?? [];
+  const visits = useMemo(
+    () => (data as { items: TechnicianVisit[] } | undefined)?.items ?? [],
+    [data]
+  );
 
   // Mutations for schedule view
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
+
+  const getVisitProjectId = useCallback(
+    (visitId: string) => visits.find((visit) => visit.id === visitId)?.projectId ?? projectId,
+    [visits, projectId]
+  );
 
   // Handlers for schedule view
   const handleVisitClick = useCallback(
@@ -133,18 +146,23 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
 
   const handleCheckIn = useCallback(
     async (visitId: string, retries = 3) => {
+      const visitProjectId = getVisitProjectId(visitId);
       try {
-        await checkIn.mutateAsync({ siteVisitId: visitId });
+        await checkIn.mutateAsync({
+          siteVisitId: visitId,
+          ...(visitProjectId ? { projectId: visitProjectId } : {}),
+        });
         toast.success('Checked in successfully');
       } catch (error) {
         const normalizedError = normalizeError(error, {
           component: 'MyTasksPage',
           action: 'check in',
-          metadata: { visitId, userId: user?.id },
+          metadata: { visitId, projectId: visitProjectId, userId: user?.id },
         });
         logger.error('Failed to check in', normalizedError, {
           domain: 'jobs',
           visitId,
+          projectId: visitProjectId,
           userId: user?.id,
         });
 
@@ -157,7 +175,7 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
           return;
         }
 
-        const userMessage = getUserFriendlyMessage(normalizedError);
+        const userMessage = formatSiteVisitMutationError(error, 'checkIn');
         toast.error(userMessage, {
           action: {
             label: 'Retry',
@@ -166,7 +184,7 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
         });
       }
     },
-    [checkIn, user?.id]
+    [checkIn, getVisitProjectId, user?.id]
   );
 
   const handleCheckInRef = useRef(handleCheckIn);
@@ -177,18 +195,23 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
 
   const handleCheckOut = useCallback(
     async (visitId: string, retries = 3) => {
+      const visitProjectId = getVisitProjectId(visitId);
       try {
-        await checkOut.mutateAsync({ siteVisitId: visitId });
+        await checkOut.mutateAsync({
+          siteVisitId: visitId,
+          ...(visitProjectId ? { projectId: visitProjectId } : {}),
+        });
         toast.success('Checked out successfully');
       } catch (error) {
         const normalizedError = normalizeError(error, {
           component: 'MyTasksPage',
           action: 'check out',
-          metadata: { visitId, userId: user?.id },
+          metadata: { visitId, projectId: visitProjectId, userId: user?.id },
         });
         logger.error('Failed to check out', normalizedError, {
           domain: 'jobs',
           visitId,
+          projectId: visitProjectId,
           userId: user?.id,
         });
 
@@ -201,7 +224,7 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
           return;
         }
 
-        const userMessage = getUserFriendlyMessage(normalizedError);
+        const userMessage = formatSiteVisitMutationError(error, 'checkOut');
         toast.error(userMessage, {
           action: {
             label: 'Retry',
@@ -210,7 +233,7 @@ export default function MyTasksPage({ initialView, projectId }: MyTasksPageProps
         });
       }
     },
-    [checkOut, user?.id]
+    [checkOut, getVisitProjectId, user?.id]
   );
 
   const handleCheckOutRef = useRef(handleCheckOut);

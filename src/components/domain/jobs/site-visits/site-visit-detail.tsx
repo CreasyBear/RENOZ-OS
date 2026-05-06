@@ -51,7 +51,11 @@ import {
 import { DisabledButtonWithTooltip } from '@/components/shared/disabled-with-tooltip';
 
 import type { SiteVisit, SiteVisitStatus } from '@/lib/schemas/jobs';
-import { useCancelSiteVisit, useProjectTasks } from '@/hooks/jobs';
+import {
+  formatSiteVisitMutationError,
+  useCancelSiteVisit,
+  useProjectTasks,
+} from '@/hooks/jobs';
 import { toastSuccess, toastError } from '@/hooks';
 import { useAlertDismissals, generateAlertIdWithValue } from '@/hooks/_shared/use-alert-dismissals';
 
@@ -269,7 +273,7 @@ export function SiteVisitDetail({
 
   const handleCancelVisit = () => {
     cancelSiteVisit.mutate(
-      { siteVisitId: visit.id },
+      { siteVisitId: visit.id, projectId: visit.projectId },
       {
         onSuccess: () => {
           toastSuccess('Site visit cancelled successfully');
@@ -279,7 +283,7 @@ export function SiteVisitDetail({
           }
         },
         onError: (error) => {
-          toastError(error.message || 'Failed to cancel site visit');
+          toastError(formatSiteVisitMutationError(error, 'cancel'));
         },
       }
     );

@@ -10,7 +10,7 @@
  *
  * SPRINT-03: New domain hooks for project-centric jobs model
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
@@ -36,6 +36,7 @@ import {
   type CheckInInput,
   type CheckOutInput,
   type CustomerSignOffInput,
+  type ScopedSiteVisitIdInput,
   type SiteVisitListResult,
   type SiteVisitMutationResult,
   type CustomerSignOffResult,
@@ -234,19 +235,20 @@ export function usePastDueSiteVisits(enabled = true) {
 
 export interface UseSiteVisitOptions {
   siteVisitId: string;
+  projectId?: string;
   enabled?: boolean;
 }
 
 /**
  * Get single site visit by ID
  */
-export function useSiteVisit({ siteVisitId, enabled = true }: UseSiteVisitOptions) {
+export function useSiteVisit({ siteVisitId, projectId, enabled = true }: UseSiteVisitOptions) {
   return useQuery({
     queryKey: queryKeys.siteVisits.detail(siteVisitId),
     queryFn: async () => {
       try {
         return await getSiteVisit({
-          data: { siteVisitId },
+          data: { siteVisitId, ...(projectId ? { projectId } : {}) },
         });
       } catch (error) {
         throw normalizeReadQueryError(error, {
@@ -266,6 +268,30 @@ export function useSiteVisit({ siteVisitId, enabled = true }: UseSiteVisitOption
 // MUTATION HOOKS
 // ============================================================================
 
+type CancelSiteVisitInput = ScopedSiteVisitIdInput & { reason?: string };
+type DeleteSiteVisitInput = string | ScopedSiteVisitIdInput;
+
+function invalidateSiteVisitMutationViews(
+  queryClient: QueryClient,
+  result: { id?: string; projectId?: string | null; installerId?: string | null }
+) {
+  if (result.id) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.detail(result.id) });
+  }
+  if (result.projectId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.siteVisits.byProject(result.projectId),
+    });
+  }
+  if (result.installerId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
+    });
+  }
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.all });
+}
+
 /**
  * Create a new site visit
  */
@@ -279,18 +305,7 @@ export function useCreateSiteVisit() {
       return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
-      // Invalidate project visits
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
-      // Invalidate installer visits if assigned
-      if (result.installerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
-        });
-      }
-      // Invalidate all lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }
@@ -307,20 +322,8 @@ export function useUpdateSiteVisit() {
       const result = await updateFn({ data: input });
       return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
-    onSuccess: (result, variables) => {
-      // Invalidate specific visit and related lists
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.detail(variables.siteVisitId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
-      if (result.installerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+    onSuccess: (result) => {
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }
@@ -338,19 +341,7 @@ export function useRescheduleSiteVisit() {
       return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.detail(result.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
-      if (result.installerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.all });
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }
@@ -363,12 +354,14 @@ export function useDeleteSiteVisit() {
   const deleteFn = useServerFn(deleteSiteVisit);
 
   return useMutation({
-    mutationFn: (siteVisitId: string) => deleteFn({ data: { siteVisitId } }),
-    onSuccess: (_, siteVisitId) => {
-      // Remove from cache
-      queryClient.removeQueries({ queryKey: queryKeys.siteVisits.detail(siteVisitId) });
-      // Invalidate all lists
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+    mutationFn: async (input: DeleteSiteVisitInput): Promise<SiteVisitMutationResult> => {
+      const data = typeof input === 'string' ? { siteVisitId: input } : input;
+      const result = await deleteFn({ data });
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
+    },
+    onSuccess: (result) => {
+      queryClient.removeQueries({ queryKey: queryKeys.siteVisits.detail(result.id) });
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }
@@ -390,19 +383,7 @@ export function useCheckIn() {
       return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
-      // Update detail cache
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.detail(result.id) });
-      // Invalidate project visits
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
-      // Invalidate installer visits
-      if (result.installerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
-        });
-      }
-      // Invalidate my visits
+      invalidateSiteVisitMutationViews(queryClient, result);
       queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.myVisits() });
     },
   });
@@ -421,19 +402,7 @@ export function useCheckOut() {
       return { id: result.id, projectId: result.projectId, installerId: result.installerId };
     },
     onSuccess: (result) => {
-      // Update detail cache
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.detail(result.id) });
-      // Invalidate project visits
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
-      // Invalidate installer visits
-      if (result.installerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
-        });
-      }
-      // Invalidate my visits
+      invalidateSiteVisitMutationViews(queryClient, result);
       queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.myVisits() });
     },
   });
@@ -456,12 +425,7 @@ export function useCustomerSignOff() {
       return { id: result.id, projectId: result.projectId };
     },
     onSuccess: (result) => {
-      // Update detail cache
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.detail(result.id) });
-      // Invalidate project visits
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.byProject(result.projectId),
-      });
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }
@@ -478,13 +442,12 @@ export function useCancelSiteVisit() {
   const cancelFn = useServerFn(cancelSiteVisit);
 
   return useMutation({
-    mutationFn: (data: { siteVisitId: string; reason?: string }) =>
-      cancelFn({ data }),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.siteVisits.detail(variables.siteVisitId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
+    mutationFn: async (data: CancelSiteVisitInput): Promise<SiteVisitMutationResult> => {
+      const result = await cancelFn({ data });
+      return { id: result.id, projectId: result.projectId, installerId: result.installerId };
+    },
+    onSuccess: (result) => {
+      invalidateSiteVisitMutationViews(queryClient, result);
     },
   });
 }

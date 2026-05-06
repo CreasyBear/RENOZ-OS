@@ -26,7 +26,12 @@ import { EntityHeaderActions } from '@/components/shared';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
 import { toast } from '@/lib/toast';
-import { useProjectDetail, useUpdateProjectTask, useRescheduleSiteVisit } from '@/hooks/jobs';
+import {
+  formatSiteVisitMutationError,
+  useProjectDetail,
+  useUpdateProjectTask,
+  useRescheduleSiteVisit,
+} from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
 import { format } from 'date-fns';
 import { ProjectDetailView } from '../views/project-detail-view';
@@ -236,14 +241,18 @@ export function ProjectDetailContainer({
           await updateTask.mutateAsync({ taskId, dueDate: dateStr });
           toast.success('Task date updated');
         } else if (visitId) {
-          await rescheduleVisit.mutateAsync({ siteVisitId: visitId, scheduledDate: dateStr });
+          await rescheduleVisit.mutateAsync({ siteVisitId: visitId, projectId, scheduledDate: dateStr });
           toast.success('Visit rescheduled');
         }
-      } catch {
-        toast.error(isTask ? 'Failed to update task date' : 'Failed to reschedule visit');
+      } catch (error) {
+        toast.error(
+          isTask
+            ? 'Failed to update task date'
+            : formatSiteVisitMutationError(error, 'reschedule')
+        );
       }
     },
-    [updateTask, rescheduleVisit]
+    [updateTask, rescheduleVisit, projectId]
   );
 
   const tabs = useProjectDetailTabRenderers({

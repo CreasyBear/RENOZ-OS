@@ -12,7 +12,13 @@
 import { useCallback, useEffect, useMemo, useState, startTransition } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { addDays, startOfWeek, format } from 'date-fns';
-import { useSchedule, useRescheduleSiteVisit, usePastDueSiteVisits, useProject } from '@/hooks/jobs';
+import {
+  formatSiteVisitMutationError,
+  useSchedule,
+  useRescheduleSiteVisit,
+  usePastDueSiteVisits,
+  useProject,
+} from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
 import { queryKeys } from '@/lib/query-keys';
 import { useQueryClient } from '@tanstack/react-query';
@@ -372,18 +378,19 @@ export function ScheduleCalendarContainer({ Layout }: ScheduleCalendarContainerP
   );
 
   const handleRescheduleVisit = useCallback(
-    async (visitId: string, _projectId: string, newDate: string, newTime?: string) => {
+    async (visitId: string, projectId: string, newDate: string, newTime?: string) => {
       try {
         await rescheduleMutation.mutateAsync({
           siteVisitId: visitId,
+          projectId,
           scheduledDate: newDate,
           scheduledTime: newTime,
         });
         toast.success('Visit rescheduled');
         queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.schedule(dateFrom, dateTo) });
         queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.pastDue() });
-      } catch {
-        toast.error('Failed to reschedule visit');
+      } catch (error) {
+        toast.error(formatSiteVisitMutationError(error, 'reschedule'));
       }
     },
     [rescheduleMutation, queryClient, dateFrom, dateTo]

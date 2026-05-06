@@ -27,6 +27,7 @@ import {
   PenLine,
 } from 'lucide-react';
 import {
+  formatSiteVisitMutationError,
   useSiteVisit,
   useCheckIn,
   useCheckOut,
@@ -58,7 +59,7 @@ export default function SiteVisitDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: visit, isLoading, error } = useSiteVisit({ siteVisitId: visitId });
+  const { data: visit, isLoading, error } = useSiteVisit({ siteVisitId: visitId, projectId });
 
   const { data: project } = useProject({
     projectId: projectId ?? '',
@@ -125,21 +126,21 @@ export default function SiteVisitDetailPage() {
 
   const handleCheckIn = useCallback(async () => {
     try {
-      await checkIn.mutateAsync({ siteVisitId: visitId });
+      await checkIn.mutateAsync({ siteVisitId: visitId, projectId });
       toast.success('Checked in successfully');
-    } catch {
-      toast.error('Failed to check in');
+    } catch (error) {
+      toast.error(formatSiteVisitMutationError(error, 'checkIn'));
     }
-  }, [checkIn, visitId]);
+  }, [checkIn, visitId, projectId]);
 
   const handleCheckOut = useCallback(async () => {
     try {
-      await checkOut.mutateAsync({ siteVisitId: visitId });
+      await checkOut.mutateAsync({ siteVisitId: visitId, projectId });
       toast.success('Checked out successfully');
-    } catch {
-      toast.error('Failed to check out');
+    } catch (error) {
+      toast.error(formatSiteVisitMutationError(error, 'checkOut'));
     }
-  }, [checkOut, visitId]);
+  }, [checkOut, visitId, projectId]);
 
   const handleSignOffSuccess = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.detail(visitId) });
@@ -326,6 +327,7 @@ export default function SiteVisitDetailPage() {
               open={signOffDialogOpen}
               onOpenChange={setSignOffDialogOpen}
               siteVisitId={visitId}
+              projectId={projectId}
               visitNumber={visit.visitNumber}
               defaultCustomerName={customerData?.name ?? undefined}
               onSuccess={handleSignOffSuccess}

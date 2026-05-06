@@ -39,7 +39,11 @@ import {
   ComboboxField,
   FormFieldDisplayProvider,
 } from '@/components/shared/forms';
-import { useCreateSiteVisit, useLoadProjectOptions } from '@/hooks/jobs';
+import {
+  formatSiteVisitMutationError,
+  useCreateSiteVisit,
+  useLoadProjectOptions,
+} from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -131,7 +135,7 @@ export function ScheduleVisitCreateDialog({
         form.reset();
         onSuccess?.(result.id);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to schedule site visit';
+        const message = formatSiteVisitMutationError(err, 'create');
         toast.error(message);
       }
     },

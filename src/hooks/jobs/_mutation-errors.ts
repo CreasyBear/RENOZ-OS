@@ -102,6 +102,26 @@ const PROJECT_BOM_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the project BOM details and try again.',
 };
 
+const SITE_VISIT_MUTATION_FALLBACKS = {
+  create: 'Site visit scheduling is temporarily unavailable. Please refresh and try again.',
+  update: 'Site visit update is temporarily unavailable. Please refresh and try again.',
+  reschedule: 'Site visit rescheduling is temporarily unavailable. Please refresh and try again.',
+  delete: 'Site visit deletion is temporarily unavailable. Please refresh and try again.',
+  cancel: 'Site visit cancellation is temporarily unavailable. Please refresh and try again.',
+  checkIn: 'Site visit check-in is temporarily unavailable. Please refresh and try again.',
+  checkOut: 'Site visit check-out is temporarily unavailable. Please refresh and try again.',
+  signOff: 'Site visit sign-off is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const SITE_VISIT_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing site visits.',
+  CONFLICT: 'Site visit details conflict with the current schedule state.',
+  NOT_FOUND: 'The site visit could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage site visits.',
+  RATE_LIMIT: 'Too many site visit changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the site visit details and try again.',
+};
+
 export type JobTemplateMutationAction = keyof typeof JOB_TEMPLATE_MUTATION_FALLBACKS;
 export type ProjectNoteMutationAction = keyof typeof PROJECT_NOTE_MUTATION_FALLBACKS;
 export type ProjectFileMutationAction = keyof typeof PROJECT_FILE_MUTATION_FALLBACKS;
@@ -109,6 +129,7 @@ export type ProjectWorkstreamMutationAction =
   keyof typeof PROJECT_WORKSTREAM_MUTATION_FALLBACKS;
 export type ProjectTaskMutationAction = keyof typeof PROJECT_TASK_MUTATION_FALLBACKS;
 export type ProjectBomMutationAction = keyof typeof PROJECT_BOM_MUTATION_FALLBACKS;
+export type SiteVisitMutationAction = keyof typeof SITE_VISIT_MUTATION_FALLBACKS;
 
 export function formatJobTemplateMutationError(
   error: unknown,
@@ -161,5 +182,14 @@ export function formatProjectBomMutationError(
 ): string {
   return formatMutationError(error, PROJECT_BOM_MUTATION_FALLBACKS[action], {
     codeMessages: PROJECT_BOM_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatSiteVisitMutationError(
+  error: unknown,
+  action: SiteVisitMutationAction
+): string {
+  return formatMutationError(error, SITE_VISIT_MUTATION_FALLBACKS[action], {
+    codeMessages: SITE_VISIT_MUTATION_CODE_MESSAGES,
   });
 }

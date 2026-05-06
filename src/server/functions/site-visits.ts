@@ -17,7 +17,7 @@ import { db } from "@/lib/db";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
 import { siteVisits, projects } from "drizzle/schema";
 import {
-  siteVisitIdSchema,
+  scopedSiteVisitIdSchema,
   createSiteVisitSchema,
   updateSiteVisitSchema,
   rescheduleSiteVisitSchema,
@@ -49,6 +49,34 @@ const SITE_VISIT_EXCLUDED_FIELDS: string[] = [
   "version",
   "organizationId",
 ];
+
+function siteVisitScope(
+  siteVisitId: string,
+  organizationId: string,
+  projectId?: string
+) {
+  const conditions = [
+    eq(siteVisits.id, siteVisitId),
+    eq(siteVisits.organizationId, organizationId),
+  ];
+
+  if (projectId) {
+    conditions.push(eq(siteVisits.projectId, projectId));
+  }
+
+  return and(...conditions);
+}
+
+function projectScope(projectId: string, organizationId: string) {
+  return and(eq(projects.id, projectId), eq(projects.organizationId, organizationId));
+}
+
+function siteVisitProjectJoin(organizationId: string) {
+  return and(
+    eq(siteVisits.projectId, projects.id),
+    eq(projects.organizationId, organizationId)
+  );
+}
 
 // ============================================================================
 // SITE VISIT CRUD
@@ -124,7 +152,7 @@ export const getSiteVisits = createServerFn({ method: "GET" })
         projectNumber: projects.projectNumber,
       })
       .from(siteVisits)
-      .leftJoin(projects, eq(siteVisits.projectId, projects.id))
+      .leftJoin(projects, siteVisitProjectJoin(ctx.organizationId))
       .where(whereClause)
       .orderBy(orderDirection(orderColumn))
       .limit(pageSize)
@@ -152,15 +180,12 @@ export const getSiteVisits = createServerFn({ method: "GET" })
  * Get site visit by ID
  */
 export const getSiteVisit = createServerFn({ method: "GET" })
-  .inputValidator(normalizeObjectInput(siteVisitIdSchema))
+  .inputValidator(normalizeObjectInput(scopedSiteVisitIdSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
     const siteVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!siteVisit) {
@@ -181,10 +206,7 @@ export const createSiteVisit = createServerFn({ method: "POST" })
 
     // Verify project exists and belongs to organization
     const project = await db.query.projects.findFirst({
-      where: and(
-        eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
-      ),
+      where: projectScope(data.projectId, ctx.organizationId),
     });
 
     if (!project) {
@@ -253,10 +275,7 @@ export const rescheduleSiteVisit = createServerFn({ method: "POST" })
     const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existingVisit) {
@@ -271,7 +290,7 @@ export const rescheduleSiteVisit = createServerFn({ method: "POST" })
     }
 
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
@@ -287,8 +306,12 @@ export const rescheduleSiteVisit = createServerFn({ method: "POST" })
     const [updatedVisit] = await db
       .update(siteVisits)
       .set(updates)
-      .where(eq(siteVisits.id, data.siteVisitId))
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
       .returning();
+
+    if (!updatedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     logger.logAsync({
       entityType: "site_visit",
@@ -330,7 +353,7 @@ export const getPastDueSiteVisits = createServerFn({ method: "GET" })
         projectNumber: projects.projectNumber,
       })
       .from(siteVisits)
-      .leftJoin(projects, eq(siteVisits.projectId, projects.id))
+      .leftJoin(projects, siteVisitProjectJoin(ctx.organizationId))
       .where(
         and(
           eq(siteVisits.organizationId, ctx.organizationId),
@@ -367,14 +390,11 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
     const logger = createActivityLoggerWithContext(ctx);
 
-    const { siteVisitId, ...updates } = data;
+    const { siteVisitId, projectId, ...updates } = data;
 
     // Verify site visit exists and belongs to organization
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(siteVisitId, ctx.organizationId, projectId),
     });
 
     if (!existingVisit) {
@@ -383,7 +403,7 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
 
     // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
@@ -397,8 +417,12 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
         updatedAt: new Date(),
         version: sql`${siteVisits.version} + 1`,
       })
-      .where(eq(siteVisits.id, siteVisitId))
+      .where(siteVisitScope(siteVisitId, ctx.organizationId, projectId))
       .returning();
+
+    if (!updatedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     // Log site visit update
     const changes = computeChanges({
@@ -435,17 +459,14 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
  * Delete a site visit
  */
 export const deleteSiteVisit = createServerFn({ method: "POST" })
-  .inputValidator(siteVisitIdSchema)
+  .inputValidator(scopedSiteVisitIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
     const logger = createActivityLoggerWithContext(ctx);
 
     // Verify site visit exists and belongs to organization
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existingVisit) {
@@ -461,13 +482,22 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
 
     // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
-    await db
+    const [deletedVisit] = await db
       .delete(siteVisits)
-      .where(eq(siteVisits.id, data.siteVisitId));
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
+      .returning({
+        id: siteVisits.id,
+        projectId: siteVisits.projectId,
+        installerId: siteVisits.installerId,
+      });
+
+    if (!deletedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     // Log site visit deletion
     logger.logAsync({
@@ -490,7 +520,7 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
       },
     });
 
-    return { success: true };
+    return deletedVisit;
   });
 
 /**
@@ -499,6 +529,7 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
 export const cancelSiteVisit = createServerFn({ method: 'POST' })
   .inputValidator(z.object({
     siteVisitId: z.string().uuid(),
+    projectId: z.string().uuid().optional(),
     reason: z.string().optional(),
   }))
   .handler(async ({ data }) => {
@@ -506,10 +537,7 @@ export const cancelSiteVisit = createServerFn({ method: 'POST' })
     const logger = createActivityLoggerWithContext(ctx);
 
     const existing = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existing) {
@@ -529,9 +557,14 @@ export const cancelSiteVisit = createServerFn({ method: 'POST' })
         status: 'cancelled',
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
+        version: sql`${siteVisits.version} + 1`,
       })
-      .where(eq(siteVisits.id, data.siteVisitId))
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
       .returning();
+
+    if (!updated) {
+      throw new NotFoundError('Site visit not found', 'siteVisit');
+    }
 
     logger.logAsync({
       entityType: 'site_visit',
@@ -564,10 +597,7 @@ export const checkIn = createServerFn({ method: "POST" })
     const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existingVisit) {
@@ -582,7 +612,7 @@ export const checkIn = createServerFn({ method: "POST" })
 
     // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
@@ -594,9 +624,14 @@ export const checkIn = createServerFn({ method: "POST" })
         startLocation: data.location,
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
+        version: sql`${siteVisits.version} + 1`,
       })
-      .where(eq(siteVisits.id, data.siteVisitId))
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
       .returning();
+
+    if (!updatedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     // Log check-in
     logger.logAsync({
@@ -633,10 +668,7 @@ export const checkOut = createServerFn({ method: "POST" })
     const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existingVisit) {
@@ -651,7 +683,7 @@ export const checkOut = createServerFn({ method: "POST" })
 
     // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
@@ -663,9 +695,14 @@ export const checkOut = createServerFn({ method: "POST" })
         completeLocation: data.location,
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
+        version: sql`${siteVisits.version} + 1`,
       })
-      .where(eq(siteVisits.id, data.siteVisitId))
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
       .returning();
+
+    if (!updatedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     // Log check-out
     logger.logAsync({
@@ -706,10 +743,7 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
     const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
-      where: and(
-        eq(siteVisits.id, data.siteVisitId),
-        eq(siteVisits.organizationId, ctx.organizationId)
-      ),
+      where: siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId),
     });
 
     if (!existingVisit) {
@@ -724,7 +758,7 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
 
     // Fetch project customerId upfront (before mutation) to avoid extra query after
     const project = await db.query.projects.findFirst({
-      where: eq(projects.id, existingVisit.projectId),
+      where: projectScope(existingVisit.projectId, ctx.organizationId),
       columns: { customerId: true },
     });
 
@@ -738,9 +772,14 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
         customerFeedback: data.customerFeedback,
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
+        version: sql`${siteVisits.version} + 1`,
       })
-      .where(eq(siteVisits.id, data.siteVisitId))
+      .where(siteVisitScope(data.siteVisitId, ctx.organizationId, data.projectId))
       .returning();
+
+    if (!updatedVisit) {
+      throw new NotFoundError("Site visit not found", "siteVisit");
+    }
 
     // Log customer sign-off
     logger.logAsync({

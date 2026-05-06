@@ -73,6 +73,10 @@ export const siteVisitIdSchema = z.object({
   siteVisitId: z.string().uuid(),
 });
 
+export const scopedSiteVisitIdSchema = siteVisitIdSchema.extend({
+  projectId: z.string().uuid().optional(),
+});
+
 export const createSiteVisitSchema = z.object({
   projectId: z.string().uuid(),
   visitType: siteVisitTypeSchema.default("installation"),
@@ -85,6 +89,7 @@ export const createSiteVisitSchema = z.object({
 
 export const updateSiteVisitSchema = z.object({
   siteVisitId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   visitType: siteVisitTypeSchema.optional(),
   status: siteVisitStatusSchema.optional(),
   scheduledDate: z.string().date().optional(),
@@ -115,6 +120,7 @@ export const scheduleVisitFormSchema = z.object({
 
 export const rescheduleSiteVisitSchema = z.object({
   siteVisitId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   scheduledTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
 });
@@ -142,12 +148,14 @@ export const siteVisitListQuerySchema = normalizeObjectInput(
 
 export const checkInSchema = z.object({
   siteVisitId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   location: siteVisitLocationSchema.optional(),
   notes: z.string().optional(),
 });
 
 export const checkOutSchema = z.object({
   siteVisitId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   location: siteVisitLocationSchema.optional(),
   notes: z.string().optional(),
 });
@@ -158,6 +166,7 @@ export const checkOutSchema = z.object({
 
 export const customerSignOffSchema = z.object({
   siteVisitId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   customerName: z.string().min(1),
   customerRating: z.number().int().min(1).max(5).optional(),
   customerFeedback: z.string().optional(),
@@ -179,6 +188,7 @@ export type CustomerSignOffFormData = z.infer<typeof customerSignOffFormSchema>;
 // ============================================================================
 
 export type SiteVisitIdInput = z.infer<typeof siteVisitIdSchema>;
+export type ScopedSiteVisitIdInput = z.infer<typeof scopedSiteVisitIdSchema>;
 export type ScheduleVisitFormInput = z.infer<typeof scheduleVisitFormSchema>;
 export type CreateSiteVisitInput = z.infer<typeof createSiteVisitSchema>;
 export type UpdateSiteVisitInput = z.infer<typeof updateSiteVisitSchema>;

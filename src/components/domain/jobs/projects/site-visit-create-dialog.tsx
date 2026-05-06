@@ -21,7 +21,7 @@ import {
   NumberField,
   DateField,
 } from '@/components/shared/forms';
-import { useCreateSiteVisit } from '@/hooks/jobs';
+import { formatSiteVisitMutationError, useCreateSiteVisit } from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -116,7 +116,7 @@ export function SiteVisitCreateDialog({
         form.reset();
         onSuccess?.(result.id);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to schedule site visit';
+        const msg = formatSiteVisitMutationError(err, 'create');
         setSubmitError(msg);
         toast.error(msg);
       }

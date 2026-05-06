@@ -154,6 +154,7 @@ export {
   formatProjectNoteMutationError,
   formatProjectTaskMutationError,
   formatProjectWorkstreamMutationError,
+  formatSiteVisitMutationError,
 } from './_mutation-errors';
 export type {
   JobTemplateMutationAction,
@@ -162,6 +163,7 @@ export type {
   ProjectNoteMutationAction,
   ProjectTaskMutationAction,
   ProjectWorkstreamMutationAction,
+  SiteVisitMutationAction,
 } from './_mutation-errors';
 
 // ============================================================================
