@@ -51,6 +51,21 @@ const BLOCKED_CODES = new Set([
   'duplicate_replay',
 ]);
 
+const UNSAFE_MESSAGE_PATTERNS = [
+  'api key',
+  'client_secret',
+  'duplicate key',
+  'violates',
+  'constraint',
+  'postgres',
+  'supabase',
+  'database',
+  'stack',
+  'token',
+  'internal server error',
+  'sql',
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -152,6 +167,64 @@ function detectKind(shape: ErrorShape): MutationClientErrorKind {
   return 'unknown';
 }
 
+function isUnsafeMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return UNSAFE_MESSAGE_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+function getFirstSafeFieldError(fieldErrors: Record<string, string[]> | undefined): string | null {
+  if (!fieldErrors) return null;
+
+  for (const [field, messages] of Object.entries(fieldErrors)) {
+    if (field === 'code') continue;
+
+    const message = messages.find((entry) => entry.trim().length > 0);
+    if (message && !isUnsafeMessage(message)) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function getFallbackMessageForKind(
+  kind: MutationClientErrorKind,
+  fallbackMessage: string
+): string {
+  if (kind === 'conflict') {
+    return `${fallbackMessage} Refresh and try again.`;
+  }
+
+  if (kind === 'retryable') {
+    return `${fallbackMessage} Please retry in a moment.`;
+  }
+
+  if (kind === 'not_found') {
+    return `${fallbackMessage} The record could not be found.`;
+  }
+
+  return fallbackMessage;
+}
+
+function formatMutationClientMessage(
+  shape: ErrorShape,
+  kind: MutationClientErrorKind,
+  fallbackMessage: string
+): string {
+  const fieldMessage = getFirstSafeFieldError(shape.fieldErrors);
+
+  if (fieldMessage && (kind === 'validation' || kind === 'blocked')) {
+    return fieldMessage;
+  }
+
+  const message = shape.message.trim();
+  if (message && kind !== 'unknown' && !isUnsafeMessage(message)) {
+    return message;
+  }
+
+  return getFallbackMessageForKind(kind, fallbackMessage);
+}
+
 function createMutationClientError<T extends OrderMutationClientError | ShipmentMutationClientError>(
   options: MutationClientErrorOptions
 ): T {
@@ -172,10 +245,11 @@ function normalizeMutationError<T extends OrderMutationClientError | ShipmentMut
   fallbackMessage: string
 ): T {
   const shape = extractErrorShape(error);
+  const kind = detectKind(shape);
   return createMutationClientError<T>({
     domain,
-    kind: detectKind(shape),
-    message: shape.message || fallbackMessage,
+    kind,
+    message: formatMutationClientMessage(shape, kind, fallbackMessage),
     code: shape.code,
     statusCode: shape.statusCode,
     fieldErrors: shape.fieldErrors,

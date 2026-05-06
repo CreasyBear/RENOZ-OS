@@ -36,8 +36,46 @@ describe('order client contracts', () => {
     const error = normalizeShipmentMutationError(new Error('database driver stack leaked'));
 
     expect(error.kind).toBe('unknown');
+    expect(error.message).toBe('Shipment request failed.');
     expect(getClientErrorMessage(error, 'Unable to mark shipment as shipped.')).toBe(
       'Unable to mark shipment as shipped.'
+    );
+  });
+
+  it('sanitizes unsafe normalized messages before components read mutation.error.message', () => {
+    const error = normalizeOrderMutationError(
+      {
+        message: 'duplicate key value violates unique constraint orders_version_idx',
+        statusCode: 409,
+        code: 'CONFLICT',
+      },
+      'Unable to update order.'
+    );
+
+    expect(error.kind).toBe('conflict');
+    expect(error.message).toBe('Unable to update order. Refresh and try again.');
+    expect(getClientErrorMessage(error, 'Unable to update order.')).toBe(
+      'Unable to update order. Refresh and try again.'
+    );
+  });
+
+  it('keeps safe validation field guidance on normalized order errors', () => {
+    const error = normalizeOrderMutationError(
+      {
+        message: 'Validation failed',
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        errors: {
+          customerId: ['Select a customer before creating the order.'],
+        },
+      },
+      'Unable to create order.'
+    );
+
+    expect(error.kind).toBe('validation');
+    expect(error.message).toBe('Select a customer before creating the order.');
+    expect(getClientErrorMessage(error, 'Unable to create order.')).toBe(
+      'Select a customer before creating the order.'
     );
   });
 
