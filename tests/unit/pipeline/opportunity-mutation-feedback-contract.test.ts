@@ -9,6 +9,14 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
+function sliceBetween(source: string, start: string, end: string): string {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex);
+}
+
 describe('pipeline opportunity mutation feedback contract', () => {
   it('suppresses unsafe stage failures with action-specific fallback copy', () => {
     expect(
@@ -91,6 +99,21 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(server).not.toContain('failed.push(`${existing.id}: ${errorMessage}`)');
     expect(server).toContain("pipelineLogger.error('[Bulk Update] Exception'");
+    const updateOpportunityBody = sliceBetween(
+      server,
+      'export const updateOpportunity = createServerFn',
+      'export const updateOpportunityStage = createServerFn'
+    );
+    const updateStageBody = sliceBetween(
+      server,
+      'export const updateOpportunityStage = createServerFn',
+      'export const bulkUpdateOpportunityStage = createServerFn'
+    );
+    for (const body of [updateOpportunityBody, updateStageBody]) {
+      expect(body).toContain('eq(opportunities.id, id)');
+      expect(body).toContain('eq(opportunities.organizationId, ctx.organizationId)');
+      expect(body).toContain('eq(opportunities.version, version)');
+    }
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"

@@ -853,6 +853,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(opportunities.id, id),
+            eq(opportunities.organizationId, ctx.organizationId),
             eq(opportunities.version, version)
           )
         )
@@ -981,6 +982,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(opportunities.id, id),
+            eq(opportunities.organizationId, ctx.organizationId),
             eq(opportunities.version, version)
           )
         )
