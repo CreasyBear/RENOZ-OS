@@ -26,6 +26,7 @@ import {
   formatPipelineOpportunityMutationError,
   useOpportunities,
   useDeleteOpportunity,
+  useBulkDeleteOpportunities,
   useBulkUpdateOpportunityStage,
 } from "@/hooks/pipeline";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
@@ -188,8 +189,10 @@ export function OpportunitiesListContainer({
   } = useTableSelection({ items: opportunities });
 
   const deleteMutation = useDeleteOpportunity();
+  const bulkDeleteMutation = useBulkDeleteOpportunities();
   const bulkStageChangeMutation = useBulkUpdateOpportunityStage();
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const isBulkActionPending = bulkDeleteMutation.isPending || bulkStageChangeMutation.isPending;
 
   // Calculate total value of selected items
   const selectedTotalValue = useMemo(
@@ -302,20 +305,33 @@ export function OpportunitiesListContainer({
   // Bulk delete handler
   const handleBulkDelete = useCallback(async () => {
     const count = selectedItems.length;
+    const opportunityLabel = count === 1 ? "opportunity" : "opportunities";
     const { confirmed } = await confirmation.confirm({
-      ...confirmations.delete(`${count} opportunities`, "opportunity"),
+      ...confirmations.delete(`${count} ${opportunityLabel}`, "opportunity"),
     });
     if (!confirmed) return;
 
     try {
-      // Delete in parallel for better performance
-      await Promise.all(selectedItems.map((item) => deleteMutation.mutateAsync(item.id)));
-      toastSuccess(`Deleted ${count} opportunities`);
-      clearSelection();
+      const result = await bulkDeleteMutation.mutateAsync({
+        opportunityIds: selectedItems.map((item) => item.id),
+      });
+
+      if (result.deleted.length > 0) {
+        toastSuccess(
+          `Deleted ${result.deleted.length} opportunit${result.deleted.length === 1 ? "y" : "ies"}`
+        );
+        clearSelection();
+      }
+
+      if (result.failed.length > 0) {
+        toastError(
+          `${result.failed.length} opportunit${result.failed.length === 1 ? "y" : "ies"} could not be deleted. Refresh and try again.`
+        );
+      }
     } catch (error) {
       toastError(formatPipelineOpportunityMutationError(error, "bulkDelete"));
     }
-  }, [selectedItems, deleteMutation, confirmation, clearSelection]);
+  }, [selectedItems, bulkDeleteMutation, confirmation, clearSelection]);
 
   // Bulk stage change handler
   const handleBulkStageChange = useCallback(() => {
@@ -387,13 +403,23 @@ export function OpportunitiesListContainer({
           <span className="text-sm text-muted-foreground mr-2">
             Total: <FormatAmount amount={selectedTotalValue} />
           </span>
-          <Button size="sm" variant="outline" onClick={handleBulkStageChange}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleBulkStageChange}
+            disabled={isBulkActionPending}
+          >
             <ArrowRightLeft className="h-4 w-4 mr-1" />
             Change Stage
           </Button>
-          <Button size="sm" variant="destructive" onClick={handleBulkDelete}>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleBulkDelete}
+            disabled={isBulkActionPending}
+          >
             <Trash2 className="h-4 w-4 mr-1" />
-            Delete
+            {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
           </Button>
         </BulkActionsBar>
 

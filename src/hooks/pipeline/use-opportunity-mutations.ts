@@ -110,6 +110,62 @@ export function useDeleteOpportunity() {
 }
 
 // ============================================================================
+// BULK DELETE MUTATION
+// ============================================================================
+
+export interface BulkDeleteOpportunitiesInput {
+  opportunityIds: string[];
+}
+
+export interface BulkDeleteOpportunitiesResult {
+  deleted: string[];
+  failed: string[];
+}
+
+/**
+ * Delete multiple opportunities with a single cache policy.
+ */
+export function useBulkDeleteOpportunities() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      opportunityIds,
+    }: BulkDeleteOpportunitiesInput): Promise<BulkDeleteOpportunitiesResult> => {
+      const settled = await Promise.allSettled(
+        opportunityIds.map(async (id) => {
+          await deleteOpportunity({ data: { id } });
+          return id;
+        })
+      );
+
+      return settled.reduce<BulkDeleteOpportunitiesResult>(
+        (result, item, index) => {
+          if (item.status === 'fulfilled') {
+            result.deleted.push(item.value);
+          } else {
+            result.failed.push(opportunityIds[index] ?? 'unknown');
+          }
+
+          return result;
+        },
+        { deleted: [], failed: [] }
+      );
+    },
+    onSuccess: (result) => {
+      for (const id of result.deleted) {
+        queryClient.removeQueries({ queryKey: queryKeys.pipeline.opportunity(id) });
+      }
+
+      if (result.deleted.length > 0 || result.failed.length > 0) {
+        invalidateOpportunityListQueries(queryClient);
+        invalidatePipelineMetrics(queryClient);
+      }
+    },
+  });
+}
+
+// ============================================================================
 // STAGE CHANGE MUTATION
 // ============================================================================
 
