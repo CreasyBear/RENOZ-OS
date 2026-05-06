@@ -101,5 +101,13 @@ describe('generated report feedback contract', () => {
         'excel'
       )
     ).toBe('You do not have permission to generate reports.');
+
+    expect(
+      formatGeneratedReportError(
+        new Error('ReferenceError: generatedReport is not defined'),
+        'pipeline forecast report',
+        'pdf'
+      )
+    ).toBe('PDF pipeline forecast report generation is temporarily unavailable. Please refresh and try again.');
   });
 });

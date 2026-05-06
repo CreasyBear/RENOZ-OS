@@ -62,4 +62,28 @@ describe('warranty analytics generated-report feedback contract', () => {
       )
     ).toBe('You do not have permission to manage this report.');
   });
+
+  it('keeps implementation-shaped report mutation messages behind fallback copy', () => {
+    expect(
+      formatReportsMutationError(
+        {
+          message: 'TypeError: Cannot read properties of undefined (reading reportDefinition)',
+          statusCode: 400,
+        },
+        'Report generation is temporarily unavailable.'
+      )
+    ).toBe('Report generation is temporarily unavailable.');
+
+    expect(
+      formatReportsMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            metric: ['SQL syntax error at or near "gross_margin"'],
+          },
+        },
+        'Report generation is temporarily unavailable.'
+      )
+    ).toBe('Report generation is temporarily unavailable.');
+  });
 });

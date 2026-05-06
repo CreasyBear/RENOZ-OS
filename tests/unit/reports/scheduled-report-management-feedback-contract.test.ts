@@ -156,5 +156,12 @@ describe('scheduled report management feedback contract', () => {
         'pipeline forecast report'
       )
     ).toBe('pipeline forecast report scheduling is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatScheduledReportMutationError(
+        new Error('Cannot read properties of undefined (reading scheduleId)'),
+        'Scheduled report updates are temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBe('Scheduled report updates are temporarily unavailable. Please refresh and try again.');
   });
 });

@@ -80,5 +80,12 @@ describe('custom report feedback contract', () => {
         'Custom report execution is temporarily unavailable. Please refresh and try again.'
       )
     ).toBe('Custom report execution is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatCustomReportMutationError(
+        new Error('TypeError: Cannot read properties of undefined (reading columns)'),
+        'Custom report execution is temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBe('Custom report execution is temporarily unavailable. Please refresh and try again.');
   });
 });

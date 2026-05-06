@@ -64,5 +64,12 @@ describe('target settings mutation feedback contract', () => {
         'Target creation is temporarily unavailable. Please refresh and try again.'
       )
     ).toBe('Target value must be positive');
+
+    expect(
+      formatTargetMutationError(
+        new Error('ReferenceError: targetProgress is not defined'),
+        'Target update is temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBe('Target update is temporarily unavailable. Please refresh and try again.');
   });
 });
