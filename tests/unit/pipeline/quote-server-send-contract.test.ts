@@ -44,7 +44,16 @@ describe('pipeline quote server send contract', () => {
     expect(quoteSend).toContain('QUOTE_EMAIL_HISTORY_STATUS_FAILED_MESSAGE');
     expect(quoteSend).toContain('QUOTE_FOLLOW_UP_FAILED_MESSAGE');
     expect(quoteSend).toContain(
+      "pipelineLogger.warn('Quote PDF attachment download returned a non-OK response'"
+    );
+    expect(quoteSend).toContain(
+      "pipelineLogger.error('Failed to prepare quote PDF attachment', error"
+    );
+    expect(quoteSend).toContain(
       "pipelineLogger.error('Failed to record quote email history', error"
+    );
+    expect(quoteSend).toContain(
+      "pipelineLogger.error('Quote email provider failed before returning a delivery result', error"
     );
     expect(quoteSend).toContain(
       "pipelineLogger.error('Failed to send quote email', sendError"
@@ -63,6 +72,8 @@ describe('pipeline quote server send contract', () => {
     expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_CREATE_FAILED');
     expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_FAILED_STATUS_MISSING');
     expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_SENT_STATUS_MISSING');
+    expect(quoteSend).toContain('const markEmailHistoryFailed = async');
+    expect(quoteSend).toContain("emailHistory: await markEmailHistoryFailed()");
     expect(quoteSend).toContain('.returning({ id: opportunityActivities.id })');
     expect(quoteSend).toContain('PIPELINE_QUOTE_SEND_ACTIVITY_FAILED');
     expect(quoteSend).toContain('.returning({ id: opportunities.id })');
@@ -72,5 +83,8 @@ describe('pipeline quote server send contract', () => {
     expect(quoteSend).not.toContain('Failed to send email: ${sendError.message}');
     expect(quoteSend).not.toContain('message: sendError.message');
     expect(quoteSend).not.toContain('error instanceof Error ? error.message');
+    expect(quoteSend).not.toContain(
+      'const { data: sendResult, error: sendError } = await resend.emails.send'
+    );
   });
 });

@@ -46,6 +46,8 @@ const QUOTE_FOLLOW_UP_FAILED_MESSAGE =
 const QUOTE_FOLLOW_UP_STAGE_FAILED_MESSAGE =
   'Activity history or stage update needs review. Refresh the opportunity before continuing.';
 
+type ResendEmailSendResult = Awaited<ReturnType<typeof resend.emails.send>>;
+
 /**
  * Send a quote to the customer via email.
  * Generates PDF if needed and sends with attachment.
@@ -176,8 +178,33 @@ export const sendQuote = createServerFn({ method: 'POST' })
       });
     }
 
-    const pdfResponse = await fetch(pdfResult.pdfUrl);
-    if (!pdfResponse.ok) {
+    let pdfBuffer: ArrayBuffer;
+    try {
+      const pdfResponse = await fetch(pdfResult.pdfUrl);
+      if (!pdfResponse.ok) {
+        pipelineLogger.warn('Quote PDF attachment download returned a non-OK response', {
+          orgId: ctx.organizationId,
+          opportunityId,
+          quoteVersionId,
+          status: pdfResponse.status,
+        });
+
+        return failedStageResult(QUOTE_ATTACHMENT_FAILED_MESSAGE, {
+          pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+          emailHistory: { status: 'skipped', message: 'Email history was not created.' },
+          email: { status: 'skipped', message: 'Email was not attempted.' },
+          stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+        });
+      }
+
+      pdfBuffer = await pdfResponse.arrayBuffer();
+    } catch (error) {
+      pipelineLogger.error('Failed to prepare quote PDF attachment', error, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+      });
+
       return failedStageResult(QUOTE_ATTACHMENT_FAILED_MESSAGE, {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
         emailHistory: { status: 'skipped', message: 'Email history was not created.' },
@@ -185,7 +212,6 @@ export const sendQuote = createServerFn({ method: 'POST' })
         stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
       });
     }
-    const pdfBuffer = await pdfResponse.arrayBuffer();
 
     const emailSubject = subject || `Quote for ${opp.title}`;
     const emailMessage = message || `Please find attached our quote for ${opp.title}.`;
@@ -272,34 +298,7 @@ ${fromName} Team
       });
     }
 
-    const { data: sendResult, error: sendError } = await resend.emails.send({
-      from: fromAddress,
-      to: [recipientEmail],
-      cc: ccEmails,
-      subject: emailSubject,
-      html: htmlContent,
-      text: textContent,
-      attachments: [
-        {
-          filename: pdfResult.filename,
-          content: Buffer.from(pdfBuffer).toString('base64'),
-        },
-      ],
-    });
-
-    if (sendError) {
-      pipelineLogger.error('Failed to send quote email', sendError, {
-        orgId: ctx.organizationId,
-        opportunityId,
-        quoteVersionId,
-        emailHistoryId: emailRecord.id,
-      });
-
-      let failedEmailHistoryStage: SendQuoteResult['stages']['emailHistory'] = {
-        status: 'completed',
-        message: 'Email history recorded the send attempt.',
-      };
-
+    const markEmailHistoryFailed = async (): Promise<SendQuoteResult['stages']['emailHistory']> => {
       try {
         const [updatedEmailRecord] = await db
           .update(emailHistory)
@@ -314,6 +313,11 @@ ${fromName} Team
             'PIPELINE_QUOTE_EMAIL_HISTORY_FAILED_STATUS_MISSING'
           );
         }
+
+        return {
+          status: 'completed',
+          message: 'Email history recorded the send attempt.',
+        };
       } catch (error) {
         pipelineLogger.error('Failed to mark quote email history failed', error, {
           orgId: ctx.organizationId,
@@ -322,15 +326,60 @@ ${fromName} Team
           emailHistoryId: emailRecord.id,
         });
 
-        failedEmailHistoryStage = {
+        return {
           status: 'failed',
           message: 'Email history status could not be updated after the send failed.',
         };
       }
+    };
+
+    let sendResult: ResendEmailSendResult['data'];
+    let sendError: ResendEmailSendResult['error'];
+    try {
+      const resendResult = await resend.emails.send({
+        from: fromAddress,
+        to: [recipientEmail],
+        cc: ccEmails,
+        subject: emailSubject,
+        html: htmlContent,
+        text: textContent,
+        attachments: [
+          {
+            filename: pdfResult.filename,
+            content: Buffer.from(pdfBuffer).toString('base64'),
+          },
+        ],
+      });
+
+      sendResult = resendResult.data;
+      sendError = resendResult.error;
+    } catch (error) {
+      pipelineLogger.error('Quote email provider failed before returning a delivery result', error, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+        emailHistoryId: emailRecord.id,
+      });
 
       return failedStageResult(QUOTE_EMAIL_FAILED_MESSAGE, {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
-        emailHistory: failedEmailHistoryStage,
+        emailHistory: await markEmailHistoryFailed(),
+        email: { status: 'failed', message: QUOTE_EMAIL_FAILED_MESSAGE },
+        stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+      });
+    }
+
+    if (sendError) {
+      pipelineLogger.error('Failed to send quote email', sendError, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+        emailHistoryId: emailRecord.id,
+      });
+
+      return failedStageResult(QUOTE_EMAIL_FAILED_MESSAGE, {
+        pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+        emailHistory: await markEmailHistoryFailed(),
         email: { status: 'failed', message: QUOTE_EMAIL_FAILED_MESSAGE },
         stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
       });
