@@ -335,6 +335,8 @@ async function createRefundArtifact({
   rma: ReturnAuthorizationRow;
   input: Extract<ProcessRmaInput, { resolution: 'refund' }>;
 }) {
+  requirePermission(ctx, PERMISSIONS.financial.update);
+
   const [original] = await tx
     .select({
       id: orderPayments.id,
@@ -351,6 +353,7 @@ async function createRefundArtifact({
         isNull(orderPayments.deletedAt)
       )
     )
+    .for('update')
     .limit(1);
 
   if (!original) {
@@ -402,6 +405,10 @@ async function createRefundArtifact({
       id: orderPayments.id,
       label: orderPayments.reference,
     });
+
+  if (!refund) {
+    throw new ValidationError('Refund could not be recorded.');
+  }
 
   await updateOrderPaymentStatus(
     tx,

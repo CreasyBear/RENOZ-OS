@@ -25,11 +25,15 @@ interface FakeTxOptions {
   insertResponses?: unknown[];
 }
 
-function createQueryResult(rows: unknown[]) {
+function createQueryResult(rows: unknown[], state?: { locks: string[] }) {
   const query = {
     where: () => query,
     innerJoin: () => query,
     orderBy: () => query,
+    for: (mode: string) => {
+      state?.locks.push(mode);
+      return query;
+    },
     limit: async (count: number) => rows.slice(0, count),
     then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(resolve(rows)),
   };
@@ -43,18 +47,20 @@ function createFakeTransaction({
 }: FakeTxOptions = {}) {
   const state = {
     inserts: [] as Array<{ table: unknown; values: unknown }>,
+    locks: [] as string[],
     selectCount: 0,
   };
 
   const tx = {
     select: () => ({
-      from: () => createQueryResult(selectResponses[state.selectCount++] ?? []),
+      from: () => createQueryResult(selectResponses[state.selectCount++] ?? [], state),
     }),
     insert: (table: unknown) => ({
       values: (values: unknown) => {
         state.inserts.push({ table, values });
+        const response = insertResponses.shift();
         const insertResult = {
-          returning: async () => [insertResponses.shift() ?? {}],
+          returning: async () => (response === null ? [] : [response ?? {}]),
           then: (resolve: (value: unknown) => unknown) => Promise.resolve(resolve(undefined)),
         };
         return insertResult;
@@ -161,6 +167,7 @@ describe('RMA remedy artifact transaction contract', () => {
       createdBy: 'user-1',
       updatedBy: 'user-1',
     });
+    expect(state.locks).toEqual(['update']);
     expect(updateOrderPaymentStatusMock).toHaveBeenCalledWith(tx, 'order-1', 'org-1', 'user-1');
   });
 
@@ -190,6 +197,38 @@ describe('RMA remedy artifact transaction contract', () => {
     ).rejects.toBeInstanceOf(ValidationError);
 
     expect(state.inserts).toHaveLength(0);
+    expect(state.locks).toEqual(['update']);
+    expect(updateOrderPaymentStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('does not project RMA refunds when the ledger insert does not return an artifact', async () => {
+    const { tx, state } = createFakeTransaction({
+      selectResponses: [
+        [{ id: 'payment-1', amount: 250, paymentMethod: 'bank_transfer' }],
+        [{ totalRefunded: 25 }],
+      ],
+      insertResponses: [null],
+    });
+
+    await expect(
+      executeRmaRemedy({
+        tx,
+        ctx,
+        rma: baseRma as never,
+        sourceOrder: sourceOrder as never,
+        sourceCustomerId: 'customer-1',
+        issue: null,
+        input: {
+          rmaId: 'rma-1',
+          resolution: 'refund',
+          originalPaymentId: 'payment-1',
+          amount: 75,
+        },
+      })
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(state.inserts).toHaveLength(1);
+    expect(state.locks).toEqual(['update']);
     expect(updateOrderPaymentStatusMock).not.toHaveBeenCalled();
   });
 

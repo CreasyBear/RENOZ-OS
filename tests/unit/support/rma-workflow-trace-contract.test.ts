@@ -45,6 +45,22 @@ describe('RMA workflow trace contract', () => {
     expect(processTrace).not.toContain('no automatic refund transaction');
   });
 
+  it('keeps RMA refund remedies on the financial ledger safety contract', () => {
+    const remedyExecution = read('src/server/functions/orders/_shared/rma-remedy-execution.ts');
+    const refundSource = remedyExecution.slice(
+      remedyExecution.indexOf('async function createRefundArtifact')
+    );
+    const insertIndex = refundSource.indexOf('.insert(orderPayments)');
+    const guardIndex = refundSource.indexOf("throw new ValidationError('Refund could not be recorded.')");
+    const projectionIndex = refundSource.indexOf('await updateOrderPaymentStatus');
+
+    expect(refundSource).toContain('requirePermission(ctx, PERMISSIONS.financial.update)');
+    expect(refundSource).toContain(".for('update')");
+    expect(insertIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(insertIndex);
+    expect(projectionIndex).toBeGreaterThan(guardIndex);
+  });
+
   it('keeps updateRma documented as a permissioned non-workflow patch', () => {
     const schema = read('src/lib/schemas/support/rma.ts');
     const updateTrace = read('docs/code-traces/18-rma-field-update.md');
