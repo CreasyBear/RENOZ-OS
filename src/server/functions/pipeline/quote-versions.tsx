@@ -116,7 +116,12 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
       const latest = await tx
         .select({ versionNumber: quoteVersions.versionNumber })
         .from(quoteVersions)
-        .where(eq(quoteVersions.opportunityId, opportunityId))
+        .where(
+          and(
+            eq(quoteVersions.opportunityId, opportunityId),
+            eq(quoteVersions.organizationId, ctx.organizationId)
+          )
+        )
         .orderBy(desc(quoteVersions.versionNumber))
         .limit(1);
 
@@ -139,14 +144,24 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
         .returning();
 
       // Update opportunity value to match latest quote total
-      await tx
+      const [updatedOpportunity] = await tx
         .update(opportunities)
         .set({
           value: total,
           weightedValue: Math.round(total * ((opportunity[0].probability ?? 50) / 100)),
           updatedBy: ctx.user.id,
         })
-        .where(eq(opportunities.id, opportunityId));
+        .where(
+          and(
+            eq(opportunities.id, opportunityId),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        )
+        .returning({ id: opportunities.id });
+
+      if (!updatedOpportunity) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
 
       return newVersion;
     });
@@ -218,7 +233,12 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
       const latest = await tx
         .select({ versionNumber: quoteVersions.versionNumber })
         .from(quoteVersions)
-        .where(eq(quoteVersions.opportunityId, opportunityId))
+        .where(
+          and(
+            eq(quoteVersions.opportunityId, opportunityId),
+            eq(quoteVersions.organizationId, ctx.organizationId)
+          )
+        )
         .orderBy(desc(quoteVersions.versionNumber))
         .limit(1);
 
@@ -245,7 +265,7 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
         .returning();
 
       // Update opportunity value to match restored quote
-      await tx
+      const [updatedOpportunity] = await tx
         .update(opportunities)
         .set({
           value: sourceVersion[0].total,
@@ -254,7 +274,17 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
           ),
           updatedBy: ctx.user.id,
         })
-        .where(eq(opportunities.id, opportunityId));
+        .where(
+          and(
+            eq(opportunities.id, opportunityId),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        )
+        .returning({ id: opportunities.id });
+
+      if (!updatedOpportunity) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
 
       return {
         quoteVersion: newVersion,
