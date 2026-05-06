@@ -12,13 +12,14 @@ import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, type TransactionExecutor } from "@/lib/db";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
-import { orderPayments } from "drizzle/schema";
+import { orderPayments, orders } from "drizzle/schema";
 import {
   insertOrderPaymentSchema,
   updateOrderPaymentSchema,
   deleteOrderPaymentSchema,
 } from "@/lib/schemas/orders/order-payments";
 import { withAuth } from "@/lib/server/protected";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import { recalculateOrderFinancialProjection } from "@/server/functions/financial/_shared/order-financial-projection";
 
@@ -166,9 +167,29 @@ export const getOrderPaymentSummary = createServerFn({ method: "GET" })
 export const createOrderPayment = createServerFn({ method: "POST" })
   .inputValidator(insertOrderPaymentSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
+      const [order] = await tx
+        .select({ id: orders.id })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, data.orderId),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!order) {
+        throw new NotFoundError("Order not found");
+      }
+
       const [payment] = await tx
         .insert(orderPayments)
         .values({
