@@ -12,9 +12,20 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt, notInArray } from 'drizzle-orm';
+import { Resend } from 'resend';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { quoteVersions, opportunities, opportunityActivities, generatedDocuments } from 'drizzle/schema';
+import {
+  addresses,
+  customers,
+  emailHistory,
+  generatedDocuments,
+  opportunities,
+  opportunityActivities,
+  organizations,
+  quoteVersions,
+  type NewEmailHistory,
+} from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
@@ -32,6 +43,16 @@ import { GST_RATE } from '@/lib/order-calculations';
 import { formatCurrency } from '@/lib/formatters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLogger } from '@/lib/activity-logger';
+import { createAdminSupabase } from '@/lib/supabase/server';
+import {
+  renderPdfToBuffer,
+  QuotePdfDocument,
+  generateFilename,
+  generateStoragePath,
+  calculateChecksum,
+  type QuoteDocumentData,
+} from '@/lib/documents';
+import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
 
 // ============================================================================
 // CONSTANTS
@@ -458,19 +479,6 @@ export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
 // GENERATE QUOTE PDF
 // ============================================================================
 
-import { Resend } from 'resend';
-import { createAdminSupabase } from '@/lib/supabase/server';
-import {
-  renderPdfToBuffer,
-  QuotePdfDocument,
-  generateFilename,
-  generateStoragePath,
-  calculateChecksum,
-  type QuoteDocumentData,
-} from '@/lib/documents';
-import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
-import { customers, addresses, organizations } from 'drizzle/schema';
-
 const STORAGE_BUCKET = 'documents';
 
 /**
@@ -821,8 +829,6 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 // ============================================================================
 // SEND QUOTE
 // ============================================================================
-
-import { emailHistory, type NewEmailHistory } from 'drizzle/schema';
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
