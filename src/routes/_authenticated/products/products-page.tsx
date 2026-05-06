@@ -29,6 +29,7 @@ import { useConfirmation, toastError, toastSuccess } from "@/hooks";
 import { logger } from "@/lib/logger";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
 import {
+  formatProductCoreMutationError,
   useDeleteProduct,
   useDuplicateProduct,
   useExportProducts,
@@ -190,6 +191,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
         getId: (product) => product.id,
         getLabel: (product) => product.name,
         run: (product) => updateProductAction({ data: { id: product.id, status } }),
+        formatError: (error) => formatProductCoreMutationError(error, "updateProduct"),
       });
 
       if (result.succeededIds.length > 0) {
@@ -233,6 +235,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
         getId: (product) => product.id,
         getLabel: (product) => product.name,
         run: (product) => updateProductAction({ data: { id: product.id, categoryId } }),
+        formatError: (error) => formatProductCoreMutationError(error, "updateProduct"),
       });
 
       if (result.succeededIds.length > 0) {
@@ -500,6 +503,7 @@ export default function ProductsPage({ search, loaderData }: ProductsPageProps) 
                         getId: (product) => product.id,
                         getLabel: (product) => product.name,
                         run: (product) => deleteProductAction({ data: { id: product.id } }),
+                        formatError: (error) => formatProductCoreMutationError(error, "deleteProduct"),
                       });
 
                       if (result.succeededIds.length > 0) {
@@ -635,7 +639,6 @@ function ExportButton({ search }: ExportButtonProps) {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       logger.error('Export failed', error);
-      toastError(error instanceof Error ? error.message : 'Failed to export products');
     }
   };
 
