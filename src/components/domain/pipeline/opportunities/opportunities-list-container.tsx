@@ -22,7 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toastSuccess, toastError, useConfirmation } from "@/hooks";
 import { confirmations } from "@/hooks/_shared/use-confirmation";
-import { useOpportunities, useDeleteOpportunity, useBulkUpdateOpportunityStage } from "@/hooks/pipeline";
+import {
+  formatPipelineOpportunityMutationError,
+  useOpportunities,
+  useDeleteOpportunity,
+  useBulkUpdateOpportunityStage,
+} from "@/hooks/pipeline";
 import { useTableSelection, BulkActionsBar } from "@/components/shared/data-table";
 import { FormatAmount } from "@/components/shared/format";
 import type {
@@ -283,8 +288,8 @@ export function OpportunitiesListContainer({
       try {
         await deleteMutation.mutateAsync(opportunityId);
         toastSuccess("Opportunity deleted");
-      } catch {
-        toastError("Failed to delete opportunity");
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, "delete"));
       }
     },
     [deleteMutation, opportunities, confirmation]
@@ -303,8 +308,8 @@ export function OpportunitiesListContainer({
       await Promise.all(selectedItems.map((item) => deleteMutation.mutateAsync(item.id)));
       toastSuccess(`Deleted ${count} opportunities`);
       clearSelection();
-    } catch {
-      toastError("Failed to delete some opportunities");
+    } catch (error) {
+      toastError(formatPipelineOpportunityMutationError(error, "bulkDelete"));
     }
   }, [selectedItems, deleteMutation, confirmation, clearSelection]);
 
@@ -343,7 +348,7 @@ export function OpportunitiesListContainer({
         clearSelection();
         setBulkDialogOpen(false);
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to update opportunity stages");
+        toastError(formatPipelineOpportunityMutationError(error, "bulkStage"));
         throw new Error("Bulk stage change failed");
       }
     },

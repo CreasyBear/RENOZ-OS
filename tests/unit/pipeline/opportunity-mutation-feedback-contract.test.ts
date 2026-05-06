@@ -41,6 +41,13 @@ describe('pipeline opportunity mutation feedback contract', () => {
         'create'
       )
     ).toBe('Unable to create opportunity. Refresh and try again.');
+
+    expect(
+      formatPipelineOpportunityMutationError(
+        new Error('TypeError: Cannot read properties of undefined (reading opportunityIds)'),
+        'bulkStage'
+      )
+    ).toBe('Unable to update selected opportunity stages. Refresh and try again.');
   });
 
   it('keeps safe validation and known opportunity codes useful for operators', () => {
@@ -67,6 +74,9 @@ describe('pipeline opportunity mutation feedback contract', () => {
       'src/components/domain/pipeline/opportunities/opportunity-quick-dialog.tsx'
     );
     const kanban = read('src/components/domain/pipeline/pipeline-kanban-container.tsx');
+    const list = read(
+      'src/components/domain/pipeline/opportunities/opportunities-list-container.tsx'
+    );
 
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
@@ -95,6 +105,14 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(kanban).not.toContain(
       'error instanceof Error ? error.message : "Failed to delete opportunity."'
+    );
+    expect(list).toContain('formatPipelineOpportunityMutationError(error, "delete")');
+    expect(list).toContain('formatPipelineOpportunityMutationError(error, "bulkDelete")');
+    expect(list).toContain('formatPipelineOpportunityMutationError(error, "bulkStage")');
+    expect(list).not.toContain('toastError("Failed to delete opportunity")');
+    expect(list).not.toContain('toastError("Failed to delete some opportunities")');
+    expect(list).not.toContain(
+      'error instanceof Error ? error.message : "Failed to update opportunity stages"'
     );
   });
 });

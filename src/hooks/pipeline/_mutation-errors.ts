@@ -33,6 +33,8 @@ export type PipelineOpportunityMutationAction =
   | 'create'
   | 'delete'
   | 'update'
+  | 'bulkDelete'
+  | 'bulkStage'
   | 'convertToOrder';
 
 const PIPELINE_OPPORTUNITY_MUTATION_FALLBACKS: Record<PipelineOpportunityMutationAction, string> = {
@@ -40,6 +42,8 @@ const PIPELINE_OPPORTUNITY_MUTATION_FALLBACKS: Record<PipelineOpportunityMutatio
   create: 'Unable to create opportunity. Refresh and try again.',
   delete: 'Unable to delete opportunity. Refresh and try again.',
   update: 'Unable to update opportunity. Refresh and try again.',
+  bulkDelete: 'Unable to delete selected opportunities. Refresh and try again.',
+  bulkStage: 'Unable to update selected opportunity stages. Refresh and try again.',
   convertToOrder: 'Unable to convert opportunity to an order. Refresh and try again.',
 };
 
