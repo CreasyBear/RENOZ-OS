@@ -32,7 +32,6 @@ import { PasswordChangeForm } from '@/components/auth/password-change-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks';
 
 // Icons
 import {
@@ -152,12 +151,7 @@ function SecuritySettings() {
       terminateSessionMutation.mutate(
         { id: sessionId },
         {
-          onSuccess: () => {
-            toast.success('Session terminated');
-            setTerminatingSessionId(null);
-          },
-          onError: () => {
-            toast.error('Failed to terminate session');
+          onSettled: () => {
             setTerminatingSessionId(null);
           },
         }
@@ -175,14 +169,7 @@ function SecuritySettings() {
     });
 
     if (confirmed) {
-      terminateAllMutation.mutate(undefined, {
-        onSuccess: () => {
-          toast.success('Other sessions terminated');
-        },
-        onError: () => {
-          toast.error('Failed to terminate sessions');
-        },
-      });
+      terminateAllMutation.mutate();
     }
   };
 
