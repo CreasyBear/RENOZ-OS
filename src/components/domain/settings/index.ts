@@ -55,31 +55,6 @@ export {
   type LinkSectionProps,
 } from './settings-sections';
 
-// --- Extended Settings Sections ---
-export {
-  PreferencesSettingsSection,
-  EmailSettingsSection,
-  SecuritySettingsSection,
-  ApiTokensSettingsSection,
-  CategoriesSettingsSection,
-  TargetsSettingsSection,
-  WinLossSettingsSection,
-  type PreferencesSettingsData,
-  type PreferencesSectionProps,
-  type EmailSettingsData,
-  type EmailSectionProps,
-  type SecuritySettingsData,
-  type SecuritySectionProps,
-  type ApiToken,
-  type ApiTokensSectionProps,
-  type Category,
-  type CategoriesSectionProps,
-  type TargetsSettingsData,
-  type TargetsSectionProps,
-  type WinLossReason,
-  type WinLossSectionProps,
-} from './settings-sections-extended';
-
 // --- Settings Presenters (Cursor-style, receive props from container) ---
 export {
   PreferencesSettingsPresenter,

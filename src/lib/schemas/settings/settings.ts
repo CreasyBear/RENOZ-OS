@@ -139,8 +139,9 @@ export const brandingSettingsSchema = z.object({
 });
 
 /**
- * Extended settings section data types.
- * Used by settings-sections-extended.tsx.
+ * Legacy settings data types.
+ * Retained for schema barrel compatibility while route-owned settings presenters
+ * use narrower workflow-specific types.
  */
 export interface PreferencesSettingsData {
   theme: string;
