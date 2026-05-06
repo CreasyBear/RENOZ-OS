@@ -64,6 +64,101 @@ export interface DocumentStatusResult {
   url: string | null;
 }
 
+export interface DocumentGenerationStartResult {
+  success: true;
+  orderId: string;
+  message: string;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+async function unwrapServerFnResult(value: unknown): Promise<unknown> {
+  if (value instanceof Response) {
+    const contentType = value.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return unwrapServerFnResult(await value.json());
+    }
+    throw new Error('Document generation returned a non-JSON response');
+  }
+
+  if (!value || typeof value !== 'object') return value;
+
+  const record = value as UnknownRecord;
+  if ('result' in record && record.result !== value) {
+    return unwrapServerFnResult(record.result);
+  }
+  if ('data' in record && record.data !== value) {
+    return unwrapServerFnResult(record.data);
+  }
+
+  return value;
+}
+
+async function normalizeDocumentGenerationStartResult(
+  value: unknown,
+  fallback: { orderId: string }
+): Promise<DocumentGenerationStartResult> {
+  const candidate = await unwrapServerFnResult(value);
+  if (!candidate || typeof candidate !== 'object') {
+    throw new Error('Document generation returned an invalid response');
+  }
+
+  const record = candidate as UnknownRecord;
+
+  return {
+    success: true,
+    orderId: typeof record.orderId === 'string' ? record.orderId : fallback.orderId,
+    message:
+      typeof record.message === 'string'
+        ? record.message
+        : 'Document PDF generation started',
+  };
+}
+
+async function normalizeDocumentStatusResult(
+  value: unknown,
+  fallback: DocumentStatusInput
+): Promise<DocumentStatusResult> {
+  const candidate = await unwrapServerFnResult(value);
+  if (!candidate || typeof candidate !== 'object') {
+    throw new Error('Document status returned an invalid response');
+  }
+
+  const record = candidate as UnknownRecord;
+  const status = record.status;
+  if (
+    status !== 'pending' &&
+    status !== 'generating' &&
+    status !== 'completed' &&
+    status !== 'failed'
+  ) {
+    throw new Error('Document status returned an invalid response');
+  }
+
+  return {
+    orderId: typeof record.orderId === 'string' ? record.orderId : fallback.orderId,
+    documentType:
+      typeof record.documentType === 'string' ? record.documentType : fallback.documentType,
+    status,
+    url: typeof record.url === 'string' ? record.url : null,
+  };
+}
+
+function invalidateAsyncDocumentViews(
+  queryClient: ReturnType<typeof useQueryClient>,
+  params: DocumentStatusInput
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.orders.detail(params.orderId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.documents.history('order', params.orderId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.documents.status(params.orderId, params.documentType),
+  });
+}
+
 // ============================================================================
 // QUOTE GENERATION
 // ============================================================================
@@ -90,20 +185,15 @@ export function useGenerateQuote() {
   const queryClient = useQueryClient();
   const generateFn = useServerFn(generateQuotePdf);
 
-  return useMutation<
-    Awaited<ReturnType<typeof generateQuotePdf>>,
-    Error,
-    GenerateQuoteInput
-  >({
-    mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      // Invalidate document-related queries
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(result.orderId),
-      });
-      // Invalidate document history so Documents tab updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('order', result.orderId),
+  return useMutation<DocumentGenerationStartResult, Error, GenerateQuoteInput>({
+    mutationFn: async (input) =>
+      normalizeDocumentGenerationStartResult(await generateFn({ data: input }), {
+        orderId: input.orderId,
+      }),
+    onSuccess: (result, variables) => {
+      invalidateAsyncDocumentViews(queryClient, {
+        orderId: result.orderId || variables.orderId,
+        documentType: 'quote',
       });
     },
   });
@@ -135,20 +225,15 @@ export function useGenerateInvoice() {
   const queryClient = useQueryClient();
   const generateFn = useServerFn(generateInvoicePdf);
 
-  return useMutation<
-    Awaited<ReturnType<typeof generateInvoicePdf>>,
-    Error,
-    GenerateInvoiceInput
-  >({
-    mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      // Invalidate document-related queries
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(result.orderId),
-      });
-      // Invalidate document history so Documents tab updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('order', result.orderId),
+  return useMutation<DocumentGenerationStartResult, Error, GenerateInvoiceInput>({
+    mutationFn: async (input) =>
+      normalizeDocumentGenerationStartResult(await generateFn({ data: input }), {
+        orderId: input.orderId,
+      }),
+    onSuccess: (result, variables) => {
+      invalidateAsyncDocumentViews(queryClient, {
+        orderId: result.orderId || variables.orderId,
+        documentType: 'invoice',
       });
     },
   });
@@ -186,7 +271,7 @@ export function useDocumentStatus(
     queryKey: queryKeys.documents.status(input.orderId, input.documentType),
     queryFn: async () => {
       try {
-        return await statusFn({ data: input });
+        return await normalizeDocumentStatusResult(await statusFn({ data: input }), input);
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
@@ -229,7 +314,10 @@ export function useDocumentPolling(
     queryKey: queryKeys.documents.status(statusInput.orderId, statusInput.documentType),
     queryFn: async () => {
       try {
-        return await statusFn({ data: statusInput });
+        return await normalizeDocumentStatusResult(
+          await statusFn({ data: statusInput }),
+          statusInput
+        );
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
