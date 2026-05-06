@@ -10,7 +10,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/pipeline.ts for server functions
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   logActivity,
@@ -19,6 +19,22 @@ import {
   deleteActivity,
 } from '@/server/functions/pipeline/pipeline';
 import type { OpportunityActivityType } from '@/lib/schemas/pipeline';
+
+function invalidateOpportunityActivityCaches(queryClient: QueryClient, opportunityId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
+      'opportunity',
+      opportunityId,
+      null
+    ),
+  });
+}
 
 // ============================================================================
 // LOG ACTIVITY MUTATION
@@ -52,20 +68,7 @@ export function useLogActivity() {
         },
       }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate activities and follow-ups
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-          'opportunity',
-          opportunityId,
-          null
-        ),
-      });
+      invalidateOpportunityActivityCaches(queryClient, opportunityId);
     },
   });
 }
@@ -101,20 +104,7 @@ export function useUpdateActivity() {
         },
       }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate activities and follow-ups
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-          'opportunity',
-          opportunityId,
-          null
-        ),
-      });
+      invalidateOpportunityActivityCaches(queryClient, opportunityId);
     },
   });
 }
@@ -139,20 +129,7 @@ export function useCompleteActivity() {
     mutationFn: ({ activityId, outcome }: CompleteActivityInput) =>
       completeActivity({ data: { id: activityId, outcome } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate activities and follow-ups
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-          'opportunity',
-          opportunityId,
-          null
-        ),
-      });
+      invalidateOpportunityActivityCaches(queryClient, opportunityId);
     },
   });
 }
@@ -176,20 +153,7 @@ export function useDeleteActivity() {
     mutationFn: ({ activityId }: DeleteActivityInput) =>
       deleteActivity({ data: { id: activityId } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate activities and follow-ups
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.activities(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.followUps(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.activityTimeline(opportunityId, { days: 90 }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-          'opportunity',
-          opportunityId,
-          null
-        ),
-      });
+      invalidateOpportunityActivityCaches(queryClient, opportunityId);
     },
   });
 }
