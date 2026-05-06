@@ -47,6 +47,7 @@ import {
   OrdersListContainer,
   buildOrderQuery,
 } from "@/components/domain/orders/orders-list-container";
+import { formatOrderExportError } from "@/components/domain/orders/order-export-error-messages";
 import {
   DEFAULT_ORDER_FILTERS,
   type OrderFiltersState,
@@ -237,7 +238,7 @@ export default function OrdersPage({ search }: OrdersPageProps) {
       toastSuccess(`Exported ${result.orders.length} orders to ${filename}${limitNotice}`);
     } catch (error) {
       logger.error('Export error', error);
-      toastError(error instanceof Error ? error.message : 'Failed to export orders');
+      toastError(formatOrderExportError(error));
     } finally {
       setIsExporting(false);
     }
