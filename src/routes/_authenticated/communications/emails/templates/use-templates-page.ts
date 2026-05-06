@@ -13,6 +13,7 @@ import {
   useCloneTemplate,
   useTemplateVersions,
   useRestoreTemplateVersion,
+  formatCommunicationTemplateMutationError,
 } from "@/hooks/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
@@ -55,8 +56,8 @@ export function useTemplatesPage() {
       try {
         await deleteMutation.mutateAsync({ id });
         toastSuccess("Template deleted");
-      } catch {
-        toastError("Failed to delete template");
+      } catch (error) {
+        toastError(formatCommunicationTemplateMutationError(error, "delete"));
       }
     },
     [confirm, deleteMutation]
@@ -67,8 +68,8 @@ export function useTemplatesPage() {
       try {
         await cloneMutation.mutateAsync({ id, newName });
         toastSuccess("Template cloned");
-      } catch {
-        toastError("Failed to clone template");
+      } catch (error) {
+        toastError(formatCommunicationTemplateMutationError(error, "clone"));
       }
     },
     [cloneMutation]
@@ -83,9 +84,10 @@ export function useTemplatesPage() {
       try {
         await restoreVersionMutation.mutateAsync({ versionId });
         toastSuccess("Template version restored");
-      } catch {
-        toastError("Failed to restore template version");
-        throw new Error("Failed to restore template version");
+      } catch (error) {
+        const message = formatCommunicationTemplateMutationError(error, "restore");
+        toastError(message);
+        throw new Error(message);
       }
     },
     [restoreVersionMutation]

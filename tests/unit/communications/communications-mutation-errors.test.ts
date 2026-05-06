@@ -35,6 +35,13 @@ describe('communications mutation error formatting', () => {
     ).toBe('A communication template with this name already exists.');
 
     expect(
+      formatCommunicationTemplateMutationError(
+        new Error('postgres database stack trace while restoring template version'),
+        'restore'
+      )
+    ).toBe('Unable to restore communication template version.');
+
+    expect(
       formatCommunicationCampaignMutationError(
         { statusCode: 403, message: 'permission denied by communications policy' },
         'create'
@@ -100,6 +107,26 @@ describe('communications mutation error formatting', () => {
     expect(container).not.toContain('getUserFriendlyMessage(error as Error)');
     expect(container).not.toContain("toast.error('Failed to delete template'");
     expect(container).not.toContain("toast.error('Failed to create campaign'");
+  });
+
+  it('keeps communications template mutations on communications-owned formatters', () => {
+    const editor = read('src/components/domain/communications/template-editor.tsx');
+    const pageHook = read(
+      'src/routes/_authenticated/communications/emails/templates/use-templates-page.ts'
+    );
+
+    expect(editor).toContain('formatCommunicationTemplateMutationError(error, "update")');
+    expect(editor).toContain('formatCommunicationTemplateMutationError(error, "create")');
+    expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "delete")');
+    expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "clone")');
+    expect(pageHook).toContain('formatCommunicationTemplateMutationError(error, "restore")');
+    expect(editor).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(editor).not.toContain('toast.error("Failed to update template"');
+    expect(editor).not.toContain('toast.error("Failed to create template"');
+    expect(pageHook).not.toContain('toastError("Failed to delete template")');
+    expect(pageHook).not.toContain('toastError("Failed to clone template")');
+    expect(pageHook).not.toContain('toastError("Failed to restore template version")');
+    expect(pageHook).not.toContain('throw new Error("Failed to restore template version")');
   });
 
   it('keeps communications campaign route actions on communications-owned formatters', () => {

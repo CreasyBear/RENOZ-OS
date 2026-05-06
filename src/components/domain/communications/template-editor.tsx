@@ -61,12 +61,12 @@ import {
   useCreateTemplate,
   useUpdateTemplate,
 } from "@/hooks/communications/use-templates";
+import { formatCommunicationTemplateMutationError } from "@/hooks/communications";
 import {
   substituteTemplateVariables,
   getSampleTemplateData,
 } from "@/lib/communications/template-utils";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import type {
   TemplateEditorProps,
   TemplateFormValues,
@@ -159,9 +159,7 @@ export function TemplateEditor({
             onSave?.();
           },
           onError: (error) => {
-            toast.error("Failed to update template", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationTemplateMutationError(error, "update"));
           },
         }
       );
@@ -181,9 +179,7 @@ export function TemplateEditor({
             onSave?.();
           },
           onError: (error) => {
-            toast.error("Failed to create template", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationTemplateMutationError(error, "create"));
           },
         }
       );

@@ -1,8 +1,12 @@
 import { getUserFriendlyMessage } from '@/lib/error-handling';
 
 const TEMPLATE_FALLBACKS = {
+  create: 'Unable to create communication template.',
   save: 'Unable to save communication template.',
+  update: 'Unable to update communication template.',
   delete: 'Unable to delete communication template.',
+  clone: 'Unable to clone communication template.',
+  restore: 'Unable to restore communication template version.',
 } as const;
 
 const CAMPAIGN_FALLBACKS = {
