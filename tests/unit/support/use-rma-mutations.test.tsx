@@ -184,6 +184,126 @@ describe('useRma mutations hardening', () => {
     });
   });
 
+  it('refreshes credit note, customer, and order context after executing an issued credit remedy', async () => {
+    processRmaMock.mockResolvedValue({
+      id: 'rma-1',
+      orderId: 'order-1',
+      customerId: 'customer-1',
+      issueId: 'issue-1',
+      creditNoteId: 'credit-1',
+      execution: {
+        status: 'completed',
+        creditNote: { id: 'credit-1', label: 'CN-1' },
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useProcessRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useProcessRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaId: 'rma-1',
+        resolution: 'credit',
+        amount: 75,
+        creditReason: 'Returned equipment',
+        applyNow: false,
+        notes: 'Issued customer credit from RMA.',
+      });
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.creditNotes(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.creditNoteDetail('credit-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.detail('customer-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.infiniteLists(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.summary(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.arAging(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    });
+  });
+
+  it('refreshes invoice and balance reporting surfaces after executing an applied credit remedy', async () => {
+    processRmaMock.mockResolvedValue({
+      id: 'rma-1',
+      orderId: 'order-1',
+      customerId: 'customer-1',
+      issueId: 'issue-1',
+      creditNoteId: 'credit-1',
+      execution: {
+        status: 'completed',
+        creditNote: { id: 'credit-1', label: 'CN-1' },
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useProcessRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useProcessRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaId: 'rma-1',
+        resolution: 'credit',
+        amount: 75,
+        creditReason: 'Returned equipment',
+        applyNow: true,
+        notes: 'Applied customer credit from RMA.',
+      });
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.detail('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.summary(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.arAging(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.dashboard(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.outstandingInvoices(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.topCustomers(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.reminderCandidates(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    });
+  });
+
   it('refreshes payment ledger and reporting surfaces after executing a refund remedy', async () => {
     processRmaMock.mockResolvedValue({
       id: 'rma-1',

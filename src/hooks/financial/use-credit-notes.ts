@@ -2,11 +2,11 @@
  * Credit note hooks.
  */
 
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { isReadQueryError, normalizeReadQueryError, requireReadResult } from '@/lib/read-path-policy';
-import { invalidateOrderBalanceReportingQueries } from './_reporting-cache';
+import { invalidateCreditNoteQueries } from './_credit-note-cache';
 import {
   listCreditNotes,
   getCreditNote,
@@ -31,48 +31,6 @@ function rethrowFinancialReadError(
   }
 
   throw normalizeReadQueryError(error, options);
-}
-
-function invalidateCreditNoteQueries(
-  queryClient: QueryClient,
-  options: {
-    creditNoteId?: string | null;
-    customerId?: string | null;
-    orderId?: string | null;
-    appliedOrderId?: string | null;
-    refreshReporting?: boolean;
-  } = {}
-) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-
-  if (options.creditNoteId) {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.financial.creditNoteDetail(options.creditNoteId),
-    });
-  }
-
-  if (options.customerId) {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.customers.detail(options.customerId),
-    });
-  }
-
-  const affectedOrderIds = new Set<string>();
-  for (const orderId of [options.orderId, options.appliedOrderId]) {
-    if (orderId) affectedOrderIds.add(orderId);
-  }
-
-  for (const orderId of affectedOrderIds) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
-  }
-
-  if (affectedOrderIds.size > 0) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-  }
-
-  if (options.refreshReporting) {
-    invalidateOrderBalanceReportingQueries(queryClient);
-  }
 }
 
 // ============================================================================

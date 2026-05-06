@@ -30,6 +30,7 @@ import {
   bulkApproveRma,
   bulkReceiveRma,
 } from '@/server/functions/orders/rma';
+import { invalidateCreditNoteQueries } from '@/hooks/financial/_credit-note-cache';
 import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
 import { invalidateOrderPaymentLedger } from '@/hooks/orders/_order-payment-cache';
 import type {
@@ -356,6 +357,15 @@ export function useProcessRma() {
       if (result.orderId) {
         if (variables.resolution === 'refund') {
           invalidateOrderPaymentLedger(queryClient, result.orderId);
+        } else if (variables.resolution === 'credit') {
+          const appliedCredit = variables.applyNow !== false;
+          invalidateCreditNoteQueries(queryClient, {
+            creditNoteId: result.creditNoteId,
+            customerId: result.customerId,
+            orderId: result.orderId,
+            appliedOrderId: appliedCredit ? result.orderId : null,
+            refreshReporting: appliedCredit,
+          });
         } else {
           queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
         }
