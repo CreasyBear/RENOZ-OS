@@ -54,7 +54,7 @@ export async function recalculateOrderTotals(
     .limit(1);
 
   if (!order) {
-    return;
+    throw new NotFoundError('Order not found', 'order');
   }
 
   const lineSubtotal = Number(lineItemAgg?.totalLineTotal ?? 0);
@@ -69,7 +69,7 @@ export async function recalculateOrderTotals(
 
   const balanceDue = totals.total - Number(order.paidAmount);
 
-  await tx
+  const [updatedOrder] = await tx
     .update(orders)
     .set({
       subtotal: totals.subtotal,
@@ -80,7 +80,18 @@ export async function recalculateOrderTotals(
       updatedAt: new Date(),
       updatedBy: userId,
     })
-    .where(and(eq(orders.id, orderId), eq(orders.organizationId, organizationId)));
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.organizationId, organizationId),
+        isNull(orders.deletedAt)
+      )
+    )
+    .returning({ id: orders.id });
+
+  if (!updatedOrder) {
+    throw new NotFoundError('Order not found', 'order');
+  }
 }
 
 export const addOrderLineItem = createServerFn({ method: 'POST' })

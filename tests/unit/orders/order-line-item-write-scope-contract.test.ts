@@ -29,6 +29,20 @@ function sourceFrom(source: string, start: string): string {
 }
 
 describe('order line-item write-scope contract', () => {
+  it('fails totals recalculation closed when the active order cannot be proved', () => {
+    const source = read('src/server/functions/orders/order-line-items.ts');
+    const block = compact(
+      sourceBetween(source, 'export async function recalculateOrderTotals', 'export const addOrderLineItem')
+    );
+
+    expect(block).toContain("if(!order){thrownewNotFoundError('Ordernotfound','order');}");
+    expect(block).not.toContain('if(!order){return;}');
+    expect(block).toContain(
+      '.where(and(eq(orders.id,orderId),eq(orders.organizationId,organizationId),isNull(orders.deletedAt))).returning({id:orders.id});'
+    );
+    expect(block).toContain("if(!updatedOrder){thrownewNotFoundError('Ordernotfound','order');}");
+  });
+
   it('keeps order aggregate version claims scoped to active orders', () => {
     const source = compact(read('src/server/functions/orders/_order-aggregate.ts'));
     const block = sourceFrom(source, 'exportasyncfunctionclaimOrderAggregateVersion');
