@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dbState = vi.hoisted(() => ({
   insertQueue: [] as Array<Array<Record<string, unknown>>>,
+  txInsertQueue: [] as Array<Array<Record<string, unknown>>>,
   selectQueue: [] as Array<Array<Record<string, unknown>>>,
   updates: [] as Array<Record<string, unknown>>,
+  txExecutions: [] as Array<unknown>,
   committedPayments: [] as Array<Record<string, unknown>>,
   updatedOrder: { paidAmount: "100.00", balanceDue: "0.00", paymentStatus: "paid" },
 }));
@@ -48,15 +50,26 @@ vi.mock("@/lib/db", () => ({
     }),
     transaction: async (
       callback: (tx: {
-        insert: () => { values: (values: Record<string, unknown>) => Promise<void> };
+        execute: (query: unknown) => Promise<void>;
+        insert: () => {
+          values: (values: Record<string, unknown>) => {
+            returning: () => Promise<Array<Record<string, unknown>>>;
+          };
+        };
         select: () => ReturnType<typeof makeQuery>;
       }) => Promise<unknown>,
     ) => {
       const stagedPayments: Array<Record<string, unknown>> = [];
       const tx = {
+        execute: async (query: unknown) => {
+          dbState.txExecutions.push(query);
+        },
         insert: () => ({
-          values: async (values: Record<string, unknown>) => {
+          values: (values: Record<string, unknown>) => {
             stagedPayments.push(values);
+            return {
+              returning: async () => dbState.txInsertQueue.shift() ?? [{ id: "payment-ledger-1" }],
+            };
           },
         }),
         select: () => makeQuery([dbState.updatedOrder]),
@@ -71,8 +84,10 @@ vi.mock("@/lib/db", () => ({
 describe("Xero payment reconciliation behavior", () => {
   beforeEach(() => {
     dbState.insertQueue = [];
+    dbState.txInsertQueue = [];
     dbState.selectQueue = [];
     dbState.updates = [];
+    dbState.txExecutions = [];
     dbState.committedPayments = [];
     dbState.updatedOrder = { paidAmount: "100.00", balanceDue: "0.00", paymentStatus: "paid" };
   });
@@ -154,8 +169,51 @@ describe("Xero payment reconciliation behavior", () => {
       orderId: "order-1",
     });
     expect(dbState.committedPayments).toHaveLength(1);
+    expect(dbState.committedPayments[0]).toMatchObject({
+      organizationId: "org-1",
+      orderId: "order-1",
+      paymentMethod: "xero",
+      recordedBy: "user-2",
+      createdBy: "user-2",
+      updatedBy: "user-2",
+    });
+    expect(dbState.txExecutions).toHaveLength(1);
     expect(dbState.updates).toEqual(
       expect.arrayContaining([expect.objectContaining({ resultState: "applied" })]),
+    );
+  });
+
+  it("rejects Xero applies when the payment ledger insert does not return a row", async () => {
+    dbState.insertQueue = [[{ id: "event-1" }]];
+    dbState.txInsertQueue = [[]];
+    dbState.selectQueue = [[{
+      id: "order-1",
+      total: 100,
+      organizationId: "org-1",
+      createdBy: "user-1",
+      updatedBy: "user-2",
+    }]];
+
+    const { applyXeroPaymentUpdate } = await import(
+      "@/server/functions/financial/_shared/xero-payment-reconciliation"
+    );
+
+    await expect(
+      applyXeroPaymentUpdate({
+        organizationId: "org-1",
+        xeroInvoiceId: "invoice-1",
+        paymentId: "payment-1",
+        amountPaid: 100,
+        paymentDate: "2026-04-01",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      resultState: "rejected",
+      error: "Xero payment could not be recorded",
+    });
+    expect(dbState.committedPayments).toEqual([]);
+    expect(dbState.updates).toEqual(
+      expect.arrayContaining([expect.objectContaining({ resultState: "rejected" })]),
     );
   });
 

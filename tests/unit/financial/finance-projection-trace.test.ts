@@ -28,6 +28,21 @@ describe('finance schema trace repair', () => {
     expect(source).toContain('recalculateOrderFinancialProjection');
   });
 
+  it('records Xero payment applies through a tenant-scoped ledger insert before projection', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/xero-payment-reconciliation.ts',
+    );
+    const insertIndex = source.indexOf('.insert(orderPayments)');
+    const guardIndex = source.indexOf("throw new ValidationError('Xero payment could not be recorded')");
+    const projectionIndex = source.indexOf('await updateOrderPaymentStatus');
+
+    expect(source).toContain("set_config('app.organization_id'");
+    expect(source).toContain('.returning({ id: orderPayments.id })');
+    expect(insertIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(insertIndex);
+    expect(projectionIndex).toBeGreaterThan(guardIndex);
+  });
+
   it('blocks paid invoice status writes and keeps invoice detail off fake payment math', () => {
     const statusSource = read(
       'src/server/functions/invoices/update-invoice-status.ts',

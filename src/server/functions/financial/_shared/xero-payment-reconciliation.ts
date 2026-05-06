@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { orderPayments, orders, oauthConnections, xeroPaymentEvents, users } from 'drizzle/schema';
 import { ServerError, ValidationError } from '@/lib/server/errors';
@@ -208,21 +208,32 @@ export async function applyXeroPaymentUpdate(data: {
 
   try {
     const applied = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${order.organizationId}, false)`
+      )
+
       const recordedBy = await resolveWebhookRecordedBy(tx, order.organizationId, order)
       const normalizedPaymentDate = new Date(paymentDate).toISOString().split('T')[0]
 
-      await tx.insert(orderPayments).values({
-        organizationId: order.organizationId,
-        orderId: order.id,
-        amount: amountPaid,
-        paymentMethod: 'xero',
-        paymentDate: normalizedPaymentDate,
-        reference: reference ?? paymentId,
-        notes: `Imported from Xero payment webhook (${paymentId})`,
-        recordedBy,
-        createdBy: recordedBy,
-        updatedBy: recordedBy,
-      })
+      const [payment] = await tx
+        .insert(orderPayments)
+        .values({
+          organizationId: order.organizationId,
+          orderId: order.id,
+          amount: amountPaid,
+          paymentMethod: 'xero',
+          paymentDate: normalizedPaymentDate,
+          reference: reference ?? paymentId,
+          notes: `Imported from Xero payment webhook (${paymentId})`,
+          recordedBy,
+          createdBy: recordedBy,
+          updatedBy: recordedBy,
+        })
+        .returning({ id: orderPayments.id })
+
+      if (!payment) {
+        throw new ValidationError('Xero payment could not be recorded')
+      }
 
       await updateOrderPaymentStatus(tx, order.id, order.organizationId, recordedBy)
 
@@ -448,4 +459,3 @@ function extractPaymentIdFromWebhookEvent(
   const match = event.resourceUrl.match(/\/Payments\/([^/?]+)/i)
   return match?.[1] ?? null
 }
-

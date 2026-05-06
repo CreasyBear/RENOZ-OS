@@ -72,7 +72,12 @@ vi.mock('@/lib/db', () => ({
     }),
     transaction: async (
       callback: (tx: {
-        insert: () => { values: (values: Record<string, unknown>) => Promise<void> }
+        execute: (query: unknown) => Promise<void>
+        insert: () => {
+          values: (values: Record<string, unknown>) => {
+            returning: () => Promise<Array<{ id: string }>>
+          }
+        }
         select: () => {
           from: () => {
             where: () => {
@@ -84,9 +89,13 @@ vi.mock('@/lib/db', () => ({
     ) => {
       const stagedPayments: Array<Record<string, unknown>> = []
       const tx = {
+        execute: async () => undefined,
         insert: () => ({
-          values: async (values: Record<string, unknown>) => {
+          values: (values: Record<string, unknown>) => {
             stagedPayments.push(values)
+            return {
+              returning: async () => [{ id: 'payment-1' }],
+            }
           },
         }),
         select: () => ({
