@@ -291,4 +291,37 @@ describe('finance schema trace repair', () => {
     expect(compact(applySource)).toContain('eq(orders.organizationId,ctx.organizationId)');
     expect(compact(applySource)).toContain('isNull(orders.deletedAt)');
   });
+
+  it('locks credit-note void before validating lifecycle state', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/credit-note-mutations.ts',
+    );
+    const voidSource = source.slice(
+      source.indexOf('export async function voidCreditNoteRecord'),
+    );
+    const transactionIndex = voidSource.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = voidSource.indexOf("set_config('app.organization_id'");
+    const lockIndex = voidSource.indexOf(".for('update')");
+    const appliedStatusIndex = voidSource.indexOf('Applied credit notes cannot be voided');
+    const voidedStatusIndex = voidSource.indexOf('Credit note is already voided');
+    const updateIndex = voidSource.indexOf('.update(creditNotes)');
+    const returningIndex = voidSource.indexOf('.returning()');
+    const staleGuardIndex = voidSource.indexOf(
+      "throw new NotFoundError('Credit note not found or already modified'",
+    );
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(lockIndex).toBeGreaterThan(setConfigIndex);
+    expect(appliedStatusIndex).toBeGreaterThan(lockIndex);
+    expect(voidedStatusIndex).toBeGreaterThan(appliedStatusIndex);
+    expect(updateIndex).toBeGreaterThan(voidedStatusIndex);
+    expect(returningIndex).toBeGreaterThan(updateIndex);
+    expect(staleGuardIndex).toBeGreaterThan(returningIndex);
+    expect(compact(voidSource)).toContain('eq(creditNotes.id,data.id)');
+    expect(compact(voidSource)).toContain(
+      'eq(creditNotes.organizationId,ctx.organizationId)',
+    );
+    expect(compact(voidSource)).toContain('isNull(creditNotes.deletedAt)');
+  });
 });

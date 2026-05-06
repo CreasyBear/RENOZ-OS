@@ -431,66 +431,83 @@ export async function voidCreditNoteRecord(
   ctx: SessionContext,
   data: z.infer<typeof voidCreditNoteSchema>,
 ): Promise<CreditNoteRecord> {
-  // Get existing credit note
-  const existing = await db
-    .select()
-    .from(creditNotes)
-    .where(
-      and(
-        eq(creditNotes.id, data.id),
-        eq(creditNotes.organizationId, ctx.organizationId),
-        isNull(creditNotes.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length === 0) {
-    throw new NotFoundError('Credit note not found', 'credit_note');
-  }
-
-  if (existing[0].status === 'applied') {
-    throw new ConflictError(
-      'Applied credit notes cannot be voided. Reverse the application first.',
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
     );
-  }
 
-  if (existing[0].status === 'voided') {
-    throw new ConflictError('Credit note is already voided');
-  }
+    const [existing] = await tx
+      .select()
+      .from(creditNotes)
+      .where(
+        and(
+          eq(creditNotes.id, data.id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
 
-  // Void
-  const [voided] = await db
-    .update(creditNotes)
-    .set({
-      status: 'voided',
-      internalNotes: existing[0].internalNotes
-        ? `${existing[0].internalNotes}\n\nVoided: ${data.voidReason}`
-        : `Voided: ${data.voidReason}`,
-      updatedBy: ctx.user.id,
-    })
-    .where(eq(creditNotes.id, data.id))
-    .returning();
+    if (!existing) {
+      throw new NotFoundError('Credit note not found', 'credit_note');
+    }
+
+    if (existing.status === 'applied') {
+      throw new ConflictError(
+        'Applied credit notes cannot be voided. Reverse the application first.',
+      );
+    }
+
+    if (existing.status === 'voided') {
+      throw new ConflictError('Credit note is already voided');
+    }
+
+    const [voided] = await tx
+      .update(creditNotes)
+      .set({
+        status: 'voided',
+        internalNotes: existing.internalNotes
+          ? `${existing.internalNotes}\n\nVoided: ${data.voidReason}`
+          : `Voided: ${data.voidReason}`,
+        updatedBy: ctx.user.id,
+      })
+      .where(
+        and(
+          eq(creditNotes.id, data.id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .returning();
+
+    if (!voided) {
+      throw new NotFoundError('Credit note not found or already modified', 'credit_note');
+    }
+
+    return { existing, voided };
+  });
 
   // Activity logging
   const logger = createActivityLoggerWithContext(ctx);
   logger.logAsync({
     entityType: 'order',
-    entityId: voided.id,
+    entityId: result.voided.id,
     action: 'updated',
-    description: `Voided credit note: ${voided.creditNoteNumber}`,
+    description: `Voided credit note: ${result.voided.creditNoteNumber}`,
     changes: computeChanges({
-      before: existing[0],
-      after: voided,
+      before: result.existing,
+      after: result.voided,
       excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
     }),
     metadata: {
-      creditNoteNumber: voided.creditNoteNumber ?? undefined,
-      customerId: voided.customerId,
-      previousStatus: existing[0].status,
-      newStatus: voided.status,
+      creditNoteNumber: result.voided.creditNoteNumber ?? undefined,
+      customerId: result.voided.customerId,
+      previousStatus: result.existing.status,
+      newStatus: result.voided.status,
       reason: data.voidReason,
     },
   });
 
-  return voided;
+  return result.voided;
 }
