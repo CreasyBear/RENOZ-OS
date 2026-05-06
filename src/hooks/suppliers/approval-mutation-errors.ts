@@ -1,4 +1,5 @@
 import { formatPurchaseOrderMutationError } from '@/hooks/purchase-orders/_mutation-errors';
+import { formatMutationError } from '@/lib/mutation-error-feedback';
 
 const APPROVAL_CODE_MESSAGES: Record<string, string> = {
   NOT_FOUND:
@@ -15,5 +16,21 @@ export function formatApprovalBulkFailureReason(
   return formatPurchaseOrderMutationError(error, fallback, {
     codeMessages: APPROVAL_CODE_MESSAGES,
     allowSafeMessageWithoutStatus: true,
+  });
+}
+
+export type ApprovalDecisionMutationAction = 'singleDecision' | 'bulkDecision';
+
+const APPROVAL_DECISION_FALLBACKS: Record<ApprovalDecisionMutationAction, string> = {
+  singleDecision: 'Unable to submit approval decision. Refresh and try again.',
+  bulkDecision: 'Unable to submit bulk approval decision. Refresh and try again.',
+};
+
+export function formatApprovalDecisionMutationError(
+  error: unknown,
+  action: ApprovalDecisionMutationAction
+): string {
+  return formatMutationError(error, APPROVAL_DECISION_FALLBACKS[action], {
+    codeMessages: APPROVAL_CODE_MESSAGES,
   });
 }

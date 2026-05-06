@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toastError } from '@/hooks';
 import { logger } from '@/lib/logger';
+import { formatApprovalDecisionMutationError } from '@/hooks/suppliers/approval-mutation-errors';
 
 // ============================================================================
 // TYPES
@@ -66,7 +67,7 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
       handleOpenChange(false);
     } catch (error) {
       logger.error('Bulk decision error', error);
-      toastError(error instanceof Error ? error.message : 'Failed to submit bulk decision');
+      toastError(formatApprovalDecisionMutationError(error, 'bulkDecision'));
     } finally {
       setIsSubmitting(false);
     }

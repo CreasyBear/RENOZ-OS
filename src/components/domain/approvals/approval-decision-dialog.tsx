@@ -53,6 +53,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { StatusCell } from '@/components/shared/data-table';
 import { APPROVAL_PRIORITY_CONFIG } from './approval-status-config';
 import type { ApprovalItem } from '@/lib/schemas/approvals';
+import { formatApprovalDecisionMutationError } from '@/hooks/suppliers/approval-mutation-errors';
 
 // ============================================================================
 // TYPES
@@ -138,7 +139,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
       handleOpenChange(false);
     } catch (error) {
       logger.error('Decision error', error);
-      toastError(error instanceof Error ? error.message : 'Failed to submit decision');
+      toastError(formatApprovalDecisionMutationError(error, 'singleDecision'));
     } finally {
       setIsSubmitting(false);
     }
