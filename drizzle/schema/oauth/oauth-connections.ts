@@ -54,6 +54,7 @@ export const oauthConnections = pgTable(
       enum: ['calendar', 'email', 'contacts', 'accounting'],
     }).notNull(),
     externalAccountId: text('external_account_id'), // Provider's account ID
+    externalAccountLabel: text('external_account_label'), // Provider account label safe for UI display
 
     // Token storage (encrypted)
     accessToken: text('access_token').notNull(),

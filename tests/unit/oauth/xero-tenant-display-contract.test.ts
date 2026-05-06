@@ -50,6 +50,8 @@ describe('xero tenant display contract', () => {
     const schema = read('src/lib/schemas/oauth/connection.ts');
 
     expect(flow).toContain('tenantName: connection.tenantName?.trim() || undefined');
+    expect(flow).toContain('externalAccountLabel: selectedTenant.tenantName');
+    expect(flow).toContain('externalAccountLabel: tenants[0]?.tenantName');
     expect(schema).toContain('tenantName?: string');
     expect(component).toContain('formatXeroTenantDisplayName(tenant, index)');
     expect(component).toContain('tenantId: tenant.tenantId');

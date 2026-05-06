@@ -4,6 +4,7 @@ export interface OAuthConnectionDisplayDescriptor {
   provider: OAuthProvider;
   serviceType: OAuthServiceType;
   isActive: boolean;
+  accountLabel?: string | null;
 }
 
 export function formatOAuthConnectionAccountLabel(
@@ -13,9 +14,12 @@ export function formatOAuthConnectionAccountLabel(
     return null;
   }
 
-  return connection.isActive
-    ? 'Accounting organization connected'
-    : 'Accounting organization disconnected';
+  const accountLabel = connection.accountLabel?.trim();
+  if (accountLabel) {
+    return accountLabel;
+  }
+
+  return connection.isActive ? 'Xero accounting organization' : 'Xero accounting disconnected';
 }
 
 export function formatOAuthConnectionAccountDetail(

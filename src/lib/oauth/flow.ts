@@ -221,6 +221,7 @@ interface OAuthCallbackTokens {
   expiresAt: Date;
   scopes: string[];
   externalAccountId?: string;
+  externalAccountLabel?: string;
 }
 
 interface PendingXeroTenantSelectionMetadata {
@@ -366,6 +367,7 @@ export async function handleOAuthCallback(
       services,
       tokens,
       externalAccountId: tokens.externalAccountId,
+      externalAccountLabel: tokens.externalAccountLabel,
     });
 
     // Log successful OAuth completion
@@ -494,6 +496,7 @@ export async function completePendingXeroTenantSelection(params: {
       scopes: metadata.scopes,
     },
     externalAccountId: selectedTenant.tenantId,
+    externalAccountLabel: selectedTenant.tenantName,
   });
 
   await updatePersistentOAuthState(params.db, params.stateId, {
@@ -501,6 +504,7 @@ export async function completePendingXeroTenantSelection(params: {
     metadata: {
       xeroTenantSelection: null,
       selectedTenantId: selectedTenant.tenantId,
+      selectedTenantName: selectedTenant.tenantName,
       connectionIds,
     },
   });
@@ -518,6 +522,7 @@ export async function completePendingXeroTenantSelection(params: {
       services: state.services,
       scopes: metadata.scopes,
       selectedTenantId: selectedTenant.tenantId,
+      selectedTenantName: selectedTenant.tenantName,
     },
     startedAt: new Date(),
     completedAt: new Date(),
@@ -850,6 +855,7 @@ async function exchangeXeroCode(
   expiresAt: Date;
   scopes: string[];
   externalAccountId?: string;
+  externalAccountLabel?: string;
 }> {
   const clientId = process.env.XERO_CLIENT_ID;
   const clientSecret = process.env.XERO_CLIENT_SECRET;
@@ -912,5 +918,6 @@ async function exchangeXeroCode(
     expiresAt,
     scopes,
     externalAccountId: tenants[0]?.tenantId,
+    externalAccountLabel: tenants[0]?.tenantName,
   };
 }

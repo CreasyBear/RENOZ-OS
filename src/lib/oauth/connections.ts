@@ -17,6 +17,11 @@ export interface OAuthConnectionTokens {
   scopes: string[];
 }
 
+function normalizeExternalAccountLabel(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
 async function assertActiveXeroTenantAvailable(
   db: OAuthDatabase,
   params: {
@@ -60,9 +65,19 @@ export async function createOAuthConnections(
     services: OAuthServiceType[];
     tokens: OAuthConnectionTokens;
     externalAccountId?: string;
+    externalAccountLabel?: string;
   }
 ): Promise<string[]> {
-  const { organizationId, userId, provider, services, tokens, externalAccountId } = params;
+  const {
+    organizationId,
+    userId,
+    provider,
+    services,
+    tokens,
+    externalAccountId,
+    externalAccountLabel,
+  } = params;
+  const normalizedExternalAccountLabel = normalizeExternalAccountLabel(externalAccountLabel);
 
   const encryptedAccessToken = encryptOAuthToken(tokens.accessToken, organizationId);
   const encryptedRefreshToken = tokens.refreshToken
@@ -100,6 +115,7 @@ export async function createOAuthConnections(
           provider,
           serviceType: service,
           externalAccountId,
+          externalAccountLabel: normalizedExternalAccountLabel,
           accessToken: encryptedAccessToken,
           refreshToken: encryptedRefreshToken,
           tokenExpiresAt: tokens.expiresAt,
@@ -134,6 +150,7 @@ export async function createOAuthConnections(
           provider,
           scopes: tokens.scopes,
           externalAccountId,
+          externalAccountLabel: normalizedExternalAccountLabel,
         },
         startedAt: new Date(),
         completedAt: new Date(),

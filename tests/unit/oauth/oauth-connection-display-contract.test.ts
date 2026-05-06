@@ -18,20 +18,31 @@ describe('oauth connection display contract', () => {
       provider: 'xero' as const,
       serviceType: 'accounting' as const,
       isActive: true,
+      accountLabel: 'RENOZ Energy Operations',
     };
 
-    expect(formatOAuthConnectionAccountLabel(connection)).toBe(
-      'Accounting organization connected'
-    );
+    expect(formatOAuthConnectionAccountLabel(connection)).toBe('RENOZ Energy Operations');
     expect(formatOAuthConnectionAccountDetail(connection)).toBe(
       'Invoices, payments, and journals use this Xero accounting connection.'
     );
   });
 
+  it('falls back to a generic connected label when no safe account label is stored', () => {
+    expect(
+      formatOAuthConnectionAccountLabel({
+        provider: 'xero',
+        serviceType: 'accounting',
+        isActive: true,
+      })
+    ).toBe('Xero accounting organization');
+  });
+
   it('keeps the OAuth connection list response free of raw external account identifiers', () => {
     const server = read('src/server/functions/oauth/connections.ts');
     const manager = read('src/components/integrations/oauth/oauth-connection-manager.tsx');
+    const create = read('src/lib/oauth/connections.ts');
 
+    expect(create).toContain('externalAccountLabel: normalizedExternalAccountLabel');
     expect(server).not.toMatch(/externalAccountId:\s*conn\.externalAccountId/);
     expect(server).not.toContain('externalAccountId: oauthConnections.externalAccountId');
     expect(manager).toContain('formatOAuthConnectionAccountLabel(connection)');

@@ -26,6 +26,7 @@ export const CreateOAuthConnectionSchema = z.object({
   expiresAt: z.date(),
   scopes: z.array(z.string()),
   externalAccountId: z.string().optional(),
+  externalAccountLabel: z.string().optional(),
 });
 
 export const UpdateOAuthConnectionSchema = z.object({
@@ -39,6 +40,7 @@ export const OAuthConnectionResponseSchema = z.object({
   organizationId: z.string().uuid(),
   provider: z.enum(OAUTH_PROVIDERS),
   serviceType: z.enum(OAUTH_SERVICE_TYPES),
+  accountLabel: z.string().optional(),
   scopes: z.array(z.string()),
   isActive: z.boolean(),
   lastSyncAt: z.date().nullable(),
@@ -65,6 +67,7 @@ export interface CreateOAuthConnectionRequest {
   expiresAt: Date;
   scopes: string[];
   externalAccountId?: string;
+  externalAccountLabel?: string;
 }
 
 export interface CreateOAuthConnectionResponseSuccess {
@@ -127,6 +130,7 @@ export async function createOAuthConnection(
         scopes: validatedInput.scopes,
       },
       externalAccountId: validatedInput.externalAccountId,
+      externalAccountLabel: validatedInput.externalAccountLabel,
     });
 
     return {
@@ -155,6 +159,7 @@ export interface GetOAuthConnectionResponseSuccess {
     organizationId: string;
     provider: OAuthProvider;
     serviceType: OAuthServiceType;
+    accountLabel?: string;
     scopes: string[];
     isActive: boolean;
     lastSyncAt?: Date;
@@ -203,8 +208,9 @@ export async function getOAuthConnection(
       connection: {
         id: connection.id,
         organizationId: connection.organizationId,
-        provider: connection.provider as 'google_workspace' | 'microsoft_365',
-        serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts',
+        provider: connection.provider as 'google_workspace' | 'microsoft_365' | 'xero',
+        serviceType: connection.serviceType as 'calendar' | 'email' | 'contacts' | 'accounting',
+        accountLabel: connection.externalAccountLabel || undefined,
         scopes: connection.scopes,
         isActive: connection.isActive,
         lastSyncAt: connection.lastSyncedAt || undefined,
@@ -237,6 +243,7 @@ export interface ListOAuthConnectionsResponseSuccess {
     organizationId: string;
     provider: OAuthProvider;
     serviceType: OAuthServiceType;
+    accountLabel?: string;
     scopes: string[];
     isActive: boolean;
     lastSyncAt?: Date;
@@ -287,6 +294,7 @@ export async function listOAuthConnections(
         organizationId: oauthConnections.organizationId,
         provider: oauthConnections.provider,
         serviceType: oauthConnections.serviceType,
+        externalAccountLabel: oauthConnections.externalAccountLabel,
         scopes: oauthConnections.scopes,
         isActive: oauthConnections.isActive,
         lastSyncedAt: oauthConnections.lastSyncedAt,
@@ -314,6 +322,7 @@ export async function listOAuthConnections(
         organizationId: conn.organizationId,
         provider: conn.provider as 'google_workspace' | 'microsoft_365' | 'xero',
         serviceType: conn.serviceType as 'calendar' | 'email' | 'contacts' | 'accounting',
+        accountLabel: conn.externalAccountLabel || undefined,
         scopes: conn.scopes,
         isActive: conn.isActive,
         lastSyncAt: conn.lastSyncedAt || undefined,

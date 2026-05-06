@@ -129,6 +129,7 @@ describe('oauth connections server functions', () => {
                         provider: 'xero',
                         serviceType: 'accounting',
                         externalAccountId: 'tenant-secret-1',
+                        externalAccountLabel: 'RENOZ Energy Operations',
                         accessToken: 'access-token-secret',
                         refreshToken: 'refresh-token-secret',
                         scopes: ['accounting.transactions'],
@@ -170,6 +171,7 @@ describe('oauth connections server functions', () => {
       organizationId: 'org-1',
       provider: 'xero',
       serviceType: 'accounting',
+      accountLabel: 'RENOZ Energy Operations',
       scopes: ['accounting.transactions'],
       isActive: true,
       lastSyncAt: undefined,
@@ -180,6 +182,7 @@ describe('oauth connections server functions', () => {
     expect(JSON.stringify(result)).not.toContain('access-token-secret')
     expect(JSON.stringify(result)).not.toContain('refresh-token-secret')
     expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('externalAccountId')
+    expect(Object.keys(selections[0] as Record<string, unknown>)).toContain('externalAccountLabel')
     expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('accessToken')
     expect(Object.keys(selections[0] as Record<string, unknown>)).not.toContain('refreshToken')
   })

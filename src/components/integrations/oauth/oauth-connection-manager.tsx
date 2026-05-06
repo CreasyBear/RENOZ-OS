@@ -39,6 +39,7 @@ interface OAuthConnection {
   id: string;
   provider: 'google_workspace' | 'microsoft_365' | 'xero';
   serviceType: 'calendar' | 'email' | 'contacts' | 'accounting';
+  accountLabel?: string;
   isActive: boolean;
   lastSyncedAt?: Date;
   lastSyncAt?: Date;
