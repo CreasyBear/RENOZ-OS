@@ -4,9 +4,6 @@
  * Timer widget with start/stop button and live elapsed time display.
  * Shows running timer status with pulse animation.
  * 48px minimum touch target for mobile accessibility.
- *
- * Migrated from jobs/time - now part of projects domain.
- * SPRINT-03: Project-centric restructure
  */
 
 import * as React from 'react';

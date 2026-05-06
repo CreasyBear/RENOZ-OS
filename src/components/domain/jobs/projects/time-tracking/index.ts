@@ -1,8 +1,7 @@
 /**
  * Time Tracking Components
  *
- * Components for tracking time on site visits.
- * Migrated from jobs/time as part of SPRINT-03 project-centric restructure.
+ * Project-domain components for project-scoped time tracking.
  */
 
 export { ActiveTimer } from './active-timer';

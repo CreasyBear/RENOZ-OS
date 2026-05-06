@@ -3,9 +3,6 @@
  *
  * Dialog for creating and editing manual time entries.
  * Includes start/end time pickers, description, and billable toggle.
- *
- * Migrated from jobs/time - now part of projects domain.
- * SPRINT-03: Project-centric restructure
  */
 
 import * as React from 'react';

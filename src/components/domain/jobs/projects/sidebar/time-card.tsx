@@ -14,8 +14,7 @@ import { Link } from '@tanstack/react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { ActiveTimer } from '../../time/active-timer';
-import { TimeEntryDialog } from '../../time/time-entry-dialog';
+import { ActiveTimer, TimeEntryDialog } from '../time-tracking';
 import {
   useJobTimeEntries,
   useStartTimer,

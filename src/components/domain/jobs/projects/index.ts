@@ -147,7 +147,7 @@ export {
   type ChecklistItemCardProps,
 } from './checklists';
 
-// --- Time Tracking (Migrated from jobs/time) ---
+// --- Time Tracking ---
 export {
   ActiveTimer,
   TimeEntryDialog,

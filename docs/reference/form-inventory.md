@@ -65,7 +65,6 @@ Comprehensive inventory of all forms in the codebase. Generated as part of the F
 | src/components/domain/jobs/projects/file-dialogs.tsx | TanStack (useTanStackForm) | dialog | Yes |
 | src/components/domain/jobs/projects/customer-sign-off-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
 | src/components/domain/jobs/projects/site-visit-create-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
-| src/components/domain/jobs/time/time-entry-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
 | src/components/domain/jobs/projects/time-tracking/time-entry-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
 | src/components/domain/jobs/schedule/schedule-visit-create-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
 | src/components/domain/communications/settings/add-suppression-dialog.tsx | TanStack (useTanStackForm) | dialog | Yes |
@@ -162,7 +161,6 @@ src/components/domain/jobs/projects/bom-dialogs.tsx,TanStack (useTanStackForm),d
 src/components/domain/jobs/projects/file-dialogs.tsx,TanStack (useTanStackForm),dialog,Yes
 src/components/domain/jobs/projects/customer-sign-off-dialog.tsx,TanStack (useTanStackForm),dialog,Yes
 src/components/domain/jobs/projects/site-visit-create-dialog.tsx,TanStack (useTanStackForm),dialog,Yes
-src/components/domain/jobs/time/time-entry-dialog.tsx,TanStack (useTanStackForm),dialog,Yes
 src/components/domain/jobs/projects/time-tracking/time-entry-dialog.tsx,TanStack (useTanStackForm),dialog,Yes
 src/components/domain/jobs/schedule/schedule-visit-create-dialog.tsx,TanStack (useTanStackForm),dialog,Yes
 src/components/domain/communications/settings/add-suppression-dialog.tsx,TanStack (useTanStackForm),dialog,Yes

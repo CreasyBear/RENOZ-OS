@@ -173,11 +173,11 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
-vi.mock('@/components/domain/jobs/time/active-timer', () => ({
+vi.mock('@/components/domain/jobs/projects/time-tracking/active-timer', () => ({
   ActiveTimer: () => <div>active-timer</div>,
 }));
 
-vi.mock('@/components/domain/jobs/time/time-entry-dialog', () => ({
+vi.mock('@/components/domain/jobs/projects/time-tracking/time-entry-dialog', () => ({
   TimeEntryDialog: () => <div>time-entry-dialog</div>,
 }));
 
@@ -335,7 +335,7 @@ describe('jobs query normalization wave 4b admin', () => {
     expect(result.current.data).toBeNull();
   });
 
-  it('preserves project not-found semantics for time tracking reads', async () => {
+  it('preserves scope not-found semantics for time tracking reads', async () => {
     mockGetJobTimeEntries.mockRejectedValueOnce({
       message: 'Job not found',
       statusCode: 404,
@@ -353,7 +353,7 @@ describe('jobs query normalization wave 4b admin', () => {
     expect(result.current.error).toMatchObject({
       failureKind: 'not-found',
       contractType: 'detail-not-found',
-      message: 'The requested project could not be found.',
+      message: 'The requested time tracking scope could not be found.',
     });
   });
 
