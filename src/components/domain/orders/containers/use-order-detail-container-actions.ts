@@ -12,6 +12,7 @@ import {
   useCreateRefundPayment,
 } from '@/hooks/orders/use-order-payments';
 import { useApplyAmendment } from '@/hooks/orders';
+import { getOrderDocumentActionErrorMessage } from '@/hooks/orders/order-document-action-errors';
 import {
   useGenerateOrderQuote,
   useGenerateOrderInvoice,
@@ -111,7 +112,7 @@ export function useOrderDetailContainerActions(
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
         ordersLogger.error('[OrderDetail] Failed to generate quote', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate quote');
+        toastError(getOrderDocumentActionErrorMessage(error, 'quote'));
       }
     },
     onGenerateInvoice: async () => {
@@ -121,7 +122,7 @@ export function useOrderDetailContainerActions(
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
         ordersLogger.error('[OrderDetail] Failed to generate invoice', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate invoice');
+        toastError(getOrderDocumentActionErrorMessage(error, 'invoice'));
       }
     },
     onGenerateProForma: async () => {
@@ -131,7 +132,7 @@ export function useOrderDetailContainerActions(
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
         ordersLogger.error('[OrderDetail] Failed to generate pro-forma', error);
-        toastError(error instanceof Error ? error.message : 'Failed to generate pro-forma');
+        toastError(getOrderDocumentActionErrorMessage(error, 'pro-forma'));
       }
     },
     isGeneratingQuote: generateQuote.isPending,

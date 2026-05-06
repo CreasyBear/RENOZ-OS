@@ -57,6 +57,7 @@ import { useTrackView } from '@/hooks/search';
 import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import type { OrderWorkflowAction } from '@/lib/schemas/orders';
 import { useOrderShipments, useReopenShipment } from '@/hooks/orders';
+import { getShipmentOperationalDocumentErrorMessage } from '@/hooks/orders/order-document-action-errors';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
@@ -552,9 +553,7 @@ export function OrderDetailContainer({
         toastSuccess(`${label} generated`);
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (error) {
-        toastError(
-          error instanceof Error ? error.message : `Failed to generate ${documentType}`
-        );
+        toastError(getShipmentOperationalDocumentErrorMessage(error, documentType));
       }
     },
     [
