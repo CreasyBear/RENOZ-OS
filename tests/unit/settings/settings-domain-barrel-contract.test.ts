@@ -24,5 +24,12 @@ describe('settings domain barrel contract', () => {
     expect(barrel).not.toContain('TargetsSettingsSection');
     expect(barrel).not.toContain('WinLossSettingsSection');
     expect(schemas).not.toContain('Used by settings-sections-extended.tsx');
+    expect(schemas).not.toContain('PreferencesSettingsData');
+    expect(schemas).not.toContain('EmailSettingsData');
+    expect(schemas).not.toContain('SecuritySettingsData');
+    expect(schemas).not.toContain('export interface ApiToken');
+    expect(schemas).not.toContain('export interface SettingsCategory');
+    expect(schemas).not.toContain('TargetsSettingsData');
+    expect(schemas).not.toContain('SettingsWinLossReason');
   });
 });

@@ -138,68 +138,6 @@ export const brandingSettingsSchema = z.object({
   websiteUrl: z.union([z.string().url(), z.literal("")]),
 });
 
-/**
- * Legacy settings data types.
- * Retained for schema barrel compatibility while route-owned settings presenters
- * use narrower workflow-specific types.
- */
-export interface PreferencesSettingsData {
-  theme: string;
-  accentColor: string;
-  density: string;
-  notifications_email: boolean;
-  notifications_inApp: boolean;
-  notifications_sound: boolean;
-  tablePageSize: string;
-  stickyHeaders: boolean;
-  reduceMotion: boolean;
-}
-
-export interface EmailSettingsData {
-  defaultFromName: string;
-  defaultFromEmail: string;
-  replyToEmail: string;
-  bccEmail: string;
-  emailSignature: string;
-}
-
-export interface SecuritySettingsData {
-  twoFactorEnabled: boolean;
-  sessionTimeout: string;
-  requirePasswordChange: boolean;
-  passwordExpiryDays: string;
-}
-
-export interface ApiToken {
-  id: string;
-  name: string;
-  lastUsed: string | null;
-  expiresAt: string | null;
-  scopes: string[];
-}
-
-export interface SettingsCategory {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  childCount: number;
-}
-
-export interface TargetsSettingsData {
-  salesTarget: number;
-  leadTarget: number;
-  conversionTarget: number;
-  revenueTarget: number;
-}
-
-export interface SettingsWinLossReason {
-  id: string;
-  label: string;
-  type: 'win' | 'loss';
-  isActive: boolean;
-}
-
 // ============================================================================
 // SYSTEM SETTINGS
 // ============================================================================
