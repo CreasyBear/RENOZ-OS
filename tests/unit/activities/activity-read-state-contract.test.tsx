@@ -38,6 +38,7 @@ describe('activity read state contract', () => {
     const activityHeatmap = read('src/components/shared/activity/activity-heatmap.tsx');
     const activityLeaderboard = read('src/components/shared/activity/activity-leaderboard.tsx');
     const followUpScheduler = read('src/components/domain/pipeline/activities/follow-up-scheduler.tsx');
+    const pipelineActivityHooks = read('src/hooks/pipeline/use-activities.ts');
     const activityHooks = read('src/hooks/activities/use-activities.ts');
     const unifiedHooks = read('src/hooks/activities/use-unified-activities.ts');
 
@@ -51,6 +52,11 @@ describe('activity read state contract', () => {
     expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.statistics');
     expect(activityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.leaderboard');
     expect(unifiedHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.history');
+    expect(pipelineActivityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.feed');
+    expect(pipelineActivityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.history');
+    expect(pipelineActivityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.followUps');
+    expect(pipelineActivityHooks).toContain('fallbackMessage: ACTIVITY_READ_MESSAGES.statistics');
+    expect(pipelineActivityHooks).not.toMatch(/fallbackMessage:\s*['"]/);
 
     for (const source of [activityFeed, timeline]) {
       expect(source).toContain('formatActivityReadError');

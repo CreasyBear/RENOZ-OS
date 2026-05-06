@@ -16,6 +16,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { ACTIVITY_READ_MESSAGES } from '@/lib/activities/read-error-messages';
 import {
   listActivities,
   getActivityTimeline,
@@ -86,15 +87,13 @@ export function useActivities({
         return requireReadResult(result, {
           message: 'Activities list returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.feed,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activities are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.feed,
         });
       }
     },
@@ -129,15 +128,13 @@ export function useActivityTimeline({
         return requireReadResult(result, {
           message: 'Activity timeline returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activity timeline is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.history,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activity timeline is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.history,
         });
       }
     },
@@ -168,15 +165,13 @@ export function useFollowUps({ opportunityId, days = 14, enabled = true }: UseFo
         return requireReadResult(result, {
           message: 'Upcoming follow-ups returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity follow-ups are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.followUps,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity follow-ups are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.followUps,
         });
       }
     },
@@ -223,15 +218,13 @@ export function useActivityAnalytics({
         return requireReadResult(result, {
           message: 'Activity analytics returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activity analytics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.statistics,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Opportunity activity analytics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: ACTIVITY_READ_MESSAGES.statistics,
         });
       }
     },
