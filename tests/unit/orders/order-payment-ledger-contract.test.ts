@@ -26,7 +26,41 @@ function sourceFrom(source: string, startMarker: string): string {
   return source.slice(start);
 }
 
+function expectActiveTenantOrderJoin(querySource: string): void {
+  expect(querySource).toContain('.innerJoin(');
+  expect(querySource).toContain('eq(orderPayments.orderId, orders.id)');
+  expect(querySource).toContain('eq(orders.organizationId, ctx.organizationId)');
+  expect(querySource).toContain('isNull(orders.deletedAt)');
+}
+
 describe('order payment ledger contract', () => {
+  it('keeps payment reads pinned to the active tenant-owned order', () => {
+    const source = read('src/server/functions/orders/order-payments.ts');
+    const paymentListSource = sourceBetween(
+      source,
+      'export const getOrderPayments',
+      '/**\n * Get a single payment by ID'
+    );
+    const paymentDetailSource = sourceBetween(
+      source,
+      'export const getOrderPayment',
+      '/**\n * Get payment summary for an order'
+    );
+    const paymentSummarySource = sourceBetween(
+      source,
+      'export const getOrderPaymentSummary',
+      '// ============================================================================\n// MUTATIONS'
+    );
+
+    expectActiveTenantOrderJoin(paymentListSource);
+    expectActiveTenantOrderJoin(paymentDetailSource);
+    expectActiveTenantOrderJoin(paymentSummarySource);
+    expect(paymentListSource).toContain('eq(orderPayments.orderId, orderId)');
+    expect(paymentDetailSource).toContain('eq(orderPayments.id, paymentId)');
+    expect(paymentDetailSource).toContain('isNull(orderPayments.deletedAt)');
+    expect(paymentSummarySource).toContain('eq(orderPayments.orderId, orderId)');
+  });
+
   it('requires finance update permission before recording a real payment', () => {
     const source = read('src/server/functions/orders/order-payments.ts');
     const createPaymentSource = sourceBetween(

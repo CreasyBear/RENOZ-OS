@@ -72,6 +72,14 @@ export const getOrderPayments = createServerFn({ method: "GET" })
         recordedBy: orderPayments.recordedBy,
       })
       .from(orderPayments)
+      .innerJoin(
+        orders,
+        and(
+          eq(orderPayments.orderId, orders.id),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
       .where(
         and(
           eq(orderPayments.orderId, orderId),
@@ -114,10 +122,19 @@ export const getOrderPayment = createServerFn({ method: "GET" })
         recordedBy: orderPayments.recordedBy,
       })
       .from(orderPayments)
+      .innerJoin(
+        orders,
+        and(
+          eq(orderPayments.orderId, orders.id),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
       .where(
         and(
           eq(orderPayments.id, paymentId),
-          eq(orderPayments.organizationId, ctx.organizationId)
+          eq(orderPayments.organizationId, ctx.organizationId),
+          isNull(orderPayments.deletedAt)
         )
       )
       .limit(1);
@@ -141,6 +158,14 @@ export const getOrderPaymentSummary = createServerFn({ method: "GET" })
         netAmount: sql<number>`COALESCE(SUM(CASE WHEN ${orderPayments.isRefund} = true THEN -${orderPayments.amount} ELSE ${orderPayments.amount} END), 0)`,
       })
       .from(orderPayments)
+      .innerJoin(
+        orders,
+        and(
+          eq(orderPayments.orderId, orders.id),
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      )
       .where(
         and(
           eq(orderPayments.orderId, orderId),
