@@ -49,7 +49,7 @@ import {
 import { SettingsDialog } from './settings-dialog'
 import { queryKeys } from '@/lib/query-keys'
 import { useQueryClient } from '@tanstack/react-query'
-import { authErrorMessage, toAuthErrorCode } from '@/lib/auth/error-codes'
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages'
 
 // ============================================================================
 // TYPES
@@ -128,7 +128,7 @@ export function Sidebar({
         })
       }
     } else if (oauthParam === 'failed') {
-      const message = authErrorMessage(toAuthErrorCode(errorParam))
+      const message = formatOAuthConnectionError(errorParam, 'callback')
       toast.error('Connection failed', { description: message })
     }
 

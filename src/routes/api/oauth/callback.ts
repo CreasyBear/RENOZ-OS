@@ -6,7 +6,7 @@
 
 import { db } from '@/lib/db';
 import { handleOAuthCallback } from '@/lib/oauth/flow';
-import { toAuthErrorCode } from '@/lib/auth/error-codes';
+import { toOAuthConnectionErrorCode } from '@/lib/oauth/oauth-error-messages';
 
 export async function GET({ request }: { request: Request }) {
   const url = new URL(request.url);
@@ -36,7 +36,7 @@ export async function GET({ request }: { request: Request }) {
   }
 
   if (!result.success && result.error !== 'TENANT_SELECTION_REQUIRED') {
-    redirect.searchParams.set('error', toAuthErrorCode(result.error));
+    redirect.searchParams.set('error', toOAuthConnectionErrorCode(result.error));
   }
 
   return new Response(null, {

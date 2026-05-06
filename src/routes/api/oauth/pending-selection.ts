@@ -5,6 +5,7 @@ import {
   completePendingXeroTenantSelection,
   getPendingXeroTenantSelection,
 } from '@/lib/oauth/flow';
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 
 const querySchema = z.object({
   stateId: z.string().uuid(),
@@ -44,7 +45,7 @@ export async function GET({ request }: { request: Request }) {
   } catch (error) {
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to load pending Xero tenant selection',
+        error: formatOAuthConnectionError(error, 'loadTenantSelection'),
       }),
       {
         status: 400,
@@ -82,7 +83,7 @@ export async function POST({ request }: { request: Request }) {
   } catch (error) {
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to complete Xero tenant selection',
+        error: formatOAuthConnectionError(error, 'completeTenantSelection'),
       }),
       {
         status: 400,

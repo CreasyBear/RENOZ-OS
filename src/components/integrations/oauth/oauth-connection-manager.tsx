@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmation } from '@/hooks';
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 import type { PendingXeroTenantSelection } from '@/lib/schemas/oauth/connection';
 
 // Import OAuth server functions (would be implemented with tRPC or similar)
@@ -151,7 +152,7 @@ const {
       );
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to load Xero tenant choices');
+        throw new Error(formatOAuthConnectionError(data.error, 'loadTenantSelection'));
       }
       return response.json() as Promise<PendingXeroTenantSelection>;
     },
@@ -184,7 +185,7 @@ const {
     },
     onError: (error) => {
       toast.error('Failed to initiate connection', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatOAuthConnectionError(error, 'initiate'),
       });
     },
   });
@@ -210,7 +211,7 @@ const {
     },
     onError: (error) => {
       toast.error('Failed to disconnect', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatOAuthConnectionError(error, 'disconnect'),
       });
     },
   });
@@ -226,7 +227,7 @@ const {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to complete Xero tenant selection');
+        throw new Error(formatOAuthConnectionError(data.error, 'completeTenantSelection'));
       }
 
       return data;
@@ -240,7 +241,7 @@ const {
     },
     onError: (error) => {
       toast.error('Failed to complete Xero tenant selection', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatOAuthConnectionError(error, 'completeTenantSelection'),
       });
     },
   });
@@ -275,7 +276,7 @@ const {
     },
     onError: (error) => {
       toast.error('Sync failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatOAuthConnectionError(error, 'sync'),
       });
     },
     onSettled: () => {
