@@ -4,7 +4,7 @@
  * Displays a list of job templates with management actions.
  * Used in settings page for template management.
  *
- * @see src/hooks/use-job-templates.ts
+ * @see src/hooks/jobs/use-job-templates-config.ts
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-007c
  */
 

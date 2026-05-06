@@ -10,7 +10,7 @@
  * - ✅ Technician: src/components/domain/jobs/technician/
  * - ✅ Site Visits: src/components/domain/jobs/site-visits/
  * - ✅ Installers: src/components/domain/jobs/installers/
- * - 🔄 Templates: Will be migrated to projects in SPRINT-05
+ * - ✅ Job Templates: src/components/domain/jobs/job-templates/
  * - ✅ Time Tracking: consolidated under projects/time-tracking
  *
  * SPRINT-04: Legacy cleanup complete (kanban, materials, tasks, calendar, timeline, bulk removed)
@@ -47,15 +47,6 @@ export {
   type InstallerSuggestionPanelProps,
 } from './installers';
 
-// --- LEGACY SUPPORT (To be removed in SPRINT-05) ---
-// Templates are temporarily kept for settings/job-templates route.
-// These will be migrated to projects in a future template-domain slice.
-
-export { JobTemplateList } from './templates/job-template-list';
-export { JobTemplateFormDialog } from './templates/job-template-form-dialog';
-
 // ============================================================================
 // SPRINT-04 STATUS: Legacy directories removed ✅
-// SPRINT-05 TODO:
-// - Migrate templates/ to projects (project templates)
 // ============================================================================

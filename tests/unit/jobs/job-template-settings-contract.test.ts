@@ -44,8 +44,8 @@ describe('job template settings contract', () => {
 
   it('keeps job template settings feedback, tenant writes, and cache spine reviewable', () => {
     const route = read('src/routes/_authenticated/settings/job-templates.tsx');
-    const form = read('src/components/domain/jobs/templates/job-template-form-dialog.tsx');
-    const list = read('src/components/domain/jobs/templates/job-template-list.tsx');
+    const form = read('src/components/domain/jobs/job-templates/job-template-form-dialog.tsx');
+    const list = read('src/components/domain/jobs/job-templates/job-template-list.tsx');
     const hooks = read('src/hooks/jobs/use-job-templates-config.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/jobs/job-templates.ts');

@@ -4,8 +4,8 @@
  * Management page for job templates. Allows creating, editing,
  * and deleting templates for quick job creation.
  *
- * @see src/components/domain/jobs/job-template-list.tsx
- * @see src/components/domain/jobs/job-template-form-dialog.tsx
+ * @see src/components/domain/jobs/job-templates/job-template-list.tsx
+ * @see src/components/domain/jobs/job-templates/job-template-form-dialog.tsx
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-007c
  */
 
@@ -14,8 +14,10 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
-import { JobTemplateList } from '@/components/domain/jobs';
-import { JobTemplateFormDialog } from '@/components/domain/jobs';
+import {
+  JobTemplateFormDialog,
+  JobTemplateList,
+} from '@/components/domain/jobs/job-templates';
 import { formatJobTemplateMutationError, toast, useCreateJobTemplate } from '@/hooks';
 import type { JobTemplateResponse } from '@/lib/schemas';
 export const Route = createFileRoute('/_authenticated/settings/job-templates')({

@@ -4,7 +4,7 @@
  * Dialog for creating/editing job templates.
  * Supports configuring default tasks, BOM, checklist, and SLA.
  *
- * @see src/hooks/use-job-templates.ts
+ * @see src/hooks/jobs/use-job-templates-config.ts
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-007c
  */
 
