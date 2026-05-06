@@ -12,6 +12,7 @@ const mockGetPreferenceHistory = vi.fn();
 const mockGetSuppressionList = vi.fn();
 const mockIsEmailSuppressed = vi.fn();
 
+const mockUseEmailHistory = vi.fn();
 const mockUseScheduledCalls = vi.fn();
 const mockUseCompleteCall = vi.fn();
 const mockUseCancelCall = vi.fn();
@@ -40,6 +41,10 @@ vi.mock('@tanstack/react-start', async (importOriginal) => {
 
 vi.mock('@/server/functions/communications/email-history', () => ({
   listEmailHistory: (...args: unknown[]) => mockListEmailHistory(...args),
+}));
+
+vi.mock('@/hooks/communications/use-email-history', () => ({
+  useEmailHistory: (...args: unknown[]) => mockUseEmailHistory(...args),
 }));
 
 vi.mock('@/server/functions/communications/scheduled-emails', () => ({
@@ -86,6 +91,12 @@ vi.mock('@/components/domain/communications', () => ({
     calls: Array<{ id: string }>;
   }) => <div>scheduled-calls:{calls.length}</div>,
   CallOutcomeDialog: () => <div>call-outcome-dialog</div>,
+}));
+
+vi.mock('@/components/domain/communications/emails/email-history-list', () => ({
+  EmailHistoryList: ({ items }: { items: Array<{ id: string }> }) => (
+    <div>email-history:{items.length}</div>
+  ),
 }));
 
 vi.mock('@/components/shared', () => ({
@@ -164,6 +175,12 @@ describe('communications query normalization wave 4c', () => {
     });
 
     const idleMutation = { mutateAsync: vi.fn(), isPending: false };
+    mockUseEmailHistory.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
     mockUseScheduledCalls.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -270,6 +287,28 @@ describe('communications query normalization wave 4c', () => {
 
     expect(screen.getByText('Showing cached scheduled calls')).toBeInTheDocument();
     expect(screen.getByText('scheduled-calls:1')).toBeInTheDocument();
+  }, 20_000);
+
+  it('keeps cached email history visible during refetch errors', async () => {
+    mockUseEmailHistory.mockReturnValue({
+      data: {
+        items: [{ id: 'history-1' }],
+        hasNextPage: false,
+        nextCursor: null,
+      },
+      isLoading: false,
+      error: new Error('Email history is temporarily unavailable. Please refresh and try again.'),
+      refetch: vi.fn(),
+    });
+
+    const { default: EmailHistoryPage } = await import(
+      '@/routes/_authenticated/communications/emails/-email-history-page'
+    );
+
+    render(<EmailHistoryPage />);
+
+    expect(screen.getByText('Showing cached email history')).toBeInTheDocument();
+    expect(screen.getByText('email-history:1')).toBeInTheDocument();
   }, 20_000);
 
   it('shows a blocking unavailable state for contact preferences cold-load failures', async () => {

@@ -7,6 +7,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { EmailHistoryList } from "@/components/domain/communications/emails/email-history-list";
 import { useEmailHistory } from "@/hooks/communications/use-email-history";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 
 export default function EmailHistoryPage() {
   const { data, isLoading, error, refetch } = useEmailHistory({ pageSize: 25 });
@@ -18,9 +22,10 @@ export default function EmailHistoryPage() {
           <AlertTitle>Showing cached email history</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              {error instanceof Error
-                ? error.message
-                : "Email history is temporarily unavailable. Please refresh and try again."}
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.emailHistory
+              )}
             </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry

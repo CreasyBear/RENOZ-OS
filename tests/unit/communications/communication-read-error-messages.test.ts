@@ -51,6 +51,12 @@ describe('communication read error messages', () => {
     const signatures = read(
       'src/routes/_authenticated/communications/signatures/signatures-page.tsx'
     );
+    const campaigns = read(
+      'src/routes/_authenticated/communications/campaigns/campaigns-page.tsx'
+    );
+    const emailHistory = read(
+      'src/routes/_authenticated/communications/emails/-email-history-page.tsx'
+    );
     const scheduledEmails = read(
       'src/routes/_authenticated/communications/emails/scheduled-emails-page.tsx'
     );
@@ -77,6 +83,15 @@ describe('communication read error messages', () => {
     expect(signatures).toContain('formatCommunicationReadError(');
     expect(signatures).toContain('COMMUNICATION_READ_MESSAGES.emailSignatures');
     expect(signatures).not.toContain('<span>{error.message}</span>');
+    expect(campaigns).toContain('formatCommunicationReadError(');
+    expect(campaigns).toContain('COMMUNICATION_READ_MESSAGES.emailCampaigns');
+    expect(campaigns).not.toContain('<span>{error.message}</span>');
+    expect(emailHistory).toContain('formatCommunicationReadError(');
+    expect(emailHistory).toContain('COMMUNICATION_READ_MESSAGES.emailHistory');
+    expect(emailHistory).not.toContain('? error.message');
+    expect(emailHistory).not.toContain(
+      'Email history is temporarily unavailable. Please refresh and try again."'
+    );
     expect(scheduledEmails).toContain('formatCommunicationReadError(');
     expect(scheduledEmails).toContain('COMMUNICATION_READ_MESSAGES.scheduledEmails');
     expect(scheduledEmails).not.toContain('? error.message');
@@ -94,6 +109,8 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('inboxEmailAccounts');
     expect(formatter).toContain('emailTemplates');
     expect(formatter).toContain('emailSignatures');
+    expect(formatter).toContain('emailCampaigns');
+    expect(formatter).toContain('emailHistory');
     expect(formatter).toContain('scheduledEmails');
     expect(formatter).toContain('scheduledCalls');
   });

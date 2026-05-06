@@ -28,6 +28,10 @@ import { toastSuccess, toastError } from "@/hooks";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
 import { ErrorState } from "@/components/shared";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { transformCampaignsToListItems } from "@/lib/communications/campaign-utils";
 import type { Campaign } from "@/lib/schemas/communications";
 import { DomainFilterBar } from "@/components/shared/filters";
@@ -356,7 +360,12 @@ export default function CampaignsPage() {
         <Alert>
           <AlertTitle>Showing cached campaigns</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message}</span>
+            <span>
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.emailCampaigns
+              )}
+            </span>
             <button
               type="button"
               className="text-sm font-medium underline underline-offset-4"

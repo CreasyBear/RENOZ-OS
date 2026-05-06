@@ -346,6 +346,49 @@ describe('communications query normalization wave 4d', () => {
     expect(result.current.data?.metrics.deliveryRate).toBe(0);
   });
 
+  it('shows cached-campaign degradation instead of blocking the campaigns page', async () => {
+    mockUseCampaigns.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'campaign-1',
+            name: 'Warranty reminder',
+            templateType: 'reminder',
+            status: 'draft',
+            recipientCount: 0,
+            sentCount: 0,
+            openCount: 0,
+            clickCount: 0,
+            bounceCount: 0,
+            failedCount: 0,
+            scheduledAt: null,
+            startedAt: null,
+            completedAt: null,
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+      error: new Error('Campaign data is temporarily unavailable. Please refresh and try again.'),
+      refetch: vi.fn(),
+    });
+
+    const { default: CampaignsPage } = await import(
+      '@/routes/_authenticated/communications/campaigns/campaigns-page'
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CampaignsPage />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText('Showing cached campaigns')).toBeInTheDocument();
+    expect(screen.getByText('campaigns:1')).toBeInTheDocument();
+  });
+
   it('shows cached-template degradation instead of blocking the templates page', async () => {
     mockUseTemplates.mockReturnValue({
       data: [{ id: 'template-1' }],
