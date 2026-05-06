@@ -16,7 +16,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { useAddProductImage } from "@/hooks/products";
+import {
+  formatProductImageMutationError,
+  useAddProductImage,
+} from "@/hooks/products";
 import { toastError } from "@/hooks";
 
 // Validation constants
@@ -241,7 +244,7 @@ export function ImageUploader({
 
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Upload failed";
+      const errorMessage = formatProductImageMutationError(error, "add");
       toastError(errorMessage);
       setFiles((prev) =>
         prev.map((f) =>
@@ -250,7 +253,7 @@ export function ImageUploader({
                 ...f,
                 status: "error" as const,
                 progress: 0,
-                error: error instanceof Error ? error.message : "Upload failed",
+                error: errorMessage,
               }
             : f
         )
@@ -267,16 +270,15 @@ export function ImageUploader({
     setIsUploading(true);
 
     // Upload files sequentially
+    let allSucceeded = true;
     for (const file of pendingFiles) {
-      await uploadFile(file);
+      const didSucceed = await uploadFile(file);
+      if (!didSucceed) {
+        allSucceeded = false;
+      }
     }
 
     setIsUploading(false);
-
-    // Check if all succeeded
-    const allSucceeded = files.every(
-      (f) => f.status === "success" || f.status === "pending"
-    );
 
     if (allSucceeded) {
       onUploadComplete?.();
