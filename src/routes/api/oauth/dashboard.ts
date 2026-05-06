@@ -10,8 +10,22 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema';
 import { and, eq, gte, sql, desc } from 'drizzle-orm';
+import {
+  formatOAuthStatusDetailValue,
+  formatOAuthStatusMessage,
+} from '@/lib/oauth/oauth-error-messages';
 
-async function handleDashboard() {
+function formatOAuthActivityDetails(metadata: unknown): Record<string, string> | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [key, formatOAuthStatusDetailValue(value)])
+  );
+}
+
+export async function GET() {
   const ctx = await withAuth({ permission: PERMISSIONS.organization.manageIntegrations });
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -80,18 +94,22 @@ async function handleDashboard() {
               ? 'warning'
               : 'error';
 
-        return {
-        id: log.id,
-        timestamp: log.createdAt,
-        type: log.operation,
-        service: log.serviceType,
-        provider: log.provider || 'google_workspace',
-        status,
-        description:
+        const rawDescription =
           log.status === 'failed'
             ? log.errorMessage || 'Sync failed'
-            : `${log.operation} completed`,
-        details: log.metadata,
+            : log.status === 'completed_with_errors'
+              ? log.errorMessage || `${log.operation} completed with warnings`
+              : `${log.operation} completed`;
+
+        return {
+          id: log.id,
+          timestamp: log.createdAt,
+          type: log.operation,
+          service: log.serviceType,
+          provider: log.provider || 'google_workspace',
+          status,
+          description: formatOAuthStatusMessage(rawDescription, status),
+          details: formatOAuthActivityDetails(log.metadata),
         };
       }),
     }),
@@ -102,7 +120,7 @@ async function handleDashboard() {
 export const Route = createFileRoute('/api/oauth/dashboard')({
   server: {
     handlers: {
-      GET: handleDashboard,
+      GET,
     },
   },
 });

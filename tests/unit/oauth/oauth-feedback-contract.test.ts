@@ -62,6 +62,7 @@ describe('oauth integration feedback', () => {
     const callbackRoute = read('src/routes/api/oauth/callback.ts');
     const initiateRoute = read('src/routes/api/oauth/initiate.ts');
     const pendingRoute = read('src/routes/api/oauth/pending-selection.ts');
+    const dashboardRoute = read('src/routes/api/oauth/dashboard.ts');
     const sidebar = read('src/components/layout/sidebar.tsx');
     const manager = read('src/components/integrations/oauth/oauth-connection-manager.tsx');
     const dashboard = read('src/components/integrations/oauth/oauth-status-dashboard.tsx');
@@ -83,6 +84,11 @@ describe('oauth integration feedback', () => {
     expect(pendingRoute).not.toContain(
       "error instanceof Error ? error.message : 'Failed to complete Xero tenant selection'"
     );
+
+    expect(dashboardRoute).toContain('description: formatOAuthStatusMessage(rawDescription, status)');
+    expect(dashboardRoute).toContain('details: formatOAuthActivityDetails(log.metadata)');
+    expect(dashboardRoute).not.toContain('description: log.errorMessage');
+    expect(dashboardRoute).not.toContain('details: log.metadata');
 
     expect(sidebar).toContain("formatOAuthConnectionError(errorParam, 'callback')");
     expect(sidebar).not.toContain('authErrorMessage(toAuthErrorCode(errorParam))');
