@@ -21,6 +21,14 @@ export const PIPELINE_READ_MESSAGES = {
   revenueAttribution: 'Revenue attribution is temporarily unavailable. Please refresh and try again.',
   pipelineCustomers: 'Pipeline customers are temporarily unavailable. Please refresh and try again.',
   pipelineProducts: 'Pipeline products are temporarily unavailable. Please refresh and try again.',
+  quoteVersionDetails:
+    'Quote version details are temporarily unavailable. Please refresh and try again.',
+  quoteVersionNotFound: 'The requested quote version could not be found.',
+  quoteComparison: 'Quote comparison is temporarily unavailable. Please refresh and try again.',
+  expiringQuotes: 'Expiring quote data is temporarily unavailable. Please refresh and try again.',
+  expiredQuotes: 'Expired quote data is temporarily unavailable. Please refresh and try again.',
+  quoteValidityStats:
+    'Quote validity statistics are temporarily unavailable. Please refresh and try again.',
   quoteVersionHistory: 'Quote version history is temporarily unavailable. Please refresh and try again.',
 } as const;
 

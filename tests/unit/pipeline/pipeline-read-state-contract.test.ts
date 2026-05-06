@@ -85,4 +85,17 @@ describe('pipeline read state contract', () => {
     expect(useOpportunities).not.toMatch(/fallbackMessage:\s*['"]/);
     expect(usePipelineMetrics).not.toMatch(/fallbackMessage:\s*['"]/);
   });
+
+  it('keeps quote hook read normalization fallbacks in the pipeline message map', () => {
+    const useQuotes = read('src/hooks/pipeline/use-quotes.ts');
+
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.quoteVersionHistory');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.quoteVersionDetails');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.quoteVersionNotFound');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.quoteComparison');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.expiringQuotes');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.expiredQuotes');
+    expect(useQuotes).toContain('PIPELINE_READ_MESSAGES.quoteValidityStats');
+    expect(useQuotes).not.toMatch(/fallbackMessage:\s*['"]/);
+  });
 });

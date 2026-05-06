@@ -40,5 +40,11 @@ describe('pipeline read error messages', () => {
     expect(PIPELINE_READ_MESSAGES.revenueAttribution).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.pipelineCustomers).toContain('temporarily unavailable');
     expect(PIPELINE_READ_MESSAGES.pipelineProducts).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.quoteVersionDetails).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.quoteVersionNotFound).toContain('could not be found');
+    expect(PIPELINE_READ_MESSAGES.quoteComparison).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.expiringQuotes).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.expiredQuotes).toContain('temporarily unavailable');
+    expect(PIPELINE_READ_MESSAGES.quoteValidityStats).toContain('temporarily unavailable');
   });
 });

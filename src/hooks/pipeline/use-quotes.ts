@@ -17,6 +17,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { PIPELINE_READ_MESSAGES } from '@/lib/pipeline/read-error-messages';
 import {
   listQuoteVersions,
   getQuoteVersion,
@@ -67,13 +68,13 @@ export function useQuoteVersions({ opportunityId, enabled = true }: UseQuoteVers
         return requireReadResult(result, {
           message: 'Quote versions returned no data',
           contractType: 'always-shaped',
-          fallbackMessage: 'Quote versions are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteVersionHistory,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Quote versions are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteVersionHistory,
         });
       }
     },
@@ -103,17 +104,15 @@ export function useQuoteVersion({ versionId, enabled = true }: UseQuoteVersionOp
         return requireReadResult(result, {
           message: 'Quote version not found',
           contractType: 'detail-not-found',
-          fallbackMessage:
-            'Quote version details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested quote version could not be found.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteVersionDetails,
+          notFoundMessage: PIPELINE_READ_MESSAGES.quoteVersionNotFound,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'detail-not-found',
-          fallbackMessage:
-            'Quote version details are temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested quote version could not be found.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteVersionDetails,
+          notFoundMessage: PIPELINE_READ_MESSAGES.quoteVersionNotFound,
         });
       }
     },
@@ -144,15 +143,13 @@ export function useQuoteComparison({ version1Id, version2Id, enabled = true }: U
         return requireReadResult(result, {
           message: 'Quote comparison returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Quote comparison is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteComparison,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Quote comparison is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteComparison,
         });
       }
     },
@@ -183,15 +180,13 @@ export function useExpiringQuotes({ warningDays = 7, limit = 10, enabled = true 
         return requireReadResult(result, {
           message: 'Expiring quotes returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Expiring quote data is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.expiringQuotes,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Expiring quote data is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.expiringQuotes,
         });
       }
     },
@@ -221,15 +216,13 @@ export function useExpiredQuotes({ limit = 10, enabled = true }: UseExpiredQuote
         return requireReadResult(result, {
           message: 'Expired quotes returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Expired quote data is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.expiredQuotes,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Expired quote data is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.expiredQuotes,
         });
       }
     },
@@ -258,15 +251,13 @@ export function useQuoteValidityStats({ enabled = true }: UseQuoteValidityStatsO
         return requireReadResult(result, {
           message: 'Quote validity stats returned no data',
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Quote validity statistics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteValidityStats,
         });
       } catch (error) {
         if (isReadQueryError(error)) throw error;
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage:
-            'Quote validity statistics are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: PIPELINE_READ_MESSAGES.quoteValidityStats,
         });
       }
     },
