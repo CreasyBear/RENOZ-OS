@@ -201,11 +201,7 @@ export function useActivityAnalytics({
   enabled = true,
 }: UseActivityAnalyticsOptions) {
   return useQuery({
-    queryKey: [
-      ...queryKeys.pipeline.all,
-      'activity-analytics',
-      { opportunityId, dateFrom, dateTo },
-    ] as const,
+    queryKey: queryKeys.pipeline.activityAnalytics({ opportunityId, dateFrom, dateTo }),
     queryFn: async () => {
       try {
         const result = await getActivityAnalytics({

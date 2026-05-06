@@ -683,6 +683,11 @@ export const queryKeys = {
       [...queryKeys.pipeline.all, 'activityTimeline', opportunityId, filters ?? {}] as const,
     followUps: (opportunityId: string) =>
       [...queryKeys.pipeline.all, 'followUps', opportunityId] as const,
+    activityAnalytics: (filters?: {
+      opportunityId?: string
+      dateFrom?: Date
+      dateTo?: Date
+    }) => [...queryKeys.pipeline.all, 'activity-analytics', filters ?? {}] as const,
     quoteVersions: (opportunityId: string) =>
       [...queryKeys.pipeline.all, 'quoteVersions', opportunityId] as const,
     quoteCompare: (version1Id: string, version2Id: string) =>
