@@ -45,6 +45,7 @@ describe('communication read error messages', () => {
     const inboxAccounts = read(
       'src/components/domain/communications/inbox/inbox-email-accounts-settings.tsx'
     );
+    const inbox = read('src/components/domain/communications/inbox/inbox.tsx');
     const templates = read(
       'src/routes/_authenticated/communications/emails/templates/templates-page.tsx'
     );
@@ -77,6 +78,12 @@ describe('communication read error messages', () => {
     expect(inboxAccounts).toContain('COMMUNICATION_READ_MESSAGES.inboxEmailAccountsCached');
     expect(inboxAccounts).not.toContain('Failed to load email accounts: {error.message}');
     expect(inboxAccounts).not.toContain('error.message ||');
+    expect(inbox).toContain('formatCommunicationReadError(');
+    expect(inbox).toContain('COMMUNICATION_READ_MESSAGES.inboxItems');
+    expect(inbox).not.toContain('? error.message');
+    expect(inbox).not.toContain(
+      'Inbox data is temporarily unavailable. Please refresh and try again."'
+    );
     expect(templates).toContain('formatCommunicationReadError(');
     expect(templates).toContain('COMMUNICATION_READ_MESSAGES.emailTemplates');
     expect(templates).not.toContain('<span>{error.message}</span>');
@@ -107,6 +114,7 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('isReadQueryError(error)');
     expect(formatter).toContain('suppressionList');
     expect(formatter).toContain('inboxEmailAccounts');
+    expect(formatter).toContain('inboxItems');
     expect(formatter).toContain('emailTemplates');
     expect(formatter).toContain('emailSignatures');
     expect(formatter).toContain('emailCampaigns');

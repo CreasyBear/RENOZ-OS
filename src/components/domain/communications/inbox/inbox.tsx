@@ -19,6 +19,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "@/lib/toast";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { InboxList } from "./inbox-list";
 import { InboxDetail } from "./inbox-detail";
 import { DomainFilterBar } from "@/components/shared/filters";
@@ -315,9 +319,10 @@ export function Inbox({
           <AlertTitle>Showing cached inbox items</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              {error instanceof Error
-                ? error.message
-                : "Inbox data is temporarily unavailable. Please refresh and try again."}
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.inboxItems
+              )}
             </span>
             {onRetry ? (
               <Button size="sm" variant="outline" onClick={() => void Promise.resolve(onRetry())}>
