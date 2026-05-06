@@ -23,6 +23,47 @@ import {
 } from '@/server/functions/project-bom';
 import type { GetProjectBomResponse } from '@/lib/schemas/jobs/project-bom';
 
+type BomItemStatus = 'planned' | 'ordered' | 'received' | 'allocated' | 'installed';
+
+type AddBomItemMutationInput = {
+  data: {
+    bomId: string;
+    productId: string;
+    quantity: number;
+    unitCost?: number;
+    notes?: string;
+  };
+};
+
+type UpdateBomItemMutationInput = {
+  data: {
+    itemId: string;
+    quantity?: number;
+    unitCost?: number;
+    status?: BomItemStatus;
+    notes?: string;
+  };
+};
+
+type RemoveBomItemMutationInput = {
+  data: {
+    itemId: string;
+  };
+};
+
+type RemoveBomItemsMutationInput = {
+  data: {
+    itemIds: string[];
+  };
+};
+
+type UpdateBomItemsStatusMutationInput = {
+  data: {
+    itemIds: string[];
+    status: BomItemStatus;
+  };
+};
+
 // ============================================================================
 // QUERY HOOKS
 // ============================================================================
@@ -85,7 +126,8 @@ export function useAddBomItem(projectId: string) {
   const addFn = useServerFn(addBomItem);
 
   return useMutation({
-    mutationFn: addFn,
+    mutationFn: (params: AddBomItemMutationInput) =>
+      addFn({ data: { ...params.data, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
@@ -106,7 +148,8 @@ export function useUpdateBomItem(projectId: string) {
   const updateFn = useServerFn(updateBomItem);
 
   return useMutation({
-    mutationFn: updateFn,
+    mutationFn: (params: UpdateBomItemMutationInput) =>
+      updateFn({ data: { ...params.data, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
@@ -127,7 +170,8 @@ export function useRemoveBomItem(projectId: string) {
   const removeFn = useServerFn(removeBomItem);
 
   return useMutation({
-    mutationFn: removeFn,
+    mutationFn: (params: RemoveBomItemMutationInput) =>
+      removeFn({ data: { ...params.data, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
@@ -148,7 +192,8 @@ export function useRemoveBomItems(projectId: string) {
   const removeFn = useServerFn(removeBomItems);
 
   return useMutation({
-    mutationFn: (params: { data: { itemIds: string[] } }) => removeFn(params),
+    mutationFn: (params: RemoveBomItemsMutationInput) =>
+      removeFn({ data: { ...params.data, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),
@@ -168,9 +213,8 @@ export function useUpdateBomItemsStatus(projectId: string) {
   const updateFn = useServerFn(updateBomItemsStatus);
 
   return useMutation({
-    mutationFn: (params: {
-      data: { itemIds: string[]; status: 'planned' | 'ordered' | 'received' | 'allocated' | 'installed' };
-    }) => updateFn(params),
+    mutationFn: (params: UpdateBomItemsStatusMutationInput) =>
+      updateFn({ data: { ...params.data, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.bom(projectId),

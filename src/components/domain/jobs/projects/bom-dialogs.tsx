@@ -22,7 +22,7 @@ import {
   TextareaField,
   extractFieldError,
 } from '@/components/shared/forms';
-import { useAddBomItem } from '@/hooks/jobs';
+import { formatProjectBomMutationError, useAddBomItem } from '@/hooks/jobs';
 import { useProductSearch } from '@/hooks/products';
 import { useDebounce } from '@/hooks/_shared';
 import { toast } from 'sonner';
@@ -101,8 +101,8 @@ export function BomAddItemDialog({
         form.reset();
         setSelectedProduct(null);
         onSuccess?.();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to add item';
+      } catch (error) {
+        const msg = formatProjectBomMutationError(error, 'addItem');
         setSubmitError(msg);
         toast.error(msg);
       }

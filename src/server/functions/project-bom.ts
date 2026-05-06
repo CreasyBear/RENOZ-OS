@@ -7,12 +7,13 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, max, sql } from 'drizzle-orm';
+import { eq, and, max, sql, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectBom, projectBomItems, products, projects, orderLineItems } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { ConflictError, NotFoundError } from '@/lib/server/errors';
 import { z } from 'zod';
 import type { BomItemWithProduct } from '@/lib/schemas/jobs/project-bom';
 
@@ -84,8 +85,20 @@ export const getProjectBom = createServerFn({ method: 'GET' })
         },
       })
       .from(projectBomItems)
-      .leftJoin(products, eq(projectBomItems.productId, products.id))
-      .where(eq(projectBomItems.bomId, bom.id))
+      .leftJoin(
+        products,
+        and(
+          eq(projectBomItems.productId, products.id),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .where(
+        and(
+          eq(projectBomItems.bomId, bom.id),
+          eq(projectBomItems.projectId, data.projectId),
+          eq(projectBomItems.organizationId, ctx.organizationId)
+        )
+      )
       .orderBy(projectBomItems.position);
 
     // Transform to flattened structure (matches BomItemWithProduct)
@@ -123,6 +136,21 @@ export const createProjectBom = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.create });
 
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.id, data.projectId),
+          eq(projects.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!project) {
+      throw new NotFoundError('Project not found', 'project');
+    }
+
     // Check if BOM already exists
     const [existing] = await db
       .select({ id: projectBom.id })
@@ -136,7 +164,7 @@ export const createProjectBom = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing) {
-      throw new Error('BOM already exists for this project');
+      throw new ConflictError('BOM already exists for this project');
     }
 
     // Generate BOM number
@@ -168,6 +196,7 @@ export const createProjectBom = createServerFn({ method: 'POST' })
 export const addBomItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
+      projectId: z.string().uuid(),
       bomId: z.string().uuid(),
       productId: z.string().uuid(),
       quantity: z.number().positive(),
@@ -182,18 +211,45 @@ export const addBomItem = createServerFn({ method: 'POST' })
     const [bom] = await db
       .select({ id: projectBom.id, projectId: projectBom.projectId })
       .from(projectBom)
-      .where(eq(projectBom.id, data.bomId))
+      .where(
+        and(
+          eq(projectBom.id, data.bomId),
+          eq(projectBom.projectId, data.projectId),
+          eq(projectBom.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
 
     if (!bom) {
-      throw new Error('BOM not found');
+      throw new NotFoundError('Project BOM not found', 'projectBom');
+    }
+
+    const [product] = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!product) {
+      throw new NotFoundError('Product not found', 'product');
     }
 
     // Get max position
     const [{ maxPosition }] = await db
       .select({ maxPosition: max(projectBomItems.position) })
       .from(projectBomItems)
-      .where(eq(projectBomItems.bomId, data.bomId));
+      .where(
+        and(
+          eq(projectBomItems.bomId, data.bomId),
+          eq(projectBomItems.projectId, data.projectId),
+          eq(projectBomItems.organizationId, ctx.organizationId)
+        )
+      );
 
     const [item] = await db
       .insert(projectBomItems)
@@ -224,6 +280,7 @@ export const updateBomItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       itemId: z.string().uuid(),
+      projectId: z.string().uuid(),
       quantity: z.number().positive().optional(),
       unitCost: z.number().min(0).optional(),
       status: z.enum(['planned', 'ordered', 'received', 'allocated', 'installed']).optional(),
@@ -243,8 +300,18 @@ export const updateBomItem = createServerFn({ method: 'POST' })
         updatedAt: new Date(),
         updatedBy: ctx.user.id,
       })
-      .where(eq(projectBomItems.id, data.itemId))
+      .where(
+        and(
+          eq(projectBomItems.id, data.itemId),
+          eq(projectBomItems.projectId, data.projectId),
+          eq(projectBomItems.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
+
+    if (!item) {
+      throw new NotFoundError('Project BOM item not found', 'projectBomItem');
+    }
 
     return {
       success: true,
@@ -259,14 +326,26 @@ export const removeBomItem = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       itemId: z.string().uuid(),
+      projectId: z.string().uuid(),
     })
   )
   .handler(async ({ data }) => {
-    await withAuth({ permission: PERMISSIONS.job.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    await db
+    const [item] = await db
       .delete(projectBomItems)
-      .where(eq(projectBomItems.id, data.itemId));
+      .where(
+        and(
+          eq(projectBomItems.id, data.itemId),
+          eq(projectBomItems.projectId, data.projectId),
+          eq(projectBomItems.organizationId, ctx.organizationId)
+        )
+      )
+      .returning({ id: projectBomItems.id });
+
+    if (!item) {
+      throw new NotFoundError('Project BOM item not found', 'projectBomItem');
+    }
 
     return {
       success: true,
@@ -280,16 +359,28 @@ export const removeBomItems = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       itemIds: z.array(z.string().uuid()).min(1),
+      projectId: z.string().uuid(),
     })
   )
   .handler(async ({ data }) => {
-    await withAuth({ permission: PERMISSIONS.job.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    for (const itemId of data.itemIds) {
-      await db
+    await db.transaction(async (tx) => {
+      const deleted = await tx
         .delete(projectBomItems)
-        .where(eq(projectBomItems.id, itemId));
-    }
+        .where(
+          and(
+            inArray(projectBomItems.id, data.itemIds),
+            eq(projectBomItems.projectId, data.projectId),
+            eq(projectBomItems.organizationId, ctx.organizationId)
+          )
+        )
+        .returning({ id: projectBomItems.id });
+
+      if (deleted.length !== data.itemIds.length) {
+        throw new NotFoundError('Project BOM item not found', 'projectBomItem');
+      }
+    });
 
     return {
       success: true,
@@ -312,22 +403,34 @@ export const updateBomItemsStatus = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       itemIds: z.array(z.string().uuid()).min(1),
+      projectId: z.string().uuid(),
       status: bomItemStatusSchema,
     })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    for (const itemId of data.itemIds) {
-      await db
+    await db.transaction(async (tx) => {
+      const updated = await tx
         .update(projectBomItems)
         .set({
           status: data.status,
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
-        .where(eq(projectBomItems.id, itemId));
-    }
+        .where(
+          and(
+            inArray(projectBomItems.id, data.itemIds),
+            eq(projectBomItems.projectId, data.projectId),
+            eq(projectBomItems.organizationId, ctx.organizationId)
+          )
+        )
+        .returning({ id: projectBomItems.id });
+
+      if (updated.length !== data.itemIds.length) {
+        throw new NotFoundError('Project BOM item not found', 'projectBomItem');
+      }
+    });
 
     return {
       success: true,

@@ -149,6 +149,7 @@ export {
 
 export {
   formatJobTemplateMutationError,
+  formatProjectBomMutationError,
   formatProjectFileMutationError,
   formatProjectNoteMutationError,
   formatProjectTaskMutationError,
@@ -156,6 +157,7 @@ export {
 } from './_mutation-errors';
 export type {
   JobTemplateMutationAction,
+  ProjectBomMutationAction,
   ProjectFileMutationAction,
   ProjectNoteMutationAction,
   ProjectTaskMutationAction,

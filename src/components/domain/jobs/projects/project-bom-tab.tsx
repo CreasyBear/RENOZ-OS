@@ -89,6 +89,7 @@ import { useOrgFormat } from '@/hooks/use-org-format';
 import { useConfirmation } from '@/hooks';
 // Hooks
 import {
+  formatProjectBomMutationError,
   useProjectBom,
   useCreateProjectBom,
   useAddBomItem,
@@ -241,8 +242,8 @@ function AddBomItemDialog({
       onOpenChange(false);
       resetForm();
       onSuccess?.();
-    } catch {
-      toast.error('Failed to add item');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'addItem'));
     }
   };
 
@@ -476,8 +477,8 @@ function EditBomItemDialog({
       toast.success('Item updated');
       onOpenChange(false);
       onSuccess?.();
-    } catch {
-      toast.error('Failed to update item');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'updateItem'));
     }
   };
 
@@ -927,8 +928,8 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
     try {
       await createBom.mutateAsync('Bill of Materials');
       toast.success('BOM created');
-    } catch {
-      toast.error('Failed to create BOM');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'create'));
     }
   };
 
@@ -948,8 +949,8 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       try {
         await removeItem.mutateAsync({ data: { itemId: item.id } });
         toast.success('Item removed');
-      } catch {
-        toast.error('Failed to remove item');
+      } catch (error) {
+        toast.error(formatProjectBomMutationError(error, 'removeItem'));
       }
     }
   };
@@ -969,8 +970,8 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       });
       toast.success(`Removed ${count} item${count > 1 ? 's' : ''}`);
       clearSelection();
-    } catch {
-      toast.error('Failed to remove items');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'removeItems'));
     }
   }, [selectedItems, confirm, removeItems, clearSelection]);
 
@@ -999,8 +1000,8 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       } else {
         toast.success(msg);
       }
-    } catch {
-      toast.error('Failed to import CSV');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'importCsv'));
     }
   };
 
@@ -1017,9 +1018,8 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       } else {
         toast.success(msg);
       }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to import from order';
-      toast.error(message);
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'importOrder'));
     }
   };
 
@@ -1263,8 +1263,8 @@ function BulkStatusDialog({
       });
       toast.success(`Updated ${items.length} item${items.length > 1 ? 's' : ''} to ${ITEM_STATUS_CONFIG[newStatus].label}`);
       onComplete();
-    } catch {
-      toast.error('Failed to update status');
+    } catch (error) {
+      toast.error(formatProjectBomMutationError(error, 'updateStatus'));
     }
   };
 
