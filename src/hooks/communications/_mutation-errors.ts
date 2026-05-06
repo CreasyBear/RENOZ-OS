@@ -37,11 +37,21 @@ const SCHEDULED_EMAIL_FALLBACKS = {
   cancel: 'Unable to cancel scheduled email.',
 } as const;
 
+const SCHEDULED_CALL_FALLBACKS = {
+  schedule: 'Unable to schedule call.',
+  complete: 'Unable to complete scheduled call.',
+  outcome: 'Unable to log call outcome.',
+  cancel: 'Unable to cancel scheduled call.',
+  reschedule: 'Unable to reschedule call.',
+  snooze: 'Unable to snooze call.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
 export type CommunicationInboxAccountMutationAction = keyof typeof INBOX_ACCOUNT_FALLBACKS;
 export type CommunicationScheduledEmailMutationAction = keyof typeof SCHEDULED_EMAIL_FALLBACKS;
+export type CommunicationScheduledCallMutationAction = keyof typeof SCHEDULED_CALL_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -107,4 +117,11 @@ export function formatCommunicationScheduledEmailMutationError(
   action: CommunicationScheduledEmailMutationAction
 ): string {
   return formatCommunicationMutationError(error, SCHEDULED_EMAIL_FALLBACKS[action]);
+}
+
+export function formatCommunicationScheduledCallMutationError(
+  error: unknown,
+  action: CommunicationScheduledCallMutationAction
+): string {
+  return formatCommunicationMutationError(error, SCHEDULED_CALL_FALLBACKS[action]);
 }

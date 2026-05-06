@@ -25,8 +25,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 import { useCompleteCall } from "@/hooks/communications/use-scheduled-calls";
+import { formatCommunicationScheduledCallMutationError } from "@/hooks/communications";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
   callOutcomeFormSchema,
   type CallOutcomeDialogProps,
@@ -132,9 +132,7 @@ export function CallOutcomeDialog({
             onSuccess?.();
           },
           onError: (error) => {
-            toast.error("Failed to log call outcome", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationScheduledCallMutationError(error, "outcome"));
           },
         }
       );

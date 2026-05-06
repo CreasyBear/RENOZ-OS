@@ -11,7 +11,13 @@
  * @see docs/plans/2026-01-24-refactor-communications-full-container-presenter-plan.md
  */
 import { useCallback, useMemo, useState } from "react";
-import { useScheduledCalls, useCompleteCall, useCancelCall, useRescheduleCall } from "@/hooks/communications";
+import {
+  useScheduledCalls,
+  useCompleteCall,
+  useCancelCall,
+  useRescheduleCall,
+  formatCommunicationScheduledCallMutationError,
+} from "@/hooks/communications";
 import { ScheduledCallsList, CallOutcomeDialog } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -55,8 +61,8 @@ export default function CallsPage() {
         });
         toastSuccess("Call marked as complete");
         setSelectedCallForOutcome(null);
-      } catch {
-        toastError("Failed to complete call");
+      } catch (error) {
+        toastError(formatCommunicationScheduledCallMutationError(error, "complete"));
       }
     },
     [completeMutation]
@@ -67,8 +73,8 @@ export default function CallsPage() {
       try {
         await cancelMutation.mutateAsync({ id });
         toastSuccess("Call cancelled");
-      } catch {
-        toastError("Failed to cancel call");
+      } catch (error) {
+        toastError(formatCommunicationScheduledCallMutationError(error, "cancel"));
       }
     },
     [cancelMutation]
@@ -79,8 +85,8 @@ export default function CallsPage() {
       try {
         await rescheduleMutation.mutateAsync({ id, newScheduledAt: newDate });
         toastSuccess("Call rescheduled");
-      } catch {
-        toastError("Failed to reschedule call");
+      } catch (error) {
+        toastError(formatCommunicationScheduledCallMutationError(error, "reschedule"));
       }
     },
     [rescheduleMutation]

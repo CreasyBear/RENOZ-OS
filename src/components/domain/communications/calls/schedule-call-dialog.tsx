@@ -16,8 +16,8 @@ import { CalendarClock } from "lucide-react";
 import { DateTimePicker } from "../date-time-picker";
 
 import { useScheduleCall } from "@/hooks/communications/use-scheduled-calls";
+import { formatCommunicationScheduledCallMutationError } from "@/hooks/communications";
 import { toast } from "sonner";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
   scheduleCallFormSchema,
   type ScheduleCallDialogProps,
@@ -113,9 +113,7 @@ export function ScheduleCallDialog({
             onSuccess?.(data.id);
           },
           onError: (error) => {
-            toast.error("Failed to schedule call", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationScheduledCallMutationError(error, "schedule"));
           },
         }
       );
@@ -166,7 +164,11 @@ export function ScheduleCallDialog({
       submitLabel="Schedule Call"
       cancelLabel="Cancel"
       loadingLabel="Scheduling..."
-      submitError={scheduleMutation.error?.message ?? null}
+      submitError={
+        scheduleMutation.error
+          ? formatCommunicationScheduledCallMutationError(scheduleMutation.error, "schedule")
+          : null
+      }
       submitDisabled={scheduleMutation.isPending}
       className="sm:max-w-[500px]"
     >

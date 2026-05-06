@@ -44,8 +44,8 @@ import {
   useCancelCall,
   useRescheduleCall,
 } from "@/hooks/communications/use-scheduled-calls";
+import { formatCommunicationScheduledCallMutationError } from "@/hooks/communications";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 
 import type { ScheduledCallActionMenuProps } from "@/lib/schemas/communications";
 
@@ -94,9 +94,7 @@ export function ScheduledCallActionMenu({
           toast.success("Call snoozed");
         },
         onError: (error) => {
-          toast.error("Failed to snooze call", {
-            description: getUserFriendlyMessage(error as Error),
-          });
+          toast.error(formatCommunicationScheduledCallMutationError(error, "snooze"));
         },
       }
     );
@@ -114,9 +112,7 @@ export function ScheduledCallActionMenu({
           setCancelDialogOpen(false);
         },
         onError: (error) => {
-          toast.error("Failed to cancel call", {
-            description: getUserFriendlyMessage(error as Error),
-          });
+          toast.error(formatCommunicationScheduledCallMutationError(error, "cancel"));
         },
       }
     );

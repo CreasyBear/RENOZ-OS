@@ -5,6 +5,7 @@ import {
   formatCommunicationCampaignMutationError,
   formatCommunicationInboxAccountMutationError,
   formatCommunicationInboxMutationError,
+  formatCommunicationScheduledCallMutationError,
   formatCommunicationScheduledEmailMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
@@ -66,6 +67,13 @@ describe('communications mutation error formatting', () => {
         'cancel'
       )
     ).toBe('Unable to cancel scheduled email.');
+
+    expect(
+      formatCommunicationScheduledCallMutationError(
+        new Error('supabase database stack trace while completing scheduled call'),
+        'complete'
+      )
+    ).toBe('Unable to complete scheduled call.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -152,6 +160,41 @@ describe('communications mutation error formatting', () => {
     expect(dialog).toContain('isEditing ? "update" : "schedule"');
     expect(page).not.toContain('error instanceof Error ? error.message : "Failed to cancel email"');
     expect(dialog).not.toContain('setSubmitError(getUserFriendlyMessage(error as Error))');
+  });
+
+  it('keeps communications scheduled call mutations on communications-owned formatters', () => {
+    const page = read('src/routes/_authenticated/communications/calls/calls-page.tsx');
+    const scheduleDialog = read(
+      'src/components/domain/communications/calls/schedule-call-dialog.tsx'
+    );
+    const outcomeDialog = read(
+      'src/components/domain/communications/calls/call-outcome-dialog.tsx'
+    );
+    const actionMenu = read(
+      'src/components/domain/communications/calls/scheduled-call-action-menu.tsx'
+    );
+
+    expect(page).toContain('formatCommunicationScheduledCallMutationError(error, "complete")');
+    expect(page).toContain('formatCommunicationScheduledCallMutationError(error, "cancel")');
+    expect(page).toContain('formatCommunicationScheduledCallMutationError(error, "reschedule")');
+    expect(scheduleDialog).toContain(
+      'formatCommunicationScheduledCallMutationError(error, "schedule")'
+    );
+    expect(scheduleDialog).toContain(
+      'formatCommunicationScheduledCallMutationError(scheduleMutation.error, "schedule")'
+    );
+    expect(outcomeDialog).toContain(
+      'formatCommunicationScheduledCallMutationError(error, "outcome")'
+    );
+    expect(actionMenu).toContain('formatCommunicationScheduledCallMutationError(error, "snooze")');
+    expect(actionMenu).toContain('formatCommunicationScheduledCallMutationError(error, "cancel")');
+    expect(scheduleDialog).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(scheduleDialog).not.toContain('submitError={scheduleMutation.error?.message ?? null}');
+    expect(outcomeDialog).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(actionMenu).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(page).not.toContain('toastError("Failed to complete call")');
+    expect(page).not.toContain('toastError("Failed to cancel call")');
+    expect(page).not.toContain('toastError("Failed to reschedule call")');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {
