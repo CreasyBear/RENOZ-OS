@@ -43,7 +43,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ErrorState } from '@/components/shared/error-state';
 import { EntityActivityLogger } from '@/components/shared/activity';
 import { useEntityActivityLogging } from '@/hooks/activities/use-entity-activity-logging';
-import { toastSuccess, toastError } from '@/hooks';
+import { toastSuccess } from '@/hooks';
 import { useProduct, useDeleteProduct, useDuplicateProduct, useUpdateProduct, useProductInventorySummary, useCustomerPrices } from '@/hooks/products';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
@@ -176,21 +176,19 @@ export function ProductDetailContainer({
   const handleDuplicate = useCallback(async () => {
     try {
       const result = await duplicateMutation.mutateAsync(productId);
-      toastSuccess(`Product duplicated as ${result.name}`);
       onDuplicate?.(result.id);
     } catch {
-      toastError('Failed to duplicate product');
+      // Product duplicate hook owns operator-safe failure feedback.
     }
   }, [duplicateMutation, productId, onDuplicate]);
 
   const handleDelete = useCallback(async () => {
     try {
       await deleteMutation.mutateAsync(productId);
-      toastSuccess('Product deleted');
       setDeleteDialogOpen(false);
       onBack?.();
     } catch {
-      toastError('Failed to delete product');
+      // Product delete hook owns operator-safe failure feedback.
     }
   }, [deleteMutation, productId, onBack]);
 
