@@ -61,6 +61,69 @@ export interface GenerateCompletionCertificateInput {
   regenerate?: boolean;
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+async function unwrapServerFnResult(value: unknown): Promise<unknown> {
+  if (value instanceof Response) {
+    const contentType = value.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      return unwrapServerFnResult(await value.json());
+    }
+    throw new Error('Project document generation returned a non-JSON response');
+  }
+
+  if (!value || typeof value !== 'object') return value;
+
+  const record = value as UnknownRecord;
+  if ('result' in record && record.result !== value) {
+    return unwrapServerFnResult(record.result);
+  }
+  if ('data' in record && record.data !== value) {
+    return unwrapServerFnResult(record.data);
+  }
+
+  return value;
+}
+
+async function normalizeProjectDocumentResult(
+  value: unknown,
+  fallback: { projectId: string }
+): Promise<GenerateProjectDocumentResult> {
+  const candidate = await unwrapServerFnResult(value);
+  if (!candidate || typeof candidate !== 'object') {
+    throw new Error('Project document generation returned an invalid response');
+  }
+
+  const record = candidate as UnknownRecord;
+  if (typeof record.url !== 'string' || typeof record.filename !== 'string') {
+    throw new Error('Project document generation returned an invalid response');
+  }
+
+  return {
+    projectId: typeof record.projectId === 'string' ? record.projectId : fallback.projectId,
+    documentType: record.documentType as ProjectDocumentType,
+    status: 'completed',
+    url: record.url,
+    filename: record.filename,
+    storagePath: typeof record.storagePath === 'string' ? record.storagePath : '',
+    fileSize: typeof record.fileSize === 'number' ? record.fileSize : 0,
+    checksum: typeof record.checksum === 'string' ? record.checksum : '',
+  };
+}
+
+function invalidateProjectDocumentViews(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string | undefined
+) {
+  if (!projectId) return;
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.projects.detail(projectId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.documents.history('project', projectId),
+  });
+}
+
 // ============================================================================
 // GENERIC PROJECT DOCUMENT GENERATION
 // ============================================================================
@@ -98,16 +161,12 @@ export function useGenerateProjectDocument() {
     safetyNotes?: string;
     technicianNotes?: string;
   }>({
-    mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      // Invalidate project detail to reflect new state
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.detail(result.projectId),
-      });
-      // Invalidate document history so Documents tab updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('project', result.projectId),
-      });
+    mutationFn: async (input) =>
+      normalizeProjectDocumentResult(await generateFn({ data: input }), {
+        projectId: input.projectId,
+      }),
+    onSuccess: (result, variables) => {
+      invalidateProjectDocumentViews(queryClient, result.projectId || variables.projectId);
     },
   });
 }
@@ -138,15 +197,12 @@ export function useGenerateWorkOrder() {
   const generateFn = useServerFn(generateProjectWorkOrderPdf);
 
   return useMutation<GenerateProjectDocumentResult, Error, GenerateWorkOrderInput>({
-    mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.detail(result.projectId),
-      });
-      // Also invalidate document history so Documents tab updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('project', result.projectId),
-      });
+    mutationFn: async (input) =>
+      normalizeProjectDocumentResult(await generateFn({ data: input }), {
+        projectId: input.projectId,
+      }),
+    onSuccess: (result, variables) => {
+      invalidateProjectDocumentViews(queryClient, result.projectId || variables.projectId);
     },
   });
 }
@@ -177,15 +233,12 @@ export function useGenerateCompletionCertificate() {
   const generateFn = useServerFn(generateProjectCompletionCertificatePdf);
 
   return useMutation<GenerateProjectDocumentResult, Error, GenerateCompletionCertificateInput>({
-    mutationFn: (input) => generateFn({ data: input }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.detail(result.projectId),
-      });
-      // Also invalidate document history so Documents tab updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('project', result.projectId),
-      });
+    mutationFn: async (input) =>
+      normalizeProjectDocumentResult(await generateFn({ data: input }), {
+        projectId: input.projectId,
+      }),
+    onSuccess: (result, variables) => {
+      invalidateProjectDocumentViews(queryClient, result.projectId || variables.projectId);
     },
   });
 }
