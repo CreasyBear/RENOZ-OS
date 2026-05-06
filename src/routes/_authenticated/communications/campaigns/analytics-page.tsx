@@ -37,6 +37,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import type { Campaign } from "@/lib/schemas/communications/email-campaigns";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { calculatePercentage } from "@/lib/communications/campaign-utils";
 
 // ============================================================================
@@ -78,6 +82,7 @@ export default function AnalyticsPage() {
 
   const isLoading = campaignsLoading || metricsLoading;
   const hasAnyData = Boolean(campaignsData || emailMetricsData);
+  const analyticsError = campaignsError ?? emailMetricsError;
 
   // Calculate campaign analytics
   const analytics = useMemo(() => {
@@ -163,15 +168,17 @@ export default function AnalyticsPage() {
       </div>
 
       <div>
-        {campaignsError || emailMetricsError ? (
+        {analyticsError ? (
           <Alert className="mb-6" variant={hasAnyData ? "default" : "destructive"}>
             <AlertTitle>
               {hasAnyData ? "Showing cached analytics" : "Campaign analytics unavailable"}
             </AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
               <span>
-                {(campaignsError ?? emailMetricsError)?.message ??
-                  "Campaign analytics are temporarily unavailable. Please refresh and try again."}
+                {formatCommunicationReadError(
+                  analyticsError,
+                  COMMUNICATION_READ_MESSAGES.campaignAnalytics
+                )}
               </span>
               <Button
                 variant="outline"

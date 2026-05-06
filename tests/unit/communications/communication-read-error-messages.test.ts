@@ -55,6 +55,9 @@ describe('communication read error messages', () => {
     const campaigns = read(
       'src/routes/_authenticated/communications/campaigns/campaigns-page.tsx'
     );
+    const campaignAnalytics = read(
+      'src/routes/_authenticated/communications/campaigns/analytics-page.tsx'
+    );
     const emailHistory = read(
       'src/routes/_authenticated/communications/emails/-email-history-page.tsx'
     );
@@ -99,6 +102,12 @@ describe('communication read error messages', () => {
     expect(campaigns).toContain('formatCommunicationReadError(');
     expect(campaigns).toContain('COMMUNICATION_READ_MESSAGES.emailCampaigns');
     expect(campaigns).not.toContain('<span>{error.message}</span>');
+    expect(campaignAnalytics).toContain('formatCommunicationReadError(');
+    expect(campaignAnalytics).toContain('COMMUNICATION_READ_MESSAGES.campaignAnalytics');
+    expect(campaignAnalytics).not.toContain('?.message');
+    expect(campaignAnalytics).not.toContain(
+      'Campaign analytics are temporarily unavailable. Please refresh and try again."'
+    );
     expect(emailHistory).toContain('formatCommunicationReadError(');
     expect(emailHistory).toContain('COMMUNICATION_READ_MESSAGES.emailHistory');
     expect(emailHistory).not.toContain('? error.message');
@@ -134,6 +143,7 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('emailTemplates');
     expect(formatter).toContain('emailSignatures');
     expect(formatter).toContain('emailCampaigns');
+    expect(formatter).toContain('campaignAnalytics');
     expect(formatter).toContain('emailHistory');
     expect(formatter).toContain('scheduledEmails');
     expect(formatter).toContain('scheduledCalls');
