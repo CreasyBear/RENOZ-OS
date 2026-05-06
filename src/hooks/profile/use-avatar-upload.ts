@@ -15,6 +15,7 @@ import { uploadAvatarFile, removeAvatar } from "@/server/functions/profile/avata
 import { toast } from "@/hooks/_shared/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { AVATAR_MAX_SIZE_BYTES, isAllowedAvatarType } from "@/lib/users";
+import { formatUserMutationError } from "@/hooks/users/user-mutation-error-messages";
 
 interface UseAvatarUploadOptions {
   onSuccess?: () => void;
@@ -70,7 +71,7 @@ export function useAvatarUpload(options: UseAvatarUploadOptions = {}) {
       options.onSuccess?.();
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update avatar");
+      toast.error(formatUserMutationError(error, "updateAvatar"));
     },
   });
 }
@@ -96,7 +97,7 @@ export function useRemoveAvatar(options: UseAvatarUploadOptions = {}) {
       options.onSuccess?.();
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to remove avatar");
+      toast.error(formatUserMutationError(error, "removeAvatar"));
     },
   });
 }

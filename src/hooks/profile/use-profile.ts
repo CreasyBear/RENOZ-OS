@@ -10,6 +10,7 @@ import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getUser, updateUser } from "@/server/functions/users/users";
 import { toast } from "@/hooks/_shared/use-toast";
 import { queryKeys } from "@/lib/query-keys";
+import { formatUserMutationError } from "@/hooks/users/user-mutation-error-messages";
 
 export function useProfile(userId: string, enabled = true) {
   return useQuery({
@@ -60,7 +61,7 @@ export function useUpdateProfile() {
       queryClient.invalidateQueries({ queryKey: queryKeys.auth.user() });
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update profile");
+      toast.error(formatUserMutationError(error, "updateProfile"));
     },
   });
 }

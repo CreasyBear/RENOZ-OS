@@ -8,6 +8,13 @@ const USER_MUTATION_FALLBACKS = {
   exportUsers: 'User export is temporarily unavailable. Please refresh and try again.',
   transferOwnership: 'Ownership transfer is temporarily unavailable. Please refresh and try again.',
   addGroupMember: 'Group membership update is temporarily unavailable. Please refresh and try again.',
+  updateProfile: 'Profile update is temporarily unavailable. Please refresh and try again.',
+  updateAvatar: 'Avatar update is temporarily unavailable. Please refresh and try again.',
+  removeAvatar: 'Avatar removal is temporarily unavailable. Please refresh and try again.',
+  updateNotificationPreference:
+    'Notification preference update is temporarily unavailable. Please refresh and try again.',
+  updateNotificationPreferences:
+    'Notification preferences update is temporarily unavailable. Please refresh and try again.',
   acceptInvitation: 'Invitation acceptance is temporarily unavailable. Please refresh and try again.',
   sendInvitation: 'Invitation sending is temporarily unavailable. Please refresh and try again.',
   cancelInvitation: 'Invitation cancellation is temporarily unavailable. Please refresh and try again.',

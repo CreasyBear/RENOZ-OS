@@ -12,6 +12,7 @@ import { toast } from "@/hooks/_shared/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { PREFERENCE_CATEGORIES } from "@/lib/schemas/users";
 import { normalizeReadQueryError } from "@/lib/read-path-policy";
+import { formatUserMutationError } from "@/hooks/users/user-mutation-error-messages";
 
 export interface NotificationPreferences {
   email: boolean;
@@ -133,7 +134,7 @@ export function useNotificationPreferences() {
       queryClient.invalidateQueries({ queryKey: queryKeys.user.preferences("notifications") });
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update preference");
+      toast.error(formatUserMutationError(error, "updateNotificationPreference"));
     },
   });
 
@@ -154,7 +155,7 @@ export function useNotificationPreferences() {
       toast.success("Notification preferences updated");
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update preferences");
+      toast.error(formatUserMutationError(error, "updateNotificationPreferences"));
     },
   });
 

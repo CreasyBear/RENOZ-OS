@@ -317,7 +317,11 @@ export function NotificationPreferencesForm() {
     <NotificationPreferencesFormPresenter
       preferences={preferences}
       isLoading={isLoading}
-      error={error instanceof Error ? error.message : null}
+      error={
+        error
+          ? "Notification preferences are temporarily unavailable. Please refresh and try again."
+          : null
+      }
       isPending={isPending}
       onToggle={handleToggle}
       onDigestChange={handleDigestChange}

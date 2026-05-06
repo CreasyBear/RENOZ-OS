@@ -15,6 +15,7 @@ import { NotificationPreferencesForm } from "@/components/domain/users/notificat
 import { ProfileErrorBoundary } from "@/components/domain/users/profile-error-boundary";
 import { useAuth } from "@/lib/auth/hooks";
 import { useUser, useUpdateUser } from "@/hooks/users";
+import { formatUserMutationError } from "@/hooks/users/user-mutation-error-messages";
 import { toast } from "@/hooks";
 import { extractAvatarUrl } from "@/lib/users";
 import type { ProfileUpdateData } from "@/lib/schemas/users/profile";
@@ -46,7 +47,7 @@ export default function ProfilePage() {
         toast.success("Profile updated successfully");
       } catch (err) {
         toast.error("Failed to update profile", {
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: formatUserMutationError(err, "updateProfile"),
         });
         throw err;
       }
@@ -78,7 +79,9 @@ export default function ProfilePage() {
         <PageLayout.Content>
           <div className="text-center py-12 space-y-4">
             <p className="text-muted-foreground">
-              {error?.message || "Failed to load profile. Please try again."}
+              {error
+                ? "Profile is temporarily unavailable. Please refresh and try again."
+                : "Failed to load profile. Please try again."}
             </p>
             <Button variant="outline" onClick={() => refetch()}>
               Retry
