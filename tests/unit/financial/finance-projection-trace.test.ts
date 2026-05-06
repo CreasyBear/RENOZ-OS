@@ -118,6 +118,37 @@ describe('finance schema trace repair', () => {
     );
   });
 
+  it('locks the order before creating a payment plan', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/payment-plan-generation.ts',
+    );
+    const transactionIndex = source.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = source.indexOf("set_config('app.organization_id'");
+    const orderLockIndex = source.indexOf(".for('update')");
+    const orderNotFoundIndex = source.indexOf("throw new NotFoundError('Order not found'");
+    const existingPlanIndex = source.indexOf('.select({ id: paymentSchedules.id })');
+    const conflictIndex = source.indexOf('Payment plan already exists for this order');
+    const insertIndex = source.indexOf('.insert(paymentSchedules)');
+    const insertGuardIndex = source.indexOf(
+      "throw new ValidationError('Payment plan installments could not be created')",
+    );
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(orderLockIndex).toBeGreaterThan(setConfigIndex);
+    expect(orderNotFoundIndex).toBeGreaterThan(orderLockIndex);
+    expect(existingPlanIndex).toBeGreaterThan(orderNotFoundIndex);
+    expect(conflictIndex).toBeGreaterThan(existingPlanIndex);
+    expect(insertIndex).toBeGreaterThan(conflictIndex);
+    expect(insertGuardIndex).toBeGreaterThan(insertIndex);
+    expect(compact(source)).toContain(
+      'where(and(eq(orders.id,data.orderId),eq(orders.organizationId,ctx.organizationId),isNull(orders.deletedAt)))',
+    );
+    expect(compact(source)).toContain(
+      'where(and(eq(paymentSchedules.orderId,data.orderId),eq(paymentSchedules.organizationId,ctx.organizationId)))',
+    );
+  });
+
   it('records Xero payment applies through a tenant-scoped ledger insert before projection', () => {
     const source = read(
       'src/server/functions/financial/_shared/xero-payment-reconciliation.ts',

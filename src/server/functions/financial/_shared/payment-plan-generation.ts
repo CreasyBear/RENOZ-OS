@@ -131,8 +131,12 @@ export async function createPaymentPlanForOrder(
   ctx: SessionContext,
   data: CreatePaymentPlanInput
 ): Promise<PaymentScheduleResponse> {
-    // Get order (outside transaction - read-only)
-    const order = await db
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
+
+    const [order] = await tx
       .select()
       .from(orders)
       .where(
@@ -142,16 +146,16 @@ export async function createPaymentPlanForOrder(
           isNull(orders.deletedAt)
         )
       )
+      .for('update')
       .limit(1);
 
-    if (order.length === 0) {
+    if (!order) {
       throw new NotFoundError('Order not found', 'order');
     }
 
-    const totalAmount = safeNumber(order[0].total);
-    const orderDate = order[0].orderDate ? new Date(order[0].orderDate) : new Date();
+    const totalAmount = safeNumber(order.total);
+    const orderDate = order.orderDate ? new Date(order.orderDate) : new Date();
 
-    // Generate installments based on plan type (outside transaction - pure computation)
     let installments: Array<{
       installmentNo: number;
       description: string;
@@ -186,104 +190,109 @@ export async function createPaymentPlanForOrder(
       );
     }
 
-    // Wrap check-and-insert in transaction for atomicity
-    const insertedInstallments = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    const existingPlan = await tx
+      .select({ id: paymentSchedules.id })
+      .from(paymentSchedules)
+      .where(
+        and(
+          eq(paymentSchedules.orderId, data.orderId),
+          eq(paymentSchedules.organizationId, ctx.organizationId)
+        )
+      )
+      .for('update')
+      .limit(1);
+
+    if (existingPlan.length > 0) {
+      throw new ConflictError(
+        'Payment plan already exists for this order. Delete the existing plan first.'
       );
-      // Check if plan already exists INSIDE transaction to prevent race conditions
-      const existingPlan = await tx
-        .select()
-        .from(paymentSchedules)
-        .where(
-          and(
-            eq(paymentSchedules.orderId, data.orderId),
-            eq(paymentSchedules.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
+    }
 
-      if (existingPlan.length > 0) {
-        throw new ConflictError(
-          'Payment plan already exists for this order. Delete the existing plan first.'
-        );
-      }
+    const insertedInstallments = await tx
+      .insert(paymentSchedules)
+      .values(
+        installments.map((inst) => ({
+          organizationId: ctx.organizationId,
+          orderId: data.orderId,
+          planType: data.planType,
+          installmentNo: inst.installmentNo,
+          description: inst.description,
+          dueDate: inst.dueDate.toISOString().split('T')[0],
+          amount: inst.amount,
+          gstAmount: inst.gstAmount,
+          status: 'pending' as const,
+          paidAmount: 0,
+          notes: data.notes,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }))
+      )
+      .returning();
 
-      // Insert all installments atomically
-      const inserted = await tx
-        .insert(paymentSchedules)
-        .values(
-          installments.map((inst) => ({
-            organizationId: ctx.organizationId,
-            orderId: data.orderId,
-            planType: data.planType,
-            installmentNo: inst.installmentNo,
-            description: inst.description,
-            dueDate: inst.dueDate.toISOString().split('T')[0],
-            amount: inst.amount,
-            gstAmount: inst.gstAmount,
-            status: 'pending' as const,
-            paidAmount: 0,
-            notes: data.notes,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          }))
-        )
-        .returning();
+    if (insertedInstallments.length !== installments.length) {
+      throw new ValidationError('Payment plan installments could not be created');
+    }
 
-      return inserted;
-    });
-
-    // Activity logging
-    const logger = createActivityLoggerWithContext(ctx);
-    logger.logAsync({
-      entityType: 'order',
-      entityId: data.orderId,
-      action: 'created',
-      description: `Created ${data.planType} payment plan for order`,
-      metadata: {
-        orderId: data.orderId,
-        orderNumber: order[0].orderNumber ?? undefined,
-        customerId: order[0].customerId, // Include for customer timeline visibility
-        planType: data.planType,
-        total: totalAmount,
-        installmentCount: insertedInstallments.length,
-      },
-    });
-
-    // Return summary (matches PaymentScheduleResponse structure)
     return {
-      orderId: data.orderId,
-      planType: data.planType,
+      insertedInstallments,
+      orderNumber: order.orderNumber ?? undefined,
+      customerId: order.customerId,
       totalAmount,
-      paidAmount: 0,
-      remainingAmount: totalAmount,
-      installmentCount: insertedInstallments.length,
-      paidCount: 0,
-      overdueCount: 0,
-      nextDueDate: insertedInstallments[0]?.dueDate
-        ? new Date(insertedInstallments[0].dueDate)
-        : null,
-      nextDueAmount: insertedInstallments[0]?.amount ?? null,
-      installments: insertedInstallments.map((inst) => ({
-        id: inst.id,
-        organizationId: inst.organizationId,
-        orderId: inst.orderId,
-        planType: inst.planType,
-        installmentNo: inst.installmentNo,
-        description: inst.description,
-        dueDate: new Date(inst.dueDate), // Convert string to Date
-        amount: safeNumber(inst.amount),
-        gstAmount: safeNumber(inst.gstAmount),
-        status: inst.status,
-        paidAmount: inst.paidAmount,
-        paidAt: inst.paidAt ? new Date(inst.paidAt) : null,
-        paymentReference: inst.paymentReference,
-        notes: inst.notes,
-        createdBy: inst.createdBy ?? '', // Ensure non-null for schema compliance
-        updatedBy: inst.updatedBy ?? '', // Ensure non-null for schema compliance
-        createdAt: inst.createdAt,
-        updatedAt: inst.updatedAt,
-      })),
     };
+  });
+
+  const { insertedInstallments, totalAmount } = result;
+
+  // Activity logging
+  const logger = createActivityLoggerWithContext(ctx);
+  logger.logAsync({
+    entityType: 'order',
+    entityId: data.orderId,
+    action: 'created',
+    description: `Created ${data.planType} payment plan for order`,
+    metadata: {
+      orderId: data.orderId,
+      orderNumber: result.orderNumber,
+      customerId: result.customerId, // Include for customer timeline visibility
+      planType: data.planType,
+      total: totalAmount,
+      installmentCount: insertedInstallments.length,
+    },
+  });
+
+  // Return summary (matches PaymentScheduleResponse structure)
+  return {
+    orderId: data.orderId,
+    planType: data.planType,
+    totalAmount,
+    paidAmount: 0,
+    remainingAmount: totalAmount,
+    installmentCount: insertedInstallments.length,
+    paidCount: 0,
+    overdueCount: 0,
+    nextDueDate: insertedInstallments[0]?.dueDate
+      ? new Date(insertedInstallments[0].dueDate)
+      : null,
+    nextDueAmount: insertedInstallments[0]?.amount ?? null,
+    installments: insertedInstallments.map((inst) => ({
+      id: inst.id,
+      organizationId: inst.organizationId,
+      orderId: inst.orderId,
+      planType: inst.planType,
+      installmentNo: inst.installmentNo,
+      description: inst.description,
+      dueDate: new Date(inst.dueDate), // Convert string to Date
+      amount: safeNumber(inst.amount),
+      gstAmount: safeNumber(inst.gstAmount),
+      status: inst.status,
+      paidAmount: inst.paidAmount,
+      paidAt: inst.paidAt ? new Date(inst.paidAt) : null,
+      paymentReference: inst.paymentReference,
+      notes: inst.notes,
+      createdBy: inst.createdBy ?? '', // Ensure non-null for schema compliance
+      updatedBy: inst.updatedBy ?? '', // Ensure non-null for schema compliance
+      createdAt: inst.createdAt,
+      updatedAt: inst.updatedAt,
+    })),
+  };
 }
