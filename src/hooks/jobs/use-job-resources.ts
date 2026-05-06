@@ -9,7 +9,7 @@
  * @see src/server/functions/jobs/job-costing.ts
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
@@ -69,6 +69,45 @@ import type {
   GetJobProfitabilityInput,
   GetJobCostingReportInput,
 } from '@/lib/schemas';
+
+type JobTimeScopeInput = {
+  jobId?: string | null;
+  projectId?: string | null;
+};
+
+function hasJobTimeScope(input: JobTimeScopeInput): boolean {
+  return Boolean(input.jobId || input.projectId);
+}
+
+function normalizeJobTimeScope(scope: string | JobTimeScopeInput): JobTimeScopeInput {
+  return typeof scope === 'string' ? { jobId: scope } : scope;
+}
+
+function invalidateJobTimeScope(queryClient: QueryClient, scope: JobTimeScopeInput | undefined) {
+  if (!scope || !hasJobTimeScope(scope)) return;
+
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.jobTime.entriesByScope(scope),
+  });
+
+  if (scope.jobId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.jobTime.entries(scope.jobId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.jobTime.costs.byJob(scope.jobId),
+    });
+  }
+
+  if (scope.projectId) {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.jobTime.entriesByScope({ projectId: scope.projectId }),
+    });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.jobTime.costs.byScope({ projectId: scope.projectId }),
+    });
+  }
+}
 
 // ============================================================================
 // MATERIALS HOOKS
@@ -238,7 +277,7 @@ export function useJobTimeEntries(input: GetJobTimeEntriesInput) {
   const getEntriesFn = useServerFn(getJobTimeEntries);
 
   return useQuery({
-    queryKey: queryKeys.jobTime.entries(input.jobId),
+    queryKey: queryKeys.jobTime.entriesByScope(input),
     queryFn: async () => {
       try {
         return await getEntriesFn({ data: input });
@@ -247,11 +286,11 @@ export function useJobTimeEntries(input: GetJobTimeEntriesInput) {
           contractType: 'detail-not-found',
           fallbackMessage:
             'Time tracking is temporarily unavailable. Please refresh and try again.',
-          notFoundMessage: 'The requested project could not be found.',
+          notFoundMessage: 'The requested time tracking scope could not be found.',
         });
       }
     },
-    enabled: !!input.jobId,
+    enabled: hasJobTimeScope(input),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.activeTimers && data.activeTimers > 0 ? 30000 : false;
@@ -290,7 +329,7 @@ export function useJobLaborCost(input: CalculateJobLaborCostInput) {
   const calculateFn = useServerFn(calculateJobLaborCost);
 
   return useQuery({
-    queryKey: queryKeys.jobTime.costs.byJob(input.jobId),
+    queryKey: queryKeys.jobTime.costs.byScope(input),
     queryFn: async () => {
       try {
         return await calculateFn({ data: input });
@@ -303,7 +342,7 @@ export function useJobLaborCost(input: CalculateJobLaborCostInput) {
         });
       }
     },
-    enabled: !!input.jobId && input.hourlyRate >= 0,
+    enabled: hasJobTimeScope(input) && input.hourlyRate >= 0,
   });
 }
 
@@ -316,10 +355,9 @@ export function useStartTimer() {
 
   return useMutation({
     mutationFn: (input: StartTimerInput) => startFn({ data: input }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.jobTime.entries(variables.jobId),
-      });
+    onSuccess: (data, variables) => {
+      invalidateJobTimeScope(queryClient, variables);
+      invalidateJobTimeScope(queryClient, data.entry);
     },
   });
 }
@@ -327,16 +365,17 @@ export function useStartTimer() {
 /**
  * Stop a running timer.
  */
-export function useStopTimer(jobId: string) {
+export function useStopTimer(scope: string | JobTimeScopeInput) {
   const queryClient = useQueryClient();
   const stopFn = useServerFn(stopTimer);
+  const configuredScope = normalizeJobTimeScope(scope);
 
   return useMutation({
     mutationFn: (input: StopTimerInput) => stopFn({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.jobTime.entries(jobId),
-      });
+    onSuccess: (data, variables) => {
+      invalidateJobTimeScope(queryClient, configuredScope);
+      invalidateJobTimeScope(queryClient, variables);
+      invalidateJobTimeScope(queryClient, data.entry);
       queryClient.invalidateQueries({
         queryKey: queryKeys.jobTime.costs.all(),
       });
@@ -353,10 +392,9 @@ export function useCreateManualEntry() {
 
   return useMutation({
     mutationFn: (input: CreateManualEntryInput) => createFn({ data: input }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.jobTime.entries(variables.jobId),
-      });
+    onSuccess: (data, variables) => {
+      invalidateJobTimeScope(queryClient, variables);
+      invalidateJobTimeScope(queryClient, data.entry);
       queryClient.invalidateQueries({
         queryKey: queryKeys.jobTime.costs.all(),
       });
@@ -367,16 +405,17 @@ export function useCreateManualEntry() {
 /**
  * Update a time entry.
  */
-export function useUpdateTimeEntry(jobId: string) {
+export function useUpdateTimeEntry(scope: string | JobTimeScopeInput) {
   const queryClient = useQueryClient();
   const updateFn = useServerFn(updateTimeEntry);
+  const configuredScope = normalizeJobTimeScope(scope);
 
   return useMutation({
     mutationFn: (input: UpdateTimeEntryInput) => updateFn({ data: input }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.jobTime.entries(jobId),
-      });
+    onSuccess: (data, variables) => {
+      invalidateJobTimeScope(queryClient, configuredScope);
+      invalidateJobTimeScope(queryClient, variables);
+      invalidateJobTimeScope(queryClient, data.entry);
       queryClient.invalidateQueries({
         queryKey: queryKeys.jobTime.detail(variables.entryId),
       });
@@ -390,16 +429,16 @@ export function useUpdateTimeEntry(jobId: string) {
 /**
  * Delete a time entry.
  */
-export function useDeleteTimeEntry(jobId: string) {
+export function useDeleteTimeEntry(scope: string | JobTimeScopeInput) {
   const queryClient = useQueryClient();
   const deleteFn = useServerFn(deleteTimeEntry);
+  const configuredScope = normalizeJobTimeScope(scope);
 
   return useMutation({
     mutationFn: (input: DeleteTimeEntryInput) => deleteFn({ data: input }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.jobTime.entries(jobId),
-      });
+      invalidateJobTimeScope(queryClient, configuredScope);
+      invalidateJobTimeScope(queryClient, variables);
       queryClient.removeQueries({
         queryKey: queryKeys.jobTime.detail(variables.entryId),
       });

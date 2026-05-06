@@ -11,11 +11,10 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { eq, and, isNull, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { jobTimeEntries, users } from 'drizzle/schema';
-import { verifyJobExists } from '@/server/functions/_shared/entity-verification';
+import { jobAssignments, jobTimeEntries, projects, users } from 'drizzle/schema';
 import {
   startTimerSchema,
   stopTimerSchema,
@@ -37,21 +36,232 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 // HELPERS
 // ============================================================================
 
+interface ProjectTimeTrackingProject {
+  id: string;
+  customerId: string;
+  projectNumber: string;
+  title: string;
+}
+
+interface TimeTrackingScope {
+  jobId: string | null;
+  projectId: string | null;
+}
+
+const emptyJobTimeSummary: JobTimeSummary = {
+  totalMinutes: 0,
+  billableMinutes: 0,
+  nonBillableMinutes: 0,
+  activeTimers: 0,
+  entries: [],
+};
+
+async function verifyProjectExists(
+  projectId: string,
+  organizationId: string
+): Promise<ProjectTimeTrackingProject> {
+  const [project] = await db
+    .select({
+      id: projects.id,
+      customerId: projects.customerId,
+      projectNumber: projects.projectNumber,
+      title: projects.title,
+    })
+    .from(projects)
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.organizationId, organizationId),
+        isNull(projects.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  return project;
+}
+
+async function findProjectTimeTrackingJob(projectId: string, organizationId: string) {
+  const [job] = await db
+    .select({
+      id: jobAssignments.id,
+      customerId: jobAssignments.customerId,
+      migratedToProjectId: jobAssignments.migratedToProjectId,
+    })
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.organizationId, organizationId),
+        eq(jobAssignments.migratedToProjectId, projectId)
+      )
+    )
+    .limit(1);
+
+  return job ?? null;
+}
+
+async function getOrCreateProjectTimeTrackingJob(
+  project: ProjectTimeTrackingProject,
+  organizationId: string,
+  userId: string
+): Promise<string> {
+  return db.transaction(async (tx) => {
+    const [lockedProject] = await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.id, project.id),
+          eq(projects.organizationId, organizationId),
+          isNull(projects.deletedAt)
+        )
+      )
+      .limit(1)
+      .for('update');
+
+    if (!lockedProject) {
+      throw new NotFoundError('Project not found');
+    }
+
+    const [existing] = await tx
+      .select({ id: jobAssignments.id })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.organizationId, organizationId),
+          eq(jobAssignments.migratedToProjectId, project.id)
+        )
+      )
+      .limit(1);
+
+    if (existing) return existing.id;
+
+    const [newJob] = await tx
+      .insert(jobAssignments)
+      .values({
+        organizationId,
+        customerId: project.customerId,
+        installerId: userId,
+        title: project.title,
+        jobNumber: `PRJ-${project.projectNumber}`,
+        jobType: 'installation',
+        status: 'scheduled',
+        scheduledDate: new Date().toISOString().split('T')[0],
+        migratedToProjectId: project.id,
+        createdBy: userId,
+        updatedBy: userId,
+      })
+      .returning({ id: jobAssignments.id });
+
+    return newJob.id;
+  });
+}
+
+async function verifyJobTimeTrackingJob(jobId: string, organizationId: string) {
+  const [job] = await db
+    .select({
+      id: jobAssignments.id,
+      customerId: jobAssignments.customerId,
+      migratedToProjectId: jobAssignments.migratedToProjectId,
+    })
+    .from(jobAssignments)
+    .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
+    .limit(1);
+
+  if (!job) {
+    throw new NotFoundError('Job not found');
+  }
+
+  return job;
+}
+
+async function resolveTimeTrackingScope(
+  input: { jobId?: string; projectId?: string },
+  organizationId: string,
+  userId: string,
+  options: { createProjectJob?: boolean } = {}
+): Promise<TimeTrackingScope> {
+  if (input.jobId) {
+    const job = await verifyJobTimeTrackingJob(input.jobId, organizationId);
+
+    if (input.projectId) {
+      const project = await verifyProjectExists(input.projectId, organizationId);
+
+      if (project.customerId !== job.customerId) {
+        throw new ValidationError('Job customer does not match project customer');
+      }
+
+      if (job.migratedToProjectId && job.migratedToProjectId !== project.id) {
+        throw new ValidationError('Job is not linked to this project');
+      }
+    }
+
+    return {
+      jobId: job.id,
+      projectId: input.projectId ?? job.migratedToProjectId ?? null,
+    };
+  }
+
+  if (input.projectId) {
+    const project = await verifyProjectExists(input.projectId, organizationId);
+    const existingJob = await findProjectTimeTrackingJob(project.id, organizationId);
+
+    if (existingJob) {
+      return { jobId: existingJob.id, projectId: project.id };
+    }
+
+    if (options.createProjectJob) {
+      const jobId = await getOrCreateProjectTimeTrackingJob(project, organizationId, userId);
+      return { jobId, projectId: project.id };
+    }
+
+    return { jobId: null, projectId: project.id };
+  }
+
+  throw new ValidationError('A job or project is required for time tracking');
+}
+
+function buildTimeEntryAccessPredicate(
+  entryId: string,
+  organizationId: string,
+  scope?: TimeTrackingScope
+): SQL | undefined {
+  const predicates = [
+    eq(jobTimeEntries.id, entryId),
+    eq(jobTimeEntries.organizationId, organizationId),
+  ];
+
+  if (scope?.jobId) {
+    predicates.push(eq(jobTimeEntries.jobId, scope.jobId));
+  }
+
+  return and(...predicates);
+}
+
 /**
  * Verify time entry belongs to the user's organization.
  * Returns the entry if found, throws NotFoundError otherwise.
  */
-async function verifyTimeEntryAccess(entryId: string, organizationId: string) {
+async function verifyTimeEntryAccess(
+  entryId: string,
+  organizationId: string,
+  scope?: TimeTrackingScope
+) {
   const [entry] = await db
     .select({
       id: jobTimeEntries.id,
       jobId: jobTimeEntries.jobId,
+      projectId: jobTimeEntries.projectId,
+      siteVisitId: jobTimeEntries.siteVisitId,
       userId: jobTimeEntries.userId,
       startTime: jobTimeEntries.startTime,
       endTime: jobTimeEntries.endTime,
     })
     .from(jobTimeEntries)
-    .where(and(eq(jobTimeEntries.id, entryId), eq(jobTimeEntries.organizationId, organizationId)))
+    .where(buildTimeEntryAccessPredicate(entryId, organizationId, scope))
     .limit(1);
 
   if (!entry) {
@@ -76,6 +286,8 @@ function calculateDurationMinutes(startTime: Date, endTime: Date | null): number
 function toTimeEntryResponse(row: {
   id: string;
   jobId: string;
+  projectId: string | null;
+  siteVisitId: string | null;
   userId: string;
   startTime: Date;
   endTime: Date | null;
@@ -91,6 +303,8 @@ function toTimeEntryResponse(row: {
   return {
     id: row.id,
     jobId: row.jobId,
+    projectId: row.projectId,
+    siteVisitId: row.siteVisitId,
     userId: row.userId,
     startTime: row.startTime,
     endTime: row.endTime,
@@ -125,8 +339,15 @@ export const startTimer = createServerFn({ method: 'POST' })
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
 
-    // Verify job access
-    await verifyJobExists(data.jobId, ctx.organizationId);
+    const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id, {
+      createProjectJob: true,
+    });
+
+    if (!scope.jobId) {
+      throw new NotFoundError('Time tracking job not found');
+    }
+    const jobId = scope.jobId;
+    const projectId = scope.projectId;
 
     // Wrap check-then-insert in transaction with row lock to prevent duplicate timers
     const result = await db.transaction(async (tx) => {
@@ -136,7 +357,7 @@ export const startTimer = createServerFn({ method: 'POST' })
         .from(jobTimeEntries)
         .where(
           and(
-            eq(jobTimeEntries.jobId, data.jobId),
+            eq(jobTimeEntries.jobId, jobId),
             eq(jobTimeEntries.userId, ctx.user.id),
             eq(jobTimeEntries.organizationId, ctx.organizationId),
             isNull(jobTimeEntries.endTime)
@@ -154,7 +375,8 @@ export const startTimer = createServerFn({ method: 'POST' })
         .insert(jobTimeEntries)
         .values({
           organizationId: ctx.organizationId,
-          jobId: data.jobId,
+          jobId,
+          projectId,
           userId: ctx.user.id,
           startTime: new Date(),
           endTime: null,
@@ -199,8 +421,17 @@ export const stopTimer = createServerFn({ method: 'POST' })
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
 
+    const scope =
+      data.jobId || data.projectId
+        ? await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id)
+        : undefined;
+
+    if (data.projectId && scope?.jobId === null) {
+      throw new NotFoundError('Time entry not found');
+    }
+
     // Verify entry access
-    const existingEntry = await verifyTimeEntryAccess(data.entryId, ctx.organizationId);
+    const existingEntry = await verifyTimeEntryAccess(data.entryId, ctx.organizationId, scope);
 
     // Check if timer is already stopped
     if (existingEntry.endTime) {
@@ -216,7 +447,7 @@ export const stopTimer = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
         version: sql`${jobTimeEntries.version} + 1`,
       })
-      .where(eq(jobTimeEntries.id, data.entryId))
+      .where(buildTimeEntryAccessPredicate(data.entryId, ctx.organizationId, scope))
       .returning();
 
     // Get user details for response
@@ -249,15 +480,23 @@ export const createManualEntry = createServerFn({ method: 'POST' })
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
 
-    // Verify job access
-    await verifyJobExists(data.jobId, ctx.organizationId);
+    const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id, {
+      createProjectJob: true,
+    });
+
+    if (!scope.jobId) {
+      throw new NotFoundError('Time tracking job not found');
+    }
+    const jobId = scope.jobId;
+    const projectId = scope.projectId;
 
     // Create the time entry
     const [entry] = await db
       .insert(jobTimeEntries)
       .values({
         organizationId: ctx.organizationId,
-        jobId: data.jobId,
+        jobId,
+        projectId,
         userId: ctx.user.id,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -299,8 +538,17 @@ export const updateTimeEntry = createServerFn({ method: 'POST' })
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
 
+    const scope =
+      data.jobId || data.projectId
+        ? await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id)
+        : undefined;
+
+    if (data.projectId && scope?.jobId === null) {
+      throw new NotFoundError('Time entry not found');
+    }
+
     // Verify entry access
-    await verifyTimeEntryAccess(data.entryId, ctx.organizationId);
+    await verifyTimeEntryAccess(data.entryId, ctx.organizationId, scope);
 
     // Build update object with only provided fields
     const updateData: Record<string, unknown> = {
@@ -326,7 +574,7 @@ export const updateTimeEntry = createServerFn({ method: 'POST' })
     const [entry] = await db
       .update(jobTimeEntries)
       .set(updateData)
-      .where(eq(jobTimeEntries.id, data.entryId))
+      .where(buildTimeEntryAccessPredicate(data.entryId, ctx.organizationId, scope))
       .returning();
 
     // Get user details for response
@@ -359,11 +607,22 @@ export const deleteTimeEntry = createServerFn({ method: 'POST' })
       permission: PERMISSIONS.job?.delete ?? 'customer.delete',
     });
 
+    const scope =
+      data.jobId || data.projectId
+        ? await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id)
+        : undefined;
+
+    if (data.projectId && scope?.jobId === null) {
+      throw new NotFoundError('Time entry not found');
+    }
+
     // Verify entry access
-    await verifyTimeEntryAccess(data.entryId, ctx.organizationId);
+    await verifyTimeEntryAccess(data.entryId, ctx.organizationId, scope);
 
     // Delete the entry
-    await db.delete(jobTimeEntries).where(eq(jobTimeEntries.id, data.entryId));
+    await db
+      .delete(jobTimeEntries)
+      .where(buildTimeEntryAccessPredicate(data.entryId, ctx.organizationId, scope));
 
     return { success: true };
   });
@@ -382,14 +641,19 @@ export const getJobTimeEntries = createServerFn({ method: 'GET' })
       permission: PERMISSIONS.job?.read ?? 'customer.read',
     });
 
-    // Verify job access
-    await verifyJobExists(data.jobId, ctx.organizationId);
+    const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id);
+
+    if (!scope.jobId) {
+      return emptyJobTimeSummary;
+    }
 
     // Get entries with user details
     const entries = await db
       .select({
         id: jobTimeEntries.id,
         jobId: jobTimeEntries.jobId,
+        projectId: jobTimeEntries.projectId,
+        siteVisitId: jobTimeEntries.siteVisitId,
         userId: jobTimeEntries.userId,
         startTime: jobTimeEntries.startTime,
         endTime: jobTimeEntries.endTime,
@@ -406,7 +670,7 @@ export const getJobTimeEntries = createServerFn({ method: 'GET' })
       .leftJoin(users, eq(jobTimeEntries.userId, users.id))
       .where(
         and(
-          eq(jobTimeEntries.jobId, data.jobId),
+          eq(jobTimeEntries.jobId, scope.jobId),
           eq(jobTimeEntries.organizationId, ctx.organizationId)
         )
       )
@@ -464,8 +728,18 @@ export const calculateJobLaborCost = createServerFn({ method: 'GET' })
       permission: PERMISSIONS.job?.read ?? 'customer.read',
     });
 
-    // Verify job access
-    await verifyJobExists(data.jobId, ctx.organizationId);
+    const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id);
+
+    if (!scope.jobId) {
+      return {
+        totalHours: 0,
+        billableHours: 0,
+        nonBillableHours: 0,
+        hourlyRate: data.hourlyRate,
+        totalCost: 0,
+        billableCost: 0,
+      } satisfies JobLaborCostSummary;
+    }
 
     // Get completed entries (with endTime)
     const entries = await db
@@ -477,7 +751,7 @@ export const calculateJobLaborCost = createServerFn({ method: 'GET' })
       .from(jobTimeEntries)
       .where(
         and(
-          eq(jobTimeEntries.jobId, data.jobId),
+          eq(jobTimeEntries.jobId, scope.jobId),
           eq(jobTimeEntries.organizationId, ctx.organizationId)
         )
       );
@@ -525,11 +799,22 @@ export const getTimeEntry = createServerFn({ method: 'GET' })
       permission: PERMISSIONS.job?.read ?? 'customer.read',
     });
 
+    const scope =
+      data.jobId || data.projectId
+        ? await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id)
+        : undefined;
+
+    if (data.projectId && scope?.jobId === null) {
+      throw new NotFoundError('Time entry not found');
+    }
+
     // Get entry with user details
     const [entry] = await db
       .select({
         id: jobTimeEntries.id,
         jobId: jobTimeEntries.jobId,
+        projectId: jobTimeEntries.projectId,
+        siteVisitId: jobTimeEntries.siteVisitId,
         userId: jobTimeEntries.userId,
         startTime: jobTimeEntries.startTime,
         endTime: jobTimeEntries.endTime,
@@ -545,10 +830,7 @@ export const getTimeEntry = createServerFn({ method: 'GET' })
       .from(jobTimeEntries)
       .leftJoin(users, eq(jobTimeEntries.userId, users.id))
       .where(
-        and(
-          eq(jobTimeEntries.id, data.entryId),
-          eq(jobTimeEntries.organizationId, ctx.organizationId)
-        )
+        buildTimeEntryAccessPredicate(data.entryId, ctx.organizationId, scope)
       )
       .limit(1);
 

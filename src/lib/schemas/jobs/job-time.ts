@@ -19,6 +19,20 @@ import { z } from 'zod';
  */
 const dateTime = z.coerce.date();
 
+const timeTrackingScopeFields = {
+  jobId: z.string().uuid('Invalid job ID format').optional(),
+  projectId: z.string().uuid('Invalid project ID format').optional(),
+};
+
+function hasTimeTrackingScope(data: { jobId?: string; projectId?: string }): boolean {
+  return Boolean(data.jobId || data.projectId);
+}
+
+const timeTrackingScopeMessage = {
+  message: 'A job or project is required for time tracking',
+  path: ['jobId'],
+};
+
 // ============================================================================
 // START TIMER
 // ============================================================================
@@ -27,11 +41,13 @@ const dateTime = z.coerce.date();
  * Schema for starting a timer on a job.
  * Creates an entry with startTime, no endTime.
  */
-export const startTimerSchema = z.object({
-  jobId: z.string().uuid('Invalid job ID format'),
-  description: z.string().max(2000).optional(),
-  isBillable: z.boolean().default(true),
-});
+export const startTimerSchema = z
+  .object({
+    ...timeTrackingScopeFields,
+    description: z.string().max(2000).optional(),
+    isBillable: z.boolean().default(true),
+  })
+  .refine(hasTimeTrackingScope, timeTrackingScopeMessage);
 
 export type StartTimerInput = z.infer<typeof startTimerSchema>;
 
@@ -45,6 +61,7 @@ export type StartTimerInput = z.infer<typeof startTimerSchema>;
  */
 export const stopTimerSchema = z.object({
   entryId: z.string().uuid('Invalid entry ID format'),
+  ...timeTrackingScopeFields,
 });
 
 export type StopTimerInput = z.infer<typeof stopTimerSchema>;
@@ -59,12 +76,13 @@ export type StopTimerInput = z.infer<typeof stopTimerSchema>;
  */
 export const createManualEntrySchema = z
   .object({
-    jobId: z.string().uuid('Invalid job ID format'),
+    ...timeTrackingScopeFields,
     startTime: dateTime,
     endTime: dateTime,
     description: z.string().max(2000).optional(),
     isBillable: z.boolean().default(true),
   })
+  .refine(hasTimeTrackingScope, timeTrackingScopeMessage)
   .refine((data) => data.endTime > data.startTime, {
     message: 'End time must be after start time',
     path: ['endTime'],
@@ -82,6 +100,7 @@ export type CreateManualEntryInput = z.infer<typeof createManualEntrySchema>;
  */
 export const updateTimeEntrySchema = z.object({
   entryId: z.string().uuid('Invalid entry ID format'),
+  ...timeTrackingScopeFields,
   startTime: dateTime.optional(),
   endTime: dateTime.optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
@@ -99,6 +118,7 @@ export type UpdateTimeEntryInput = z.infer<typeof updateTimeEntrySchema>;
  */
 export const deleteTimeEntrySchema = z.object({
   entryId: z.string().uuid('Invalid entry ID format'),
+  ...timeTrackingScopeFields,
 });
 
 export type DeleteTimeEntryInput = z.infer<typeof deleteTimeEntrySchema>;
@@ -110,9 +130,9 @@ export type DeleteTimeEntryInput = z.infer<typeof deleteTimeEntrySchema>;
 /**
  * Schema for listing time entries for a job.
  */
-export const getJobTimeEntriesSchema = z.object({
-  jobId: z.string().uuid('Invalid job ID format'),
-});
+export const getJobTimeEntriesSchema = z
+  .object(timeTrackingScopeFields)
+  .refine(hasTimeTrackingScope, timeTrackingScopeMessage);
 
 export type GetJobTimeEntriesInput = z.infer<typeof getJobTimeEntriesSchema>;
 
@@ -125,9 +145,9 @@ export type GetJobTimeEntriesInput = z.infer<typeof getJobTimeEntriesSchema>;
  * Requires hourly rate to compute total cost.
  */
 export const calculateJobLaborCostSchema = z.object({
-  jobId: z.string().uuid('Invalid job ID format'),
+  ...timeTrackingScopeFields,
   hourlyRate: z.number().min(0, 'Hourly rate must be 0 or greater'),
-});
+}).refine(hasTimeTrackingScope, timeTrackingScopeMessage);
 
 export type CalculateJobLaborCostInput = z.infer<typeof calculateJobLaborCostSchema>;
 
@@ -140,6 +160,7 @@ export type CalculateJobLaborCostInput = z.infer<typeof calculateJobLaborCostSch
  */
 export const getTimeEntrySchema = z.object({
   entryId: z.string().uuid('Invalid entry ID format'),
+  ...timeTrackingScopeFields,
 });
 
 export type GetTimeEntryInput = z.infer<typeof getTimeEntrySchema>;
@@ -154,6 +175,8 @@ export type GetTimeEntryInput = z.infer<typeof getTimeEntrySchema>;
 export interface TimeEntryResponse {
   id: string;
   jobId: string;
+  projectId: string | null;
+  siteVisitId: string | null;
   userId: string;
   startTime: Date;
   endTime: Date | null;

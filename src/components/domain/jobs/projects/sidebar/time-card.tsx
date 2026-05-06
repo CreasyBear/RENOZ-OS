@@ -21,6 +21,7 @@ import {
   useStartTimer,
   useStopTimer,
   useCreateManualEntry,
+  formatJobTimeMutationError,
 } from '@/hooks/jobs';
 import { toastSuccess, toastError } from '@/hooks';
 
@@ -29,7 +30,7 @@ import { toastSuccess, toastError } from '@/hooks';
 // ============================================================================
 
 export interface TimeCardProps {
-  /** Project ID (used as jobId for time tracking) */
+  /** Project ID used as the project-scoped time tracking anchor */
   projectId: string;
   /** Whether the user can track time */
   canTrackTime?: boolean;
@@ -43,13 +44,13 @@ export interface TimeCardProps {
 export function TimeCard({ projectId, canTrackTime = true, className }: TimeCardProps) {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
-  // Fetch time entries for this project (using projectId as jobId)
+  // Fetch time entries for this project through the project-scoped resolver.
   const { data: timeData, isLoading, error, refetch } = useJobTimeEntries({
-    jobId: projectId,
+    projectId,
   });
 
   const startTimer = useStartTimer();
-  const stopTimer = useStopTimer(projectId);
+  const stopTimer = useStopTimer({ projectId });
   const createManualEntry = useCreateManualEntry();
 
   // Find active timer entry
@@ -58,13 +59,13 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
   const handleStart = async () => {
     try {
       await startTimer.mutateAsync({
-        jobId: projectId,
+        projectId,
         description: undefined,
         isBillable: true,
       });
       toastSuccess('Timer started');
-    } catch {
-      toastError('Failed to start timer');
+    } catch (error) {
+      toastError(formatJobTimeMutationError(error, 'start'));
     }
   };
 
@@ -72,10 +73,11 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
     try {
       await stopTimer.mutateAsync({
         entryId,
+        projectId,
       });
       toastSuccess('Timer stopped');
-    } catch {
-      toastError('Failed to stop timer');
+    } catch (error) {
+      toastError(formatJobTimeMutationError(error, 'stop'));
     }
   };
 
@@ -87,13 +89,13 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
   }) => {
     try {
       await createManualEntry.mutateAsync({
-        jobId: projectId,
+        projectId,
         ...values,
       });
       toastSuccess('Time entry added');
       setManualEntryOpen(false);
-    } catch {
-      toastError('Failed to add time entry');
+    } catch (error) {
+      toastError(formatJobTimeMutationError(error, 'createManual'));
     }
   };
 

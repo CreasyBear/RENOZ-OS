@@ -139,6 +139,24 @@ const INSTALLER_PROFILE_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the installer profile details and try again.',
 };
 
+const JOB_TIME_MUTATION_FALLBACKS = {
+  start: 'Timer start is temporarily unavailable. Please refresh and try again.',
+  stop: 'Timer stop is temporarily unavailable. Please refresh and try again.',
+  createManual:
+    'Manual time entry creation is temporarily unavailable. Please refresh and try again.',
+  update: 'Time entry update is temporarily unavailable. Please refresh and try again.',
+  delete: 'Time entry deletion is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const JOB_TIME_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your session has expired. Sign in again before tracking time.',
+  CONFLICT: 'Time tracking details conflict with the current project state.',
+  NOT_FOUND: 'The time entry could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to track time.',
+  RATE_LIMIT: 'Too many time tracking changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the time entry details and try again.',
+};
+
 export type JobTemplateMutationAction = keyof typeof JOB_TEMPLATE_MUTATION_FALLBACKS;
 export type InstallerProfileMutationAction =
   keyof typeof INSTALLER_PROFILE_MUTATION_FALLBACKS;
@@ -149,6 +167,7 @@ export type ProjectWorkstreamMutationAction =
 export type ProjectTaskMutationAction = keyof typeof PROJECT_TASK_MUTATION_FALLBACKS;
 export type ProjectBomMutationAction = keyof typeof PROJECT_BOM_MUTATION_FALLBACKS;
 export type SiteVisitMutationAction = keyof typeof SITE_VISIT_MUTATION_FALLBACKS;
+export type JobTimeMutationAction = keyof typeof JOB_TIME_MUTATION_FALLBACKS;
 
 export function formatJobTemplateMutationError(
   error: unknown,
@@ -219,5 +238,14 @@ export function formatSiteVisitMutationError(
 ): string {
   return formatMutationError(error, SITE_VISIT_MUTATION_FALLBACKS[action], {
     codeMessages: SITE_VISIT_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatJobTimeMutationError(
+  error: unknown,
+  action: JobTimeMutationAction
+): string {
+  return formatMutationError(error, JOB_TIME_MUTATION_FALLBACKS[action], {
+    codeMessages: JOB_TIME_MUTATION_CODE_MESSAGES,
   });
 }

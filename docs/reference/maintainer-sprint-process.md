@@ -70,10 +70,12 @@ Demand:
 - centralized query keys and cache invalidation
 - tenant isolation in server functions, database queries, cache keys, and UI assumptions
 - transactional inventory and finance integrity
-- serialized lineage continuity for battery assets
+- serialized lineage continuity when a slice touches battery serial identity, movement, warranty/RMA continuity, or related repair work
 - tests that protect real operator workflows
 - business-value judgment in each sprint
 - closeout notes that explain judgment, not only commands
+
+The old serialized gate pack is closed work. Do not run it, list it as skipped evidence, or reopen it for unrelated slices.
 
 Do not demand:
 
@@ -184,7 +186,7 @@ Architecture checks:
 - Are tenant IDs, organization IDs, or user-scoped assumptions explicit at every data boundary?
 - Does the UI distinguish empty, loading, stale, failed, blocked, and degraded states?
 - Are inventory, warranty, RMA, and finance side effects traceable?
-- Do inventory mutations preserve quantity, movement, cost-layer, valuation, and serialized lineage continuity in one coherent transaction?
+- When a slice touches serialized inventory identity, do inventory mutations preserve quantity, movement, cost-layer, valuation, and lineage continuity in one coherent transaction?
 
 Architect output:
 

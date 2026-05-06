@@ -1779,6 +1779,18 @@ export const queryKeys = {
       [...queryKeys.jobTime.all, 'detail', entryId] as const,
     entries: (jobId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.jobTime.all, 'entries', jobId, filters ?? {}] as const,
+    scopeKey: (scope: { jobId?: string | null; projectId?: string | null }) =>
+      scope.jobId ? `job:${scope.jobId}` : scope.projectId ? `project:${scope.projectId}` : 'unscoped',
+    entriesByScope: (
+      scope: { jobId?: string | null; projectId?: string | null },
+      filters?: Record<string, unknown>
+    ) =>
+      [
+        ...queryKeys.jobTime.all,
+        'entries',
+        queryKeys.jobTime.scopeKey(scope),
+        filters ?? {},
+      ] as const,
     entryDetail: (entryId: string) =>
       [...queryKeys.jobTime.all, 'entry', entryId] as const,
     summary: (jobId: string) =>
@@ -1790,6 +1802,8 @@ export const queryKeys = {
     costs: {
       all: () => [...queryKeys.jobTime.all, 'costs'] as const,
       byJob: (jobId: string) => [...queryKeys.jobTime.all, 'costs', jobId] as const,
+      byScope: (scope: { jobId?: string | null; projectId?: string | null }) =>
+        [...queryKeys.jobTime.all, 'costs', queryKeys.jobTime.scopeKey(scope)] as const,
     },
   },
 
