@@ -15,6 +15,7 @@ import {
   useSignatures,
   useDeleteSignature,
   useSetDefaultSignature,
+  formatCommunicationSignatureMutationError,
 } from "@/hooks/communications";
 import { SignaturesList } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
@@ -58,8 +59,8 @@ export default function SignaturesPage() {
       try {
         await deleteMutation.mutateAsync({ id });
         toastSuccess("Signature deleted");
-      } catch {
-        toastError("Failed to delete signature");
+      } catch (error) {
+        toastError(formatCommunicationSignatureMutationError(error, "delete"));
       }
     },
     [confirm, deleteMutation]
@@ -70,8 +71,8 @@ export default function SignaturesPage() {
       try {
         await setDefaultMutation.mutateAsync({ id });
         toastSuccess("Default signature updated");
-      } catch {
-        toastError("Failed to set default signature");
+      } catch (error) {
+        toastError(formatCommunicationSignatureMutationError(error, "setDefault"));
       }
     },
     [setDefaultMutation]

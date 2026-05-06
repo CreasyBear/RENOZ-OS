@@ -46,12 +46,20 @@ const SCHEDULED_CALL_FALLBACKS = {
   snooze: 'Unable to snooze call.',
 } as const;
 
+const SIGNATURE_FALLBACKS = {
+  create: 'Unable to create email signature.',
+  update: 'Unable to update email signature.',
+  delete: 'Unable to delete email signature.',
+  setDefault: 'Unable to set default email signature.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
 export type CommunicationInboxAccountMutationAction = keyof typeof INBOX_ACCOUNT_FALLBACKS;
 export type CommunicationScheduledEmailMutationAction = keyof typeof SCHEDULED_EMAIL_FALLBACKS;
 export type CommunicationScheduledCallMutationAction = keyof typeof SCHEDULED_CALL_FALLBACKS;
+export type CommunicationSignatureMutationAction = keyof typeof SIGNATURE_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -124,4 +132,11 @@ export function formatCommunicationScheduledCallMutationError(
   action: CommunicationScheduledCallMutationAction
 ): string {
   return formatCommunicationMutationError(error, SCHEDULED_CALL_FALLBACKS[action]);
+}
+
+export function formatCommunicationSignatureMutationError(
+  error: unknown,
+  action: CommunicationSignatureMutationAction
+): string {
+  return formatCommunicationMutationError(error, SIGNATURE_FALLBACKS[action]);
 }

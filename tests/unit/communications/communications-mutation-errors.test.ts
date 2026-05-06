@@ -7,6 +7,7 @@ import {
   formatCommunicationInboxMutationError,
   formatCommunicationScheduledCallMutationError,
   formatCommunicationScheduledEmailMutationError,
+  formatCommunicationSignatureMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
 import { executeBulkAction } from '@/lib/actions/bulk-action-results';
@@ -74,6 +75,13 @@ describe('communications mutation error formatting', () => {
         'complete'
       )
     ).toBe('Unable to complete scheduled call.');
+
+    expect(
+      formatCommunicationSignatureMutationError(
+        new Error('postgres duplicate key constraint while setting default signature'),
+        'setDefault'
+      )
+    ).toBe('Unable to set default email signature.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -195,6 +203,20 @@ describe('communications mutation error formatting', () => {
     expect(page).not.toContain('toastError("Failed to complete call")');
     expect(page).not.toContain('toastError("Failed to cancel call")');
     expect(page).not.toContain('toastError("Failed to reschedule call")');
+  });
+
+  it('keeps communications signature mutations on communications-owned formatters', () => {
+    const page = read('src/routes/_authenticated/communications/signatures/signatures-page.tsx');
+    const editor = read('src/components/domain/communications/signatures/signature-editor.tsx');
+
+    expect(editor).toContain('formatCommunicationSignatureMutationError(error, "update")');
+    expect(editor).toContain('formatCommunicationSignatureMutationError(error, "create")');
+    expect(page).toContain('formatCommunicationSignatureMutationError(error, "delete")');
+    expect(page).toContain('formatCommunicationSignatureMutationError(error, "setDefault")');
+    expect(editor).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(editor).not.toContain('toast.error("Failed to update signature"');
+    expect(page).not.toContain('toastError("Failed to delete signature")');
+    expect(page).not.toContain('toastError("Failed to set default signature")');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

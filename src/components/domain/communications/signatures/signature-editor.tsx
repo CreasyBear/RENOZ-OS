@@ -44,8 +44,8 @@ import {
   useCreateSignature,
   useUpdateSignature,
 } from "@/hooks/communications/use-signatures";
+import { formatCommunicationSignatureMutationError } from "@/hooks/communications";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import {
   signatureFormSchema,
   type SignatureEditorProps,
@@ -98,9 +98,7 @@ export function SignatureEditor({
               onSave?.();
             },
             onError: (error) => {
-              toast.error("Failed to update signature", {
-                description: getUserFriendlyMessage(error as Error),
-              });
+              toast.error(formatCommunicationSignatureMutationError(error, "update"));
             },
           }
         );
@@ -113,9 +111,7 @@ export function SignatureEditor({
               onSave?.();
             },
             onError: (error) => {
-              toast.error("Failed to update signature", {
-                description: getUserFriendlyMessage(error as Error),
-              });
+              toast.error(formatCommunicationSignatureMutationError(error, "create"));
             },
           }
         );
