@@ -20,6 +20,7 @@ import { useCallback, useMemo, useState } from "react";
 import { endOfMonth, isSameDay, startOfMonth } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  formatPipelineOpportunityMutationError,
   useOpportunitiesKanban,
   usePipelineMetrics,
   useUpdateOpportunityStage,
@@ -418,8 +419,8 @@ export function PipelineKanbanContainer({
           reason,
         });
         toastSuccess("Opportunity stage updated successfully.");
-      } catch {
-        toastError("Failed to update opportunity stage. Please try again.");
+      } catch (error) {
+        toastError(formatPipelineOpportunityMutationError(error, "stage"));
         throw new Error("Stage change failed");
       }
     },
@@ -457,7 +458,7 @@ export function PipelineKanbanContainer({
         await deleteMutation.mutateAsync(id);
         toastSuccess("Opportunity deleted successfully.");
       } catch (error) {
-        toastError(error instanceof Error ? error.message : "Failed to delete opportunity.");
+        toastError(formatPipelineOpportunityMutationError(error, "delete"));
       }
     },
     [confirm, deleteMutation]

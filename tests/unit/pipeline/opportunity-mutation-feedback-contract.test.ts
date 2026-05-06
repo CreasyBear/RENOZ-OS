@@ -66,6 +66,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
     const quickDialog = read(
       'src/components/domain/pipeline/opportunities/opportunity-quick-dialog.tsx'
     );
+    const kanban = read('src/components/domain/pipeline/pipeline-kanban-container.tsx');
 
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
@@ -86,6 +87,14 @@ describe('pipeline opportunity mutation feedback contract', () => {
     );
     expect(quickDialog).not.toContain(
       'error instanceof Error ? error.message : "Failed to update opportunity."'
+    );
+    expect(kanban).toContain('formatPipelineOpportunityMutationError(error, "stage")');
+    expect(kanban).toContain('formatPipelineOpportunityMutationError(error, "delete")');
+    expect(kanban).not.toContain(
+      'toastError("Failed to update opportunity stage. Please try again.")'
+    );
+    expect(kanban).not.toContain(
+      'error instanceof Error ? error.message : "Failed to delete opportunity."'
     );
   });
 });
