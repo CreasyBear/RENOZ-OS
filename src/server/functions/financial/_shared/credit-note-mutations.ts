@@ -161,28 +161,6 @@ export async function updateCreditNoteRecord(
 ): Promise<CreditNoteRecord> {
   const { id, ...updateData } = data;
 
-  // Get existing credit note
-  const existing = await db
-    .select()
-    .from(creditNotes)
-    .where(
-      and(
-        eq(creditNotes.id, id),
-        eq(creditNotes.organizationId, ctx.organizationId),
-        isNull(creditNotes.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (existing.length === 0) {
-    throw new NotFoundError('Credit note not found', 'credit_note');
-  }
-
-  // Only drafts can be updated
-  if (existing[0].status !== 'draft') {
-    throw new ConflictError('Only draft credit notes can be updated');
-  }
-
   // Recalculate GST if amount changed and GST not explicitly provided
   const updates: Partial<CreditNoteRecord> = {
     ...updateData,
@@ -193,33 +171,72 @@ export async function updateCreditNoteRecord(
     updates.gstAmount = calculateGst(updateData.amount);
   }
 
-  // Update
-  const [updated] = await db
-    .update(creditNotes)
-    .set(updates)
-    .where(eq(creditNotes.id, id))
-    .returning();
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+    );
+
+    const [existing] = await tx
+      .select()
+      .from(creditNotes)
+      .where(
+        and(
+          eq(creditNotes.id, id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Credit note not found', 'credit_note');
+    }
+
+    // Only drafts can be updated
+    if (existing.status !== 'draft') {
+      throw new ConflictError('Only draft credit notes can be updated');
+    }
+
+    const [updated] = await tx
+      .update(creditNotes)
+      .set(updates)
+      .where(
+        and(
+          eq(creditNotes.id, id),
+          eq(creditNotes.organizationId, ctx.organizationId),
+          isNull(creditNotes.deletedAt),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundError('Credit note not found or already modified', 'credit_note');
+    }
+
+    return { existing, updated };
+  });
 
   // Activity logging
   const logger = createActivityLoggerWithContext(ctx);
   logger.logAsync({
     entityType: 'order',
-    entityId: updated.id,
+    entityId: result.updated.id,
     action: 'updated',
-    description: `Updated credit note: ${updated.creditNoteNumber}`,
+    description: `Updated credit note: ${result.updated.creditNoteNumber}`,
     changes: computeChanges({
-      before: existing[0],
-      after: updated,
+      before: result.existing,
+      after: result.updated,
       excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
     }),
     metadata: {
-      creditNoteNumber: updated.creditNoteNumber ?? undefined,
-      customerId: updated.customerId,
+      creditNoteNumber: result.updated.creditNoteNumber ?? undefined,
+      customerId: result.updated.customerId,
       changedFields: Object.keys(updateData),
     },
   });
 
-  return updated;
+  return result.updated;
 }
 
 export async function issueCreditNoteRecord(

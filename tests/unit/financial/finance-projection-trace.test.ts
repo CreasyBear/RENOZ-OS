@@ -189,6 +189,38 @@ describe('finance schema trace repair', () => {
     expect(source).not.toContain('newPaidAmount = currentPaid + creditAmount');
   });
 
+  it('locks credit-note updates before validating draft state', () => {
+    const source = read(
+      'src/server/functions/financial/_shared/credit-note-mutations.ts',
+    );
+    const updateSource = source.slice(
+      source.indexOf('export async function updateCreditNoteRecord'),
+      source.indexOf('export async function issueCreditNoteRecord'),
+    );
+    const transactionIndex = updateSource.indexOf('db.transaction(async (tx)');
+    const setConfigIndex = updateSource.indexOf("set_config('app.organization_id'");
+    const lockIndex = updateSource.indexOf(".for('update')");
+    const draftStatusIndex = updateSource.indexOf('Only draft credit notes can be updated');
+    const updateIndex = updateSource.indexOf('.update(creditNotes)');
+    const returningIndex = updateSource.indexOf('.returning()');
+    const staleGuardIndex = updateSource.indexOf(
+      "throw new NotFoundError('Credit note not found or already modified'",
+    );
+
+    expect(transactionIndex).toBeGreaterThanOrEqual(0);
+    expect(setConfigIndex).toBeGreaterThan(transactionIndex);
+    expect(lockIndex).toBeGreaterThan(setConfigIndex);
+    expect(draftStatusIndex).toBeGreaterThan(lockIndex);
+    expect(updateIndex).toBeGreaterThan(draftStatusIndex);
+    expect(returningIndex).toBeGreaterThan(updateIndex);
+    expect(staleGuardIndex).toBeGreaterThan(returningIndex);
+    expect(compact(updateSource)).toContain('eq(creditNotes.id,id)');
+    expect(compact(updateSource)).toContain(
+      'eq(creditNotes.organizationId,ctx.organizationId)',
+    );
+    expect(compact(updateSource)).toContain('isNull(creditNotes.deletedAt)');
+  });
+
   it('locks credit-note issue before validating draft state', () => {
     const source = read(
       'src/server/functions/financial/_shared/credit-note-mutations.ts',
