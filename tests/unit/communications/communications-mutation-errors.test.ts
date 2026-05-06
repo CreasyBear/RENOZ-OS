@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatCommunicationCampaignMutationError,
+  formatCommunicationInboxMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
 import { executeBulkAction } from '@/lib/actions/bulk-action-results';
@@ -42,6 +43,13 @@ describe('communications mutation error formatting', () => {
         'delete'
       )
     ).toBe('Unable to delete communication campaign.');
+
+    expect(
+      formatCommunicationInboxMutationError(
+        new Error('supabase database constraint failed while archiving inbox item'),
+        'archive'
+      )
+    ).toBe('Unable to archive email.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -76,6 +84,22 @@ describe('communications mutation error formatting', () => {
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to delete campaign"');
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to duplicate campaign"');
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to send test email"');
+  });
+
+  it('keeps communications inbox actions on communications-owned formatters', () => {
+    const hook = read('src/hooks/communications/use-inbox-actions.ts');
+
+    expect(hook).toContain('formatCommunicationInboxMutationError(error, "markRead")');
+    expect(hook).toContain('formatCommunicationInboxMutationError(error, "markAllRead")');
+    expect(hook).toContain('formatCommunicationInboxMutationError(error, "toggleStarred")');
+    expect(hook).toContain('formatCommunicationInboxMutationError(error, "archive")');
+    expect(hook).toContain('formatCommunicationInboxMutationError(error, "delete")');
+    expect(hook).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(hook).not.toContain('toast.error("Failed to mark email as read"');
+    expect(hook).not.toContain('toast.error("Failed to mark emails as read"');
+    expect(hook).not.toContain('toast.error("Failed to update starred status"');
+    expect(hook).not.toContain('toast.error("Failed to archive email"');
+    expect(hook).not.toContain('toast.error("Failed to delete email"');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

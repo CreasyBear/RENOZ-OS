@@ -18,7 +18,7 @@ import {
   deleteEmail,
 } from "@/server/functions/communications/inbox-actions";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
+import { formatCommunicationInboxMutationError } from "./_mutation-errors";
 
 // ============================================================================
 // MARK AS READ
@@ -44,9 +44,7 @@ export function useMarkEmailAsRead() {
       });
     },
     onError: (error) => {
-      toast.error("Failed to mark email as read", {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxMutationError(error, "markRead"));
     },
     onSuccess: () => {
       toast.success("Email marked as read");
@@ -82,9 +80,7 @@ export function useMarkAllEmailsAsRead() {
       });
     },
     onError: (error) => {
-      toast.error("Failed to mark emails as read", {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxMutationError(error, "markAllRead"));
     },
     onSuccess: () => {
       toast.success("All emails marked as read");
@@ -123,9 +119,7 @@ export function useToggleEmailStarred() {
       });
     },
     onError: (error) => {
-      toast.error("Failed to update starred status", {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxMutationError(error, "toggleStarred"));
     },
     onSuccess: (data) => {
       toast.success(data.starred ? "Email starred" : "Email unstarred");
@@ -164,9 +158,7 @@ export function useArchiveEmail() {
       });
     },
     onError: (error) => {
-      toast.error("Failed to archive email", {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxMutationError(error, "archive"));
     },
     onSuccess: () => {
       toast.success("Email archived");
@@ -205,9 +197,7 @@ export function useDeleteEmail() {
       });
     },
     onError: (error) => {
-      toast.error("Failed to delete email", {
-        description: getUserFriendlyMessage(error as Error),
-      });
+      toast.error(formatCommunicationInboxMutationError(error, "delete"));
     },
     onSuccess: () => {
       toast.success("Email deleted");

@@ -15,8 +15,17 @@ const CAMPAIGN_FALLBACKS = {
   resume: 'Unable to resume communication campaign.',
 } as const;
 
+const INBOX_FALLBACKS = {
+  markRead: 'Unable to mark email as read.',
+  markAllRead: 'Unable to mark emails as read.',
+  toggleStarred: 'Unable to update email star status.',
+  archive: 'Unable to archive email.',
+  delete: 'Unable to delete email.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
+export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -50,4 +59,11 @@ export function formatCommunicationCampaignMutationError(
   action: CommunicationCampaignMutationAction
 ): string {
   return formatCommunicationMutationError(error, CAMPAIGN_FALLBACKS[action]);
+}
+
+export function formatCommunicationInboxMutationError(
+  error: unknown,
+  action: CommunicationInboxMutationAction
+): string {
+  return formatCommunicationMutationError(error, INBOX_FALLBACKS[action]);
 }
