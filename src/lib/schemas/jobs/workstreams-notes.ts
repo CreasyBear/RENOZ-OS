@@ -17,7 +17,7 @@ export const createWorkstreamSchema = z.object({
   projectId: z.string().uuid(),
   name: z.string().min(1).max(255),
   description: z.string().optional(),
-  position: z.number().int().min(0).default(0),
+  position: z.number().int().min(0).optional(),
   defaultVisitType: z.enum([
     'assessment',
     'installation',
@@ -31,6 +31,7 @@ export const createWorkstreamSchema = z.object({
 
 export const updateWorkstreamSchema = z.object({
   id: z.string().uuid(),
+  projectId: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
   position: z.number().int().min(0).optional(),
@@ -49,8 +50,14 @@ export const workstreamIdSchema = z.object({
   id: z.string().uuid(),
 });
 
+export const projectScopedWorkstreamIdSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+});
+
 export type CreateWorkstreamInput = z.infer<typeof createWorkstreamSchema>;
 export type UpdateWorkstreamInput = z.infer<typeof updateWorkstreamSchema>;
+export type ProjectScopedWorkstreamIdInput = z.infer<typeof projectScopedWorkstreamIdSchema>;
 
 // ============================================================================
 // NOTE SCHEMAS

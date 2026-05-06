@@ -43,6 +43,7 @@ import {
 
 // Hooks
 import {
+  formatProjectWorkstreamMutationError,
   useWorkstreams,
   useDeleteWorkstream,
   useReorderWorkstreams,
@@ -243,8 +244,8 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
     try {
       await deleteWorkstream.mutateAsync(workstream.id);
       toast.success('Workstream deleted');
-    } catch {
-      toast.error('Failed to delete workstream');
+    } catch (error) {
+      toast.error(formatProjectWorkstreamMutationError(error, 'delete'));
     }
   };
 
@@ -252,8 +253,8 @@ export function ProjectWorkstreamsTab({ project }: TabProps) {
     try {
       await reorderWorkstreams.mutateAsync(workstreamIds);
       toast.success('Workstreams reordered');
-    } catch {
-      toast.error('Failed to reorder workstreams');
+    } catch (error) {
+      toast.error(formatProjectWorkstreamMutationError(error, 'reorder'));
     }
   };
 

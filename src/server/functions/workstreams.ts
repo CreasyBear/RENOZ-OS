@@ -20,9 +20,11 @@ import {
   createWorkstreamSchema,
   updateWorkstreamSchema,
   workstreamIdSchema,
+  projectScopedWorkstreamIdSchema,
 } from '@/lib/schemas/jobs/workstreams-notes';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // WORKSTREAM CRUD
@@ -79,7 +81,7 @@ export const getWorkstream = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!workstream) {
-      throw new Error('Workstream not found');
+      throw new NotFoundError('Project workstream not found', 'projectWorkstream');
     }
 
     return {
@@ -135,7 +137,7 @@ export const updateWorkstream = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    const { id, ...updates } = data;
+    const { id, projectId, ...updates } = data;
 
     const [workstream] = await db
       .update(projectWorkstreams)
@@ -146,13 +148,14 @@ export const updateWorkstream = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(projectWorkstreams.id, id),
+          eq(projectWorkstreams.projectId, projectId),
           eq(projectWorkstreams.organizationId, ctx.organizationId)
         )
       )
       .returning();
 
     if (!workstream) {
-      throw new Error('Workstream not found');
+      throw new NotFoundError('Project workstream not found', 'projectWorkstream');
     }
 
     return {
@@ -165,45 +168,54 @@ export const updateWorkstream = createServerFn({ method: 'POST' })
  * Delete a workstream
  */
 export const deleteWorkstream = createServerFn({ method: 'POST' })
-  .inputValidator(workstreamIdSchema)
+  .inputValidator(projectScopedWorkstreamIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
 
-    // Get the workstream to find its project and position
-    const [workstream] = await db
-      .select()
-      .from(projectWorkstreams)
-      .where(
-        and(
-          eq(projectWorkstreams.id, data.id),
-          eq(projectWorkstreams.organizationId, ctx.organizationId)
+    await db.transaction(async (tx) => {
+      // Get the workstream to find its position and protect the route project boundary.
+      const [workstream] = await tx
+        .select()
+        .from(projectWorkstreams)
+        .where(
+          and(
+            eq(projectWorkstreams.id, data.id),
+            eq(projectWorkstreams.projectId, data.projectId),
+            eq(projectWorkstreams.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!workstream) {
-      throw new Error('Workstream not found');
-    }
+      if (!workstream) {
+        throw new NotFoundError('Project workstream not found', 'projectWorkstream');
+      }
 
-    // Delete the workstream
-    await db
-      .delete(projectWorkstreams)
-      .where(eq(projectWorkstreams.id, data.id));
+      // Delete the workstream
+      await tx
+        .delete(projectWorkstreams)
+        .where(
+          and(
+            eq(projectWorkstreams.id, data.id),
+            eq(projectWorkstreams.projectId, data.projectId),
+            eq(projectWorkstreams.organizationId, ctx.organizationId)
+          )
+        );
 
-    // Reorder remaining workstreams to fill the gap
-    await db
-      .update(projectWorkstreams)
-      .set({
-        position: sql`${projectWorkstreams.position} - 1`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(projectWorkstreams.projectId, workstream.projectId),
-          eq(projectWorkstreams.organizationId, ctx.organizationId),
-          sql`${projectWorkstreams.position} > ${workstream.position}`
-        )
-      );
+      // Reorder remaining workstreams to fill the gap
+      await tx
+        .update(projectWorkstreams)
+        .set({
+          position: sql`${projectWorkstreams.position} - 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(projectWorkstreams.projectId, workstream.projectId),
+            eq(projectWorkstreams.organizationId, ctx.organizationId),
+            sql`${projectWorkstreams.position} > ${workstream.position}`
+          )
+        );
+    });
 
     return {
       success: true,
@@ -223,24 +235,28 @@ export const reorderWorkstreams = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    // Update positions based on the provided order
-    const updates = data.workstreamIds.map((id, index) =>
-      db
-        .update(projectWorkstreams)
-        .set({
-          position: index,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(projectWorkstreams.id, id),
-            eq(projectWorkstreams.projectId, data.projectId),
-            eq(projectWorkstreams.organizationId, ctx.organizationId)
+    await db.transaction(async (tx) => {
+      for (const [index, id] of data.workstreamIds.entries()) {
+        const [updated] = await tx
+          .update(projectWorkstreams)
+          .set({
+            position: index,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(projectWorkstreams.id, id),
+              eq(projectWorkstreams.projectId, data.projectId),
+              eq(projectWorkstreams.organizationId, ctx.organizationId)
+            )
           )
-        )
-    );
+          .returning({ id: projectWorkstreams.id });
 
-    await Promise.all(updates);
+        if (!updated) {
+          throw new NotFoundError('Project workstream not found', 'projectWorkstream');
+        }
+      }
+    });
 
     return {
       success: true,

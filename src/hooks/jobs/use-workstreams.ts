@@ -23,6 +23,8 @@ import type {
   ListWorkstreamsResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
+type UpdateWorkstreamMutationInput = Omit<UpdateWorkstreamInput, 'projectId'>;
+
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
@@ -94,8 +96,8 @@ export function useUpdateWorkstream(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateWorkstreamInput) =>
-      updateWorkstream({ data }),
+    mutationFn: (data: UpdateWorkstreamMutationInput) =>
+      updateWorkstream({ data: { ...data, projectId } }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectWorkstreams.byProject(projectId),
@@ -113,7 +115,7 @@ export function useDeleteWorkstream(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteWorkstream({ data: { id } }),
+    mutationFn: (id: string) => deleteWorkstream({ data: { id, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectWorkstreams.byProject(projectId),

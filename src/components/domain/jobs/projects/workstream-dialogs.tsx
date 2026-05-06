@@ -18,7 +18,11 @@ import {
   TextareaField,
   SelectField,
 } from '@/components/shared/forms';
-import { useCreateWorkstream, useUpdateWorkstream } from '@/hooks/jobs';
+import {
+  formatProjectWorkstreamMutationError,
+  useCreateWorkstream,
+  useUpdateWorkstream,
+} from '@/hooks/jobs';
 import { toast } from 'sonner';
 import type { ProjectWorkstream } from '@/lib/schemas/jobs';
 
@@ -96,7 +100,6 @@ export function WorkstreamCreateDialog({
         await createWorkstream.mutateAsync({
           name: data.name,
           description: data.description,
-          position: 0,
           defaultVisitType: data.defaultVisitType,
         });
 
@@ -104,8 +107,8 @@ export function WorkstreamCreateDialog({
         onOpenChange(false);
         form.reset();
         onSuccess?.();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to create workstream';
+      } catch (error) {
+        const msg = formatProjectWorkstreamMutationError(error, 'create');
         setSubmitError(msg);
         toast.error(msg);
       }
@@ -231,8 +234,8 @@ export function WorkstreamEditDialog({
         toast.success('Workstream updated');
         onOpenChange(false);
         onSuccess?.();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to update workstream';
+      } catch (error) {
+        const msg = formatProjectWorkstreamMutationError(error, 'update');
         setSubmitError(msg);
         toast.error(msg);
       }
@@ -310,5 +313,4 @@ export function WorkstreamEditDialog({
     </FormDialog>
   );
 }
-
 

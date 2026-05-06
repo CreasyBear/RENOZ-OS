@@ -151,11 +151,13 @@ export {
   formatJobTemplateMutationError,
   formatProjectFileMutationError,
   formatProjectNoteMutationError,
+  formatProjectWorkstreamMutationError,
 } from './_mutation-errors';
 export type {
   JobTemplateMutationAction,
   ProjectFileMutationAction,
   ProjectNoteMutationAction,
+  ProjectWorkstreamMutationAction,
 } from './_mutation-errors';
 
 // ============================================================================
