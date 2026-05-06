@@ -43,6 +43,10 @@ import {
   useDeleteInboxEmailAccount,
 } from "@/hooks/communications/use-inbox-email-accounts";
 import { formatCommunicationInboxAccountMutationError } from "@/hooks/communications";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QUERY_CONFIG } from "@/lib/constants";
 import type { InboxEmailAccount } from "@/lib/schemas/communications/inbox-accounts";
@@ -327,7 +331,12 @@ export function InboxEmailAccountsSettings() {
         <CardContent>
           <div className="flex items-center space-x-2 text-destructive">
             <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">Failed to load email accounts: {error.message}</span>
+            <span className="text-sm">
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.inboxEmailAccounts
+              )}
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -350,9 +359,12 @@ export function InboxEmailAccountsSettings() {
         <CardContent className="pt-0">
           <Alert>
             <AlertDescription>
-              {accounts.length > 0
-                ? error.message || "Email accounts are temporarily unavailable. Showing the most recent connections."
-                : error.message || "Email accounts are temporarily unavailable. Please refresh and try again."}
+              {formatCommunicationReadError(
+                error,
+                accounts.length > 0
+                  ? COMMUNICATION_READ_MESSAGES.inboxEmailAccountsCached
+                  : COMMUNICATION_READ_MESSAGES.inboxEmailAccounts
+              )}
             </AlertDescription>
           </Alert>
         </CardContent>

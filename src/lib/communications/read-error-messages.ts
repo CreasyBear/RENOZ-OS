@@ -7,6 +7,10 @@ export const COMMUNICATION_READ_MESSAGES = {
     'Preference history is temporarily unavailable. Please refresh and try again.',
   suppressionList:
     'Suppression list data is temporarily unavailable. Please refresh and try again.',
+  inboxEmailAccounts:
+    'Email accounts are temporarily unavailable. Please refresh and try again.',
+  inboxEmailAccountsCached:
+    'Email accounts are temporarily unavailable. Showing the most recent connections.',
 } as const;
 
 export function formatCommunicationReadError(

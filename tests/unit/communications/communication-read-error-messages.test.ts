@@ -35,12 +35,15 @@ describe('communication read error messages', () => {
     );
   });
 
-  it('keeps preference and suppression read states behind communications-owned copy', () => {
+  it('keeps preference, suppression, and inbox account read states behind communications-owned copy', () => {
     const preferences = read(
       'src/components/domain/communications/communication-preferences.tsx'
     );
     const suppression = read(
       'src/components/domain/communications/settings/suppression-list-table.tsx'
+    );
+    const inboxAccounts = read(
+      'src/components/domain/communications/inbox/inbox-email-accounts-settings.tsx'
     );
     const formatter = read('src/lib/communications/read-error-messages.ts');
 
@@ -51,7 +54,13 @@ describe('communication read error messages', () => {
     expect(suppression).toContain('formatCommunicationReadError(');
     expect(suppression).toContain('COMMUNICATION_READ_MESSAGES.suppressionList');
     expect(suppression).not.toContain('<span>{error.message}</span>');
+    expect(inboxAccounts).toContain('formatCommunicationReadError(');
+    expect(inboxAccounts).toContain('COMMUNICATION_READ_MESSAGES.inboxEmailAccounts');
+    expect(inboxAccounts).toContain('COMMUNICATION_READ_MESSAGES.inboxEmailAccountsCached');
+    expect(inboxAccounts).not.toContain('Failed to load email accounts: {error.message}');
+    expect(inboxAccounts).not.toContain('error.message ||');
     expect(formatter).toContain('isReadQueryError(error)');
     expect(formatter).toContain('suppressionList');
+    expect(formatter).toContain('inboxEmailAccounts');
   });
 });

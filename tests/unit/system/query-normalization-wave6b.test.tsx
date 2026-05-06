@@ -329,6 +329,10 @@ describe('system/operational query normalization wave 6b', () => {
       useSyncInboxEmailAccount: () => ({ mutate: vi.fn(), isPending: false, variables: null }),
       useDeleteInboxEmailAccount: () => ({ mutate: vi.fn(), isPending: false }),
     }));
+    vi.doMock('@/hooks/communications', () => ({
+      formatCommunicationInboxAccountMutationError: () =>
+        'Unable to disconnect email account.',
+    }));
     vi.doMock('@/hooks/_shared/use-confirmation', () => ({
       useConfirmation: () => ({ confirm: vi.fn() }),
     }));
@@ -340,7 +344,7 @@ describe('system/operational query normalization wave 6b', () => {
     render(<InboxEmailAccountsSettings />);
 
     expect(
-      screen.getByText('Email accounts are temporarily unavailable. Please refresh and try again.')
+      screen.getByText('Email accounts are temporarily unavailable. Showing the most recent connections.')
     ).toBeInTheDocument();
     expect(screen.getByText('ops@example.com')).toBeInTheDocument();
   });
