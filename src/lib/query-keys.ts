@@ -2062,6 +2062,10 @@ export const queryKeys = {
       [...queryKeys.oauth.all, 'health', organizationId ?? ''] as const,
     dashboard: (organizationId?: string, timeframe?: string) =>
       [...queryKeys.oauth.all, 'dashboard', organizationId ?? '', timeframe ?? ''] as const,
+    pendingSelections: () =>
+      [...queryKeys.oauth.all, 'pendingSelection'] as const,
+    pendingSelection: (stateId: string) =>
+      [...queryKeys.oauth.pendingSelections(), stateId] as const,
   },
 
   // -------------------------------------------------------------------------

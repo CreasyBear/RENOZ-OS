@@ -151,7 +151,9 @@ const {
   }, []);
 
   const { data: pendingTenantSelection, isLoading: isLoadingPendingTenantSelection } = useQuery({
-    queryKey: ['oauth', 'pending-selection', pendingSelectionStateId],
+    queryKey: pendingSelectionStateId
+      ? queryKeys.oauth.pendingSelection(pendingSelectionStateId)
+      : queryKeys.oauth.pendingSelections(),
     enabled: pendingSelectionStateId != null,
     queryFn: async () => {
       const response = await fetch(
