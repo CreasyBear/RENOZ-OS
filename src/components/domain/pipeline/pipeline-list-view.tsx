@@ -42,14 +42,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FormatAmount } from "@/components/shared/format";
 import { formatDate } from "@/lib/formatters";
-import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import type { OpportunityStage } from "@/lib/schemas/pipeline";
+import type { PipelineOpportunityItem } from "./pipeline-opportunity-types";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 export interface PipelineListViewProps {
-  opportunities: Opportunity[];
+  opportunities: PipelineOpportunityItem[];
   onStageChange: (opportunityId: string, newStage: OpportunityStage) => void;
   onEdit: (id: string) => void;
   onDelete?: (id: string) => void;

@@ -29,7 +29,8 @@ import {
   type KanbanPriority,
 } from "@/components/shared/kanban";
 import { WonLostDialog } from "./won-lost-dialog";
-import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import type { OpportunityStage } from "@/lib/schemas/pipeline";
+import type { PipelineOpportunityItem } from "./pipeline-opportunity-types";
 import { PIPELINE_STAGE_COLORS, PIPELINE_TAG_COLORS } from "./pipeline-stage-colors";
 
 // ============================================================================
@@ -37,7 +38,7 @@ import { PIPELINE_STAGE_COLORS, PIPELINE_TAG_COLORS } from "./pipeline-stage-col
 // ============================================================================
 
 export interface PipelineBoardProps {
-  opportunities: Opportunity[];
+  opportunities: PipelineOpportunityItem[];
   onStageChange: (
     opportunityId: string,
     newStage: OpportunityStage,
@@ -118,7 +119,7 @@ function getPriorityFromProbability(probability: number | null): KanbanPriority 
 // ============================================================================
 
 interface OpportunityCardRendererProps {
-  opportunity: Opportunity;
+  opportunity: PipelineOpportunityItem;
   onEdit?: (id: string) => void;
 }
 
@@ -212,7 +213,7 @@ export function PipelineBoard({
   // Track pending Won/Lost confirmation
   const [pendingTransition, setPendingTransition] = useState<{
     opportunityId: string;
-    opportunity: Opportunity;
+    opportunity: PipelineOpportunityItem;
     targetStage: "won" | "lost";
   } | null>(null);
 
@@ -295,7 +296,7 @@ export function PipelineBoard({
 
   // Render card function for kanban board
   const renderCard = useCallback(
-    (opportunity: Opportunity) => (
+    (opportunity: PipelineOpportunityItem) => (
       <OpportunityCardRenderer opportunity={opportunity} onEdit={onEditOpportunity} />
     ),
     [onEditOpportunity]

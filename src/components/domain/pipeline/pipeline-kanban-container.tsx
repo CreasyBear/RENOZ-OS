@@ -54,12 +54,13 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import type { OpportunityStage } from "@/lib/schemas/pipeline";
 import { queryKeys } from "@/lib/query-keys";
 import {
   PIPELINE_READ_MESSAGES,
   formatPipelineReadError,
 } from "@/lib/pipeline/read-error-messages";
+import type { PipelineOpportunityItem } from "./pipeline-opportunity-types";
 
 // ============================================================================
 // DEFAULT FILTERS - Keep result set manageable
@@ -468,8 +469,7 @@ export function PipelineKanbanContainer({
     [confirm, deleteMutation]
   );
 
-  // Cast: OpportunityMetadata from API lacks index signature { [x: string]: unknown } expected by schema
-  const opportunities: Opportunity[] = (opportunitiesData?.items ?? []) as Opportunity[];
+  const opportunities: PipelineOpportunityItem[] = opportunitiesData?.items ?? [];
   const totalCount = opportunitiesData?.pagination?.totalItems ?? opportunities.length;
   const isLoading =
     isLoadingOpportunities || stageChangeMutation.isPending || deleteMutation.isPending;
