@@ -49,6 +49,13 @@ import {
   type OrderSortField,
   type SortDirection,
 } from "./order-sorting";
+import {
+  createBulkOrderStatusHandledFailure,
+  getBulkStatusFailureToast,
+  isBulkOrderStatusHandledFailure,
+  mapBulkCancellationBlockedFailures,
+  mapBulkStatusFailures,
+} from "./order-bulk-status-feedback";
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -295,14 +302,9 @@ export function OrdersListContainer({
         const blocked = selectedItems.filter((order) =>
           ["partially_shipped", "shipped", "delivered"].includes(order.status)
         );
-        setBulkFailures(
-          blocked.map(
-            (order) =>
-              `${order.orderNumber}: Cannot cancel orders with shipped quantities (process return/RMA first)`
-          )
-        );
+        setBulkFailures(mapBulkCancellationBlockedFailures(blocked));
         toastError("Cancellation blocked for shipped orders");
-        throw new Error("Some orders failed to update");
+        throw createBulkOrderStatusHandledFailure();
       }
 
       try {
@@ -316,23 +318,9 @@ export function OrdersListContainer({
         }
 
         if (result.failed.length > 0) {
-          const orderNumberById = new Map(
-            selectedItems.map((order) => [order.id, order.orderNumber] as const)
-          );
-          const mappedFailures = result.failed.map((entry) => {
-            const delimiterIndex = entry.indexOf(": ");
-            const orderId =
-              delimiterIndex === -1 ? entry : entry.slice(0, delimiterIndex);
-            const reason =
-              delimiterIndex === -1 ? "" : entry.slice(delimiterIndex + 2);
-            const orderNumber = orderNumberById.get(orderId) ?? orderId;
-            return reason ? `${orderNumber}: ${reason}` : `${orderNumber}: Failed`;
-          });
-          setBulkFailures(mappedFailures);
-          toastError(
-            `${result.failed.length} order${result.failed.length === 1 ? "" : "s"} failed. Review details in the dialog.`
-          );
-          throw new Error("Some orders failed to update");
+          setBulkFailures(mapBulkStatusFailures(result, selectedItems));
+          toastError(getBulkStatusFailureToast(result.failed.length));
+          throw createBulkOrderStatusHandledFailure();
         }
 
         setBulkFailures([]);
@@ -340,7 +328,7 @@ export function OrdersListContainer({
         setBulkDialogOpen(false);
         setBulkOperation(null);
       } catch (error) {
-        if (error instanceof Error && error.message === "Some orders failed to update") {
+        if (isBulkOrderStatusHandledFailure(error)) {
           throw error;
         }
         toastError("Failed to update order statuses");
