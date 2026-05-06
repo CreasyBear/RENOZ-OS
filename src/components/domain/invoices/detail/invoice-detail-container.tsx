@@ -54,7 +54,7 @@ import { useInvoiceDetail } from '@/hooks/invoices/use-invoice-detail';
 import { useCreateOrderPayment, useOrderPayments } from '@/hooks/orders/use-order-payments';
 import { useGenerateOrderInvoice } from '@/hooks/documents';
 import { useVoidInvoice } from '@/hooks/invoices';
-import { useCreateCreditNote } from '@/hooks/financial';
+import { formatCreditNoteMutationError, useCreateCreditNote } from '@/hooks/financial';
 import { toastSuccess, toastError } from '@/hooks';
 import { useTrackView } from '@/hooks/search';
 import { toast } from '@/lib/toast';
@@ -420,7 +420,12 @@ export function InvoiceDetailContainer({
     setCreditNoteDialogOpen(true);
   };
 
-  const handleCreditNoteSubmit = (input: { customerId: string; orderId?: string; amount: number; reason: string }) => {
+  const handleCreditNoteSubmit = (input: {
+    customerId: string;
+    orderId?: string;
+    amount: number;
+    reason: string;
+  }) => {
     createCreditNote.mutate(input, {
       onSuccess: (creditNote) => {
         setCreditNoteDialogOpen(false);
@@ -435,7 +440,7 @@ export function InvoiceDetailContainer({
         });
       },
       onError: (error) => {
-        toast.error(error.message || 'Failed to create credit note');
+        toast.error(formatCreditNoteMutationError(error, 'create'));
       },
     });
   };

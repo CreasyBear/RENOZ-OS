@@ -27,7 +27,11 @@ import {
   DEFAULT_CREDIT_NOTE_FILTERS,
   type CreditNoteFiltersState,
 } from '@/components/domain/financial/credit-note-filter-config';
-import { useCreateCreditNote, useIssueCreditNote } from '@/hooks/financial';
+import {
+  formatCreditNoteMutationError,
+  useCreateCreditNote,
+  useIssueCreditNote,
+} from '@/hooks/financial';
 import { toast } from '@/lib/toast';
 import type { CreateCreditNoteInput } from '@/lib/schemas/financial/credit-notes';
 
@@ -109,7 +113,7 @@ function CreditNotesPage() {
           });
         },
         onError: (error) => {
-          toast.error(error.message || 'Failed to create credit note');
+          toast.error(formatCreditNoteMutationError(error, 'create'));
         },
       });
     },

@@ -58,6 +58,13 @@ export function CreateCreditNoteDialog({
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
 
+  const resetForm = useCallback(() => {
+    setSelectedCustomer(null);
+    setSelectedOrder(null);
+    setAmount('');
+    setReason('');
+  }, []);
+
   // Fetch order with customer if initialOrderId is provided
   const { data: orderData } = useOrderWithCustomer({
     orderId: initialOrderId ?? '',
@@ -107,14 +114,16 @@ export function CreateCreditNoteDialog({
 
   const handleClose = useCallback((newOpen: boolean) => {
     if (!newOpen) {
-      // Reset form when closing
-      setSelectedCustomer(null);
-      setSelectedOrder(null);
-      setAmount('');
-      setReason('');
+      resetForm();
     }
     onOpenChange(newOpen);
-  }, [onOpenChange]);
+  }, [onOpenChange, resetForm]);
+
+  useEffect(() => {
+    if (!open) {
+      startTransition(resetForm);
+    }
+  }, [open, resetForm]);
 
   const handleSubmit = useCallback(() => {
     if (!amount || !selectedCustomer) return;
@@ -131,8 +140,7 @@ export function CreateCreditNoteDialog({
       amount: amountNum, // Amount is in dollars (STANDARDS.md compliance)
       reason: reason.trim(),
     });
-    handleClose(false);
-  }, [amount, selectedCustomer, selectedOrder, reason, onCreate, handleClose]);
+  }, [amount, selectedCustomer, selectedOrder, reason, onCreate]);
 
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isPending);
   const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isPending, handleClose);

@@ -9,6 +9,10 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
+function compact(value: string): string {
+  return value.replace(/\s+/g, '');
+}
+
 describe('credit note mutation feedback contract', () => {
   it('formats credit note mutation failures without leaking infrastructure details', () => {
     expect(
@@ -20,6 +24,16 @@ describe('credit note mutation feedback contract', () => {
         'issue'
       )
     ).toBe('Unable to issue credit note. Refresh and try again.');
+
+    expect(
+      formatCreditNoteMutationError(
+        {
+          statusCode: 500,
+          message: 'duplicate key value violates unique constraint credit_notes_number_key',
+        },
+        'create'
+      )
+    ).toBe('Unable to create credit note. Refresh and try again.');
 
     expect(
       formatCreditNoteMutationError(
@@ -61,11 +75,25 @@ describe('credit note mutation feedback contract', () => {
   it('keeps list and detail credit note actions on the formatter boundary', () => {
     const index = read('src/hooks/financial/index.ts');
     const formatter = read('src/hooks/financial/_mutation-errors.ts');
+    const route = read('src/routes/_authenticated/financial/credit-notes/index.tsx');
+    const invoiceDetail = read('src/components/domain/invoices/detail/invoice-detail-container.tsx');
+    const dialog = read('src/components/domain/financial/credit-note-dialogs.tsx');
+    const compactDialog = compact(dialog);
     const list = read('src/components/domain/financial/credit-notes-list-container.tsx');
     const detail = read('src/components/domain/financial/credit-note-detail-container.tsx');
 
     expect(index).toContain('formatCreditNoteMutationError');
     expect(formatter).toContain('CREDIT_NOTE_CODE_MESSAGES');
+
+    expect(route).toContain("formatCreditNoteMutationError(error, 'create')");
+    expect(route).not.toContain("error.message || 'Failed to create credit note'");
+
+    expect(invoiceDetail).toContain("formatCreditNoteMutationError(error, 'create')");
+    expect(invoiceDetail).not.toContain("error.message || 'Failed to create credit note'");
+
+    expect(dialog).toContain('const resetForm = useCallback(() => {');
+    expect(compactDialog).toContain('onCreate({customerId:selectedCustomer.id,orderId:selectedOrder?.id||undefined,amount:amountNum,');
+    expect(compactDialog).not.toContain('onCreate({customerId:selectedCustomer.id,orderId:selectedOrder?.id||undefined,amount:amountNum,reason:reason.trim(),});handleClose(false);');
 
     expect(list).toContain("formatCreditNoteMutationError(error, 'issue')");
     expect(list).toContain("formatCreditNoteMutationError(error, 'apply')");

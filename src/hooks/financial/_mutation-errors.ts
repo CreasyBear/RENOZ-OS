@@ -1,6 +1,7 @@
 import { formatMutationError } from '@/lib/mutation-error-feedback';
 
 const CREDIT_NOTE_FALLBACKS = {
+  create: 'Unable to create credit note. Refresh and try again.',
   issue: 'Unable to issue credit note. Refresh and try again.',
   apply: 'Unable to apply credit note to invoice. Refresh and try again.',
   void: 'Unable to void credit note. Refresh and try again.',
