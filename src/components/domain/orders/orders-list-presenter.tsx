@@ -23,6 +23,7 @@ import { OrdersMobileCards } from "./orders-mobile-cards";
 import type { OrderTableItem } from "@/lib/schemas/orders";
 import type { OrderFiltersState } from "./order-filter-config";
 import { ORDER_FILTER_CONFIG, DEFAULT_ORDER_FILTERS } from "./order-filter-config";
+import { getOrdersListReadErrorMessage } from "./orders-read-error-messages";
 import type { SortDirection } from "./order-sorting";
 
 export interface OrdersListPresenterProps {
@@ -236,7 +237,7 @@ export const OrdersListPresenter = memo(function OrdersListPresenter({
       <DataTableEmpty
         variant="error"
         title="Failed to load orders"
-        description={error.message ?? "An unexpected error occurred"}
+        description={getOrdersListReadErrorMessage(error)}
         action={onRetry ? { label: "Try again", onClick: onRetry } : undefined}
         className={className}
       />
