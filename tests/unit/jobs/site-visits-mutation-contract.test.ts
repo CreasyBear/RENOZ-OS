@@ -152,6 +152,11 @@ describe('site visits mutation contract', () => {
 
     expect(projectCreateDialog).toContain("formatSiteVisitMutationError(err, 'create')");
     expect(scheduleCreateDialog).toContain("formatSiteVisitMutationError(err, 'create')");
+    expect(projectCreateDialog).toContain('submitError={submitError}');
+    expect(scheduleCreateDialog).toContain('submitError={submitError}');
+    expect(scheduleCreateDialog).toContain('FormErrorSummary');
+    expect(scheduleCreateDialog).toContain('setSubmitError(message)');
+    expect(scheduleCreateDialog).toContain("const message = 'Please select a project'");
     expect(scheduleContainer).toContain("formatSiteVisitMutationError(error, 'reschedule')");
     expect(projectDetailContainer).toContain(
       "formatSiteVisitMutationError(error, 'reschedule')"

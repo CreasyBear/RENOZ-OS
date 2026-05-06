@@ -11,7 +11,7 @@
  * @source useLoadProjectOptions from hooks/jobs
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Calendar } from 'lucide-react';
 import {
@@ -38,6 +38,7 @@ import {
   NumberField,
   DateField,
   ComboboxField,
+  FormErrorSummary,
   FormFieldDisplayProvider,
 } from '@/components/shared/forms';
 import {
@@ -90,6 +91,7 @@ export function ScheduleVisitCreateDialog({
   const navigate = useNavigate();
   const loadProjectOptions = useLoadProjectOptions();
   const createSiteVisit = useCreateSiteVisit();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const {
     data: installersData,
     error: installersError,
@@ -106,12 +108,16 @@ export function ScheduleVisitCreateDialog({
       scheduledTime: prefillTime,
     }),
     onSubmitInvalid: () => {
+      setSubmitError(null);
       toast.error('Please fix the errors below and try again.');
     },
     onSubmit: async (data) => {
+      setSubmitError(null);
       const resolvedProjectId = initialProjectId ?? data.projectId;
       if (!resolvedProjectId) {
-        toast.error('Please select a project');
+        const message = 'Please select a project';
+        setSubmitError(message);
+        toast.error(message);
         return;
       }
       try {
@@ -131,6 +137,7 @@ export function ScheduleVisitCreateDialog({
         onSuccess?.(result.id);
       } catch (err) {
         const message = formatSiteVisitMutationError(err, 'create');
+        setSubmitError(message);
         toast.error(message);
       }
     },
@@ -138,6 +145,7 @@ export function ScheduleVisitCreateDialog({
 
   useEffect(() => {
     if (open) {
+      setTimeout(() => setSubmitError(null), 0);
       form.reset(
         createScheduleSiteVisitFormDefaults({
           projectId: initialProjectId,
@@ -151,7 +159,10 @@ export function ScheduleVisitCreateDialog({
   const isSubmitting = createSiteVisit.isPending;
   const showProjectSelector = !initialProjectId;
   const pendingInteractionGuards = createPendingDialogInteractionGuards(isSubmitting);
-  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, onOpenChange);
+  const handleDialogOpenChange = createPendingDialogOpenChangeHandler(isSubmitting, (nextOpen) => {
+    if (!nextOpen) setSubmitError(null);
+    onOpenChange(nextOpen);
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -179,6 +190,8 @@ export function ScheduleVisitCreateDialog({
           }}
           className="space-y-6"
         >
+          <FormErrorSummary form={form} submitError={submitError} />
+
           <FormFieldDisplayProvider form={form}>
           <div className="space-y-4">
             {showProjectSelector && (
