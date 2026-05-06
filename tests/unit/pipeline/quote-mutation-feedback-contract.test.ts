@@ -58,6 +58,10 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(
       formatPipelineQuoteMutationError({ statusCode: 409, code: 'CONFLICT' }, 'send')
     ).toBe('Quote state changed. Refresh and review before trying again.');
+
+    expect(
+      formatPipelineQuoteMutationError({ code: 'PDF_MISSING' }, 'generatePdf')
+    ).toBe('Quote PDF is unavailable. Refresh and try again.');
   });
 
   it('keeps quote detail actions on the pipeline formatter contract', () => {
@@ -74,6 +78,7 @@ describe('pipeline quote mutation feedback contract', () => {
     const quoteVersionHistory = read(
       'src/components/domain/pipeline/quotes/quote-version-history.tsx'
     );
+    const quotePdfPreview = read('src/components/domain/pipeline/quotes/quote-pdf-preview.tsx');
 
     expect(index).toContain('formatPipelineQuoteMutationError');
     expect(formatter).toContain('PIPELINE_QUOTE_CODE_MESSAGES');
@@ -87,6 +92,10 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'generatePdf')");
     expect(quoteBuilder).toContain('formatPipelineQuoteMutationError(error, "save")');
     expect(quoteVersionHistory).toContain('formatPipelineQuoteMutationError(error, "restore")');
+    expect(quotePdfPreview).toContain(
+      'formatPipelineQuoteMutationError({ code: "PDF_MISSING" }, "generatePdf")'
+    );
+    expect(quotePdfPreview).toContain('formatPipelineQuoteMutationError(error, "generatePdf")');
 
     expect(quoteDetail).not.toContain(
       "error instanceof Error ? error.message : 'Failed to generate PDF'"
@@ -111,5 +120,7 @@ describe('pipeline quote mutation feedback contract', () => {
       'error instanceof Error ? error.message : "Failed to save quote"'
     );
     expect(quoteVersionHistory).not.toContain('toastError("Failed to restore quote version")');
+    expect(quotePdfPreview).not.toContain('toastError("PDF generation failed")');
+    expect(quotePdfPreview).not.toContain('toastError("Failed to generate PDF")');
   });
 });

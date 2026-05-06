@@ -14,6 +14,7 @@ const PIPELINE_QUOTE_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Quote state changed. Refresh and review before trying again.',
   FORBIDDEN: 'You do not have permission to manage quotes.',
   NOT_FOUND: 'Quote was not found. Refresh and try again.',
+  PDF_MISSING: 'Quote PDF is unavailable. Refresh and try again.',
   PERMISSION_DENIED: 'You do not have permission to manage quotes.',
   VALIDATION_ERROR: 'Quote details need review before continuing.',
 };

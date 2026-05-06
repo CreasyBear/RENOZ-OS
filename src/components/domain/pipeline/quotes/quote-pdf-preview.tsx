@@ -34,7 +34,10 @@ import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
-import type { GenerateQuotePdfInput } from "@/hooks/pipeline";
+import {
+  formatPipelineQuoteMutationError,
+  type GenerateQuotePdfInput,
+} from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
@@ -129,11 +132,13 @@ export const QuotePdfPreviewPresenter = memo(function QuotePdfPreviewPresenter({
             toastSuccess("PDF generated successfully");
             window.open(data.pdfUrl, "_blank");
           } else {
-            toastError("PDF generation failed");
+            toastError(
+              formatPipelineQuoteMutationError({ code: "PDF_MISSING" }, "generatePdf")
+            );
           }
         },
-        onError: () => {
-          toastError("Failed to generate PDF");
+        onError: (error) => {
+          toastError(formatPipelineQuoteMutationError(error, "generatePdf"));
         },
       }
     );
