@@ -14,7 +14,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { useCustomerNavigation } from '@/hooks/customers';
+import { formatCustomerMutationError, useCustomerNavigation } from '@/hooks/customers';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, History, AlertTriangle } from 'lucide-react';
@@ -94,7 +94,7 @@ export function DuplicatesContainer({
       toastSuccess('Duplicate pair dismissed');
     } catch (error) {
       customersLogger.error('Failed to dismiss duplicate', error);
-      toastError(error instanceof Error ? error.message : 'Failed to dismiss duplicate');
+      toastError(formatCustomerMutationError(error, 'Unable to dismiss duplicate match.'));
     }
   }, [dismissMutation]);
 

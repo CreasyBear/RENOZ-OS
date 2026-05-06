@@ -14,6 +14,10 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
+function compact(value: string): string {
+  return value.replace(/\s+/g, '');
+}
+
 describe('customer mutation error formatting', () => {
   it('maps known customer mutation codes and validation fields', () => {
     expect(
@@ -123,6 +127,7 @@ describe('customer mutation error formatting', () => {
 
   it('keeps customer list mutation feedback on the formatter contract', () => {
     const actionPlans = read('src/hooks/customers/use-action-plans.ts');
+    const duplicates = read('src/components/domain/customers/containers/duplicates-container.tsx');
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
     const hierarchy = read('src/components/domain/customers/containers/customer-hierarchy-container.tsx');
@@ -164,6 +169,10 @@ describe('customer mutation error formatting', () => {
     expect(actionPlans).not.toContain("'Failed to delete action plan'");
     expect(actionPlans).not.toContain("'Failed to complete action plan'");
 
+    expect(duplicates).toContain("formatCustomerMutationError(error, 'Unable to dismiss duplicate match.')");
+    expect(duplicates).not.toContain('error instanceof Error ? error.message');
+    expect(duplicates).not.toContain("error.message : 'Failed to dismiss duplicate'");
+
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'save')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'update')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'delete')");
@@ -177,5 +186,16 @@ describe('customer mutation error formatting', () => {
     expect(xeroContactManager).toContain("formatCustomerXeroContactMutationError(error, 'unlink')");
     expect(xeroContactManager).not.toContain('description: error instanceof Error ? error.message');
     expect(xeroContactManager).not.toContain("'Unknown error'");
+  });
+
+  it('keeps duplicate dismissal writes tenant-scoped before audit insertion', () => {
+    const source = compact(read('src/server/functions/customers/customer-duplicate-scan.ts'));
+
+    expect(source).toContain('if(data.customer1Id===data.customer2Id)');
+    expect(source).toContain('inArray(customers.id,dismissPairIds)');
+    expect(source).toContain('eq(customers.organizationId,ctx.organizationId)');
+    expect(source).toContain('isNull(customers.deletedAt)');
+    expect(source).toContain("thrownewNotFoundError('Oneormorecustomersnotfound','customer')");
+    expect(source).toContain('awaitdb.insert(customerMergeAudit).values');
   });
 });

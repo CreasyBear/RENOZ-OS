@@ -19,11 +19,12 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, desc, asc } from 'drizzle-orm';
+import { sql, eq, and, desc, asc, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { customerMergeAudit } from 'drizzle/schema';
+import { customerMergeAudit, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { decodeCursor, buildCursorCondition, buildCursorResponse } from '@/lib/db/pagination';
 import { customerMergeAuditFilterSchema, customerMergeAuditCursorSchema } from '@/lib/schemas/customers';
 import { flexibleJsonSchema } from '@/lib/schemas/_shared/patterns';
@@ -420,6 +421,28 @@ export const dismissDuplicatePair = createServerFn({ method: 'POST' })
   .inputValidator(dismissDuplicatePairInputSchema)
   .handler(async ({ data }: { data: DismissDuplicatePairInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+
+    if (data.customer1Id === data.customer2Id) {
+      throw new ValidationError('Select two different customers to dismiss a duplicate match', {
+        customers: ['Select two different customers to dismiss a duplicate match'],
+      });
+    }
+
+    const dismissPairIds = [data.customer1Id, data.customer2Id];
+    const dismissCustomers = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(
+        and(
+          inArray(customers.id, dismissPairIds),
+          eq(customers.organizationId, ctx.organizationId),
+          isNull(customers.deletedAt)
+        )
+      );
+
+    if (dismissCustomers.length !== 2) {
+      throw new NotFoundError('One or more customers not found', 'customer');
+    }
 
     // Record the dismissal in audit log
     await db.insert(customerMergeAudit).values({
