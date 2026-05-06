@@ -52,6 +52,7 @@ describe('pipeline activity mutation feedback contract', () => {
   it('keeps activity mutation actions on the pipeline formatter contract', () => {
     const index = read('src/hooks/pipeline/index.ts');
     const formatter = read('src/hooks/pipeline/_mutation-errors.ts');
+    const server = read('src/server/functions/pipeline/pipeline.ts');
     const activityLogger = read('src/components/domain/pipeline/activities/activity-logger.tsx');
     const followUpScheduler = read(
       'src/components/domain/pipeline/activities/follow-up-scheduler.tsx'
@@ -65,6 +66,11 @@ describe('pipeline activity mutation feedback contract', () => {
 
     expect(index).toContain('formatPipelineActivityMutationError');
     expect(formatter).toContain('PIPELINE_ACTIVITY_CODE_MESSAGES');
+    expect(server).toContain('const [activity] = await db');
+    expect(server).toContain('const [deletedActivity] = await db');
+    expect(server).toContain('.returning({ id: opportunityActivities.id })');
+    expect(server).toContain("throw new NotFoundError('Activity not found', 'opportunityActivity')");
+    expect(server).not.toContain('return { activity: result[0] }');
     expect(activityLogger).toContain('formatPipelineActivityMutationError(error, "log")');
     expect(followUpScheduler).toContain(
       'formatPipelineActivityMutationError(error, "scheduleFollowUp")'

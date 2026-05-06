@@ -1713,13 +1713,17 @@ export const updateActivity = createServerFn({ method: 'POST' })
     }
 
     // MUST include organizationId filter in update WHERE clause
-    const result = await db
+    const [activity] = await db
       .update(opportunityActivities)
       .set(updateData)
       .where(buildActivityByIdWhere(id, ctx.organizationId))
       .returning();
 
-    return { activity: result[0] };
+    if (!activity) {
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
+    }
+
+    return { activity };
   });
 
 /**
@@ -1750,7 +1754,7 @@ export const completeActivity = createServerFn({ method: 'POST' })
     }
 
     // MUST include organizationId filter in update WHERE clause
-    const result = await db
+    const [activity] = await db
       .update(opportunityActivities)
       .set({
         completedAt: new Date(),
@@ -1759,7 +1763,11 @@ export const completeActivity = createServerFn({ method: 'POST' })
       .where(buildActivityByIdWhere(id, ctx.organizationId))
       .returning();
 
-    return { activity: result[0] };
+    if (!activity) {
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
+    }
+
+    return { activity };
   });
 
 /**
@@ -1785,9 +1793,14 @@ export const deleteActivity = createServerFn({ method: 'POST' })
       throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
-    await db
+    const [deletedActivity] = await db
       .delete(opportunityActivities)
-      .where(buildActivityByIdWhere(id, ctx.organizationId));
+      .where(buildActivityByIdWhere(id, ctx.organizationId))
+      .returning({ id: opportunityActivities.id });
+
+    if (!deletedActivity) {
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
+    }
 
     return { success: true };
   });
