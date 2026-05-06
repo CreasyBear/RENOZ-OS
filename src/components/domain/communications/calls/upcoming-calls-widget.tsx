@@ -14,6 +14,10 @@ import * as React from "react";
 import { useMemo } from "react";
 import { useScheduledCalls } from "@/hooks/communications/use-scheduled-calls";
 import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
+import {
   Phone,
   Clock,
   AlertTriangle,
@@ -233,12 +237,13 @@ export function UpcomingCallsWidget({
   const [selectedCallForOutcome, setSelectedCallForOutcome] = React.useState<
     string | null
   >(null);
+  const widgetFromDate = useMemo(() => new Date(), []);
 
   // Fetch upcoming calls
   const { data: callsData, isLoading, error, refetch } = useScheduledCalls({
     assigneeId: userId,
     status: "pending",
-    fromDate: new Date(),
+    fromDate: widgetFromDate,
     limit,
   });
 
@@ -292,9 +297,10 @@ export function UpcomingCallsWidget({
             <AlertTitle>Upcoming calls unavailable</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
               <span>
-                {error instanceof Error
-                  ? error.message
-                  : "Upcoming calls are temporarily unavailable. Please refresh and try again."}
+                {formatCommunicationReadError(
+                  error,
+                  COMMUNICATION_READ_MESSAGES.upcomingCalls
+                )}
               </span>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
                 Retry
@@ -340,9 +346,10 @@ export function UpcomingCallsWidget({
           <AlertTitle>Showing cached upcoming calls</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              {error instanceof Error
-                ? error.message
-                : "Upcoming calls are temporarily unavailable. Please refresh and try again."}
+              {formatCommunicationReadError(
+                error,
+                COMMUNICATION_READ_MESSAGES.upcomingCalls
+              )}
             </span>
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry

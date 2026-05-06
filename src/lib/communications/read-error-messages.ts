@@ -25,6 +25,8 @@ export const COMMUNICATION_READ_MESSAGES = {
     'Scheduled emails are temporarily unavailable. Please refresh and try again.',
   scheduledCalls:
     'Scheduled calls are temporarily unavailable. Please refresh and try again.',
+  upcomingCalls:
+    'Upcoming calls are temporarily unavailable. Please refresh and try again.',
 } as const;
 
 export function formatCommunicationReadError(

@@ -58,7 +58,15 @@ export function useScheduledCalls(options: UseScheduledCallsOptions = {}) {
   } = options;
 
   return useQuery<ListScheduledCallsResult>({
-    queryKey: queryKeys.communications.scheduledCallsList({ customerId, assigneeId, status }),
+    queryKey: queryKeys.communications.scheduledCallsList({
+      customerId,
+      assigneeId,
+      status,
+      fromDate: fromDate?.toISOString(),
+      toDate: toDate?.toISOString(),
+      limit,
+      offset,
+    }),
     queryFn: async () => {
       try {
         return await getScheduledCalls({

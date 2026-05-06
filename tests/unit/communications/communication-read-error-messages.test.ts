@@ -64,6 +64,9 @@ describe('communication read error messages', () => {
     const scheduledCalls = read(
       'src/routes/_authenticated/communications/calls/calls-page.tsx'
     );
+    const upcomingCalls = read(
+      'src/components/domain/communications/calls/upcoming-calls-widget.tsx'
+    );
     const formatter = read('src/lib/communications/read-error-messages.ts');
 
     expect(preferences).toContain('formatCommunicationReadError(');
@@ -111,6 +114,12 @@ describe('communication read error messages', () => {
     expect(scheduledCalls).not.toContain(
       'Scheduled calls are temporarily unavailable. Please refresh and try again."'
     );
+    expect(upcomingCalls).toContain('formatCommunicationReadError(');
+    expect(upcomingCalls).toContain('COMMUNICATION_READ_MESSAGES.upcomingCalls');
+    expect(upcomingCalls).not.toContain('? error.message');
+    expect(upcomingCalls).not.toContain(
+      'Upcoming calls are temporarily unavailable. Please refresh and try again."'
+    );
     expect(formatter).toContain('isReadQueryError(error)');
     expect(formatter).toContain('suppressionList');
     expect(formatter).toContain('inboxEmailAccounts');
@@ -121,5 +130,6 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('emailHistory');
     expect(formatter).toContain('scheduledEmails');
     expect(formatter).toContain('scheduledCalls');
+    expect(formatter).toContain('upcomingCalls');
   });
 });

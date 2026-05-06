@@ -37,6 +37,19 @@ describe('communications domain remediation trace', () => {
     expect(hook).toContain('offset,');
   });
 
+  it('keeps scheduled call cache keys complete for widget and list filters', () => {
+    const hook = read('src/hooks/communications/use-scheduled-calls.ts');
+    const widget = read('src/components/domain/communications/calls/upcoming-calls-widget.tsx');
+
+    expect(hook).toContain('queryKeys.communications.scheduledCallsList({');
+    expect(hook).toContain('fromDate: fromDate?.toISOString()');
+    expect(hook).toContain('toDate: toDate?.toISOString()');
+    expect(hook).toContain('limit,');
+    expect(hook).toContain('offset,');
+    expect(widget).toContain('const widgetFromDate = useMemo(() => new Date(), [])');
+    expect(widget).toContain('fromDate: widgetFromDate');
+  });
+
   it('keeps scheduled email ServerFns thin and processing owned by shared helpers', () => {
     const server = read('src/server/functions/communications/scheduled-emails.ts');
     const job = read('src/trigger/jobs/process-scheduled-emails.ts');
