@@ -19,8 +19,8 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { queryKeys } from '@/lib/query-keys';
 import {
   createQuoteVersion,
-  restoreQuoteVersion,
 } from '@/server/functions/pipeline/quote-versions';
+import { restoreQuoteVersion } from '@/server/functions/pipeline/quote-version-restore';
 import { generateQuotePdf } from '@/server/functions/pipeline/quote-pdf';
 import { sendQuote } from '@/server/functions/pipeline/quote-send';
 import { deleteQuote } from '@/server/functions/pipeline/quote-delete';

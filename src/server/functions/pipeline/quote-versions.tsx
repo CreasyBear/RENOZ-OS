@@ -20,11 +20,10 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   createQuoteVersionSchema,
-  restoreQuoteVersionSchema,
   type QuoteLineItem,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
-import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -167,130 +166,4 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
     });
 
     return { quoteVersion };
-  });
-
-// ============================================================================
-// RESTORE QUOTE VERSION
-// ============================================================================
-
-/**
- * Restore a previous quote version by creating a new version with that content.
- * This maintains the audit trail - versions are never modified.
- * All operations are wrapped in a transaction to prevent race conditions.
- */
-export const restoreQuoteVersion = createServerFn({ method: 'POST' })
-  .inputValidator(restoreQuoteVersionSchema)
-  .handler(async ({ data }) => {
-    const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
-    });
-
-    const { opportunityId, sourceVersionId, notes } = data;
-
-    // Wrap all operations in a transaction for atomicity
-    const result = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
-      );
-      // Get the source version
-      const sourceVersion = await tx
-        .select()
-        .from(quoteVersions)
-        .where(
-          and(
-            eq(quoteVersions.id, sourceVersionId),
-            eq(quoteVersions.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
-
-      if (!sourceVersion[0]) {
-        throw new NotFoundError('Source quote version not found', 'quoteVersion');
-      }
-
-      // Verify it belongs to the same opportunity
-      if (sourceVersion[0].opportunityId !== opportunityId) {
-        throw new ValidationError('Source version does not belong to this opportunity');
-      }
-
-      // Get opportunity for probability calculation
-      const opportunity = await tx
-        .select()
-        .from(opportunities)
-        .where(
-          and(
-            eq(opportunities.id, opportunityId),
-            eq(opportunities.organizationId, ctx.organizationId)
-          )
-        )
-        .limit(1);
-
-      if (!opportunity[0]) {
-        throw new NotFoundError('Opportunity not found', 'opportunity');
-      }
-
-      // Get next version number (query within transaction)
-      const latest = await tx
-        .select({ versionNumber: quoteVersions.versionNumber })
-        .from(quoteVersions)
-        .where(
-          and(
-            eq(quoteVersions.opportunityId, opportunityId),
-            eq(quoteVersions.organizationId, ctx.organizationId)
-          )
-        )
-        .orderBy(desc(quoteVersions.versionNumber))
-        .limit(1);
-
-      const versionNumber = (latest[0]?.versionNumber ?? 0) + 1;
-
-      // Create new version with source content
-      const restorationNotes = notes
-        ? `Restored from v${sourceVersion[0].versionNumber}. ${notes}`
-        : `Restored from v${sourceVersion[0].versionNumber}`;
-
-      const [newVersion] = await tx
-        .insert(quoteVersions)
-        .values({
-          organizationId: ctx.organizationId,
-          opportunityId,
-          versionNumber,
-          items: sourceVersion[0].items,
-          subtotal: sourceVersion[0].subtotal,
-          taxAmount: sourceVersion[0].taxAmount,
-          total: sourceVersion[0].total,
-          notes: restorationNotes,
-          createdBy: ctx.user.id,
-        })
-        .returning();
-
-      // Update opportunity value to match restored quote
-      const [updatedOpportunity] = await tx
-        .update(opportunities)
-        .set({
-          value: sourceVersion[0].total,
-          weightedValue: Math.round(
-            sourceVersion[0].total * ((opportunity[0].probability ?? 50) / 100)
-          ),
-          updatedBy: ctx.user.id,
-        })
-        .where(
-          and(
-            eq(opportunities.id, opportunityId),
-            eq(opportunities.organizationId, ctx.organizationId)
-          )
-        )
-        .returning({ id: opportunities.id });
-
-      if (!updatedOpportunity) {
-        throw new NotFoundError('Opportunity not found', 'opportunity');
-      }
-
-      return {
-        quoteVersion: newVersion,
-        restoredFrom: sourceVersion[0].versionNumber,
-      };
-    });
-
-    return result;
   });

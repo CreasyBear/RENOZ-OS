@@ -10,6 +10,9 @@ const deleteQuoteMock = vi.fn();
 
 vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   createQuoteVersion: vi.fn(),
+}));
+
+vi.mock('@/server/functions/pipeline/quote-version-restore', () => ({
   restoreQuoteVersion: vi.fn(),
 }));
 
