@@ -24,6 +24,7 @@ import {
   findSerializedItemBySerial,
 } from '@/server/functions/_shared/serialized-lineage';
 import { generateWarrantyNumbersTx } from '../_shared/warranty-numbering';
+import { formatWarrantyBulkImportRowFailure } from './warranty-bulk-import-result-messages';
 
 const MAX_IMPORT_ROWS = 1000;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5MB
@@ -826,8 +827,7 @@ export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
         createdWithRows.push({ warranty: created, row });
         byPolicyType[row.policyType]++;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        failed.push({ rowIndex, error: msg });
+        failed.push({ rowIndex, error: formatWarrantyBulkImportRowFailure(err) });
       }
     }
 
