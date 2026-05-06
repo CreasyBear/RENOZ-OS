@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/hooks';
+import { formatUserMutationError } from '@/hooks/users/user-mutation-error-messages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -88,7 +89,7 @@ export default function InviteUserPagePresenter({
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to send invitation',
+        text: formatUserMutationError(err, 'sendInvitation'),
       });
     }
   };

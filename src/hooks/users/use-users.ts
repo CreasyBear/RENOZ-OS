@@ -25,6 +25,7 @@ import {
 } from '@/server/functions/users/users';
 import { getUserActivity } from '@/server/functions/_shared/audit-logs';
 import type { UpdateUser, UserListQuery } from '@/lib/schemas/auth';
+import { formatUserMutationError } from './user-mutation-error-messages';
 
 // ============================================================================
 // FILTER TYPES
@@ -197,7 +198,7 @@ export function useExportUsers() {
     mutationFn: (data: { format: 'csv' | 'json'; userIds?: string[] }) =>
       exportUsers({ data }),
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to export users');
+      toast.error(formatUserMutationError(error, 'exportUsers'));
     },
   });
 }

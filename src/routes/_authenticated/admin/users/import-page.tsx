@@ -11,6 +11,7 @@ import { Link } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { BatchInvitationItem, BatchSendInvitationsInput } from '@/hooks/users';
+import { formatUserMutationError } from '@/hooks/users/user-mutation-error-messages';
 import type { BatchInvitationResult } from '@/lib/schemas/users';
 
 // UI Components
@@ -314,7 +315,7 @@ export default function BulkUserImportPresenter({
         failed: validRows.length,
         errors: validRows.map((r) => ({
           email: parsedData[r.row - 1].email,
-          error: err instanceof Error ? err.message : 'Batch import failed',
+          error: formatUserMutationError(err, 'batchSendInvitations'),
         })),
       });
     }

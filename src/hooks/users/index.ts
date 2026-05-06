@@ -66,6 +66,13 @@ export {
   type SessionInfo,
 } from './use-sessions';
 
+// --- Mutation feedback helpers ---
+export {
+  formatUserMutationError,
+  isUnsafeUserMutationMessage,
+  type UserMutationAction,
+} from './user-mutation-error-messages';
+
 // --- Activity ---
 export { useMyActivity, type MyActivityFilters } from './use-my-activity';
 

@@ -21,6 +21,7 @@ import {
   useBulkUpdateUsers,
   useExportUsers,
 } from '@/hooks/users/use-users';
+import { formatUserMutationError } from '@/hooks/users/user-mutation-error-messages';
 import { useTableSelection } from '@/components/shared/data-table';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
@@ -137,7 +138,7 @@ export default function UsersAdminPageContainer() {
           });
         },
         onError: (err) => {
-          toastError(err instanceof Error ? err.message : 'Failed to deactivate user');
+          toastError(formatUserMutationError(err, 'deactivateUser'));
         },
       });
     },
@@ -151,7 +152,7 @@ export default function UsersAdminPageContainer() {
         toastSuccess('User reactivated successfully');
       },
       onError: (err) => {
-        toastError(err instanceof Error ? err.message : 'Failed to reactivate user');
+        toastError(formatUserMutationError(err, 'reactivateUser'));
       },
     });
   }, [reactivateMutation]);
@@ -210,7 +211,7 @@ export default function UsersAdminPageContainer() {
             clearSelection();
           },
           onError: (err) => {
-            toastError(err instanceof Error ? err.message : 'Bulk update failed');
+            toastError(formatUserMutationError(err, 'bulkUpdateUsers'));
           },
         }
       );
@@ -241,7 +242,7 @@ export default function UsersAdminPageContainer() {
           toastSuccess(`Exported ${result.count} user(s)`);
         },
         onError: (err) => {
-          toastError(err instanceof Error ? err.message : 'Export failed');
+          toastError(formatUserMutationError(err, 'exportUsers'));
         },
       }
     );

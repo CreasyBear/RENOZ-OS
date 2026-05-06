@@ -17,6 +17,7 @@ import {
 } from '@/server/functions/users/sessions';
 import type { SessionInfo } from '@/lib/schemas/users';
 import { toast } from '../_shared/use-toast';
+import { formatUserMutationError } from './user-mutation-error-messages';
 
 // Re-export SessionInfo type for consumers
 export type { SessionInfo };
@@ -64,7 +65,7 @@ export function useTerminateSession() {
       toast.success('Session terminated');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to terminate session');
+      toast.error(formatUserMutationError(error, 'terminateSession'));
     },
   });
 }
@@ -87,7 +88,7 @@ export function useTerminateAllOtherSessions() {
       toast.success('All other sessions terminated');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to terminate sessions');
+      toast.error(formatUserMutationError(error, 'terminateOtherSessions'));
     },
   });
 }

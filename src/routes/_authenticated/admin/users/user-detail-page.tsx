@@ -19,6 +19,7 @@ import {
 } from '@/hooks/users/use-users';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGroups, useAddGroupMember } from '@/hooks/users/use-groups';
+import { formatUserMutationError } from '@/hooks/users/user-mutation-error-messages';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirmation } from '@/hooks';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
@@ -206,7 +207,7 @@ function UserDetailPresenter({
       setSelectedGroupId('');
       setSelectedGroupRole('member');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add user to group');
+      toast.error(formatUserMutationError(err, 'addGroupMember'));
     }
   };
 
@@ -260,7 +261,7 @@ function UserDetailPresenter({
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to update user',
+        text: formatUserMutationError(err, 'updateUser'),
       });
     }
   };
@@ -283,7 +284,7 @@ function UserDetailPresenter({
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to deactivate user',
+        text: formatUserMutationError(err, 'deactivateUser'),
       });
     }
   };
@@ -295,7 +296,7 @@ function UserDetailPresenter({
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to reactivate user',
+        text: formatUserMutationError(err, 'reactivateUser'),
       });
     }
   };
@@ -320,7 +321,7 @@ function UserDetailPresenter({
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to transfer ownership',
+        text: formatUserMutationError(err, 'transferOwnership'),
       });
     }
   };

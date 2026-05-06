@@ -23,6 +23,7 @@ import type {
 } from '@/lib/schemas/users';
 import { toast } from '../_shared/use-toast';
 import { trackInviteSent, trackInviteAccepted, trackInviteResend, trackInviteCancelled } from '@/lib/analytics';
+import { formatUserMutationError } from './user-mutation-error-messages';
 
 // Re-export for route components
 export type { BatchInvitationItem, BatchSendInvitationsInput };
@@ -163,7 +164,7 @@ export function useAcceptInvitation() {
       trackInviteAccepted({ email: result.email, role: 'unknown' });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to accept invitation');
+      toast.error(formatUserMutationError(error, 'acceptInvitation'));
     },
   });
 }
@@ -189,7 +190,7 @@ export function useSendInvitation() {
       trackInviteSent({ email: variables.email, role: variables.role });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to send invitation');
+      toast.error(formatUserMutationError(error, 'sendInvitation'));
     },
   });
 }
@@ -209,7 +210,7 @@ export function useCancelInvitation() {
       trackInviteCancelled({ id: variables.id });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to cancel invitation');
+      toast.error(formatUserMutationError(error, 'cancelInvitation'));
     },
   });
 }
@@ -233,7 +234,7 @@ export function useResendInvitation() {
       trackInviteResend({ id: variables.id });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to resend invitation');
+      toast.error(formatUserMutationError(error, 'resendInvitation'));
     },
   });
 }
@@ -258,7 +259,7 @@ export function useBatchSendInvitations() {
       }
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to send invitations');
+      toast.error(formatUserMutationError(error, 'batchSendInvitations'));
     },
   });
 }

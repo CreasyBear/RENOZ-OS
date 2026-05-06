@@ -250,8 +250,8 @@ export function UserInviteDialog({
         setRole('viewer');
         setPersonalMessage('');
         onOpenChange(false);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to send invitation');
+      } catch {
+        // The hook owns invitation failure copy; keep the dialog open for correction.
       }
     },
     [email, role, personalMessage, sendInvitation, onSuccess, onOpenChange]
