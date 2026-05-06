@@ -24,7 +24,10 @@ import {
   getXeroSyncReadiness,
   syncInvoiceWithXero,
 } from '../xero-adapter';
-import { formatXeroSyncIssueMessage } from './xero-sync-feedback';
+import {
+  formatXeroInvoiceSyncMutationError,
+  formatXeroSyncIssueMessage,
+} from './xero-sync-feedback';
 import type { z } from 'zod';
 
 // ============================================================================
@@ -400,11 +403,13 @@ export async function syncInvoiceToXeroCommand(
   });
 
   if (!readiness.available) {
+    const errorMessage = readiness.message ?? 'Xero integration unavailable';
+    const responseMessage = formatXeroInvoiceSyncMutationError(errorMessage);
     await db
       .update(orders)
       .set({
         xeroSyncStatus: 'error',
-        xeroSyncError: readiness.message ?? 'Xero integration unavailable',
+        xeroSyncError: errorMessage,
         lastXeroSyncAt: new Date().toISOString(),
       })
       .where(
@@ -417,12 +422,12 @@ export async function syncInvoiceToXeroCommand(
     return buildResult({
       success: false,
       status: 'error',
-      error: readiness.message ?? 'Xero integration unavailable',
+      error: responseMessage,
       integrationAvailable: false,
       stages: {
         readiness: {
           status: 'failed',
-          message: readiness.message ?? 'Xero integration unavailable',
+          message: responseMessage,
         },
         validation: {
           status: 'skipped',
@@ -588,6 +593,7 @@ export async function syncInvoiceToXeroCommand(
   if (!customer.xeroContactId?.trim()) {
     const error =
       'Customer is missing a trusted Xero contact mapping. Set xeroContactId before syncing invoices.';
+    const responseMessage = formatXeroInvoiceSyncMutationError(error);
     await db
       .update(orders)
       .set({
@@ -605,7 +611,7 @@ export async function syncInvoiceToXeroCommand(
     return buildResult({
       success: false,
       status: 'error',
-      error,
+      error: responseMessage,
       integrationAvailable: readiness.available,
       stages: {
         readiness: {
@@ -813,6 +819,7 @@ export async function syncInvoiceToXeroCommand(
     });
   } catch (error) {
     const errorMessage = getXeroErrorMessage(error);
+    const responseMessage = formatXeroInvoiceSyncMutationError(errorMessage);
 
     // Update order with error — orgId for defense-in-depth
     await db
@@ -832,7 +839,7 @@ export async function syncInvoiceToXeroCommand(
     return buildResult({
       success: false,
       status: 'error',
-      error: errorMessage,
+      error: responseMessage,
       integrationAvailable: readiness.available,
       stages: {
         readiness: {
@@ -843,7 +850,7 @@ export async function syncInvoiceToXeroCommand(
           status: 'completed',
           message: 'Order is eligible for sync.',
         },
-        sync: { status: 'failed', message: errorMessage },
+        sync: { status: 'failed', message: responseMessage },
         persist: {
           status: 'completed',
           message: 'Order sync error state was saved.',

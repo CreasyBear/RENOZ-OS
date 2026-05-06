@@ -53,6 +53,9 @@ describe('xero sync issue feedback contract', () => {
     const { formatXeroSyncReadError } = await import(
       '@/server/functions/financial/_shared/xero-sync-feedback'
     );
+    const { formatXeroInvoiceSyncMutationError } = await import(
+      '@/server/functions/financial/_shared/xero-sync-feedback'
+    );
 
     const validationIssue = normalizeXeroSyncIssue({
       readiness: { available: true },
@@ -67,6 +70,9 @@ describe('xero sync issue feedback contract', () => {
     });
     expect(formatXeroSyncReadError('duplicate key violates access_token constraint', validationIssue)).toBe(
       'Invoice data needs review before this order can sync to Xero.'
+    );
+    expect(formatXeroInvoiceSyncMutationError('duplicate key violates access_token constraint')).toBe(
+      'Xero connection needs attention before invoices can sync.'
     );
 
     const authIssue = normalizeXeroSyncIssue({
@@ -131,8 +137,14 @@ describe('xero sync issue feedback contract', () => {
     const feedback = read('src/server/functions/financial/_shared/xero-sync-feedback.ts');
 
     expect(feedback).toContain('formatXeroSyncIssueMessage');
+    expect(feedback).toContain('formatXeroInvoiceSyncMutationError');
     expect(command).toContain('formatXeroSyncIssueMessage');
     expect(command).not.toContain('message: xeroSyncError');
+    expect(command).toContain('const responseMessage = formatXeroInvoiceSyncMutationError(errorMessage)');
+    expect(command).not.toContain('error: errorMessage');
+    expect(command).not.toContain('error: readiness.message');
+    expect(command).not.toContain("message: readiness.message ?? 'Xero integration unavailable'");
+    expect(command).not.toContain("sync: { status: 'failed', message: errorMessage }");
     expect(statusRead).toContain('xeroSyncError: formatXeroSyncReadError(order.xeroSyncError, issue)');
     expect(statusRead).toContain('xeroSyncError: formatXeroSyncReadError(r.xeroSyncError, syncIssue)');
     expect(statusRead).not.toMatch(/\n\s+xeroSyncError:\s+order\.xeroSyncError,\n\s+lastXeroSyncAt/);

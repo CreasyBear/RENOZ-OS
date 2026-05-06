@@ -38,6 +38,55 @@ export function formatXeroSyncReadError(
   return formatXeroSyncIssueMessage('validation_failed');
 }
 
+export function formatXeroInvoiceSyncMutationError(xeroSyncError?: string | null): string {
+  if (!xeroSyncError) {
+    return 'Invoice sync is temporarily unavailable. Review the invoice and try again.';
+  }
+
+  const normalized = xeroSyncError.toLowerCase();
+
+  if (
+    normalized.includes('no active xero') ||
+    normalized.includes('oauth is not configured') ||
+    normalized.includes('xero integration unavailable') ||
+    normalized.includes('auth') ||
+    normalized.includes('expired') ||
+    normalized.includes('refresh token') ||
+    normalized.includes('refresh_token') ||
+    normalized.includes('access token') ||
+    normalized.includes('access_token') ||
+    normalized.includes('unauthor')
+  ) {
+    return 'Xero connection needs attention before invoices can sync.';
+  }
+
+  if (
+    normalized.includes('trusted xero contact mapping') ||
+    (normalized.includes('missing') && normalized.includes('xero contact'))
+  ) {
+    return formatXeroSyncIssueMessage('missing_contact_mapping');
+  }
+
+  if (
+    normalized.includes('forbidden') ||
+    normalized.includes('tenant') ||
+    normalized.includes('scope') ||
+    normalized.includes('permission')
+  ) {
+    return formatXeroSyncIssueMessage('forbidden');
+  }
+
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('too many requests') ||
+    normalized.includes('retry after')
+  ) {
+    return formatXeroSyncIssueMessage('rate_limited');
+  }
+
+  return 'Invoice sync is temporarily unavailable. Review the invoice and try again.';
+}
+
 export function formatRevenueRecognitionXeroSyncError(
   xeroSyncError?: string | null,
   state?: string | null,

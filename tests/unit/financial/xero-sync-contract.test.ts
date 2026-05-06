@@ -11,7 +11,7 @@ const withAuthMock = vi.hoisted(() => vi.fn(async () => ({
 
 const getXeroSyncReadinessMock = vi.hoisted(() => vi.fn(async () => ({
   available: false,
-  message: 'Xero is disconnected',
+  message: 'Xero is disconnected with refresh_token provider stack',
 })));
 
 const applyXeroPaymentUpdateMock = vi.hoisted(() => vi.fn(async () => ({
@@ -88,12 +88,15 @@ describe('xero invoice sync hardening', () => {
     expect(result.success).toBe(false);
     expect(result.stages?.readiness).toEqual({
       status: 'failed',
-      message: 'Xero is disconnected',
+      message: 'Xero connection needs attention before invoices can sync.',
     });
+    expect(result.error).toBe('Xero connection needs attention before invoices can sync.');
+    expect(JSON.stringify(result)).not.toContain('refresh_token');
+    expect(JSON.stringify(result)).not.toContain('provider stack');
     expect(result.stages?.persist.status).toBe('completed');
     expect(state.updateSets[0]).toMatchObject({
       xeroSyncStatus: 'error',
-      xeroSyncError: 'Xero is disconnected',
+      xeroSyncError: 'Xero is disconnected with refresh_token provider stack',
     });
   });
 

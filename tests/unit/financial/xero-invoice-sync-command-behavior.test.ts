@@ -94,20 +94,33 @@ describe("Xero invoice sync command behavior", () => {
   });
 
   it("persists staged error state when Xero is disconnected", async () => {
-    mockReadiness.mockResolvedValue({ available: false, message: "No active Xero accounting connection" });
+    mockReadiness.mockResolvedValue({
+      available: false,
+      message: "No active Xero accounting connection with refresh_token provider stack",
+    });
 
     const { syncInvoiceToXeroCommand } = await import(
       "@/server/functions/financial/_shared/xero-invoice-sync-command"
     );
 
-    await expect(syncInvoiceToXeroCommand(ctx, { orderId: "order-1", force: false })).resolves.toMatchObject({
+    const result = await syncInvoiceToXeroCommand(ctx, { orderId: "order-1", force: false });
+    expect(result).toMatchObject({
       success: false,
       status: "error",
-      stages: { readiness: { status: "failed" }, persist: { status: "completed" } },
+      error: "Xero connection needs attention before invoices can sync.",
+      stages: {
+        readiness: {
+          status: "failed",
+          message: "Xero connection needs attention before invoices can sync.",
+        },
+        persist: { status: "completed" },
+      },
     });
+    expect(JSON.stringify(result)).not.toContain("refresh_token");
+    expect(JSON.stringify(result)).not.toContain("provider stack");
     expect(dbState.updates[0]).toMatchObject({
       xeroSyncStatus: "error",
-      xeroSyncError: "No active Xero accounting connection",
+      xeroSyncError: "No active Xero accounting connection with refresh_token provider stack",
     });
   });
 
@@ -120,7 +133,7 @@ describe("Xero invoice sync command behavior", () => {
 
     await expect(syncInvoiceToXeroCommand(ctx, { orderId: "order-1", force: false })).resolves.toMatchObject({
       success: false,
-      error: expect.stringContaining("trusted Xero contact mapping"),
+      error: "Customer needs a trusted Xero contact mapping before this invoice can sync.",
       stages: { validation: { status: "failed" }, persist: { status: "completed" } },
     });
     expect(mockSyncInvoice).not.toHaveBeenCalled();
@@ -152,23 +165,35 @@ describe("Xero invoice sync command behavior", () => {
 
   it("persists provider failure with a staged result", async () => {
     dbState.selectQueue = [[order()], [customer()], [lineItem], [{ defaultPaymentTerms: 14, settings: {} }]];
-    mockSyncInvoice.mockRejectedValue(new Error("Xero provider failed"));
+    mockSyncInvoice.mockRejectedValue(
+      new Error("duplicate key violates orders_xero_access_token_key at provider stack frame")
+    );
 
     const { syncInvoiceToXeroCommand } = await import(
       "@/server/functions/financial/_shared/xero-invoice-sync-command"
     );
 
-    await expect(syncInvoiceToXeroCommand(ctx, { orderId: "order-1", force: false })).resolves.toMatchObject({
+    const result = await syncInvoiceToXeroCommand(ctx, { orderId: "order-1", force: false });
+    expect(result).toMatchObject({
       success: false,
       status: "error",
-      error: "Xero provider failed",
-      stages: { sync: { status: "failed" }, persist: { status: "completed" } },
+      error: "Xero connection needs attention before invoices can sync.",
+      stages: {
+        sync: {
+          status: "failed",
+          message: "Xero connection needs attention before invoices can sync.",
+        },
+        persist: { status: "completed" },
+      },
     });
+    expect(JSON.stringify(result)).not.toContain("duplicate key");
+    expect(JSON.stringify(result)).not.toContain("access_token");
+    expect(JSON.stringify(result)).not.toContain("provider stack");
     expect(dbState.updates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           xeroSyncStatus: "error",
-          xeroSyncError: "Xero provider failed",
+          xeroSyncError: "duplicate key violates orders_xero_access_token_key at provider stack frame",
         }),
       ]),
     );
