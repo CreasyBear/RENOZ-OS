@@ -196,6 +196,7 @@ export interface OAuthCallbackResultError {
 
 export interface XeroTenantDescriptor {
   tenantId: string;
+  tenantName?: string;
   tenantType?: string;
 }
 
@@ -758,7 +759,7 @@ function generateXeroScopes(services: OAuthServiceType[]): string[] {
   return scopes;
 }
 
-async function fetchXeroTenants(accessToken: string): Promise<Array<{ tenantId: string; tenantType?: string }>> {
+async function fetchXeroTenants(accessToken: string): Promise<XeroTenantDescriptor[]> {
   const response = await fetch('https://api.xero.com/connections', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -771,15 +772,17 @@ async function fetchXeroTenants(accessToken: string): Promise<Array<{ tenantId: 
   }
 
   const connections = (await response.json().catch(() => null)) as
-    | Array<{ tenantId?: string; tenantType?: string }>
+    | Array<{ tenantId?: string; tenantName?: string; tenantType?: string }>
     | null;
 
   const tenants = (connections ?? [])
-    .filter((connection): connection is { tenantId: string; tenantType?: string } =>
-      typeof connection.tenantId === 'string' && connection.tenantId.trim().length > 0
+    .filter(
+      (connection): connection is { tenantId: string; tenantName?: string; tenantType?: string } =>
+        typeof connection.tenantId === 'string' && connection.tenantId.trim().length > 0
     )
     .map((connection) => ({
       tenantId: connection.tenantId,
+      tenantName: connection.tenantName?.trim() || undefined,
       tenantType: connection.tenantType,
     }));
 

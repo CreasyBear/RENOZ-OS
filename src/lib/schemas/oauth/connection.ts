@@ -36,6 +36,7 @@ export interface PendingXeroTenantSelection {
   redirectUrl: string;
   tenants: Array<{
     tenantId: string;
+    tenantName?: string;
     tenantType?: string;
   }>;
 }

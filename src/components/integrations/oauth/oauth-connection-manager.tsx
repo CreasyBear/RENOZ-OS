@@ -24,6 +24,10 @@ import {
 import { toast } from 'sonner';
 import { useConfirmation } from '@/hooks';
 import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
+import {
+  formatXeroTenantDisplayName,
+  formatXeroTenantType,
+} from '@/lib/oauth/xero-tenant-display';
 import type { PendingXeroTenantSelection } from '@/lib/schemas/oauth/connection';
 
 // Import OAuth server functions (would be implemented with tRPC or similar)
@@ -406,25 +410,25 @@ const {
       {pendingSelectionStateId && (
         <Card className="border-amber-300">
           <CardHeader>
-            <CardTitle>Select Xero Tenant</CardTitle>
+            <CardTitle>Select Xero organization</CardTitle>
             <CardDescription>
-              This Xero login can access multiple organizations. Choose the tenant to connect to
-              this Renoz organization.
+              This Xero login can access multiple organizations. Choose the accounting organization
+              to connect to this Renoz organization.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {isLoadingPendingTenantSelection ? (
-              <div className="text-sm text-muted-foreground">Loading Xero tenants...</div>
+              <div className="text-sm text-muted-foreground">Loading Xero organizations...</div>
             ) : pendingTenantSelection?.tenants?.length ? (
-              pendingTenantSelection.tenants.map((tenant) => (
+              pendingTenantSelection.tenants.map((tenant, index) => (
                 <div
                   key={tenant.tenantId}
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div>
-                    <div className="font-medium">{tenant.tenantId}</div>
+                    <div className="font-medium">{formatXeroTenantDisplayName(tenant, index)}</div>
                     <div className="text-sm text-muted-foreground">
-                      {tenant.tenantType || 'Xero organization'}
+                      {formatXeroTenantType(tenant)}
                     </div>
                   </div>
                   <Button
@@ -442,7 +446,7 @@ const {
                         Connecting...
                       </>
                     ) : (
-                      'Connect tenant'
+                      'Connect organization'
                     )}
                   </Button>
                 </div>
@@ -451,7 +455,7 @@ const {
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  No selectable Xero tenants were found for this OAuth session.
+                  No selectable Xero organizations were found for this OAuth session.
                 </AlertDescription>
               </Alert>
             )}
