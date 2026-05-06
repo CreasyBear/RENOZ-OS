@@ -23,7 +23,7 @@ import {
   type QuoteLineItem,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -79,22 +79,6 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
 
     const { opportunityId, items, notes } = data;
 
-    // Verify opportunity exists and belongs to org
-    const opportunity = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.id, opportunityId),
-          eq(opportunities.organizationId, ctx.organizationId)
-        )
-      )
-      .limit(1);
-
-    if (!opportunity[0]) {
-      throw new NotFoundError('Opportunity not found', 'opportunity');
-    }
-
     // Calculate totals
     const { subtotal, taxAmount, total } = calculateQuoteTotals(items);
 
@@ -111,6 +95,22 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const opportunity = await tx
+        .select()
+        .from(opportunities)
+        .where(
+          and(
+            eq(opportunities.id, opportunityId),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!opportunity[0]) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
+
       // Get next version number inside transaction to prevent race condition
       const latest = await tx
         .select({ versionNumber: quoteVersions.versionNumber })
@@ -141,6 +141,10 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
           createdBy: ctx.user.id,
         })
         .returning();
+
+      if (!newVersion) {
+        throw new ServerError('Unable to create quote version');
+      }
 
       // Update opportunity value to match latest quote total
       const [updatedOpportunity] = await tx

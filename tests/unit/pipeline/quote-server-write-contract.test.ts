@@ -39,6 +39,7 @@ describe('pipeline quote server write contract', () => {
     expect(count(source, 'eq(quoteVersions.opportunityId, opportunityId)')).toBe(1);
     expect(count(source, 'eq(quoteVersions.organizationId, ctx.organizationId)')).toBe(1);
     expect(count(source, 'orderBy(desc(quoteVersions.versionNumber))')).toBe(1);
+    expect(source).toContain("throw new ServerError('Unable to create quote version')");
     expect(count(source, '.update(opportunities)')).toBe(1);
     expect(count(source, 'eq(opportunities.id, opportunityId)')).toBe(2);
     expect(count(source, 'eq(opportunities.organizationId, ctx.organizationId)')).toBe(2);
