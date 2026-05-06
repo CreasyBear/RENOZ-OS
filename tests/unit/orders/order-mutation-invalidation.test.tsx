@@ -18,6 +18,8 @@ const mockPickOrderItems = vi.fn()
 const mockUnpickOrderItems = vi.fn()
 const mockCreateOrderPayment = vi.fn()
 const mockUpdateOrderPayment = vi.fn()
+const mockDeleteOrderPayment = vi.fn()
+const mockCreateRefundPayment = vi.fn()
 
 vi.mock('@tanstack/react-start', () => ({
   useServerFn: (fn: unknown) => mockUseServerFn(fn),
@@ -54,8 +56,8 @@ vi.mock('@/server/functions/orders/order-payments', () => ({
   getOrderPaymentSummary: vi.fn(),
   createOrderPayment: (...args: unknown[]) => mockCreateOrderPayment(...args),
   updateOrderPayment: (...args: unknown[]) => mockUpdateOrderPayment(...args),
-  deleteOrderPayment: vi.fn(),
-  createRefundPayment: vi.fn(),
+  deleteOrderPayment: (...args: unknown[]) => mockDeleteOrderPayment(...args),
+  createRefundPayment: (...args: unknown[]) => mockCreateRefundPayment(...args),
 }))
 
 function createWrapper(queryClient: QueryClient) {
@@ -397,6 +399,12 @@ describe('order mutation invalidation', () => {
       queryKey: queryKeys.orders.detail('order-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.infiniteLists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.invoices.detail('order-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -404,6 +412,24 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.invoices.summary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.arAging(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.dashboard(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.outstandingInvoices(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.topCustomers(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.reminderCandidates(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
     })
   })
 
@@ -433,6 +459,64 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.invoices.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    })
+  })
+
+  it('payment deletes refresh order paid-state and financial reporting surfaces', async () => {
+    mockDeleteOrderPayment.mockResolvedValue({ success: true })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useDeleteOrderPayment } = await import('@/hooks/orders/use-order-payments')
+
+    const { result } = renderHook(() => useDeleteOrderPayment('order-1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: 'payment-1' })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    })
+  })
+
+  it('payment refunds refresh order paid-state and financial reporting surfaces', async () => {
+    mockCreateRefundPayment.mockResolvedValue({ id: 'refund-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useCreateRefundPayment } = await import('@/hooks/orders/use-order-payments')
+
+    const { result } = renderHook(() => useCreateRefundPayment('order-1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        originalPaymentId: 'payment-1',
+        amount: 50,
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
     })
   })
 })

@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { queryKeys } from "@/lib/query-keys";
+import { invalidateOrderBalanceReportingQueries } from "@/hooks/financial/_reporting-cache";
 import { expectOrderQueryData } from "./order-mutation-client-errors";
 import {
   getOrderPayments,
@@ -51,9 +52,12 @@ function invalidateOrderPaymentLedger(
   queryClient.invalidateQueries({
     queryKey: queryKeys.orders.detail(orderId),
   });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
   queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
   queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+  invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true });
 }
 
 // ============================================================================

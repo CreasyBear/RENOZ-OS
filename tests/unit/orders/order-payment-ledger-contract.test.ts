@@ -254,8 +254,11 @@ describe('order payment ledger contract', () => {
     expect(orderPaymentHook).toContain('queryKeys.orders.paymentSummary(orderId)');
     expect(createPaymentHookSource).toContain('invalidateOrderPaymentLedger(queryClient, orderId)');
     expect(orderPaymentHook).toContain('queryKeys.orders.detail(orderId)');
+    expect(orderPaymentHook).toContain('queryKeys.orders.lists()');
+    expect(orderPaymentHook).toContain('queryKeys.orders.infiniteLists()');
     expect(orderPaymentHook).toContain('queryKeys.invoices.detail(orderId)');
     expect(orderPaymentHook).toContain('queryKeys.invoices.lists()');
     expect(orderPaymentHook).toContain('queryKeys.invoices.summary()');
+    expect(orderPaymentHook).toContain('invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true })');
   });
 });
