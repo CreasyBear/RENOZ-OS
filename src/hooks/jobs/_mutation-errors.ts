@@ -103,10 +103,12 @@ const PROJECT_BOM_MUTATION_CODE_MESSAGES: Record<string, string> = {
 };
 
 const PROJECT_MUTATION_FALLBACKS = {
+  addMember: 'Project member assignment is temporarily unavailable. Please refresh and try again.',
   complete: 'Project completion is temporarily unavailable. Please refresh and try again.',
   create: 'Project creation is temporarily unavailable. Please refresh and try again.',
   delete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
   bulkDelete: 'Project deletion is temporarily unavailable. Please refresh and try again.',
+  removeMember: 'Project member removal is temporarily unavailable. Please refresh and try again.',
   update: 'Project update is temporarily unavailable. Please refresh and try again.',
   generateWorkOrder:
     'Work order generation is temporarily unavailable. Please refresh and try again.',
@@ -121,6 +123,12 @@ const PROJECT_MUTATION_CODE_MESSAGES: Record<string, string> = {
   PERMISSION_DENIED: 'You do not have permission to manage projects.',
   RATE_LIMIT: 'Too many project changes were attempted. Wait a moment and retry.',
   VALIDATION_ERROR: 'Check the project details and try again.',
+};
+
+const PROJECT_MEMBER_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  ...PROJECT_MUTATION_CODE_MESSAGES,
+  NOT_FOUND: 'The project or team member could not be found. Refresh and try again.',
+  VALIDATION_ERROR: 'Check the project team member details and try again.',
 };
 
 const SITE_VISIT_MUTATION_FALLBACKS = {
@@ -258,8 +266,13 @@ export function formatProjectMutationError(
   error: unknown,
   action: ProjectMutationAction
 ): string {
+  const codeMessages =
+    action === 'addMember' || action === 'removeMember'
+      ? PROJECT_MEMBER_MUTATION_CODE_MESSAGES
+      : PROJECT_MUTATION_CODE_MESSAGES;
+
   return formatMutationError(error, PROJECT_MUTATION_FALLBACKS[action], {
-    codeMessages: PROJECT_MUTATION_CODE_MESSAGES,
+    codeMessages,
   });
 }
 

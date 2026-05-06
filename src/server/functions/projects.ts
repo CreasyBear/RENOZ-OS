@@ -17,7 +17,7 @@ import { eq, and, ilike, desc, asc, sql, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
 import { normalizeObjectInput } from "@/lib/schemas/_shared/patterns";
-import { projects, projectMembers } from "drizzle/schema";
+import { projects, projectMembers, users } from "drizzle/schema";
 import {
   projectIdSchema,
   createProjectSchema,
@@ -552,6 +552,46 @@ export const deleteProject = createServerFn({ method: "POST" })
 // PROJECT MEMBERS
 // ============================================================================
 
+async function getActiveProjectForMemberMutation(
+  projectId: string,
+  organizationId: string
+) {
+  const project = await db.query.projects.findFirst({
+    where: and(
+      eq(projects.id, projectId),
+      eq(projects.organizationId, organizationId),
+      isNull(projects.deletedAt)
+    ),
+  });
+
+  if (!project) {
+    throw new NotFoundError("Project not found", "project");
+  }
+
+  return project;
+}
+
+async function assertUserBelongsToOrganization(
+  userId: string,
+  organizationId: string
+): Promise<void> {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.organizationId, organizationId),
+        isNull(users.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!user) {
+    throw new NotFoundError("User not found in organization", "user");
+  }
+}
+
 /**
  * Add a member to a project
  */
@@ -561,17 +601,11 @@ export const addProjectMember = createServerFn({ method: "POST" })
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify project exists and belongs to organization
-    const existingProject = await db.query.projects.findFirst({
-      where: and(
-        eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
-      ),
-    });
-
-    if (!existingProject) {
-      throw new Error("Project not found");
-    }
+    const existingProject = await getActiveProjectForMemberMutation(
+      data.projectId,
+      ctx.organizationId
+    );
+    await assertUserBelongsToOrganization(data.userId, ctx.organizationId);
 
     const [member] = await db
       .insert(projectMembers)
@@ -583,7 +617,11 @@ export const addProjectMember = createServerFn({ method: "POST" })
       })
       .onConflictDoUpdate({
         target: [projectMembers.projectId, projectMembers.userId],
-        set: { role: data.role },
+        set: {
+          organizationId: ctx.organizationId,
+          role: data.role,
+          updatedAt: new Date(),
+        },
       })
       .returning();
 
@@ -615,19 +653,12 @@ export const removeProjectMember = createServerFn({ method: "POST" })
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
     const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify project exists and belongs to organization
-    const existingProject = await db.query.projects.findFirst({
-      where: and(
-        eq(projects.id, data.projectId),
-        eq(projects.organizationId, ctx.organizationId)
-      ),
-    });
+    const existingProject = await getActiveProjectForMemberMutation(
+      data.projectId,
+      ctx.organizationId
+    );
 
-    if (!existingProject) {
-      throw new Error("Project not found");
-    }
-
-    await db
+    const [deletedMember] = await db
       .delete(projectMembers)
       .where(
         and(
@@ -635,7 +666,12 @@ export const removeProjectMember = createServerFn({ method: "POST" })
           eq(projectMembers.userId, data.userId),
           eq(projectMembers.organizationId, ctx.organizationId)
         )
-      );
+      )
+      .returning({ id: projectMembers.id });
+
+    if (!deletedMember) {
+      throw new NotFoundError("Project member not found", "projectMember");
+    }
 
     // Log member removal
     logger.logAsync({
@@ -677,7 +713,7 @@ export const completeProject = createServerFn({ method: "POST" })
     });
 
     if (!existingProject) {
-      throw new Error("Project not found");
+      throw new NotFoundError("Project not found", "project");
     }
 
     const before = existingProject;
