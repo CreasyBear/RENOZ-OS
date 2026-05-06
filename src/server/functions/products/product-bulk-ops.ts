@@ -21,6 +21,8 @@ import { ValidationError } from '@/lib/server/errors';
 
 const MAX_BATCH_SIZE = 500;
 const MAX_IMPORT_SIZE = 1000;
+const PRODUCT_IMPORT_ROW_FAILED_MESSAGE =
+  'This row could not be imported. Review the product data and try again.';
 
 // ============================================================================
 // TYPES
@@ -409,19 +411,18 @@ export const importProducts = createServerFn({ method: 'POST' })
           });
           created++;
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
+      } catch {
         results.push({
           row: i + 1,
           sku: row.sku,
           status: 'error',
-          message,
+          message: PRODUCT_IMPORT_ROW_FAILED_MESSAGE,
         });
         errors++;
 
         if (!data.skipErrors) {
-          throw new ValidationError(`Import failed at row ${i + 1}: ${message}`, {
-            import: [`Row ${i + 1}: ${message}`],
+          throw new ValidationError(`Import failed at row ${i + 1}.`, {
+            import: [`Row ${i + 1}: ${PRODUCT_IMPORT_ROW_FAILED_MESSAGE}`],
           });
         }
       }
