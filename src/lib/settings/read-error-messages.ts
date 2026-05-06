@@ -1,6 +1,10 @@
 import { isReadQueryError } from '@/lib/read-path-policy';
 
 export const SETTINGS_READ_MESSAGES = {
+  apiTokens:
+    'API tokens are temporarily unavailable. Please refresh and try again.',
+  apiTokensCached:
+    'API tokens are temporarily unavailable. Showing the most recent tokens.',
   organizationSettings:
     'Organization settings are temporarily unavailable. Please refresh and try again.',
   scheduledReports:

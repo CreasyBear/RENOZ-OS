@@ -37,6 +37,12 @@ import {
   type ApiTokenScope,
 } from "@/hooks/settings";
 import { DataTableEmpty } from "@/components/shared/data-table";
+import {
+  formatSettingsReadError,
+  SETTINGS_READ_MESSAGES,
+} from "@/lib/settings/read-error-messages";
+import { formatApiTokenMutationError } from "@/lib/settings/mutation-error-messages";
+import { toast } from "@/hooks/_shared/use-toast";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -118,6 +124,9 @@ function ApiTokensContent() {
             onSuccess: () => {
               setTokenToRevoke(null);
             },
+            onError: (error) => {
+              toast.error(formatApiTokenMutationError(error, 'revoke'));
+            },
           }
         );
       }
@@ -149,9 +158,12 @@ function ApiTokensContent() {
         {error ? (
           <Alert className="mb-6">
             <AlertDescription>
-              {tokens
-                ? error.message || 'API tokens are temporarily unavailable. Showing the most recent tokens.'
-                : error.message || 'API tokens are temporarily unavailable. Please refresh and try again.'}
+              {formatSettingsReadError(
+                error,
+                tokens
+                  ? SETTINGS_READ_MESSAGES.apiTokensCached
+                  : SETTINGS_READ_MESSAGES.apiTokens
+              )}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -162,7 +174,7 @@ function ApiTokensContent() {
         ) : error && !tokens ? (
           <Alert>
             <AlertDescription>
-              {error.message || 'API tokens are temporarily unavailable. Please refresh and try again.'}
+              {formatSettingsReadError(error, SETTINGS_READ_MESSAGES.apiTokens)}
             </AlertDescription>
           </Alert>
         ) : tokens && tokens.length > 0 ? (
@@ -190,7 +202,11 @@ function ApiTokensContent() {
           onClose={() => setShowCreateDialog(false)}
           onCreate={handleCreate}
           isLoading={createMutation.isPending}
-          error={createMutation.error?.message}
+          error={
+            createMutation.error
+              ? formatApiTokenMutationError(createMutation.error, 'create')
+              : undefined
+          }
         />
       )}
 

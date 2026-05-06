@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
+import { SETTINGS_READ_MESSAGES } from '@/lib/settings/read-error-messages';
 import type {
   ApiTokenListItem,
   CreateApiTokenResponse,
@@ -59,7 +60,7 @@ export function useApiTokens({ enabled = true }: UseApiTokensOptions = {}) {
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'API tokens are temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: SETTINGS_READ_MESSAGES.apiTokens,
         });
       }
     },
