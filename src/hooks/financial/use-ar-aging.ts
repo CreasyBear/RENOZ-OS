@@ -30,10 +30,11 @@ function rethrowFinancialReadError(
 
 export interface UseARAgingReportOptions extends Partial<ARAgingReportQuery> {
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 export function useARAgingReport(options: UseARAgingReportOptions = {}) {
-  const { enabled = true, ...filters } = options;
+  const { enabled = true, refetchInterval, ...filters } = options;
   const fn = useServerFn(getARAgingReport);
 
   return useQuery({
@@ -55,6 +56,7 @@ export function useARAgingReport(options: UseARAgingReportOptions = {}) {
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
+    refetchInterval,
   });
 }
 
@@ -84,4 +86,3 @@ export function useCustomerAgingDetail(customerId: string, enabled = true) {
     staleTime: 60 * 1000,
   });
 }
-

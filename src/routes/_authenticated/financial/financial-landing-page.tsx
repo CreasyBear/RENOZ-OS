@@ -25,6 +25,8 @@ import { buttonVariants } from '@/components/ui/button';
 import { FinancialCommandBar, FinancialTriage } from '@/components/domain/financial/landing';
 import { cn } from '@/lib/utils';
 
+const FINANCIAL_TRIAGE_REFETCH_INTERVAL_MS = 30 * 1000;
+
 const workbenchLinks = [
   {
     title: 'Collect Invoices',
@@ -78,7 +80,10 @@ export default function FinancialLandingPage() {
           <AlertTriangle className="h-5 w-5 text-amber-600" />
           <h2 className="text-lg font-semibold">Work Financial Exceptions First</h2>
         </div>
-        <FinancialTriage maxItems={6} />
+        <FinancialTriage
+          maxItems={6}
+          refetchInterval={FINANCIAL_TRIAGE_REFETCH_INTERVAL_MS}
+        />
       </section>
 
       <section className="space-y-3">

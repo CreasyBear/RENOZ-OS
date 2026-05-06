@@ -37,6 +37,7 @@ function rethrowFinancialReadError(
 export interface UseFinancialDashboardMetricsOptions {
   includePreviousPeriod?: boolean;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
@@ -44,7 +45,7 @@ export interface UseFinancialDashboardMetricsOptions {
  * Includes revenue MTD/YTD, AR balance, cash received, GST collected.
  */
 export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetricsOptions = {}) {
-  const { enabled = true, includePreviousPeriod = true } = options;
+  const { enabled = true, includePreviousPeriod = true, refetchInterval } = options;
   const fn = useServerFn(getFinancialDashboardMetrics);
 
   return useQuery({
@@ -68,6 +69,7 @@ export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetri
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute
+    refetchInterval,
   });
 }
 
@@ -106,6 +108,7 @@ export interface UseRevenueByPeriodOptions {
   periodType: PeriodType;
   customerType?: 'residential' | 'commercial';
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
@@ -114,7 +117,7 @@ export interface UseRevenueByPeriodOptions {
  * Includes residential vs commercial breakdown.
  */
 export function useRevenueByPeriod(options: UseRevenueByPeriodOptions) {
-  const { enabled = true, ...params } = options;
+  const { enabled = true, refetchInterval, ...params } = options;
   const fn = useServerFn(getRevenueByPeriod);
 
   return useQuery({
@@ -140,6 +143,7 @@ export function useRevenueByPeriod(options: UseRevenueByPeriodOptions) {
     },
     enabled,
     staleTime: 60 * 1000,
+    refetchInterval,
   });
 }
 
@@ -152,6 +156,7 @@ export interface UseTopCustomersByRevenueOptions {
   /** Revenue basis: invoiced (orders) or cash (payments received) */
   basis?: 'invoiced' | 'cash';
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
@@ -159,7 +164,7 @@ export interface UseTopCustomersByRevenueOptions {
  * Highlights commercial accounts ($50K+).
  */
 export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOptions = {}) {
-  const { enabled = true, ...params } = options;
+  const { enabled = true, refetchInterval, ...params } = options;
   const fn = useServerFn(getTopCustomersByRevenue);
 
   return useQuery({
@@ -189,6 +194,7 @@ export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOption
     },
     enabled,
     staleTime: 60 * 1000,
+    refetchInterval,
   });
 }
 
@@ -198,6 +204,7 @@ export interface UseOutstandingInvoicesOptions {
   pageSize?: number;
   page?: number;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
@@ -205,7 +212,7 @@ export interface UseOutstandingInvoicesOptions {
  * Optionally filtered by overdue status or customer type.
  */
 export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = {}) {
-  const { enabled = true, ...params } = options;
+  const { enabled = true, refetchInterval, ...params } = options;
   const fn = useServerFn(getOutstandingInvoices);
 
   return useQuery({
@@ -233,5 +240,6 @@ export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = 
     },
     enabled,
     staleTime: 60 * 1000,
+    refetchInterval,
   });
 }

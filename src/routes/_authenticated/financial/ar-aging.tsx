@@ -16,6 +16,8 @@ import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { ARAgingReport } from '@/components/domain/financial/ar-aging-report';
 import { useARAgingReport } from '@/hooks/financial';
 
+const AR_AGING_REFETCH_INTERVAL_MS = 30 * 1000;
+
 // ============================================================================
 // ROUTE
 // ============================================================================
@@ -37,7 +39,10 @@ function ARAgingReportPage() {
   const [commercialOnly, setCommercialOnly] = useState(false);
 
   // Fetch AR aging data
-  const { data, isLoading, error } = useARAgingReport({ commercialOnly });
+  const { data, isLoading, error } = useARAgingReport({
+    commercialOnly,
+    refetchInterval: AR_AGING_REFETCH_INTERVAL_MS,
+  });
 
   // Navigate to customer details
   const handleCustomerClick = useCallback(

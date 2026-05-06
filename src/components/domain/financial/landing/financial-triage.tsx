@@ -19,6 +19,8 @@ import { useOutstandingInvoices, useXeroSyncs, useOrdersForReminders } from '@/h
 export interface FinancialTriageProps {
   /** Maximum number of triage items to display */
   maxItems?: number;
+  /** Poll interval in ms for external financial writes such as Xero payment webhooks. */
+  refetchInterval?: number | false;
   /** Callback when user dismisses an alert */
   onDismiss?: (id: string) => void;
   /** Dismissed alert IDs (for persistence) */
@@ -35,6 +37,7 @@ export interface FinancialTriageProps {
  */
 export function FinancialTriage({
   maxItems = 5,
+  refetchInterval,
   onDismiss,
   dismissedIds = new Set(),
 }: FinancialTriageProps) {
@@ -46,12 +49,14 @@ export function FinancialTriage({
   const { data: overdueData } = useOutstandingInvoices({
     overdueOnly: true,
     pageSize: 10,
+    refetchInterval,
   });
 
   // Failed Xero syncs (warning)
   const { data: failedSyncsData } = useXeroSyncs({
     errorsOnly: true,
     pageSize: 10,
+    refetchInterval,
   });
 
   // Payment reminders due (info)
@@ -61,6 +66,7 @@ export function FinancialTriage({
     minDaysOverdue: 0,
     matchTemplateDays: false,
     excludeAlreadyReminded: false,
+    refetchInterval,
   });
 
   // ============================================================================

@@ -4,6 +4,9 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
+const compact = (source: string) => source.replace(/\s+/g, '');
+const countMatches = (source: string, pattern: string) =>
+  source.split(pattern).length - 1;
 
 describe('financial separation contract', () => {
   it('keeps the legacy financial hook as a compatibility shim', () => {
@@ -137,5 +140,77 @@ describe('financial separation contract', () => {
     expect(page).toContain('const XERO_CONSOLE_REFETCH_INTERVAL_MS = 15 * 1000');
     expect(page).toContain('refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS');
     expect(page).toContain('{ refetchInterval: XERO_CONSOLE_REFETCH_INTERVAL_MS }');
+  });
+
+  it('keeps externally applied payment reporting freshness route-scoped', () => {
+    const dashboardHook = read('src/hooks/financial/use-financial-dashboard.ts');
+    const arAgingHook = read('src/hooks/financial/use-ar-aging.ts');
+    const remindersHook = read('src/hooks/financial/use-payment-reminders.ts');
+    const analyticsPage = read(
+      'src/routes/_authenticated/financial/analytics/financial-analytics-page.tsx',
+    );
+    const arAgingPage = read('src/routes/_authenticated/financial/ar-aging.tsx');
+    const financialLandingPage = read(
+      'src/routes/_authenticated/financial/financial-landing-page.tsx',
+    );
+    const financialTriage = read(
+      'src/components/domain/financial/landing/financial-triage.tsx',
+    );
+
+    expect(dashboardHook).toContain('refetchInterval?: number | false');
+    expect(arAgingHook).toContain('refetchInterval?: number | false');
+    expect(remindersHook).toContain('refetchInterval?: number | false');
+    expect(financialTriage).toContain('refetchInterval?: number | false');
+
+    expect(compact(dashboardHook)).toContain(
+      'const{enabled=true,includePreviousPeriod=true,refetchInterval}=options;',
+    );
+    expect(compact(dashboardHook)).toContain(
+      'const{enabled=true,refetchInterval,...params}=options;',
+    );
+    expect(compact(arAgingHook)).toContain(
+      'const{enabled=true,refetchInterval,...filters}=options;',
+    );
+    expect(compact(remindersHook)).toContain(
+      'const{enabled=true,refetchInterval,...params}=options;',
+    );
+
+    expect(compact(dashboardHook)).toContain(
+      'queryKey:queryKeys.financial.dashboardMetrics({includePreviousPeriod}),',
+    );
+    expect(compact(dashboardHook)).toContain(
+      'queryKey:queryKeys.financial.revenueByPeriod(params.periodType,{dateFrom:params.dateFrom,dateTo:params.dateTo,customerType:params.customerType,}),',
+    );
+    expect(compact(dashboardHook)).toContain(
+      'queryKey:queryKeys.financial.topCustomersList({dateFrom:params.dateFrom,dateTo:params.dateTo,commercialOnly:params.commercialOnly,pageSize:params.pageSize,basis:params.basis,}),',
+    );
+    expect(compact(dashboardHook)).toContain(
+      'queryKey:queryKeys.financial.outstandingInvoicesList({overdueOnly:params.overdueOnly,customerType:params.customerType,pageSize:params.pageSize,}),',
+    );
+    expect(compact(arAgingHook)).toContain(
+      'queryKey:queryKeys.financial.arAgingReport(filters),',
+    );
+    expect(compact(remindersHook)).toContain(
+      'queryKey:queryKeys.financial.ordersForReminders(params),',
+    );
+
+    expect(analyticsPage).toContain(
+      'const FINANCIAL_REPORTING_REFETCH_INTERVAL_MS = 30 * 1000;',
+    );
+    expect(
+      countMatches(
+        analyticsPage,
+        'refetchInterval: FINANCIAL_REPORTING_REFETCH_INTERVAL_MS',
+      ),
+    ).toBe(4);
+    expect(arAgingPage).toContain('const AR_AGING_REFETCH_INTERVAL_MS = 30 * 1000;');
+    expect(arAgingPage).toContain('refetchInterval: AR_AGING_REFETCH_INTERVAL_MS');
+    expect(financialLandingPage).toContain(
+      'const FINANCIAL_TRIAGE_REFETCH_INTERVAL_MS = 30 * 1000;',
+    );
+    expect(financialLandingPage).toContain(
+      'refetchInterval={FINANCIAL_TRIAGE_REFETCH_INTERVAL_MS}',
+    );
+    expect(countMatches(financialTriage, 'refetchInterval,')).toBeGreaterThanOrEqual(4);
   });
 });

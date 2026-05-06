@@ -25,6 +25,8 @@ import {
 } from '@/hooks/financial';
 import type { PeriodType } from '@/lib/schemas';
 
+const FINANCIAL_REPORTING_REFETCH_INTERVAL_MS = 30 * 1000;
+
 export default function FinancialAnalyticsPage() {
   // ===========================================================================
   // UI STATE
@@ -43,7 +45,10 @@ export default function FinancialAnalyticsPage() {
     data: metrics,
     isLoading: metricsLoading,
     error: metricsError,
-  } = useFinancialDashboardMetrics({ includePreviousPeriod: true });
+  } = useFinancialDashboardMetrics({
+    includePreviousPeriod: true,
+    refetchInterval: FINANCIAL_REPORTING_REFETCH_INTERVAL_MS,
+  });
 
   // Revenue by period query
   const {
@@ -54,6 +59,7 @@ export default function FinancialAnalyticsPage() {
     dateFrom: subMonths(new Date(), 6),
     dateTo: new Date(),
     periodType,
+    refetchInterval: FINANCIAL_REPORTING_REFETCH_INTERVAL_MS,
   });
 
   // Top customers query
@@ -66,6 +72,7 @@ export default function FinancialAnalyticsPage() {
     dateTo: new Date(),
     pageSize: 5,
     basis: topCustomersBasis,
+    refetchInterval: FINANCIAL_REPORTING_REFETCH_INTERVAL_MS,
   });
 
   // Outstanding invoices query
@@ -73,7 +80,11 @@ export default function FinancialAnalyticsPage() {
     data: outstanding,
     isLoading: outstandingLoading,
     error: outstandingError,
-  } = useOutstandingInvoices({ overdueOnly: true, pageSize: 5 });
+  } = useOutstandingInvoices({
+    overdueOnly: true,
+    pageSize: 5,
+    refetchInterval: FINANCIAL_REPORTING_REFETCH_INTERVAL_MS,
+  });
 
   // Combined loading and error states
   const isLoading =

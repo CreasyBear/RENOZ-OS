@@ -121,13 +121,14 @@ export interface UseOrdersForRemindersOptions {
   matchTemplateDays?: boolean;
   excludeAlreadyReminded?: boolean;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 /**
  * Fetch orders that are due for payment reminders.
  */
 export function useOrdersForReminders(options: UseOrdersForRemindersOptions = {}) {
-  const { enabled = true, ...params } = options;
+  const { enabled = true, refetchInterval, ...params } = options;
   const fn = useServerFn(getOrdersForReminders);
 
   return useQuery({
@@ -151,6 +152,7 @@ export function useOrdersForReminders(options: UseOrdersForRemindersOptions = {}
     },
     enabled,
     staleTime: 30 * 1000,
+    refetchInterval,
   });
 }
 
@@ -187,4 +189,3 @@ export function useReminderHistory(options: UseReminderHistoryOptions = {}) {
     staleTime: 30 * 1000,
   });
 }
-
