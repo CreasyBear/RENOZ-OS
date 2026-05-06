@@ -58,6 +58,10 @@ import { useDetailBreadcrumb } from '@/components/layout/use-detail-breadcrumb';
 import type { OrderWorkflowAction } from '@/lib/schemas/orders';
 import { useOrderShipments, useReopenShipment } from '@/hooks/orders';
 import { getShipmentOperationalDocumentErrorMessage } from '@/hooks/orders/order-document-action-errors';
+import {
+  getOrderWorkflowActionErrorMessage,
+  getReopenShipmentActionErrorMessage,
+} from '@/hooks/orders/order-workflow-action-errors';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
@@ -490,7 +494,7 @@ export function OrderDetailContainer({
       detail.refetch();
     },
     onError: (error) => {
-      toastError(error.message || 'Unable to update the order workflow.');
+      toastError(getOrderWorkflowActionErrorMessage(error, 'update'));
       detail.refetch();
     },
   });
@@ -854,7 +858,7 @@ export function OrderDetailContainer({
                   detail.refetch();
                 },
                 onError: (error) => {
-                  toastError(error.message || 'Unable to reopen the shipment.');
+                  toastError(getReopenShipmentActionErrorMessage(error));
                   detail.refetch();
                 },
               }
