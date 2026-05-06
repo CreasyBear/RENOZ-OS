@@ -5,6 +5,7 @@ import {
   formatCommunicationCampaignMutationError,
   formatCommunicationInboxAccountMutationError,
   formatCommunicationInboxMutationError,
+  formatCommunicationPreferenceMutationError,
   formatCommunicationQuickLogMutationError,
   formatCommunicationScheduledCallMutationError,
   formatCommunicationScheduledEmailMutationError,
@@ -105,6 +106,13 @@ describe('communications mutation error formatting', () => {
         'create'
       )
     ).toBe('Unable to save quick log.');
+
+    expect(
+      formatCommunicationPreferenceMutationError(
+        new Error('supabase database stack trace while updating communication preferences'),
+        'update'
+      )
+    ).toBe('Unable to update communication preferences.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -290,6 +298,22 @@ describe('communications mutation error formatting', () => {
     expect(dialog).not.toContain('getUserFriendlyMessage(error as Error)');
     expect(dialog).not.toContain("toast.error('Failed to save log'");
     expect(dialog).not.toContain('description: getUserFriendlyMessage');
+  });
+
+  it('keeps communication preference mutations on communications-owned formatters', () => {
+    const preferences = read(
+      'src/components/domain/communications/communication-preferences.tsx'
+    );
+
+    expect(preferences).toContain(
+      'formatCommunicationPreferenceMutationError(error, "update")'
+    );
+    expect(preferences).toContain(
+      'formatCommunicationPreferenceMutationError(updateMutation.error, "update")'
+    );
+    expect(preferences).not.toContain('getUserFriendlyMessage(error as Error)');
+    expect(preferences).not.toContain('toast.error("Failed to update preferences"');
+    expect(preferences).not.toContain('submitError={updateMutation.error?.message ?? null}');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

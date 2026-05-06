@@ -18,6 +18,7 @@ import {
   usePreferenceHistory,
   useUpdateContactPreferences,
 } from "@/hooks/communications/use-contact-preferences";
+import { formatCommunicationPreferenceMutationError } from "@/hooks/communications";
 import { Mail, MessageSquare, Loader2, History, Check } from "lucide-react";
 import { format } from "date-fns";
 
@@ -53,7 +54,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import type {
   ContactPreferences,
   PreferenceHistoryItem,
@@ -430,9 +430,7 @@ export function CommunicationPreferences({
             toast.success("Preferences updated");
           },
           onError: (error) => {
-            toast.error("Failed to update preferences", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationPreferenceMutationError(error, "update"));
           },
         }
       );
@@ -449,9 +447,7 @@ export function CommunicationPreferences({
             toast.success("Preferences updated");
           },
           onError: (error) => {
-            toast.error("Failed to update preferences", {
-              description: getUserFriendlyMessage(error as Error),
-            });
+            toast.error(formatCommunicationPreferenceMutationError(error, "update"));
           },
         }
       );
@@ -520,7 +516,11 @@ export function CommunicationPreferences({
       <CommunicationPreferencesPresenter
         preferences={preferences}
         isUpdating={updateMutation.isPending}
-        submitError={updateMutation.error?.message ?? null}
+        submitError={
+          updateMutation.error
+            ? formatCommunicationPreferenceMutationError(updateMutation.error, "update")
+            : null
+        }
         contactName={contactName}
         className={className}
         onToggle={handleToggle}

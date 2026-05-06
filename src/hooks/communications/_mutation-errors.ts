@@ -66,6 +66,10 @@ const QUICK_LOG_FALLBACKS = {
   create: 'Unable to save quick log.',
 } as const;
 
+const PREFERENCE_FALLBACKS = {
+  update: 'Unable to update communication preferences.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
@@ -75,6 +79,7 @@ export type CommunicationScheduledCallMutationAction = keyof typeof SCHEDULED_CA
 export type CommunicationSignatureMutationAction = keyof typeof SIGNATURE_FALLBACKS;
 export type CommunicationSuppressionMutationAction = keyof typeof SUPPRESSION_FALLBACKS;
 export type CommunicationQuickLogMutationAction = keyof typeof QUICK_LOG_FALLBACKS;
+export type CommunicationPreferenceMutationAction = keyof typeof PREFERENCE_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -168,4 +173,11 @@ export function formatCommunicationQuickLogMutationError(
   action: CommunicationQuickLogMutationAction
 ): string {
   return formatCommunicationMutationError(error, QUICK_LOG_FALLBACKS[action]);
+}
+
+export function formatCommunicationPreferenceMutationError(
+  error: unknown,
+  action: CommunicationPreferenceMutationAction
+): string {
+  return formatCommunicationMutationError(error, PREFERENCE_FALLBACKS[action]);
 }
