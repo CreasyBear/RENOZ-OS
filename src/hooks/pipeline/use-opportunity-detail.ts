@@ -34,6 +34,7 @@ import { useOpportunityAlerts, useOpportunityActiveItems } from './use-opportuni
 import { useUnifiedActivities } from '@/hooks/activities';
 import { toast } from '@/lib/toast';
 import { toastError } from '@/hooks';
+import { formatPipelineQuoteSendSuccessMessage } from '@/lib/pipeline';
 
 // Types
 import type { OpportunityStage, UpdateOpportunity } from '@/lib/schemas/pipeline';
@@ -370,12 +371,7 @@ export function useOpportunityDetail(opportunityId: string): UseOpportunityDetai
           return;
         }
 
-        const successMessage =
-          result.stages.stageBump.status === 'failed'
-            ? 'Quote sent, but opportunity follow-up updates need attention'
-            : 'Quote sent successfully';
-
-        toast.success(successMessage, {
+        toast.success(formatPipelineQuoteSendSuccessMessage(result), {
           action: {
             label: 'Schedule follow-up',
             onClick: () => setActivityDialogOpen(true),

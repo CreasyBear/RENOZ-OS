@@ -40,14 +40,29 @@ describe('pipeline quote server send contract', () => {
 
     expect(quoteSend).toContain("import { pipelineLogger } from '@/lib/logger'");
     expect(quoteSend).toContain('QUOTE_EMAIL_FAILED_MESSAGE');
+    expect(quoteSend).toContain('QUOTE_EMAIL_HISTORY_CREATE_FAILED_MESSAGE');
+    expect(quoteSend).toContain('QUOTE_EMAIL_HISTORY_STATUS_FAILED_MESSAGE');
     expect(quoteSend).toContain('QUOTE_FOLLOW_UP_FAILED_MESSAGE');
     expect(quoteSend).toContain(
+      "pipelineLogger.error('Failed to record quote email history', error"
+    );
+    expect(quoteSend).toContain(
       "pipelineLogger.error('Failed to send quote email', sendError"
+    );
+    expect(quoteSend).toContain(
+      "pipelineLogger.error('Failed to mark quote email history failed', error"
+    );
+    expect(quoteSend).toContain(
+      "pipelineLogger.error('Failed to mark quote email history sent', error"
     );
     expect(quoteSend).toContain(
       "pipelineLogger.error('Failed to complete quote send follow-up updates', error"
     );
 
+    expect(quoteSend).toContain('.returning({ id: emailHistory.id })');
+    expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_CREATE_FAILED');
+    expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_FAILED_STATUS_MISSING');
+    expect(quoteSend).toContain('PIPELINE_QUOTE_EMAIL_HISTORY_SENT_STATUS_MISSING');
     expect(quoteSend).toContain('.returning({ id: opportunityActivities.id })');
     expect(quoteSend).toContain('PIPELINE_QUOTE_SEND_ACTIVITY_FAILED');
     expect(quoteSend).toContain('.returning({ id: opportunities.id })');

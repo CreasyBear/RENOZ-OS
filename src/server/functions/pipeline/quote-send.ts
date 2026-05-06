@@ -35,6 +35,12 @@ const QUOTE_ATTACHMENT_FAILED_MESSAGE =
   'Unable to prepare the quote attachment. Refresh and try again.';
 const QUOTE_EMAIL_FAILED_MESSAGE =
   'Quote email could not be sent. Check the recipient and email settings, then try again.';
+const QUOTE_EMAIL_HISTORY_CREATE_FAILED_MESSAGE =
+  'Unable to record quote email history. Refresh and try again.';
+const QUOTE_EMAIL_HISTORY_STATUS_FAILED_MESSAGE =
+  'Quote email was sent, but email history needs review.';
+const QUOTE_EMAIL_HISTORY_AND_FOLLOW_UP_FAILED_MESSAGE =
+  'Quote email was sent, but email history and follow-up updates need review.';
 const QUOTE_FOLLOW_UP_FAILED_MESSAGE =
   'Quote email was sent, but opportunity follow-up updates need review.';
 const QUOTE_FOLLOW_UP_STAGE_FAILED_MESSAGE =
@@ -226,19 +232,45 @@ Best regards,
 ${fromName} Team
 `.trim();
 
-    const [emailRecord] = await db
-      .insert(emailHistory)
-      .values({
-        organizationId: ctx.organizationId,
-        fromAddress: fromAddress,
-        toAddress: recipientEmail,
-        customerId: cust.id,
-        subject: emailSubject,
-        bodyHtml: htmlContent,
-        bodyText: textContent,
-        status: 'pending',
-      } as NewEmailHistory)
-      .returning();
+    let emailRecord: { id: string };
+    try {
+      const [createdEmailRecord] = await db
+        .insert(emailHistory)
+        .values({
+          organizationId: ctx.organizationId,
+          fromAddress: fromAddress,
+          toAddress: recipientEmail,
+          customerId: cust.id,
+          subject: emailSubject,
+          bodyHtml: htmlContent,
+          bodyText: textContent,
+          status: 'pending',
+        } as NewEmailHistory)
+        .returning({ id: emailHistory.id });
+
+      if (!createdEmailRecord) {
+        throw new ServerError(
+          'Unable to record quote email history',
+          500,
+          'PIPELINE_QUOTE_EMAIL_HISTORY_CREATE_FAILED'
+        );
+      }
+
+      emailRecord = createdEmailRecord;
+    } catch (error) {
+      pipelineLogger.error('Failed to record quote email history', error, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+      });
+
+      return failedStageResult(QUOTE_EMAIL_HISTORY_CREATE_FAILED_MESSAGE, {
+        pdf: { status: 'completed', message: 'Quote PDF was generated.' },
+        emailHistory: { status: 'failed', message: 'Email history could not be created.' },
+        email: { status: 'skipped', message: 'Email was not attempted.' },
+        stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
+      });
+    }
 
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: fromAddress,
@@ -256,11 +288,6 @@ ${fromName} Team
     });
 
     if (sendError) {
-      await db
-        .update(emailHistory)
-        .set({ status: 'failed' })
-        .where(and(eq(emailHistory.id, emailRecord.id), eq(emailHistory.organizationId, ctx.organizationId)));
-
       pipelineLogger.error('Failed to send quote email', sendError, {
         orgId: ctx.organizationId,
         opportunityId,
@@ -268,22 +295,86 @@ ${fromName} Team
         emailHistoryId: emailRecord.id,
       });
 
+      let failedEmailHistoryStage: SendQuoteResult['stages']['emailHistory'] = {
+        status: 'completed',
+        message: 'Email history recorded the send attempt.',
+      };
+
+      try {
+        const [updatedEmailRecord] = await db
+          .update(emailHistory)
+          .set({ status: 'failed' })
+          .where(and(eq(emailHistory.id, emailRecord.id), eq(emailHistory.organizationId, ctx.organizationId)))
+          .returning({ id: emailHistory.id });
+
+        if (!updatedEmailRecord) {
+          throw new ServerError(
+            'Unable to mark quote email history failed',
+            500,
+            'PIPELINE_QUOTE_EMAIL_HISTORY_FAILED_STATUS_MISSING'
+          );
+        }
+      } catch (error) {
+        pipelineLogger.error('Failed to mark quote email history failed', error, {
+          orgId: ctx.organizationId,
+          opportunityId,
+          quoteVersionId,
+          emailHistoryId: emailRecord.id,
+        });
+
+        failedEmailHistoryStage = {
+          status: 'failed',
+          message: 'Email history status could not be updated after the send failed.',
+        };
+      }
+
       return failedStageResult(QUOTE_EMAIL_FAILED_MESSAGE, {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
-        emailHistory: { status: 'completed', message: 'Email history recorded the send attempt.' },
+        emailHistory: failedEmailHistoryStage,
         email: { status: 'failed', message: QUOTE_EMAIL_FAILED_MESSAGE },
         stageBump: { status: 'skipped', message: 'Opportunity follow-up stages were not attempted.' },
       });
     }
 
-    await db
-      .update(emailHistory)
-      .set({
-        status: 'sent',
-        sentAt: new Date(),
+    let sentEmailHistoryStage: SendQuoteResult['stages']['emailHistory'] = {
+      status: 'completed',
+      message: 'Email history recorded the sent email.',
+    };
+    let quoteSentWarning: string | undefined;
+
+    try {
+      const [updatedEmailRecord] = await db
+        .update(emailHistory)
+        .set({
+          status: 'sent',
+          sentAt: new Date(),
+          resendMessageId: sendResult?.id,
+        })
+        .where(and(eq(emailHistory.id, emailRecord.id), eq(emailHistory.organizationId, ctx.organizationId)))
+        .returning({ id: emailHistory.id });
+
+      if (!updatedEmailRecord) {
+        throw new ServerError(
+          'Unable to mark quote email history sent',
+          500,
+          'PIPELINE_QUOTE_EMAIL_HISTORY_SENT_STATUS_MISSING'
+        );
+      }
+    } catch (error) {
+      pipelineLogger.error('Failed to mark quote email history sent', error, {
+        orgId: ctx.organizationId,
+        opportunityId,
+        quoteVersionId,
+        emailHistoryId: emailRecord.id,
         resendMessageId: sendResult?.id,
-      })
-      .where(and(eq(emailHistory.id, emailRecord.id), eq(emailHistory.organizationId, ctx.organizationId)));
+      });
+
+      sentEmailHistoryStage = {
+        status: 'failed',
+        message: 'Email history status could not be updated after delivery.',
+      };
+      quoteSentWarning = QUOTE_EMAIL_HISTORY_STATUS_FAILED_MESSAGE;
+    }
 
     let stageBumpStage: SendQuoteResult['stages']['stageBump'] = {
       status: 'skipped',
@@ -369,10 +460,12 @@ ${fromName} Team
         resendMessageId: sendResult?.id,
         success: true,
         status: 'sent',
-        error: QUOTE_FOLLOW_UP_FAILED_MESSAGE,
+        error: quoteSentWarning
+          ? QUOTE_EMAIL_HISTORY_AND_FOLLOW_UP_FAILED_MESSAGE
+          : QUOTE_FOLLOW_UP_FAILED_MESSAGE,
         stages: {
           pdf: { status: 'completed', message: 'Quote PDF was generated.' },
-          emailHistory: { status: 'completed', message: 'Email history recorded the sent email.' },
+          emailHistory: sentEmailHistoryStage,
           email: { status: 'completed', message: 'Quote email was sent successfully.' },
           stageBump: {
             status: 'failed',
@@ -394,9 +487,10 @@ ${fromName} Team
       status: 'sent' as const,
       emailHistoryId: emailRecord.id,
       resendMessageId: sendResult?.id,
+      ...(quoteSentWarning ? { error: quoteSentWarning } : {}),
       stages: {
         pdf: { status: 'completed', message: 'Quote PDF was generated.' },
-        emailHistory: { status: 'completed', message: 'Email history recorded the sent email.' },
+        emailHistory: sentEmailHistoryStage,
         email: { status: 'completed', message: 'Quote email was sent successfully.' },
         stageBump: stageBumpStage,
       },

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { formatPipelineQuoteMutationError } from '@/hooks/pipeline/_mutation-errors';
+import { formatPipelineQuoteSendSuccessMessage } from '@/lib/pipeline/quote-send-feedback';
 
 const root = process.cwd();
 
@@ -10,6 +11,41 @@ function read(path: string): string {
 }
 
 describe('pipeline quote mutation feedback contract', () => {
+  it('formats quote-send partial success states honestly', () => {
+    expect(
+      formatPipelineQuoteSendSuccessMessage({
+        stages: {
+          pdf: { status: 'completed' },
+          emailHistory: { status: 'completed' },
+          email: { status: 'completed' },
+          stageBump: { status: 'completed' },
+        },
+      })
+    ).toBe('Quote sent successfully');
+
+    expect(
+      formatPipelineQuoteSendSuccessMessage({
+        stages: {
+          pdf: { status: 'completed' },
+          emailHistory: { status: 'failed' },
+          email: { status: 'completed' },
+          stageBump: { status: 'completed' },
+        },
+      })
+    ).toBe('Quote sent, but email history needs attention');
+
+    expect(
+      formatPipelineQuoteSendSuccessMessage({
+        stages: {
+          pdf: { status: 'completed' },
+          emailHistory: { status: 'failed' },
+          email: { status: 'completed' },
+          stageBump: { status: 'failed' },
+        },
+      })
+    ).toBe('Quote sent, but email history and follow-up updates need attention');
+  });
+
   it('suppresses unsafe quote action failures with action-specific fallback copy', () => {
     expect(
       formatPipelineQuoteMutationError(
@@ -67,6 +103,8 @@ describe('pipeline quote mutation feedback contract', () => {
   it('keeps quote detail actions on the pipeline formatter contract', () => {
     const index = read('src/hooks/pipeline/index.ts');
     const formatter = read('src/hooks/pipeline/_mutation-errors.ts');
+    const pipelineLibIndex = read('src/lib/pipeline/index.ts');
+    const quoteSendFeedback = read('src/lib/pipeline/quote-send-feedback.ts');
     const quoteDetail = read(
       'src/components/domain/pipeline/quotes/containers/quote-detail-container.tsx'
     );
@@ -83,12 +121,16 @@ describe('pipeline quote mutation feedback contract', () => {
 
     expect(index).toContain('formatPipelineQuoteMutationError');
     expect(formatter).toContain('PIPELINE_QUOTE_CODE_MESSAGES');
+    expect(pipelineLibIndex).toContain('formatPipelineQuoteSendSuccessMessage');
+    expect(quoteSendFeedback).toContain('emailHistoryFailed && followUpFailed');
     expect(quoteDetail).toContain("formatPipelineQuoteMutationError(error, 'generatePdf')");
     expect(quoteDetail).toContain("formatPipelineQuoteMutationError(result.error, 'send')");
     expect(quoteDetail).toContain("formatPipelineQuoteMutationError(error, 'send')");
     expect(quoteDetail).toContain("formatPipelineQuoteMutationError(error, 'delete')");
+    expect(quoteDetail).toContain('toastSuccess(formatPipelineQuoteSendSuccessMessage(result))');
     expect(opportunityDetail).toContain("formatPipelineQuoteMutationError(result.error, 'send')");
     expect(opportunityDetail).toContain("formatPipelineQuoteMutationError(error, 'send')");
+    expect(opportunityDetail).toContain('toast.success(formatPipelineQuoteSendSuccessMessage(result)');
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'save')");
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'generatePdf')");
     expect(quoteBuilder).toContain('formatPipelineQuoteMutationError(error, "save")');
@@ -112,6 +154,8 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(opportunityDetail).not.toContain(
       "error instanceof Error ? error.message : 'Failed to send quote'"
     );
+    expect(opportunityDetail).not.toContain("result.stages.stageBump.status === 'failed'");
+    expect(quoteDetail).not.toContain("result.stages.stageBump.status === 'failed'");
     expect(opportunityQuoteTab).not.toContain(
       "error instanceof Error ? error.message : 'Failed to save quote'"
     );

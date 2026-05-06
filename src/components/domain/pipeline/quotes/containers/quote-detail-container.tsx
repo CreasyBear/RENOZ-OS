@@ -57,6 +57,7 @@ import {
 import { useGenerateQuotePdf, useSendQuote } from '@/hooks/pipeline/use-quote-mutations';
 import { useUnifiedActivities } from '@/hooks/activities';
 import { useTrackView } from '@/hooks/search';
+import { formatPipelineQuoteSendSuccessMessage } from '@/lib/pipeline';
 import { QuoteDetailView } from '../views/quote-detail-view';
 import {
   getQuoteDisplayStatus,
@@ -225,11 +226,7 @@ export function QuoteDetailContainer({
         toastError(formatPipelineQuoteMutationError(result.error, 'send'));
         return;
       }
-      toastSuccess(
-        result.stages.stageBump.status === 'failed'
-          ? 'Quote sent, but opportunity follow-up updates need attention'
-          : 'Quote sent successfully'
-      );
+      toastSuccess(formatPipelineQuoteSendSuccessMessage(result));
     } catch (error) {
       toastError(formatPipelineQuoteMutationError(error, 'send'));
     }
