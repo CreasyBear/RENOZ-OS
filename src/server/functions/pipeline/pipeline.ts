@@ -407,7 +407,11 @@ export const listOpportunities = createServerFn({ method: 'GET' })
     
     // Validate count result exists
     if (!countResult[0]) {
-      throw new Error('Failed to fetch opportunity count');
+      throw new ServerError(
+        'Unable to load opportunities',
+        500,
+        'PIPELINE_OPPORTUNITY_COUNT_FAILED'
+      );
     }
     const totalItems = countResult[0].count ?? 0;
 
@@ -450,7 +454,11 @@ export const listOpportunities = createServerFn({ method: 'GET' })
 
     // Validate metrics result exists
     if (!metricsResult[0]) {
-      throw new Error('Failed to fetch opportunity metrics');
+      throw new ServerError(
+        'Unable to load opportunity metrics',
+        500,
+        'PIPELINE_OPPORTUNITY_METRICS_FAILED'
+      );
     }
     // Drizzle's sum() returns number | null, ensure we convert to number safely
     const totalValueRaw = metricsResult[0].totalValue;
@@ -1394,7 +1402,11 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
 
     // Validate totals result exists
     if (!totalsResult[0]) {
-      throw new Error('Failed to fetch pipeline metrics totals');
+      throw new ServerError(
+        'Unable to load pipeline metrics',
+        500,
+        'PIPELINE_METRICS_TOTALS_FAILED'
+      );
     }
 
     // Drizzle's sum() returns number | null, ensure we convert to number safely
@@ -2243,10 +2255,18 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
 
     // Validate results exist
     if (!allOpportunities[0]) {
-      throw new Error('Failed to fetch pipeline velocity metrics');
+      throw new ServerError(
+        'Unable to load pipeline velocity metrics',
+        500,
+        'PIPELINE_VELOCITY_METRICS_FAILED'
+      );
     }
     if (!wonOpportunities[0]) {
-      throw new Error('Failed to fetch won opportunities metrics');
+      throw new ServerError(
+        'Unable to load won opportunity metrics',
+        500,
+        'PIPELINE_WON_METRICS_FAILED'
+      );
     }
 
     // Calculate stage conversion rates (simplified - % in each stage)

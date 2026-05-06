@@ -77,7 +77,17 @@ describe('pipeline read state contract', () => {
 
     expect(server).toContain("ServerError, ValidationError } from '@/lib/server/errors'");
     expect(server).toContain("'PIPELINE_ACTIVITY_COUNT_FAILED'");
+    expect(server).toContain("'PIPELINE_OPPORTUNITY_COUNT_FAILED'");
+    expect(server).toContain("'PIPELINE_OPPORTUNITY_METRICS_FAILED'");
+    expect(server).toContain("'PIPELINE_METRICS_TOTALS_FAILED'");
+    expect(server).toContain("'PIPELINE_VELOCITY_METRICS_FAILED'");
+    expect(server).toContain("'PIPELINE_WON_METRICS_FAILED'");
     expect(server).not.toContain("throw new Error('Failed to fetch activity count')");
+    expect(server).not.toContain("throw new Error('Failed to fetch opportunity count')");
+    expect(server).not.toContain("throw new Error('Failed to fetch opportunity metrics')");
+    expect(server).not.toContain("throw new Error('Failed to fetch pipeline metrics totals')");
+    expect(server).not.toContain("throw new Error('Failed to fetch pipeline velocity metrics')");
+    expect(server).not.toContain("throw new Error('Failed to fetch won opportunities metrics')");
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunities');
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityDetails');
     expect(useOpportunities).toContain('PIPELINE_READ_MESSAGES.opportunityNotFound');
