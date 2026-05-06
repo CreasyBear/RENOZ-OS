@@ -19,6 +19,7 @@ export {
   formatResendConfirmationError,
   isUnsafeResendConfirmationMessage,
 } from './resend-confirmation-error-messages';
+export { formatSignUpError, isUnsafeSignUpMessage } from './sign-up-error-messages';
 export { useRequestPasswordReset, type RequestPasswordResetInput } from './use-password-reset';
 export { useResendConfirmationEmail } from './use-resend-confirmation';
 export type { ResendConfirmationInput } from '@/lib/schemas/auth';

@@ -6,6 +6,7 @@ import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { formatSignUpError } from '@/hooks/auth';
 import { registerSchema } from '@/lib/schemas/auth';
 import { supabase } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         },
       },
     });
-    if (error) throw error;
+    if (error) throw new Error(formatSignUpError(error));
     await navigate({ to: '/sign-up-success', search: { email: values.email } });
   };
 
@@ -56,7 +57,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
     e.preventDefault();
     setAuthError(null);
     void form.handleSubmit().catch((err) => {
-      setAuthError(err instanceof Error ? err.message : 'An error occurred');
+      setAuthError(formatSignUpError(err));
     });
   };
 
