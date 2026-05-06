@@ -21,7 +21,11 @@ import {
   TextareaField,
   SelectField,
 } from '@/components/shared/forms';
-import { useCreateFile, type CreateFileInput } from '@/hooks/jobs';
+import {
+  formatProjectFileMutationError,
+  useCreateFile,
+  type CreateFileInput,
+} from '@/hooks/jobs';
 import { uploadProjectFile } from '@/server/functions/files/upload-project-file';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -133,7 +137,6 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
           mimeType: selectedFile.type || 'application/octet-stream',
           fileType: data.fileType,
           description: data.description,
-          position: 0,
         };
 
         await createFile.mutateAsync(fileData);
@@ -148,9 +151,9 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         setUploadProgress(0);
         onSuccess?.();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message = formatProjectFileMutationError(error, 'upload');
         setSubmitError(message);
-        toast.error(`Failed to upload file: ${message}`);
+        toast.error(message);
       } finally {
         setIsUploading(false);
         setUploadProgress(0);

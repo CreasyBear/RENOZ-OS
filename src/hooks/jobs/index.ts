@@ -149,9 +149,14 @@ export {
 
 export {
   formatJobTemplateMutationError,
+  formatProjectFileMutationError,
   formatProjectNoteMutationError,
 } from './_mutation-errors';
-export type { JobTemplateMutationAction, ProjectNoteMutationAction } from './_mutation-errors';
+export type {
+  JobTemplateMutationAction,
+  ProjectFileMutationAction,
+  ProjectNoteMutationAction,
+} from './_mutation-errors';
 
 // ============================================================================
 // JOB DOCUMENTS

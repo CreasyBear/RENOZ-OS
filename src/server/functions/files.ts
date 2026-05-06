@@ -11,6 +11,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectFiles } from 'drizzle/schema';
@@ -18,10 +19,12 @@ import {
   createFileSchema,
   updateFileSchema,
   fileIdSchema,
+  projectScopedFileIdSchema,
   filesListQuerySchema,
 } from '@/lib/schemas/jobs/workstreams-notes';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // FILE CRUD
@@ -101,7 +104,7 @@ export const getFile = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!file) {
-      throw new Error('File not found');
+      throw new NotFoundError('Project file not found', 'projectFile');
     }
 
     return {
@@ -142,7 +145,7 @@ export const createFile = createServerFn({ method: 'POST' })
         fileSize: data.fileSize ?? null,
         mimeType: data.mimeType ?? null,
         fileType: data.fileType,
-        description: null,
+        description: data.description ?? null,
         position,
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
@@ -163,7 +166,7 @@ export const updateFile = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
-    const { id, ...updates } = data;
+    const { id, projectId, ...updates } = data;
 
     const [file] = await db
       .update(projectFiles)
@@ -175,13 +178,14 @@ export const updateFile = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(projectFiles.id, id),
+          eq(projectFiles.projectId, projectId),
           eq(projectFiles.organizationId, ctx.organizationId)
         )
       )
       .returning();
 
     if (!file) {
-      throw new Error('File not found');
+      throw new NotFoundError('Project file not found', 'projectFile');
     }
 
     return {
@@ -194,30 +198,41 @@ export const updateFile = createServerFn({ method: 'POST' })
  * Delete a file record
  */
 export const deleteFile = createServerFn({ method: 'POST' })
-  .inputValidator(fileIdSchema)
+  .inputValidator(projectScopedFileIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
 
-    // Get file to find its position
-    const [file] = await db
-      .select()
-      .from(projectFiles)
-      .where(
-        and(
-          eq(projectFiles.id, data.id),
-          eq(projectFiles.organizationId, ctx.organizationId)
+    await db.transaction(async (tx) => {
+      // Get file to find its position and protect the route project boundary.
+      const [file] = await tx
+        .select()
+        .from(projectFiles)
+        .where(
+          and(
+            eq(projectFiles.id, data.id),
+            eq(projectFiles.projectId, data.projectId),
+            eq(projectFiles.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (file) {
+      if (!file) {
+        throw new NotFoundError('Project file not found', 'projectFile');
+      }
+
       // Delete the file record
-      await db
+      await tx
         .delete(projectFiles)
-        .where(eq(projectFiles.id, data.id));
+        .where(
+          and(
+            eq(projectFiles.id, data.id),
+            eq(projectFiles.projectId, data.projectId),
+            eq(projectFiles.organizationId, ctx.organizationId)
+          )
+        );
 
       // Reorder remaining files
-      await db
+      await tx
         .update(projectFiles)
         .set({
           position: sql`${projectFiles.position} - 1`,
@@ -231,7 +246,7 @@ export const deleteFile = createServerFn({ method: 'POST' })
             sql`${projectFiles.position} > ${file.position}`
           )
         );
-    }
+    });
 
     return {
       success: true,
@@ -317,6 +332,3 @@ export const reorderFiles = createServerFn({ method: 'POST' })
       success: true,
     };
   });
-
-// Import z for input schemas
-import { z } from 'zod';

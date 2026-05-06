@@ -158,11 +158,12 @@ export const createFileSchema = z.object({
   mimeType: z.string().optional(),
   fileType: projectFileTypeSchema.default('other'),
   description: z.string().optional(),
-  position: z.number().int().min(0).default(0),
+  position: z.number().int().min(0).optional(),
 });
 
 export const updateFileSchema = z.object({
   id: z.string().uuid(),
+  projectId: z.string().uuid(),
   fileType: projectFileTypeSchema.optional(),
   description: z.string().optional(),
   position: z.number().int().min(0).optional(),
@@ -170,6 +171,11 @@ export const updateFileSchema = z.object({
 
 export const fileIdSchema = z.object({
   id: z.string().uuid(),
+});
+
+export const projectScopedFileIdSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
 });
 
 export const filesListQuerySchema = normalizeObjectInput(
@@ -184,6 +190,7 @@ export const filesListQuerySchema = normalizeObjectInput(
 
 export type CreateFileInput = z.infer<typeof createFileSchema>;
 export type UpdateFileInput = z.infer<typeof updateFileSchema>;
+export type ProjectScopedFileIdInput = z.infer<typeof projectScopedFileIdSchema>;
 export type FilesListQuery = z.infer<typeof filesListQuerySchema>;
 
 // ============================================================================

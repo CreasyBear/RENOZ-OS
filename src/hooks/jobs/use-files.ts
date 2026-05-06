@@ -24,6 +24,8 @@ import type {
   ListFilesResponse,
 } from '@/lib/schemas/jobs/workstreams-notes';
 
+type UpdateFileMutationInput = Omit<UpdateFileInput, 'projectId'>;
+
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
@@ -122,8 +124,8 @@ export function useUpdateFile(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateFileInput) =>
-      updateFile({ data }),
+    mutationFn: (data: UpdateFileMutationInput) =>
+      updateFile({ data: { ...data, projectId } }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectFiles.byProject(projectId),
@@ -144,7 +146,7 @@ export function useDeleteFile(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteFile({ data: { id } }),
+    mutationFn: (id: string) => deleteFile({ data: { id, projectId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.projectFiles.byProject(projectId),

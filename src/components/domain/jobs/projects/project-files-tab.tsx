@@ -66,7 +66,7 @@ import {
 import { toast } from '@/lib/toast';
 
 // Hooks
-import { useFiles, useDeleteProjectFile } from '@/hooks/jobs';
+import { formatProjectFileMutationError, useFiles, useDeleteProjectFile } from '@/hooks/jobs';
 import { useConfirmation, confirmations } from '@/hooks/_shared/use-confirmation';
 import { useUserLookup } from '@/hooks/users';
 
@@ -761,8 +761,8 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
     try {
       await deleteFile.mutateAsync(file.id);
       toast.success('File deleted');
-    } catch {
-      toast.error('Failed to delete file');
+    } catch (error) {
+      toast.error(formatProjectFileMutationError(error, 'delete'));
     }
   };
 
