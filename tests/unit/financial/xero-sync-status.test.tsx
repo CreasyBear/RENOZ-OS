@@ -90,12 +90,9 @@ describe('XeroSyncStatus', () => {
         integration={{
           available: true,
           provider: 'xero',
-          connectionId: 'conn-1',
-          tenantId: 'tenant-1',
-          tenantLabel: 'tenant-1',
           isActive: true,
           status: 'connected',
-          message: 'Connected to tenant tenant-1',
+          message: 'Xero accounting connection is active.',
           nextAction: null,
           nextActionLabel: null,
         }}
@@ -232,12 +229,9 @@ describe('XeroSyncStatus', () => {
         integration={{
           available: true,
           provider: 'xero',
-          connectionId: 'conn-2',
-          tenantId: 'tenant-2',
-          tenantLabel: 'tenant-2',
           isActive: true,
           status: 'connected',
-          message: 'Connected to tenant tenant-2',
+          message: 'Xero accounting connection is active.',
           nextAction: null,
           nextActionLabel: null,
         }}

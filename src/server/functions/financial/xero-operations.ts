@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { customers, oauthConnections, xeroPaymentEvents } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -19,6 +19,7 @@ import type {
 } from '@/lib/schemas/settings/xero-sync';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { z } from 'zod';
+import { buildXeroIntegrationStatus } from './_shared/xero-integration-status-read';
 import { buildXeroPaymentEventRecord } from './_shared/xero-payment-event-read';
 
 const customerIdSchema = z.object({
@@ -47,10 +48,11 @@ export const getXeroIntegrationStatus = createServerFn({ method: 'GET' })
 
     const [connection] = await db
       .select({
-        id: oauthConnections.id,
-        externalAccountId: oauthConnections.externalAccountId,
         isActive: oauthConnections.isActive,
-        updatedAt: oauthConnections.updatedAt,
+        hasTenant: sql<boolean>`
+          ${oauthConnections.externalAccountId} IS NOT NULL
+          AND ${oauthConnections.externalAccountId} <> ''
+        `,
       })
       .from(oauthConnections)
       .where(
@@ -63,39 +65,7 @@ export const getXeroIntegrationStatus = createServerFn({ method: 'GET' })
       .orderBy(desc(oauthConnections.updatedAt))
       .limit(1);
 
-    if (!readiness.available) {
-      const message = connection
-        ? 'The stored Xero accounting connection needs to be reconnected before invoices and journals can sync.'
-        : readiness.message ?? 'Xero integration unavailable';
-
-      return {
-        available: false,
-        provider: 'xero',
-        connectionId: connection?.id ?? null,
-        tenantId: connection?.externalAccountId ?? null,
-        tenantLabel: connection?.externalAccountId ?? null,
-        isActive: Boolean(connection?.isActive),
-        status: connection ? 'reconnect_required' : 'not_connected',
-        message,
-        nextAction: connection ? 'reconnect_xero' : 'connect_xero',
-        nextActionLabel: connection ? 'Reconnect Xero' : 'Connect Xero',
-      };
-    }
-
-    return {
-      available: true,
-      provider: 'xero',
-      connectionId: connection?.id ?? readiness.connectionId ?? null,
-      tenantId: connection?.externalAccountId ?? null,
-      tenantLabel: connection?.externalAccountId ?? null,
-      isActive: Boolean(connection?.isActive),
-      status: 'connected',
-      message: connection?.externalAccountId
-        ? `Connected to tenant ${connection.externalAccountId}`
-        : 'Connected to Xero',
-      nextAction: null,
-      nextActionLabel: null,
-    };
+    return buildXeroIntegrationStatus(readiness, connection);
   });
 
 export const getCustomerXeroMappingStatus = createServerFn({ method: 'GET' })

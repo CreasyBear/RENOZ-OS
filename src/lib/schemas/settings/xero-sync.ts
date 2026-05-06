@@ -275,9 +275,6 @@ export interface InvoiceWithSyncStatus {
 export interface XeroIntegrationStatus {
   available: boolean;
   provider: 'xero';
-  connectionId?: string | null;
-  tenantId?: string | null;
-  tenantLabel?: string | null;
   isActive: boolean;
   status:
     | 'connected'

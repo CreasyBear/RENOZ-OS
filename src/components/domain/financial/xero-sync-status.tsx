@@ -778,7 +778,6 @@ export const XeroSyncStatus = memo(function XeroSyncStatus({
             <AlertTitle>{integration?.available ? 'Xero connected' : 'Xero needs attention'}</AlertTitle>
             <AlertDescription>
               {integration?.message ?? 'Xero integration status is unavailable.'}
-              {integration?.tenantLabel ? ` Active tenant: ${integration.tenantLabel}` : ''}
             </AlertDescription>
           </Alert>
 
