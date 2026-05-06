@@ -31,7 +31,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAdjustStock, useInventoryLocations } from "@/hooks/products";
+import {
+  mapProductInventoryMutationError,
+  useAdjustStock,
+  useInventoryLocations,
+} from "@/hooks/products";
 
 interface StockAdjustmentProps {
   productId: string;
@@ -106,7 +110,7 @@ export function StockAdjustment({
       };
 
       const onError = (err: Error) => {
-        setError(err.message || "Failed to adjust stock");
+        setError(mapProductInventoryMutationError(err));
       };
 
       switch (data.adjustmentType) {

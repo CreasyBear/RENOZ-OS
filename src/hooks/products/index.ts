@@ -49,6 +49,7 @@ export {
   type InventorySummary,
   type UseProductInventorySummaryOptions,
 } from './use-product-inventory';
+export { mapProductInventoryMutationError } from './product-inventory-error-messages';
 
 // Product attribute hooks
 export {
