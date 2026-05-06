@@ -56,6 +56,23 @@ function invalidateDeletedQuoteCaches(queryClient: QueryClient, quoteId: string)
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
 }
 
+function invalidateGeneratedQuotePdfCaches(queryClient: QueryClient, quoteVersionId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersion(quoteVersionId) });
+}
+
+function invalidateSentQuoteCaches(queryClient: QueryClient, opportunityId: string) {
+  invalidateQuoteVersionsAndOpportunity(queryClient, opportunityId);
+  invalidateOpportunityListCaches(queryClient);
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.documents.history('opportunity', opportunityId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.activities.byOpportunity(opportunityId),
+  });
+}
+
 // ============================================================================
 // CREATE QUOTE VERSION MUTATION
 // ============================================================================
@@ -173,11 +190,7 @@ export function useGenerateQuotePdf() {
     mutationFn: ({ quoteVersionId }: GenerateQuotePdfInput) =>
       generateQuotePdf({ data: { id: quoteVersionId } }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.quoteVersion(variables.quoteVersionId),
-      });
+      invalidateGeneratedQuotePdfCaches(queryClient, variables.quoteVersionId);
     },
   });
 }
@@ -206,14 +219,7 @@ export function useSendQuote() {
     mutationFn: (input: SendQuoteInput) =>
       sendQuote({ data: input }),
     onSuccess: (_result, variables) => {
-      invalidateQuoteVersionsAndOpportunity(queryClient, variables.opportunityId);
-      invalidateOpportunityListCaches(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.history('opportunity', variables.opportunityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
-      });
+      invalidateSentQuoteCaches(queryClient, variables.opportunityId);
     },
   });
 }

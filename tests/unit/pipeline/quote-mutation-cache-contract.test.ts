@@ -21,13 +21,17 @@ describe('pipeline quote mutation cache contract', () => {
     expect(source).toContain('function invalidateQuoteExpiryCaches');
     expect(source).toContain('function invalidateQuoteExpirationCaches');
     expect(source).toContain('function invalidateDeletedQuoteCaches');
+    expect(source).toContain('function invalidateGeneratedQuotePdfCaches');
+    expect(source).toContain('function invalidateSentQuoteCaches');
 
     expect(count(source, 'invalidateOpportunityListCaches(queryClient)')).toBe(3);
-    expect(count(source, 'invalidateQuoteVersionsAndOpportunity(queryClient, opportunityId)')).toBe(2);
-    expect(count(source, 'invalidateQuoteVersionsAndOpportunity(queryClient, variables.opportunityId)')).toBe(1);
+    expect(count(source, 'invalidateQuoteVersionsAndOpportunity(queryClient, opportunityId)')).toBe(3);
+    expect(count(source, 'invalidateQuoteVersionsAndOpportunity(queryClient, variables.opportunityId)')).toBe(0);
     expect(count(source, 'invalidateQuoteExpiryCaches(queryClient)')).toBe(1);
     expect(count(source, 'invalidateQuoteExpirationCaches(queryClient, opportunityId)')).toBe(2);
     expect(count(source, 'invalidateDeletedQuoteCaches(queryClient, id)')).toBe(1);
+    expect(count(source, 'invalidateGeneratedQuotePdfCaches(queryClient, variables.quoteVersionId)')).toBe(1);
+    expect(count(source, 'invalidateSentQuoteCaches(queryClient, variables.opportunityId)')).toBe(1);
 
     expect(count(source, 'queryKeys.opportunities.lists()')).toBe(1);
     expect(count(source, 'queryKeys.opportunities.infiniteLists()')).toBe(1);
@@ -38,6 +42,11 @@ describe('pipeline quote mutation cache contract', () => {
     expect(count(source, 'queryKeys.quotes.lists()')).toBe(1);
     expect(count(source, 'queryKeys.quotes.detail(quoteId)')).toBe(1);
     expect(count(source, 'queryKeys.pipeline.metrics()')).toBe(1);
+    expect(count(source, 'queryKeys.documents.all')).toBe(1);
+    expect(count(source, 'queryKeys.pipeline.all')).toBe(1);
+    expect(count(source, 'queryKeys.pipeline.quoteVersion(quoteVersionId)')).toBe(1);
+    expect(count(source, "queryKeys.documents.history('opportunity', opportunityId)")).toBe(1);
+    expect(count(source, 'queryKeys.activities.byOpportunity(opportunityId)')).toBe(1);
   });
 
   it('keeps delete quote in mutation hooks instead of quote read hooks', () => {
