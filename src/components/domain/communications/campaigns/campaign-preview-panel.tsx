@@ -35,6 +35,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -285,7 +289,10 @@ export function CampaignPreviewPanel({
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error loading preview</AlertTitle>
           <AlertDescription>
-            {error instanceof Error ? error.message : "Failed to load recipient preview"}
+            {formatCommunicationReadError(
+              error,
+              COMMUNICATION_READ_MESSAGES.campaignPreview
+            )}
           </AlertDescription>
         </Alert>
       )}

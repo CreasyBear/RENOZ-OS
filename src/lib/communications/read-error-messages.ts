@@ -21,6 +21,8 @@ export const COMMUNICATION_READ_MESSAGES = {
     'Campaign data is temporarily unavailable. Please refresh and try again.',
   campaignAnalytics:
     'Campaign analytics are temporarily unavailable. Please refresh and try again.',
+  campaignPreview:
+    'Campaign preview is temporarily unavailable. Please refresh and try again.',
   emailHistory:
     'Email history is temporarily unavailable. Please refresh and try again.',
   scheduledEmails:
