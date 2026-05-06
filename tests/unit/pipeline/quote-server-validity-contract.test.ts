@@ -26,16 +26,19 @@ describe('pipeline quote server validity contract', () => {
   it('keeps quote expiration defaults and generated PDF validity on one constant', () => {
     const constantSource = read('src/server/functions/pipeline/quote-validity-constants.ts');
     const quoteVersioning = read('src/server/functions/pipeline/quote-versions.tsx');
+    const quotePdf = read('src/server/functions/pipeline/quote-pdf.tsx');
     const quoteValidity = read('src/server/functions/pipeline/quote-validity.ts');
 
     expect(constantSource).toContain('export const DEFAULT_QUOTE_VALIDITY_DAYS = 30');
     expect(quoteVersioning).not.toContain('const DEFAULT_QUOTE_VALIDITY_DAYS = 30');
     expect(quoteVersioning).not.toContain('const QUOTE_VALIDITY_DAYS = 30');
+    expect(quotePdf).not.toContain('const DEFAULT_QUOTE_VALIDITY_DAYS = 30');
     expect(quoteValidity).not.toContain('const DEFAULT_QUOTE_VALIDITY_DAYS = 30');
-    expect(count(quoteVersioning, 'DEFAULT_QUOTE_VALIDITY_DAYS')).toBe(2);
+    expect(count(quoteVersioning, 'DEFAULT_QUOTE_VALIDITY_DAYS')).toBe(0);
+    expect(count(quotePdf, 'DEFAULT_QUOTE_VALIDITY_DAYS')).toBe(2);
     expect(count(quoteValidity, 'DEFAULT_QUOTE_VALIDITY_DAYS')).toBe(2);
     expect(quoteValidity).toContain('expiresAt.setDate(expiresAt.getDate() + DEFAULT_QUOTE_VALIDITY_DAYS)');
-    expect(quoteVersioning).toContain(
+    expect(quotePdf).toContain(
       'new Date(issueDate.getTime() + DEFAULT_QUOTE_VALIDITY_DAYS * 24 * 60 * 60 * 1000)'
     );
   });
