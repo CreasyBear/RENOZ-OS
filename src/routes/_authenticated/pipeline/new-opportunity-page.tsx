@@ -29,7 +29,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toastSuccess, toastError } from '@/hooks';
 import { useCustomers } from '@/hooks/customers';
-import { useCreateOpportunity } from '@/hooks/pipeline';
+import {
+  formatPipelineOpportunityMutationError,
+  useCreateOpportunity,
+} from '@/hooks/pipeline';
 import { STAGE_PROBABILITY_DEFAULTS, type OpportunityStage } from '@/lib/schemas/pipeline';
 import type { SearchParams } from './new';
 
@@ -138,8 +141,8 @@ function NewOpportunityForm({
         to: '/pipeline/$opportunityId',
         params: { opportunityId: result.opportunity.id },
       });
-    } catch {
-      toastError('Failed to create opportunity. Please try again.');
+    } catch (error) {
+      toastError(formatPipelineOpportunityMutationError(error, 'create'));
     }
   };
 

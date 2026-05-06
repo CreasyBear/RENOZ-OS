@@ -77,6 +77,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
     const list = read(
       'src/components/domain/pipeline/opportunities/opportunities-list-container.tsx'
     );
+    const newOpportunityPage = read('src/routes/_authenticated/pipeline/new-opportunity-page.tsx');
     const bulkDialog = read(
       'src/components/domain/pipeline/opportunities/opportunity-bulk-operations-dialog.tsx'
     );
@@ -116,6 +117,12 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(list).not.toContain('toastError("Failed to delete some opportunities")');
     expect(list).not.toContain(
       'error instanceof Error ? error.message : "Failed to update opportunity stages"'
+    );
+    expect(newOpportunityPage).toContain(
+      "formatPipelineOpportunityMutationError(error, 'create')"
+    );
+    expect(newOpportunityPage).not.toContain(
+      "toastError('Failed to create opportunity. Please try again.')"
     );
     expect(bulkDialog).not.toContain('toastError');
     expect(bulkDialog).not.toContain(
