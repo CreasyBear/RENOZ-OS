@@ -31,6 +31,7 @@ import {
   bulkReceiveRma,
 } from '@/server/functions/orders/rma';
 import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
+import { invalidateOrderPaymentLedger } from '@/hooks/orders/_order-payment-cache';
 import type {
   ListRmasInput,
   CreateRmaInput,
@@ -349,11 +350,15 @@ export function useProcessRma() {
 
   return useMutation({
     mutationFn: (data: ProcessRmaInput) => processRma({ data }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.setQueryData(queryKeys.support.rmaDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       if (result.orderId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+        if (variables.resolution === 'refund') {
+          invalidateOrderPaymentLedger(queryClient, result.orderId);
+        } else {
+          queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });
+        }
       }
       if (result.issueId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.support.issueDetail(result.issueId) });

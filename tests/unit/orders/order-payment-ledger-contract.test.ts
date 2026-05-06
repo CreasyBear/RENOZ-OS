@@ -240,6 +240,7 @@ describe('order payment ledger contract', () => {
   it('keeps invoice payment recording on the order payment mutation spine', () => {
     const invoiceDetail = read('src/components/domain/invoices/detail/invoice-detail-container.tsx');
     const orderPaymentHook = read('src/hooks/orders/use-order-payments.ts');
+    const orderPaymentCache = read('src/hooks/orders/_order-payment-cache.ts');
     const createPaymentHookSource = sourceBetween(
       orderPaymentHook,
       'export function useCreateOrderPayment',
@@ -249,16 +250,17 @@ describe('order payment ledger contract', () => {
     expect(invoiceDetail).toContain('const createOrderPayment = useCreateOrderPayment(invoiceId);');
     expect(invoiceDetail).toContain('await createOrderPayment.mutateAsync(data);');
     expect(invoiceDetail).toContain('<RecordPaymentDialog');
-    expect(orderPaymentHook).toContain('function invalidateOrderPaymentLedger');
-    expect(orderPaymentHook).toContain('queryKeys.orders.payments(orderId)');
-    expect(orderPaymentHook).toContain('queryKeys.orders.paymentSummary(orderId)');
+    expect(orderPaymentHook).toContain('invalidateOrderPaymentLedger');
+    expect(orderPaymentCache).toContain('export function invalidateOrderPaymentLedger');
+    expect(orderPaymentCache).toContain('queryKeys.orders.payments(orderId)');
+    expect(orderPaymentCache).toContain('queryKeys.orders.paymentSummary(orderId)');
     expect(createPaymentHookSource).toContain('invalidateOrderPaymentLedger(queryClient, orderId)');
-    expect(orderPaymentHook).toContain('queryKeys.orders.detail(orderId)');
-    expect(orderPaymentHook).toContain('queryKeys.orders.lists()');
-    expect(orderPaymentHook).toContain('queryKeys.orders.infiniteLists()');
-    expect(orderPaymentHook).toContain('queryKeys.invoices.detail(orderId)');
-    expect(orderPaymentHook).toContain('queryKeys.invoices.lists()');
-    expect(orderPaymentHook).toContain('queryKeys.invoices.summary()');
-    expect(orderPaymentHook).toContain('invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true })');
+    expect(orderPaymentCache).toContain('queryKeys.orders.detail(orderId)');
+    expect(orderPaymentCache).toContain('queryKeys.orders.lists()');
+    expect(orderPaymentCache).toContain('queryKeys.orders.infiniteLists()');
+    expect(orderPaymentCache).toContain('queryKeys.invoices.detail(orderId)');
+    expect(orderPaymentCache).toContain('queryKeys.invoices.lists()');
+    expect(orderPaymentCache).toContain('queryKeys.invoices.summary()');
+    expect(orderPaymentCache).toContain('invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true })');
   });
 });

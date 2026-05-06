@@ -9,12 +9,11 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
-  type QueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { queryKeys } from "@/lib/query-keys";
-import { invalidateOrderBalanceReportingQueries } from "@/hooks/financial/_reporting-cache";
+import { invalidateOrderPaymentLedger } from "./_order-payment-cache";
 import { expectOrderQueryData } from "./order-mutation-client-errors";
 import {
   getOrderPayments,
@@ -30,35 +29,6 @@ import type {
   UpdateOrderPayment,
   DeleteOrderPayment,
 } from "@/lib/schemas/orders/order-payments";
-
-function invalidateOrderPaymentLedger(
-  queryClient: QueryClient,
-  orderId: string,
-  options: { paymentId?: string } = {}
-) {
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.orders.payments(orderId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.orders.paymentSummary(orderId),
-  });
-
-  if (options.paymentId) {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.orders.paymentDetail(options.paymentId),
-    });
-  }
-
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.orders.detail(orderId),
-  });
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(orderId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
-  invalidateOrderBalanceReportingQueries(queryClient, { includeCashRevenue: true });
-}
 
 // ============================================================================
 // QUERY HOOKS

@@ -173,11 +173,62 @@ describe('useRma mutations hardening', () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['orders', 'detail', 'order-1'],
     });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['support', 'issues', 'detail', 'issue-1'],
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: ['support', 'issues', 'list'],
+    });
+  });
+
+  it('refreshes payment ledger and reporting surfaces after executing a refund remedy', async () => {
+    processRmaMock.mockResolvedValue({
+      id: 'rma-1',
+      orderId: 'order-1',
+      issueId: 'issue-1',
+      execution: {
+        status: 'completed',
+        refundPayment: { id: 'refund-1', label: null },
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useProcessRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useProcessRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaId: 'rma-1',
+        resolution: 'refund',
+        originalPaymentId: 'payment-1',
+        amount: 75,
+        notes: 'Refunded from RMA.',
+      });
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.paymentSummary('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.invoices.summary(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
     });
   });
 });
