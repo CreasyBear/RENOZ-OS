@@ -251,7 +251,7 @@ Broader gates should be risk-selected:
 
 - Run `bun run test:unit` or `bun run build` when the slice touches shared contracts, build-time behavior, route loading, or a cross-domain workflow.
 - Run `bun run lint:reliability` when the slice touches one of its guarded contracts: route casts, pending dialog guards, read-path query guards, or serialized read auto-upsert policy.
-- Serialized gates are retired as routine sprint evidence. Reopen `bun run reliability:serialized-gates` only when deliberately changing serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or a related repair script.
+- The serialized gate pack is closed and no longer part of routine maintainer closeout. Future serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or repair-script work should define focused evidence inside that slice instead of rerunning the old default gate pack.
 - Run finance, document, release, or deploy gates only when the slice touches those contracts or when preparing a release.
 
 If local `bun run` is broken, run the underlying direct tool commands and record the reason.

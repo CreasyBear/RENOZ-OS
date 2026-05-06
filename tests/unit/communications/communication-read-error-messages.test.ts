@@ -61,6 +61,9 @@ describe('communication read error messages', () => {
     const campaignAnalytics = read(
       'src/routes/_authenticated/communications/campaigns/analytics-page.tsx'
     );
+    const campaignDetails = read(
+      'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
+    );
     const campaignPreview = read(
       'src/components/domain/communications/campaigns/campaign-preview-panel.tsx'
     );
@@ -117,6 +120,10 @@ describe('communication read error messages', () => {
     expect(campaignAnalytics).not.toContain(
       'Campaign analytics are temporarily unavailable. Please refresh and try again."'
     );
+    expect(campaignDetails).toContain('formatCommunicationReadError(');
+    expect(campaignDetails).toContain('COMMUNICATION_READ_MESSAGES.campaignDetails');
+    expect(campaignDetails).not.toContain('campaignError?.message');
+    expect(campaignDetails).not.toContain('"This campaign could not be loaded."');
     expect(campaignPreview).toContain('formatCommunicationReadError(');
     expect(campaignPreview).toContain('COMMUNICATION_READ_MESSAGES.campaignPreview');
     expect(campaignPreview).not.toContain('error instanceof Error ? error.message');
@@ -157,6 +164,7 @@ describe('communication read error messages', () => {
     expect(formatter).toContain('emailPreview');
     expect(formatter).toContain('emailSignatures');
     expect(formatter).toContain('emailCampaigns');
+    expect(formatter).toContain('campaignDetails');
     expect(formatter).toContain('campaignAnalytics');
     expect(formatter).toContain('campaignPreview');
     expect(formatter).toContain('emailHistory');

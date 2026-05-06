@@ -86,6 +86,10 @@ import {
   calculatePercentage,
 } from "@/lib/communications/campaign-utils";
 import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
+import {
+  COMMUNICATION_READ_MESSAGES,
+  formatCommunicationReadError,
+} from "@/lib/communications/read-error-messages";
 
 // ============================================================================
 // TYPES
@@ -480,7 +484,10 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
         <EmptyState
           icon={AlertTriangle}
           title="Campaign not found"
-          message={campaignError?.message || "This campaign could not be loaded."}
+          message={formatCommunicationReadError(
+            campaignError,
+            COMMUNICATION_READ_MESSAGES.campaignDetails
+          )}
           primaryAction={
             onBack
               ? {
