@@ -53,13 +53,7 @@ import {
   type QuoteDocumentData,
 } from '@/lib/documents';
 import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Default quote validity in days */
-const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
+import { DEFAULT_QUOTE_VALIDITY_DAYS } from './quote-validity-constants';
 
 /** Raw quote line item from DB (supports legacy cents and new dollars format) */
 interface QuoteVersionItemRaw {
@@ -433,47 +427,6 @@ export const updateQuoteExpiration = createServerFn({ method: 'POST' })
     }
     return { opportunity: result[0] };
   });
-
-/**
- * Set quote expiration to default (30 days from now)
- */
-export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
-  .inputValidator(z.object({ opportunityId: z.string().uuid() }))
-  .handler(
-    async ({
-      data,
-    }): Promise<{ opportunity: typeof opportunities.$inferSelect; expiresAt: Date }> => {
-      const ctx = await withAuth({
-        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
-      });
-
-      const { opportunityId } = data;
-
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + DEFAULT_QUOTE_VALIDITY_DAYS);
-
-      // Verify and update
-      const result = await db
-        .update(opportunities)
-        .set({
-          quoteExpiresAt: expiresAt,
-          updatedBy: ctx.user.id,
-        })
-        .where(
-          and(
-            eq(opportunities.id, opportunityId),
-            eq(opportunities.organizationId, ctx.organizationId)
-          )
-        )
-        .returning();
-
-      if (!result[0]) {
-        throw new NotFoundError('Opportunity not found', 'opportunity');
-      }
-
-      return { opportunity: result[0]!, expiresAt };
-    }
-  );
 
 // ============================================================================
 // GENERATE QUOTE PDF

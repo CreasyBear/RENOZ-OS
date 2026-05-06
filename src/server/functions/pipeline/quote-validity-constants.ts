@@ -1,0 +1,1 @@
+export const DEFAULT_QUOTE_VALIDITY_DAYS = 30;

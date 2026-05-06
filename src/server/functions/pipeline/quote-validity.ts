@@ -16,6 +16,7 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { opportunities, opportunityActivities, quoteVersions } from 'drizzle/schema';
+import { DEFAULT_QUOTE_VALIDITY_DAYS } from './quote-validity-constants';
 
 /**
  * Get quotes that are expiring within the warning period.
@@ -159,6 +160,46 @@ export const getQuoteValidityStats = createServerFn({ method: 'GET' })
       total: Number(stats?.total ?? 0),
     };
   });
+
+/**
+ * Set quote expiration to default (30 days from now).
+ */
+export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ opportunityId: z.string().uuid() }))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ opportunity: typeof opportunities.$inferSelect; expiresAt: Date }> => {
+      const ctx = await withAuth({
+        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      });
+
+      const { opportunityId } = data;
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + DEFAULT_QUOTE_VALIDITY_DAYS);
+
+      const result = await db
+        .update(opportunities)
+        .set({
+          quoteExpiresAt: expiresAt,
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            eq(opportunities.id, opportunityId),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        )
+        .returning();
+
+      if (!result[0]) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
+
+      return { opportunity: result[0]!, expiresAt };
+    }
+  );
 
 /**
  * Extend quote validity with a reason for audit trail.
