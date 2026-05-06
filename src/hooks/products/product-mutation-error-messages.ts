@@ -46,6 +46,23 @@ const PRODUCT_CORE_FALLBACKS = {
     'Product export is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const PRODUCT_IMAGE_FALLBACKS = {
+  add:
+    'Product image upload is temporarily unavailable. Please refresh and try again.',
+  update:
+    'Product image update is temporarily unavailable. Please refresh and try again.',
+  delete:
+    'Product image deletion is temporarily unavailable. Please refresh and try again.',
+  setPrimary:
+    'Primary product image update is temporarily unavailable. Please refresh and try again.',
+  reorder:
+    'Product image ordering is temporarily unavailable. Please refresh and try again.',
+  bulkDelete:
+    'Bulk product image deletion is temporarily unavailable. Please refresh and try again.',
+  updateAltText:
+    'Product image alt text update is temporarily unavailable. Please refresh and try again.',
+} as const;
+
 const PRODUCT_CODE_MESSAGES: Record<string, string> = {
   NOT_FOUND: 'Product record could not be found. Refresh and try again.',
   PERMISSION_DENIED: 'You do not have permission to manage products.',
@@ -63,8 +80,18 @@ const PRODUCT_PRICING_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Product pricing conflicts with an existing price rule.',
 };
 
+const PRODUCT_IMAGE_CODE_MESSAGES: Record<string, string> = {
+  ...PRODUCT_CODE_MESSAGES,
+  NOT_FOUND: 'Product image record could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage product images.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing product images.',
+  RATE_LIMIT: 'Too many product image changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'Product image details conflict with the current product gallery.',
+};
+
 export type ProductPricingMutationAction = keyof typeof PRODUCT_PRICING_FALLBACKS;
 export type ProductCoreMutationAction = keyof typeof PRODUCT_CORE_FALLBACKS;
+export type ProductImageMutationAction = keyof typeof PRODUCT_IMAGE_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -264,5 +291,16 @@ export function formatProductCoreMutationError(
     error,
     PRODUCT_CORE_FALLBACKS[action],
     PRODUCT_CODE_MESSAGES
+  );
+}
+
+export function formatProductImageMutationError(
+  error: unknown,
+  action: ProductImageMutationAction
+): string {
+  return formatProductMutationError(
+    error,
+    PRODUCT_IMAGE_FALLBACKS[action],
+    PRODUCT_IMAGE_CODE_MESSAGES
   );
 }

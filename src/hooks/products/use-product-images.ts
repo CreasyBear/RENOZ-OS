@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
+import { formatProductImageMutationError } from './product-mutation-error-messages';
 import {
   listProductImages,
   getImageStats,
@@ -154,8 +155,8 @@ export function useAddProductImage() {
         });
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to add image');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'add'));
     },
   });
 }
@@ -175,8 +176,8 @@ export function useUpdateProductImage() {
         queryKey: queryKeys.products.images.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update image');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'update'));
     },
   });
 }
@@ -195,8 +196,8 @@ export function useDeleteProductImage() {
         queryKey: queryKeys.products.images.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete image');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'delete'));
     },
   });
 }
@@ -215,8 +216,8 @@ export function useSetPrimaryImage() {
         queryKey: queryKeys.products.images.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to set primary image');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'setPrimary'));
     },
   });
 }
@@ -235,8 +236,8 @@ export function useReorderProductImages() {
         queryKey: queryKeys.products.images.list(variables.productId),
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to reorder images');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'reorder'));
     },
   });
 }
@@ -255,8 +256,8 @@ export function useBulkDeleteImages() {
         queryKey: queryKeys.products.images.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete images');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'bulkDelete'));
     },
   });
 }
@@ -276,8 +277,8 @@ export function useBulkUpdateAltText() {
         queryKey: queryKeys.products.images.all,
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update alt text');
+    onError: (error) => {
+      toast.error(formatProductImageMutationError(error, 'updateAltText'));
     },
   });
 }

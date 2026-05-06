@@ -108,8 +108,10 @@ export {
 
 export {
   formatProductCoreMutationError,
+  formatProductImageMutationError,
   formatProductPricingMutationError,
   type ProductCoreMutationAction,
+  type ProductImageMutationAction,
   type ProductPricingMutationAction,
 } from './product-mutation-error-messages';
 
