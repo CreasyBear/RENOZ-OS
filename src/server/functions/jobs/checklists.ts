@@ -275,7 +275,12 @@ export const updateChecklistTemplate = createServerFn({ method: 'POST' })
     const [template] = await db
       .update(checklistTemplates)
       .set(updateData)
-      .where(eq(checklistTemplates.id, data.templateId))
+      .where(
+        and(
+          eq(checklistTemplates.id, data.templateId),
+          eq(checklistTemplates.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     return { template: toTemplateResponse(template) };
@@ -307,7 +312,12 @@ export const deleteChecklistTemplate = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
         version: sql`${checklistTemplates.version} + 1`,
       })
-      .where(eq(checklistTemplates.id, data.templateId));
+      .where(
+        and(
+          eq(checklistTemplates.id, data.templateId),
+          eq(checklistTemplates.organizationId, ctx.organizationId)
+        )
+      );
 
     return { success: true };
   });
@@ -451,7 +461,12 @@ export const updateChecklistItem = createServerFn({ method: 'POST' })
     const [updated] = await db
       .update(jobChecklistItems)
       .set(updateData)
-      .where(eq(jobChecklistItems.id, data.itemId))
+      .where(
+        and(
+          eq(jobChecklistItems.id, data.itemId),
+          eq(jobChecklistItems.organizationId, ctx.organizationId)
+        )
+      )
       .returning();
 
     // Get user details for completedBy
@@ -460,7 +475,7 @@ export const updateChecklistItem = createServerFn({ method: 'POST' })
       const [user] = await db
         .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
-        .where(eq(users.id, updated.completedBy))
+        .where(and(eq(users.id, updated.completedBy), eq(users.organizationId, ctx.organizationId)))
         .limit(1);
       if (user) {
         completedByUser = user;
@@ -579,8 +594,16 @@ async function getJobChecklistById(
       userEmail: users.email,
     })
     .from(jobChecklistItems)
-    .leftJoin(users, eq(jobChecklistItems.completedBy, users.id))
-    .where(eq(jobChecklistItems.checklistId, checklistId))
+    .leftJoin(
+      users,
+      and(eq(jobChecklistItems.completedBy, users.id), eq(users.organizationId, organizationId))
+    )
+    .where(
+      and(
+        eq(jobChecklistItems.checklistId, checklistId),
+        eq(jobChecklistItems.organizationId, organizationId)
+      )
+    )
     .orderBy(jobChecklistItems.position);
 
   // Calculate stats
@@ -667,7 +690,13 @@ export const getChecklistItem = createServerFn({ method: 'GET' })
         userEmail: users.email,
       })
       .from(jobChecklistItems)
-      .leftJoin(users, eq(jobChecklistItems.completedBy, users.id))
+      .leftJoin(
+        users,
+        and(
+          eq(jobChecklistItems.completedBy, users.id),
+          eq(users.organizationId, ctx.organizationId)
+        )
+      )
       .where(
         and(
           eq(jobChecklistItems.id, data.itemId),
