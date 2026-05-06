@@ -14,6 +14,7 @@ import {
   checkPasswordResetAllowed,
   type PasswordResetResult,
 } from '@/server/functions/auth/password-reset';
+import { formatPasswordResetRequestError } from './password-reset-error-messages';
 import { authLogger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 
@@ -59,9 +60,14 @@ export function useRequestPasswordReset() {
 
   return useMutation<PasswordResetResult, Error, RequestPasswordResetInput>({
     mutationFn: async (input) => {
-      const result = await checkAllowedFn({ data: input });
+      const result = await checkAllowedFn({ data: input }).catch((error) => {
+        throw new Error(formatPasswordResetRequestError(error));
+      });
       if (!result.success) {
-        return result;
+        return {
+          ...result,
+          error: formatPasswordResetRequestError(result.error, result.retryAfter),
+        };
       }
       const normalizedEmail = input.email.trim().toLowerCase();
 
@@ -72,7 +78,7 @@ export function useRequestPasswordReset() {
         authLogger.error('Password reset redirect URL resolution failed', error, {
           redirectTo: 'unresolved',
         });
-        throw new Error('Password reset is temporarily unavailable. Please try again shortly.');
+        throw new Error(formatPasswordResetRequestError(error));
       }
 
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {

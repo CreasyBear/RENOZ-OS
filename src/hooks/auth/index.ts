@@ -10,6 +10,10 @@ export {
   isUnsafePasswordChangeMessage,
 } from './password-change-error-messages';
 export {
+  formatPasswordResetRequestError,
+  isUnsafePasswordResetMessage,
+} from './password-reset-error-messages';
+export {
   formatResendConfirmationError,
   isUnsafeResendConfirmationMessage,
 } from './resend-confirmation-error-messages';

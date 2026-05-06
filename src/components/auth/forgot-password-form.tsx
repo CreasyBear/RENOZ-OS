@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { TextField, FormFieldDisplayProvider } from '@/components/shared/forms';
-import { useRequestPasswordReset } from '@/hooks/auth';
+import { formatPasswordResetRequestError, useRequestPasswordReset } from '@/hooks/auth';
 import { forgotPasswordSchema, type ForgotPassword } from '@/lib/schemas/auth';
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 
@@ -25,7 +25,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
       setSubmitError(null);
       const result = await forgotPasswordMutation.mutateAsync({ email: values.email.trim() });
       if (!result.success) {
-        throw new Error(result.error ?? 'Failed to send password reset email.');
+        throw new Error(formatPasswordResetRequestError(result.error, result.retryAfter));
       }
     },
   });
@@ -36,7 +36,7 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
     e.preventDefault();
     setSubmitError(null);
     void form.handleSubmit().catch((error: unknown) => {
-      setSubmitError(error instanceof Error ? error.message : 'An unexpected error occurred.');
+      setSubmitError(formatPasswordResetRequestError(error));
     });
   };
 
