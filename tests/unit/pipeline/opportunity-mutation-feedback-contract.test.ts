@@ -69,6 +69,7 @@ describe('pipeline opportunity mutation feedback contract', () => {
   it('keeps opportunity detail stage actions on the pipeline formatter contract', () => {
     const index = read('src/hooks/pipeline/index.ts');
     const formatter = read('src/hooks/pipeline/_mutation-errors.ts');
+    const server = read('src/server/functions/pipeline/pipeline.ts');
     const opportunityDetail = read('src/hooks/pipeline/use-opportunity-detail.ts');
     const quickDialog = read(
       'src/components/domain/pipeline/opportunities/opportunity-quick-dialog.tsx'
@@ -85,6 +86,11 @@ describe('pipeline opportunity mutation feedback contract', () => {
 
     expect(index).toContain('formatPipelineOpportunityMutationError');
     expect(formatter).toContain('PIPELINE_OPPORTUNITY_CODE_MESSAGES');
+    expect(server).toContain(
+      'failed.push(`${existing.id}: Unable to update opportunity stage. Refresh and try again.`)'
+    );
+    expect(server).not.toContain('failed.push(`${existing.id}: ${errorMessage}`)');
+    expect(server).toContain("pipelineLogger.error('[Bulk Update] Exception'");
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"

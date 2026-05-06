@@ -1168,7 +1168,7 @@ export const bulkUpdateOpportunityStage = createServerFn({ method: 'POST' })
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error';
               const errorStack = error instanceof Error ? error.stack : undefined;
-              failed.push(`${existing.id}: ${errorMessage}`);
+              failed.push(`${existing.id}: Unable to update opportunity stage. Refresh and try again.`);
               
               // Log error with full context for debugging
               pipelineLogger.error('[Bulk Update] Exception', error, {
