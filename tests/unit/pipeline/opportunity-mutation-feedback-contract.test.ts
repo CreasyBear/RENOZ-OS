@@ -119,6 +119,11 @@ describe('pipeline opportunity mutation feedback contract', () => {
       'export const updateOpportunityStage = createServerFn',
       'export const bulkUpdateOpportunityStage = createServerFn'
     );
+    const deleteOpportunityBody = sliceBetween(
+      server,
+      'export const deleteOpportunity = createServerFn',
+      'export const getPipelineMetrics = createServerFn'
+    );
     for (const body of [updateOpportunityBody, updateStageBody]) {
       expect(body).toContain('const [updatedOpportunity] = await tx');
       expect(body).toContain('eq(opportunities.id, id)');
@@ -130,6 +135,15 @@ describe('pipeline opportunity mutation feedback contract', () => {
     expect(updateOpportunityBody).not.toContain('entityId: result[0].id');
     expect(updateOpportunityBody).not.toContain('return result[0] ?? null');
     expect(updateStageBody).not.toContain('return updateResult[0] ?? null');
+    expect(deleteOpportunityBody).toContain('const [deletedOpportunity] = await tx');
+    expect(deleteOpportunityBody).toContain('eq(opportunities.id, id)');
+    expect(deleteOpportunityBody).toContain('eq(opportunities.organizationId, ctx.organizationId)');
+    expect(deleteOpportunityBody).toContain('isNull(opportunities.deletedAt)');
+    expect(deleteOpportunityBody).toContain('.returning({ id: opportunities.id })');
+    expect(deleteOpportunityBody).toContain(
+      "throw new NotFoundError('Opportunity not found', 'opportunity')"
+    );
+    expect(deleteOpportunityBody).toContain('entityId: id');
     expect(opportunityDetail).toContain("formatPipelineOpportunityMutationError(error, 'stage')");
     expect(opportunityDetail).toContain(
       "formatPipelineOpportunityMutationError(MISSING_OPPORTUNITY_VERSION_ERROR, 'stage')"

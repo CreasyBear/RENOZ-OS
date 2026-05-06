@@ -1261,7 +1261,7 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
     const opportunityToDelete = current[0];
 
     await db.transaction(async (tx) => {
-      await tx
+      const [deletedOpportunity] = await tx
         .update(opportunities)
         .set({
           deletedAt: new Date(),
@@ -1270,9 +1270,15 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(opportunities.id, id),
-            eq(opportunities.organizationId, ctx.organizationId)
+            eq(opportunities.organizationId, ctx.organizationId),
+            isNull(opportunities.deletedAt)
           )
-        );
+        )
+        .returning({ id: opportunities.id });
+
+      if (!deletedOpportunity) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
 
       await enqueueSearchIndexOutbox(
         {
