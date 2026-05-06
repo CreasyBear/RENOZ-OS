@@ -90,7 +90,8 @@ async function fetchProjectData(projectId: string, organizationId: string) {
     .where(
       and(
         eq(projects.id, projectId),
-        eq(projects.organizationId, organizationId)
+        eq(projects.organizationId, organizationId),
+        isNull(projects.deletedAt)
       )
     )
     .limit(1);
@@ -148,7 +149,10 @@ async function fetchCustomerData(customerId: string, organizationId: string) {
 /**
  * Fetch project materials (join with products to get name/sku)
  */
-async function fetchProjectMaterials(projectId: string): Promise<WorkOrderMaterial[]> {
+async function fetchProjectMaterials(
+  projectId: string,
+  organizationId: string
+): Promise<WorkOrderMaterial[]> {
   const materials = await db
     .select({
       id: jobMaterials.id,
@@ -159,7 +163,14 @@ async function fetchProjectMaterials(projectId: string): Promise<WorkOrderMateri
     })
     .from(jobMaterials)
     .innerJoin(products, eq(jobMaterials.productId, products.id))
-    .where(eq(jobMaterials.projectId, projectId));
+    .where(
+      and(
+        eq(jobMaterials.projectId, projectId),
+        eq(jobMaterials.organizationId, organizationId),
+        eq(products.organizationId, organizationId),
+        isNull(products.deletedAt)
+      )
+    );
 
   return materials.map((m) => ({
     id: m.id,
@@ -230,7 +241,7 @@ export const generateProjectDocument = createServerFn({ method: 'POST' })
     ]);
 
     const customerData = await fetchCustomerData(projectData.customerId, ctx.organizationId);
-    const materials = await fetchProjectMaterials(projectId);
+    const materials = await fetchProjectMaterials(projectId, ctx.organizationId);
 
     // Parse site address
     const siteAddress = projectData.siteAddress as {
