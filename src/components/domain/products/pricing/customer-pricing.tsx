@@ -37,6 +37,7 @@ import {
 } from "@/components/shared/forms";
 import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
 import {
+  formatProductPricingMutationError,
   useSetCustomerPrice,
   useDeleteCustomerPrice,
 } from "@/hooks/products";
@@ -110,6 +111,9 @@ export function CustomerPricing({
   const deleteCustomerPriceMutation = useDeleteCustomerPrice();
 
   const isSubmitting = setCustomerPriceMutation.isPending || deleteCustomerPriceMutation.isPending;
+  const submitError = setCustomerPriceMutation.error
+    ? formatProductPricingMutationError(setCustomerPriceMutation.error, "setCustomerPrice")
+    : null;
 
   const getDefaultValues = (): CustomerPriceFormValues => ({
     customerId: "",
@@ -158,6 +162,7 @@ export function CustomerPricing({
 
   // Open dialog for new customer price
   const handleAdd = () => {
+    setCustomerPriceMutation.reset();
     form.reset(getDefaultValues());
     setIsDialogOpen(true);
   };
@@ -294,7 +299,7 @@ export function CustomerPricing({
         submitLabel="Add Price"
         cancelLabel="Cancel"
         loadingLabel="Saving..."
-        submitError={setCustomerPriceMutation.error?.message ?? null}
+        submitError={submitError}
         submitDisabled={isSubmitting}
         className="sm:max-w-[500px]"
       >

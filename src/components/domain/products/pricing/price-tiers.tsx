@@ -35,6 +35,7 @@ import {
   SwitchField,
 } from "@/components/shared/forms";
 import {
+  formatProductPricingMutationError,
   useCreatePriceTier,
   useUpdatePriceTier,
   useDeletePriceTier,
@@ -85,6 +86,13 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
   const deleteMutation = useDeletePriceTier();
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const submitError = editingTier
+    ? updateMutation.error
+      ? formatProductPricingMutationError(updateMutation.error, "updateTier")
+      : null
+    : createMutation.error
+      ? formatProductPricingMutationError(createMutation.error, "createTier")
+      : null;
 
   // Sort tiers by min quantity
   const sortedTiers = [...tiers].sort((a, b) => a.minQuantity - b.minQuantity);
@@ -142,6 +150,8 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
 
   // Open dialog for new tier
   const handleAdd = () => {
+    createMutation.reset();
+    updateMutation.reset();
     setEditingTier(null);
     form.reset(getDefaultValues());
     setIsDialogOpen(true);
@@ -149,6 +159,8 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
 
   // Open dialog for editing
   const handleEdit = (tier: PriceTier) => {
+    createMutation.reset();
+    updateMutation.reset();
     setEditingTier(tier);
     form.reset(getDefaultValues(tier));
     setIsDialogOpen(true);
@@ -315,7 +327,7 @@ export function PriceTiers({ productId, basePrice, tiers, onTiersChange }: Price
         submitLabel={editingTier ? "Update Tier" : "Create Tier"}
         cancelLabel="Cancel"
         loadingLabel="Saving..."
-        submitError={(createMutation.error ?? updateMutation.error)?.message ?? null}
+        submitError={submitError}
         submitDisabled={isSubmitting}
         className="sm:max-w-[500px]"
       >
