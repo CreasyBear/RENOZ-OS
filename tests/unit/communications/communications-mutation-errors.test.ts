@@ -5,6 +5,7 @@ import {
   formatCommunicationCampaignMutationError,
   formatCommunicationInboxAccountMutationError,
   formatCommunicationInboxMutationError,
+  formatCommunicationScheduledEmailMutationError,
   formatCommunicationTemplateMutationError,
 } from '@/hooks/communications/_mutation-errors';
 import { executeBulkAction } from '@/lib/actions/bulk-action-results';
@@ -58,6 +59,13 @@ describe('communications mutation error formatting', () => {
         'callback'
       )
     ).toBe('Unable to connect email account.');
+
+    expect(
+      formatCommunicationScheduledEmailMutationError(
+        new Error('postgres database stack trace while cancelling scheduled email'),
+        'cancel'
+      )
+    ).toBe('Unable to cancel scheduled email.');
   });
 
   it('keeps customer communications mutation feedback on communications-owned formatters', () => {
@@ -133,6 +141,17 @@ describe('communications mutation error formatting', () => {
     expect(hook).not.toContain("toast.error('Failed to connect email account'");
     expect(hook).not.toContain("toast.error('Sync failed'");
     expect(settings).not.toContain('toast.error("Disconnect Failed"');
+  });
+
+  it('keeps communications scheduled email mutations on communications-owned formatters', () => {
+    const page = read('src/routes/_authenticated/communications/emails/scheduled-emails-page.tsx');
+    const dialog = read('src/components/domain/communications/emails/schedule-email-dialog.tsx');
+
+    expect(page).toContain('formatCommunicationScheduledEmailMutationError(error, "cancel")');
+    expect(dialog).toContain('formatCommunicationScheduledEmailMutationError(');
+    expect(dialog).toContain('isEditing ? "update" : "schedule"');
+    expect(page).not.toContain('error instanceof Error ? error.message : "Failed to cancel email"');
+    expect(dialog).not.toContain('setSubmitError(getUserFriendlyMessage(error as Error))');
   });
 
   it('formats campaign bulk action failure items before summarizing them', async () => {

@@ -31,10 +31,17 @@ const INBOX_ACCOUNT_FALLBACKS = {
   delete: 'Unable to disconnect email account.',
 } as const;
 
+const SCHEDULED_EMAIL_FALLBACKS = {
+  schedule: 'Unable to schedule email.',
+  update: 'Unable to update scheduled email.',
+  cancel: 'Unable to cancel scheduled email.',
+} as const;
+
 export type CommunicationTemplateMutationAction = keyof typeof TEMPLATE_FALLBACKS;
 export type CommunicationCampaignMutationAction = keyof typeof CAMPAIGN_FALLBACKS;
 export type CommunicationInboxMutationAction = keyof typeof INBOX_FALLBACKS;
 export type CommunicationInboxAccountMutationAction = keyof typeof INBOX_ACCOUNT_FALLBACKS;
+export type CommunicationScheduledEmailMutationAction = keyof typeof SCHEDULED_EMAIL_FALLBACKS;
 
 function isUnsafeMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -93,4 +100,11 @@ export function formatCommunicationInboxAccountMutationError(
   action: CommunicationInboxAccountMutationAction
 ): string {
   return formatCommunicationMutationError(error, INBOX_ACCOUNT_FALLBACKS[action]);
+}
+
+export function formatCommunicationScheduledEmailMutationError(
+  error: unknown,
+  action: CommunicationScheduledEmailMutationAction
+): string {
+  return formatCommunicationMutationError(error, SCHEDULED_EMAIL_FALLBACKS[action]);
 }

@@ -16,7 +16,12 @@ import { ScheduledEmailsList } from "@/components/domain/communications";
 import { ScheduleEmailDialog } from "@/components/domain/communications";
 import { DomainFilterBar } from "@/components/shared/filters";
 import { useFilterUrlState } from "@/hooks/filters/use-filter-url-state";
-import { useScheduledEmails, useScheduledEmail, useCancelScheduledEmail } from "@/hooks/communications";
+import {
+  useScheduledEmails,
+  useScheduledEmail,
+  useCancelScheduledEmail,
+  formatCommunicationScheduledEmailMutationError,
+} from "@/hooks/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import {
   SCHEDULED_EMAILS_FILTER_CONFIG,
@@ -100,9 +105,7 @@ export default function ScheduledEmailsPage({ search }: ScheduledEmailsPageProps
         toastSuccess("Email cancelled");
         return true;
       } catch (error) {
-        toastError(
-          error instanceof Error ? error.message : "Failed to cancel email"
-        );
+        toastError(formatCommunicationScheduledEmailMutationError(error, "cancel"));
         return false;
       }
     },

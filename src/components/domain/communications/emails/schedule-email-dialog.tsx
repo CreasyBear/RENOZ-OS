@@ -12,6 +12,7 @@ import {
   useScheduleEmail,
   useUpdateScheduledEmail,
 } from "@/hooks/communications/use-scheduled-emails";
+import { formatCommunicationScheduledEmailMutationError } from "@/hooks/communications";
 import { useTemplates } from "@/hooks/communications/use-templates";
 import { addHours } from "date-fns";
 import { Send, Calendar, Clock, Loader2 } from "lucide-react";
@@ -272,10 +273,20 @@ export function ScheduleEmailDialog({
             onSuccess?.();
           })
           .catch((error) => {
-            setSubmitError(getUserFriendlyMessage(error as Error));
+            setSubmitError(
+              formatCommunicationScheduledEmailMutationError(
+                error,
+                isEditing ? "update" : "schedule"
+              )
+            );
           });
       } catch (error) {
-        setSubmitError(getUserFriendlyMessage(error as Error));
+        setSubmitError(
+          formatCommunicationScheduledEmailMutationError(
+            error,
+            isEditing ? "update" : "schedule"
+          )
+        );
       }
     },
     [
