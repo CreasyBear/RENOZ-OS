@@ -12,7 +12,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/quote-versions.ts for server functions
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   createQuoteVersion,
@@ -27,6 +27,21 @@ import type {
   QuoteLineItem,
   SendQuoteResult,
 } from '@/lib/schemas/pipeline';
+
+function invalidateOpportunityListCaches(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+}
+
+function invalidateQuoteVersionsAndOpportunity(queryClient: QueryClient, opportunityId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+}
+
+function invalidateQuoteExpiryCaches(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes(7) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
+}
 
 // ============================================================================
 // CREATE QUOTE VERSION MUTATION
@@ -48,11 +63,8 @@ export function useCreateQuoteVersion() {
     mutationFn: ({ opportunityId, items, notes }: CreateQuoteVersionInput) =>
       createQuoteVersion({ data: { opportunityId, items, notes } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate quote versions and opportunity detail
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+      invalidateQuoteVersionsAndOpportunity(queryClient, opportunityId);
+      invalidateOpportunityListCaches(queryClient);
     },
   });
 }
@@ -76,9 +88,7 @@ export function useRestoreQuoteVersion() {
     mutationFn: ({ opportunityId, sourceVersionId }: RestoreQuoteVersionInput) =>
       restoreQuoteVersion({ data: { opportunityId, sourceVersionId } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate quote versions and opportunity detail
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+      invalidateQuoteVersionsAndOpportunity(queryClient, opportunityId);
     },
   });
 }
@@ -102,12 +112,9 @@ export function useUpdateQuoteExpiration() {
     mutationFn: ({ opportunityId, quoteExpiresAt }: UpdateQuoteExpirationInput) =>
       updateQuoteExpiration({ data: { opportunityId, quoteExpiresAt } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate opportunity and expiring/expired quotes
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes(7) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+      invalidateQuoteExpiryCaches(queryClient);
+      invalidateOpportunityListCaches(queryClient);
     },
   });
 }
@@ -132,12 +139,9 @@ export function useExtendQuoteValidity() {
     mutationFn: ({ opportunityId, newExpirationDate, reason }: ExtendQuoteValidityInput) =>
       extendQuoteValidity({ data: { opportunityId, newExpirationDate, reason } }),
     onSuccess: (_, { opportunityId }) => {
-      // Invalidate expiring/expired quotes and opportunity
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes(7) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
+      invalidateQuoteExpiryCaches(queryClient);
       queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+      invalidateOpportunityListCaches(queryClient);
     },
   });
 }
@@ -193,14 +197,8 @@ export function useSendQuote() {
     mutationFn: (input: SendQuoteInput) =>
       sendQuote({ data: input }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.quoteVersions(variables.opportunityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.pipeline.opportunity(variables.opportunityId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.infiniteLists() });
+      invalidateQuoteVersionsAndOpportunity(queryClient, variables.opportunityId);
+      invalidateOpportunityListCaches(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.documents.history('opportunity', variables.opportunityId),
       });
