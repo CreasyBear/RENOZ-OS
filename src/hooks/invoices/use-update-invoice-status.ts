@@ -16,6 +16,8 @@ import {
   updateInvoiceStatus,
   markInvoiceViewed,
 } from '@/server/functions/invoices';
+import { toastError } from '@/hooks';
+import { formatInvoiceMutationError } from './_mutation-errors';
 
 type UpdateStatusResult = Awaited<ReturnType<typeof updateInvoiceStatus>>;
 
@@ -52,6 +54,9 @@ export function useUpdateInvoiceStatus() {
       });
       // Also invalidate summary for dashboard updates
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.summary() });
+    },
+    onError: (error: unknown) => {
+      toastError(formatInvoiceMutationError(error, 'updateStatus'));
     },
   });
 }

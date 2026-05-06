@@ -20,6 +20,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { updateInvoiceStatusSchema } from '@/lib/schemas/invoices';
@@ -49,7 +50,7 @@ export interface UpdateInvoiceStatusResponse {
 export const updateInvoiceStatus = createServerFn({ method: 'POST' })
   .inputValidator(updateInvoiceStatusSchema)
   .handler(async ({ data }): Promise<UpdateInvoiceStatusResponse> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { organizationId } = ctx;
     const userId = ctx.user.id;
 

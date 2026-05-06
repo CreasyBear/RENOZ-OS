@@ -4,6 +4,7 @@ const INVOICE_FALLBACKS = {
   generatePdf: 'Unable to generate invoice PDF. Refresh and try again.',
   void: 'Unable to void invoice. Refresh and review before trying again.',
   sendReminder: 'Unable to send invoice reminder. Refresh and try again.',
+  updateStatus: 'Unable to update invoice status. Refresh and review before trying again.',
 } as const;
 
 const INVOICE_CODE_MESSAGES: Record<string, string> = {
