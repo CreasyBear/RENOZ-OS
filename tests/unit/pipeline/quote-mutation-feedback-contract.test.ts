@@ -79,6 +79,7 @@ describe('pipeline quote mutation feedback contract', () => {
       'src/components/domain/pipeline/quotes/quote-version-history.tsx'
     );
     const quotePdfPreview = read('src/components/domain/pipeline/quotes/quote-pdf-preview.tsx');
+    const quickQuoteForm = read('src/components/domain/pipeline/quotes/quick-quote-form.tsx');
 
     expect(index).toContain('formatPipelineQuoteMutationError');
     expect(formatter).toContain('PIPELINE_QUOTE_CODE_MESSAGES');
@@ -96,6 +97,7 @@ describe('pipeline quote mutation feedback contract', () => {
       'formatPipelineQuoteMutationError({ code: "PDF_MISSING" }, "generatePdf")'
     );
     expect(quotePdfPreview).toContain('formatPipelineQuoteMutationError(error, "generatePdf")');
+    expect(quickQuoteForm).toContain('formatPipelineQuoteMutationError(error, "save")');
 
     expect(quoteDetail).not.toContain(
       "error instanceof Error ? error.message : 'Failed to generate PDF'"
@@ -122,5 +124,6 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(quoteVersionHistory).not.toContain('toastError("Failed to restore quote version")');
     expect(quotePdfPreview).not.toContain('toastError("PDF generation failed")');
     expect(quotePdfPreview).not.toContain('toastError("Failed to generate PDF")');
+    expect(quickQuoteForm).not.toContain('toastError("Failed to create quote")');
   });
 });

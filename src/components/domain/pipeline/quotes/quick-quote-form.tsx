@@ -75,7 +75,10 @@ import { CustomerCombobox } from "@/components/shared";
 import { toastSuccess, toastError } from "@/hooks";
 import type { Customer } from "@/lib/schemas/customers";
 import { GST_RATE } from "@/lib/order-calculations";
-import type { CreateQuoteVersionInput } from "@/hooks/pipeline";
+import {
+  formatPipelineQuoteMutationError,
+  type CreateQuoteVersionInput,
+} from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
@@ -194,8 +197,8 @@ export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
               navigate({ to: "/pipeline" });
             }
           },
-          onError: () => {
-            toastError("Failed to create quote");
+          onError: (error) => {
+            toastError(formatPipelineQuoteMutationError(error, "save"));
           },
         }
       );
