@@ -53,6 +53,9 @@ import type {
 } from '@/lib/schemas';
 import { paymentPlanTypeSchema } from '@/lib/schemas';
 
+const PAYMENT_SCHEDULE_READ_ERROR_MESSAGE =
+  'Payment schedule details are temporarily unavailable. Please refresh and try again.';
+
 /**
  * Props for the PaymentPlansList presenter component.
  * All data and handlers are passed from the container (route).
@@ -626,7 +629,7 @@ export const PaymentPlansList = memo(function PaymentPlansList({
           <div className="flex-1">
             <p className="font-medium text-destructive">Failed to load payment schedule</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              {PAYMENT_SCHEDULE_READ_ERROR_MESSAGE}
             </p>
             <Button
               variant="outline"

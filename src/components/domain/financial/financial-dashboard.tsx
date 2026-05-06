@@ -82,6 +82,9 @@ export interface FinancialDashboardProps {
   className?: string;
 }
 
+const FINANCIAL_DASHBOARD_READ_ERROR_MESSAGE =
+  'Financial dashboard is temporarily unavailable. Please refresh and try again.';
+
 // ============================================================================
 // KPI CARD
 // ============================================================================
@@ -260,7 +263,7 @@ export const FinancialDashboard = memo(function FinancialDashboard({
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span>Failed to load financial dashboard: {error.message}</span>
+              <span>{FINANCIAL_DASHBOARD_READ_ERROR_MESSAGE}</span>
             </div>
           </CardContent>
         </Card>

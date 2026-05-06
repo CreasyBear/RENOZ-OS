@@ -56,6 +56,9 @@ import { OrderCombobox, type OrderSummary, ConfirmationModal } from '@/component
 // TYPES
 // ============================================================================
 
+const CREDIT_NOTES_READ_ERROR_MESSAGE =
+  'Credit notes are temporarily unavailable. Please refresh and try again.';
+
 // CreditNoteWithCustomer type imported from schemas (SCHEMA-TRACE.md compliance)
 
 /**
@@ -260,7 +263,7 @@ export const CreditNotesList = memo(function CreditNotesList({
           <div className="flex-1">
             <p className="font-medium text-destructive">Failed to load credit notes</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              {CREDIT_NOTES_READ_ERROR_MESSAGE}
             </p>
             <Button
               variant="outline"

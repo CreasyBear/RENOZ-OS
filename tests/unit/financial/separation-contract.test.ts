@@ -213,4 +213,31 @@ describe('financial separation contract', () => {
     );
     expect(countMatches(financialTriage, 'refetchInterval,')).toBeGreaterThanOrEqual(4);
   });
+
+  it('keeps financial read-state presenters from rendering raw query errors', () => {
+    const dashboard = read('src/components/domain/financial/financial-dashboard.tsx');
+    const paymentPlans = read('src/components/domain/financial/payment-plans-list.tsx');
+    const creditNotesLegacy = read('src/components/domain/financial/credit-notes-list.tsx');
+    const creditNotesPresenter = read(
+      'src/components/domain/financial/credit-notes-list-presenter.tsx',
+    );
+
+    expect(dashboard).not.toContain('error.message');
+    expect(paymentPlans).not.toContain('error.message');
+    expect(creditNotesLegacy).not.toContain('error.message');
+    expect(creditNotesPresenter).not.toContain('error.message');
+
+    expect(dashboard).toContain(
+      'Financial dashboard is temporarily unavailable. Please refresh and try again.',
+    );
+    expect(paymentPlans).toContain(
+      'Payment schedule details are temporarily unavailable. Please refresh and try again.',
+    );
+    expect(creditNotesLegacy).toContain(
+      'Credit notes are temporarily unavailable. Please refresh and try again.',
+    );
+    expect(creditNotesPresenter).toContain(
+      'Credit notes are temporarily unavailable. Please refresh and try again.',
+    );
+  });
 });
