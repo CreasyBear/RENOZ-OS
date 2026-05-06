@@ -86,20 +86,28 @@ export function useAllInstallers(enabled = true) {
   return useQuery({
     queryKey: queryKeys.installers.allActive(),
     queryFn: async () => {
-      const result = await listAllActiveInstallers();
-      // Map to InstallerListItem format
-      return result.map((item) => ({
-        id: item.id,
-        userId: item.userId,
-        name: item.name,
-        email: item.email,
-        status: item.status,
-        yearsExperience: item.yearsExperience,
-        vehicleType: item.vehicleType,
-        maxJobsPerDay: item.maxJobsPerDay,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      })) as InstallerListItem[];
+      try {
+        const result = await listAllActiveInstallers();
+        // Map to InstallerListItem format
+        return result.map((item) => ({
+          id: item.id,
+          user: {
+            id: item.userId,
+            name: item.name,
+            email: item.email,
+          },
+          status: item.status,
+          yearsExperience: item.yearsExperience,
+          vehicleType: item.vehicleType,
+          maxJobsPerDay: item.maxJobsPerDay,
+        })) as InstallerListItem[];
+      } catch (error) {
+        throw normalizeReadQueryError(error, {
+          contractType: 'always-shaped',
+          fallbackMessage:
+            'Installer directory is temporarily unavailable. Please refresh and try again.',
+        });
+      }
     },
     enabled,
     staleTime: 60 * 1000, // 1 minute

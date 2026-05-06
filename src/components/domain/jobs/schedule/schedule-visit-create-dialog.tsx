@@ -26,6 +26,7 @@ import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,13 +43,19 @@ import {
 import {
   formatSiteVisitMutationError,
   useCreateSiteVisit,
+  useAllInstallers,
   useLoadProjectOptions,
 } from '@/hooks/jobs';
-import { useUsers } from '@/hooks/users';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { scheduleVisitFormSchema } from '@/lib/schemas/jobs';
 import { VISIT_TYPE_OPTIONS } from '@/lib/constants/site-visits';
+import {
+  CURRENT_USER_INSTALLER_OPTION_VALUE,
+  createSiteVisitInstallerOptions,
+  formatInstallerDirectoryReadError,
+  resolveSiteVisitInstallerId,
+} from '../site-visits/site-visit-installer-options';
 
 // ============================================================================
 // TYPES
@@ -82,16 +89,13 @@ export function ScheduleVisitCreateDialog({
   const navigate = useNavigate();
   const loadProjectOptions = useLoadProjectOptions();
   const createSiteVisit = useCreateSiteVisit();
-  const { data: usersData } = useUsers();
-
-  const installers = usersData?.items?.filter((user) => user.type === 'installer') ?? [];
-  const installerOptions = [
-    { value: 'unassigned', label: 'Unassigned' },
-    ...installers.map((installer) => ({
-      value: installer.id,
-      label: installer.name ?? 'Unknown',
-    })),
-  ];
+  const {
+    data: installersData,
+    error: installersError,
+    refetch: refetchInstallers,
+  } = useAllInstallers();
+  const installerOptions = createSiteVisitInstallerOptions(installersData ?? []);
+  const installerDirectoryMessage = formatInstallerDirectoryReadError(installersError);
 
   const form = useTanStackForm({
     schema: scheduleVisitFormSchema,
@@ -101,7 +105,7 @@ export function ScheduleVisitCreateDialog({
       scheduledDate: prefillDate ?? new Date(),
       scheduledTime: prefillTime ?? '',
       estimatedDuration: 120,
-      installerId: 'unassigned',
+      installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
       notes: '',
     },
     onSubmitInvalid: () => {
@@ -120,7 +124,7 @@ export function ScheduleVisitCreateDialog({
           scheduledDate: format(data.scheduledDate, 'yyyy-MM-dd'),
           scheduledTime: data.scheduledTime || undefined,
           estimatedDuration: data.estimatedDuration ?? undefined,
-          installerId: data.installerId === 'unassigned' ? undefined : data.installerId,
+          installerId: resolveSiteVisitInstallerId(data.installerId),
           notes: data.notes,
         });
 
@@ -149,7 +153,7 @@ export function ScheduleVisitCreateDialog({
         scheduledDate: prefillDate ?? new Date(),
         scheduledTime: prefillTime ?? '',
         estimatedDuration: 120,
-        installerId: 'unassigned',
+        installerId: CURRENT_USER_INSTALLER_OPTION_VALUE,
         notes: '',
       });
     }
@@ -236,6 +240,27 @@ export function ScheduleVisitCreateDialog({
                 )}
               </form.Field>
             </div>
+
+            {installersError ? (
+              <Alert variant={installersData === undefined ? 'destructive' : 'default'}>
+                <AlertTitle>
+                  {installersData === undefined
+                    ? 'Installer directory unavailable'
+                    : 'Showing cached installers'}
+                </AlertTitle>
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{installerDirectoryMessage}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refetchInstallers()}
+                  >
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-4">
               <form.Field name="estimatedDuration">

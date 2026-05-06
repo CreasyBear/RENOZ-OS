@@ -45,8 +45,12 @@ describe('site visits mutation contract', () => {
   it('keeps site visit mutations project-scoped, cache-safe, and operator-safe', () => {
     const schema = read('src/lib/schemas/jobs/site-visits.ts');
     const hooks = read('src/hooks/jobs/use-site-visits.ts');
+    const installersHook = read('src/hooks/jobs/use-installers.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/site-visits.ts');
+    const installerOptionHelper = read(
+      'src/components/domain/jobs/site-visits/site-visit-installer-options.ts'
+    );
     const projectCreateDialog = read(
       'src/components/domain/jobs/projects/site-visit-create-dialog.tsx'
     );
@@ -70,6 +74,8 @@ describe('site visits mutation contract', () => {
     const compactSchema = compact(schema);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
+    const compactProjectCreateDialog = compact(projectCreateDialog);
+    const compactScheduleCreateDialog = compact(scheduleCreateDialog);
     const compactRoute = compact(visitRoute);
     const compactSchedule = compact(scheduleContainer);
     const compactProjectDetail = compact(projectDetailContainer);
@@ -106,6 +112,11 @@ describe('site visits mutation contract', () => {
     );
     expect(compactHooks).toContain(
       'return{id:result.id,projectId:result.projectId,installerId:result.installerId}'
+    );
+    expect(installersHook).toContain('listAllActiveInstallers');
+    expect(installersHook).toContain('normalizeReadQueryError(error, {');
+    expect(installersHook).toContain(
+      "'Installer directory is temporarily unavailable. Please refresh and try again.'"
     );
 
     expect(server).toContain('function siteVisitScope');
@@ -146,6 +157,34 @@ describe('site visits mutation contract', () => {
     expect(visitRoute).toContain("formatSiteVisitMutationError(error, 'checkOut')");
     expect(myTasksPage).toContain("formatSiteVisitMutationError(error, 'checkIn')");
     expect(myTasksPage).toContain("formatSiteVisitMutationError(error, 'checkOut')");
+
+    expect(installerOptionHelper).toContain(
+      "CURRENT_USER_INSTALLER_OPTION_VALUE = 'current-user'"
+    );
+    expect(installerOptionHelper).toContain("label: 'Assign to me'");
+    expect(installerOptionHelper).toContain('const userId = installer.user?.id');
+    expect(installerOptionHelper).toContain('value: userId');
+    expect(installerOptionHelper).toContain('resolveSiteVisitInstallerId');
+    expect(projectCreateDialog).toContain('useAllInstallers');
+    expect(scheduleCreateDialog).toContain('useAllInstallers');
+    expect(projectCreateDialog).toContain('Installer directory unavailable');
+    expect(scheduleCreateDialog).toContain('Installer directory unavailable');
+    expect(projectCreateDialog).toContain('Showing cached installers');
+    expect(scheduleCreateDialog).toContain('Showing cached installers');
+    expect(projectCreateDialog).toContain('void refetchInstallers()');
+    expect(scheduleCreateDialog).toContain('void refetchInstallers()');
+    expect(compactProjectCreateDialog).toContain(
+      'installerId:resolveSiteVisitInstallerId(data.installerId)'
+    );
+    expect(compactScheduleCreateDialog).toContain(
+      'installerId:resolveSiteVisitInstallerId(data.installerId)'
+    );
+    expect(projectCreateDialog).not.toContain('useUsers');
+    expect(scheduleCreateDialog).not.toContain('useUsers');
+    expect(projectCreateDialog).not.toContain('Unassigned');
+    expect(scheduleCreateDialog).not.toContain('Unassigned');
+    expect(projectCreateDialog).not.toContain("'unassigned'");
+    expect(scheduleCreateDialog).not.toContain("'unassigned'");
 
     expect(compactRoute).toContain('useSiteVisit({siteVisitId:visitId,projectId})');
     expect(compactRoute).toContain('checkIn.mutateAsync({siteVisitId:visitId,projectId})');
