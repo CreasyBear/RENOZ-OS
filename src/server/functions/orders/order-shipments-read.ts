@@ -136,7 +136,12 @@ export async function getShipmentHandler({
   const items = await db
     .select()
     .from(shipmentItems)
-    .where(eq(shipmentItems.shipmentId, data.id));
+    .where(
+      and(
+        eq(shipmentItems.shipmentId, data.id),
+        eq(shipmentItems.organizationId, ctx.organizationId)
+      )
+    );
 
   return {
     ...shipment,
@@ -179,7 +184,12 @@ export async function getOrderShipmentsHandler({
       ? await db
           .select()
           .from(shipmentItems)
-          .where(inArray(shipmentItems.shipmentId, shipmentIds))
+          .where(
+            and(
+              inArray(shipmentItems.shipmentId, shipmentIds),
+              eq(shipmentItems.organizationId, ctx.organizationId)
+            )
+          )
       : [];
 
   type ShipmentItemRecord = (typeof allItems)[number];
@@ -203,7 +213,13 @@ export async function getOrderShipmentsHandler({
             qtyShipped: orderLineItems.qtyShipped,
           })
           .from(orderLineItems)
-          .where(inArray(orderLineItems.id, lineItemIds))
+          .where(
+            and(
+              inArray(orderLineItems.id, lineItemIds),
+              eq(orderLineItems.organizationId, ctx.organizationId),
+              eq(orderLineItems.orderId, data.orderId)
+            )
+          )
       : [];
   const lineItemMap = new Map(
     lineItemQuantities.map((item) => [
