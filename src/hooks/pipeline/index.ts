@@ -93,7 +93,6 @@ export {
   type QuoteAlertItem,
   type QuoteVersionListResult,
   type QuoteComparisonResult,
-  useDeleteQuote,
 } from './use-quotes';
 
 export {
@@ -103,6 +102,7 @@ export {
   useExtendQuoteValidity,
   useGenerateQuotePdf,
   useSendQuote,
+  useDeleteQuote,
   type CreateQuoteVersionInput,
   type RestoreQuoteVersionInput,
   type UpdateQuoteExpirationInput,

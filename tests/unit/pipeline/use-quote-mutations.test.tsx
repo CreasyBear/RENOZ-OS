@@ -6,6 +6,7 @@ import { queryKeys } from '@/lib/query-keys';
 
 const generateQuotePdfMock = vi.fn();
 const sendQuoteMock = vi.fn();
+const deleteQuoteMock = vi.fn();
 
 vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   createQuoteVersion: vi.fn(),
@@ -16,10 +17,15 @@ vi.mock('@/server/functions/pipeline/quote-versions', () => ({
   sendQuote: (args: unknown) => sendQuoteMock(args),
 }));
 
+vi.mock('@/server/functions/pipeline/pipeline', () => ({
+  deleteQuote: (args: unknown) => deleteQuoteMock(args),
+}));
+
 describe('useQuoteMutations hardening', () => {
   beforeEach(() => {
     generateQuotePdfMock.mockReset();
     sendQuoteMock.mockReset();
+    deleteQuoteMock.mockReset();
   });
 
   function createWrapper(queryClient: QueryClient) {
@@ -104,6 +110,32 @@ describe('useQuoteMutations hardening', () => {
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.pipeline.quoteVersion('quote-1'),
+    });
+  });
+
+  it('refreshes quote lists, quote detail, and pipeline metrics after deleting a quote', async () => {
+    deleteQuoteMock.mockResolvedValue({ success: true });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useDeleteQuote } = await import('@/hooks/pipeline/use-quote-mutations');
+    const { result } = renderHook(() => useDeleteQuote(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync('quote-1');
+    });
+
+    expect(deleteQuoteMock).toHaveBeenCalledWith({ data: { id: 'quote-1' } });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.quotes.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.quotes.detail('quote-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.pipeline.metrics(),
     });
   });
 });

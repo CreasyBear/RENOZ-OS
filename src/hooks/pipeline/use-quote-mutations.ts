@@ -22,6 +22,7 @@ import {
   generateQuotePdf,
   sendQuote,
 } from '@/server/functions/pipeline/quote-versions';
+import { deleteQuote } from '@/server/functions/pipeline/pipeline';
 import type {
   GenerateQuotePdfResult,
   QuoteLineItem,
@@ -41,6 +42,12 @@ function invalidateQuoteVersionsAndOpportunity(queryClient: QueryClient, opportu
 function invalidateQuoteExpiryCaches(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiringQuotes(7) });
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.expiredQuotes() });
+}
+
+function invalidateDeletedQuoteCaches(queryClient: QueryClient, quoteId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.quotes.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.quotes.detail(quoteId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
 }
 
 // ============================================================================
@@ -205,6 +212,24 @@ export function useSendQuote() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
       });
+    },
+  });
+}
+
+// ============================================================================
+// DELETE QUOTE MUTATION
+// ============================================================================
+
+/**
+ * Soft-delete a quote (sets deletedAt, hides from lists)
+ */
+export function useDeleteQuote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteQuote({ data: { id } }),
+    onSuccess: (_, id) => {
+      invalidateDeletedQuoteCaches(queryClient, id);
     },
   });
 }

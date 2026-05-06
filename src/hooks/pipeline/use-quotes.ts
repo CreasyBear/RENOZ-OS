@@ -10,7 +10,7 @@
  * @see src/lib/query-keys.ts for centralized query keys
  * @see src/server/functions/pipeline/quote-versions.ts for server functions
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   isReadQueryError,
@@ -26,7 +26,6 @@ import {
   getExpiredQuotes,
   getQuoteValidityStats,
 } from '@/server/functions/pipeline/quote-versions';
-import { deleteQuote } from '@/server/functions/pipeline/pipeline';
 import type { QuoteVersion } from '@/lib/schemas/pipeline';
 
 // ============================================================================
@@ -263,27 +262,6 @@ export function useQuoteValidityStats({ enabled = true }: UseQuoteValidityStatsO
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-// ============================================================================
-// DELETE QUOTE MUTATION
-// ============================================================================
-
-/**
- * Soft-delete a quote (sets deletedAt, hides from lists)
- */
-export function useDeleteQuote() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => deleteQuote({ data: { id } }),
-    onSuccess: (_, id) => {
-      // Invalidate both list and detail caches per STANDARDS.md
-      queryClient.invalidateQueries({ queryKey: queryKeys.quotes.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.quotes.detail(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
-    },
   });
 }
 
