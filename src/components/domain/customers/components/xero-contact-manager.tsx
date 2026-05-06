@@ -21,6 +21,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { useConfirmation } from '@/hooks';
 import {
+  formatCustomerXeroContactMutationError,
   useCreateCustomerXeroContact,
   useCustomerXeroMapping,
   useLinkCustomerXeroContact,
@@ -81,7 +82,7 @@ export function XeroContactManager({
       setDialogOpen(false);
     } catch (error) {
       toast.error('Failed to create Xero contact', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatCustomerXeroContactMutationError(error, 'create'),
       });
     }
   };
@@ -95,7 +96,7 @@ export function XeroContactManager({
       setDialogOpen(false);
     } catch (error) {
       toast.error('Failed to link Xero contact', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatCustomerXeroContactMutationError(error, 'link'),
       });
     }
   };
@@ -118,7 +119,7 @@ export function XeroContactManager({
       toast.success('Xero contact mapping removed');
     } catch (error) {
       toast.error('Failed to unlink Xero contact', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: formatCustomerXeroContactMutationError(error, 'unlink'),
       });
     }
   };

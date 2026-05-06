@@ -37,12 +37,27 @@ const ACTION_PLAN_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'Customer action plan details conflict with the current customer state.',
 };
 
+const XERO_CONTACT_FALLBACKS = {
+  create: 'Unable to create Xero contact.',
+  link: 'Unable to link Xero contact.',
+  unlink: 'Unable to unlink Xero contact.',
+} as const;
+
+const XERO_CONTACT_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The customer or Xero contact could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage customer Xero contact mappings.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing customer Xero contact mappings.',
+  RATE_LIMIT: 'Too many Xero contact mapping changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'This customer Xero contact mapping conflicts with the current customer or Xero state.',
+};
+
 interface FormatCustomerMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
 
 export type CustomerSavedFilterMutationAction = keyof typeof SAVED_FILTER_FALLBACKS;
 export type CustomerActionPlanMutationAction = keyof typeof ACTION_PLAN_FALLBACKS;
+export type CustomerXeroContactMutationAction = keyof typeof XERO_CONTACT_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -253,5 +268,14 @@ export function formatCustomerActionPlanMutationError(
 ): string {
   return formatCustomerMutationError(error, ACTION_PLAN_FALLBACKS[action], {
     codeMessages: ACTION_PLAN_CODE_MESSAGES,
+  });
+}
+
+export function formatCustomerXeroContactMutationError(
+  error: unknown,
+  action: CustomerXeroContactMutationAction
+): string {
+  return formatCustomerMutationError(error, XERO_CONTACT_FALLBACKS[action], {
+    codeMessages: XERO_CONTACT_CODE_MESSAGES,
   });
 }

@@ -5,6 +5,7 @@ import {
   formatCustomerActionPlanMutationError,
   formatCustomerMutationError,
   formatCustomerSavedFilterMutationError,
+  formatCustomerXeroContactMutationError,
 } from '@/hooks/customers/_mutation-errors';
 
 const root = process.cwd();
@@ -97,15 +98,40 @@ describe('customer mutation error formatting', () => {
     ).toBe('Action plan is already completed');
   });
 
+  it('uses Xero-contact-specific fallbacks and safe validation copy', () => {
+    expect(
+      formatCustomerXeroContactMutationError(
+        { statusCode: 404, code: 'NOT_FOUND' },
+        'link'
+      )
+    ).toBe('The customer or Xero contact could not be found. Refresh and try again.');
+
+    expect(
+      formatCustomerXeroContactMutationError(
+        new Error('xero database sync failed with stack trace'),
+        'create'
+      )
+    ).toBe('Unable to create Xero contact.');
+
+    expect(
+      formatCustomerXeroContactMutationError(
+        new Error('Selected Xero contact could not be found'),
+        'link'
+      )
+    ).toBe('Selected Xero contact could not be found');
+  });
+
   it('keeps customer list mutation feedback on the formatter contract', () => {
     const actionPlans = read('src/hooks/customers/use-action-plans.ts');
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
     const hierarchy = read('src/components/domain/customers/containers/customer-hierarchy-container.tsx');
     const savedFilters = read('src/hooks/customers/use-saved-filters.ts');
+    const xeroContactManager = read('src/components/domain/customers/components/xero-contact-manager.tsx');
     const index = read('src/hooks/customers/index.ts');
 
-    expect(index).toContain("export { formatCustomerMutationError } from './_mutation-errors';");
+    expect(index).toContain('formatCustomerMutationError');
+    expect(index).toContain('formatCustomerXeroContactMutationError');
     expect(list).toContain('formatCustomerMutationError(error, "Unable to delete customer.")');
     expect(list).toContain('formatCustomerMutationError(error, "Unable to update customer status.")');
     expect(list).toContain('formatCustomerMutationError(error, "Unable to assign customer tags.")');
@@ -145,5 +171,11 @@ describe('customer mutation error formatting', () => {
     expect(savedFilters).not.toContain("'Failed to save filter'");
     expect(savedFilters).not.toContain("'Failed to update filter'");
     expect(savedFilters).not.toContain("'Failed to delete filter'");
+
+    expect(xeroContactManager).toContain("formatCustomerXeroContactMutationError(error, 'create')");
+    expect(xeroContactManager).toContain("formatCustomerXeroContactMutationError(error, 'link')");
+    expect(xeroContactManager).toContain("formatCustomerXeroContactMutationError(error, 'unlink')");
+    expect(xeroContactManager).not.toContain('description: error instanceof Error ? error.message');
+    expect(xeroContactManager).not.toContain("'Unknown error'");
   });
 });
