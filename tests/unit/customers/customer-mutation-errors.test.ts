@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  formatCustomerActionPlanMutationError,
   formatCustomerMutationError,
   formatCustomerSavedFilterMutationError,
 } from '@/hooks/customers/_mutation-errors';
@@ -73,7 +74,31 @@ describe('customer mutation error formatting', () => {
     ).toBe('A saved filter named "Active Dealers" already exists');
   });
 
+  it('uses action-plan-specific fallbacks and code copy', () => {
+    expect(
+      formatCustomerActionPlanMutationError(
+        { statusCode: 404, code: 'NOT_FOUND' },
+        'update'
+      )
+    ).toBe('The customer action plan could not be found. Refresh and try again.');
+
+    expect(
+      formatCustomerActionPlanMutationError(
+        new Error('duplicate key value violates unique constraint customer_action_plans_pkey'),
+        'create'
+      )
+    ).toBe('Unable to create customer action plan.');
+
+    expect(
+      formatCustomerActionPlanMutationError(
+        { statusCode: 400, errors: { actionPlan: ['Action plan is already completed'] } },
+        'complete'
+      )
+    ).toBe('Action plan is already completed');
+  });
+
   it('keeps customer list mutation feedback on the formatter contract', () => {
+    const actionPlans = read('src/hooks/customers/use-action-plans.ts');
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
     const hierarchy = read('src/components/domain/customers/containers/customer-hierarchy-container.tsx');
@@ -102,6 +127,16 @@ describe('customer mutation error formatting', () => {
     expect(hierarchy).toContain("'Unable to remove customer parent.'");
     expect(hierarchy).not.toContain('error instanceof Error ? error.message');
     expect(hierarchy).not.toContain('Failed to ${action}');
+
+    expect(actionPlans).toContain("formatCustomerActionPlanMutationError(error, 'create')");
+    expect(actionPlans).toContain("formatCustomerActionPlanMutationError(error, 'update')");
+    expect(actionPlans).toContain("formatCustomerActionPlanMutationError(error, 'delete')");
+    expect(actionPlans).toContain("formatCustomerActionPlanMutationError(error, 'complete')");
+    expect(actionPlans).not.toContain('error instanceof Error ? error.message');
+    expect(actionPlans).not.toContain("'Failed to create action plan'");
+    expect(actionPlans).not.toContain("'Failed to update action plan'");
+    expect(actionPlans).not.toContain("'Failed to delete action plan'");
+    expect(actionPlans).not.toContain("'Failed to complete action plan'");
 
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'save')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'update')");

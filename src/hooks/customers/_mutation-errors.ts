@@ -22,11 +22,27 @@ const SAVED_FILTER_CODE_MESSAGES: Record<string, string> = {
   CONFLICT: 'A saved customer filter with that name already exists.',
 };
 
+const ACTION_PLAN_FALLBACKS = {
+  create: 'Unable to create customer action plan.',
+  update: 'Unable to update customer action plan.',
+  delete: 'Unable to delete customer action plan.',
+  complete: 'Unable to complete customer action plan.',
+} as const;
+
+const ACTION_PLAN_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'The customer action plan could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage customer action plans.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing customer action plans.',
+  RATE_LIMIT: 'Too many customer action plan changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'Customer action plan details conflict with the current customer state.',
+};
+
 interface FormatCustomerMutationErrorOptions {
   codeMessages?: Record<string, string>;
 }
 
 export type CustomerSavedFilterMutationAction = keyof typeof SAVED_FILTER_FALLBACKS;
+export type CustomerActionPlanMutationAction = keyof typeof ACTION_PLAN_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -228,5 +244,14 @@ export function formatCustomerSavedFilterMutationError(
 ): string {
   return formatCustomerMutationError(error, SAVED_FILTER_FALLBACKS[action], {
     codeMessages: SAVED_FILTER_CODE_MESSAGES,
+  });
+}
+
+export function formatCustomerActionPlanMutationError(
+  error: unknown,
+  action: CustomerActionPlanMutationAction
+): string {
+  return formatCustomerMutationError(error, ACTION_PLAN_FALLBACKS[action], {
+    codeMessages: ACTION_PLAN_CODE_MESSAGES,
   });
 }

@@ -12,6 +12,7 @@ import {
   normalizeReadQueryError,
   requireReadResult,
 } from '@/lib/read-path-policy';
+import { formatCustomerActionPlanMutationError } from './_mutation-errors';
 import type { CreateActionPlanInput, UpdateActionPlanInput } from '@/lib/schemas/customers/action-plans';
 import {
   createActionPlan,
@@ -126,7 +127,7 @@ export function useCreateActionPlan() {
       toast.success('Action plan created');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to create action plan');
+      toast.error(formatCustomerActionPlanMutationError(error, 'create'));
     },
   });
 }
@@ -152,7 +153,7 @@ export function useUpdateActionPlan() {
       toast.success('Action plan updated');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to update action plan');
+      toast.error(formatCustomerActionPlanMutationError(error, 'update'));
     },
   });
 }
@@ -175,7 +176,7 @@ export function useDeleteActionPlan() {
       toast.success('Action plan deleted');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete action plan');
+      toast.error(formatCustomerActionPlanMutationError(error, 'delete'));
     },
   });
 }
@@ -204,7 +205,7 @@ export function useCompleteActionPlan() {
       toast.success('Action plan completed');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to complete action plan');
+      toast.error(formatCustomerActionPlanMutationError(error, 'complete'));
     },
   });
 }
