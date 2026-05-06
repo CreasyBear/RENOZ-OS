@@ -184,6 +184,64 @@ describe('useRma mutations hardening', () => {
     });
   });
 
+  it('refreshes source and replacement order context after executing a replacement remedy', async () => {
+    processRmaMock.mockResolvedValue({
+      id: 'rma-1',
+      orderId: 'order-1',
+      customerId: 'customer-1',
+      issueId: 'issue-1',
+      replacementOrderId: 'order-2',
+      execution: {
+        status: 'completed',
+        replacementOrder: { id: 'order-2', label: 'ORD-2' },
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useProcessRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useProcessRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaId: 'rma-1',
+        resolution: 'replacement',
+        confirmReplacement: true,
+        notes: 'Replacement draft created.',
+      });
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.withCustomer('order-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-2'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.withCustomer('order-2'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.infiniteLists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.byCustomer('customer-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.creditNotes(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.financial.revenue(),
+    });
+  });
+
   it('refreshes credit note, customer, and order context after executing an issued credit remedy', async () => {
     processRmaMock.mockResolvedValue({
       id: 'rma-1',

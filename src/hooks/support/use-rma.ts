@@ -32,6 +32,7 @@ import {
 } from '@/server/functions/orders/rma';
 import { invalidateCreditNoteQueries } from '@/hooks/financial/_credit-note-cache';
 import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
+import { invalidateOrderArtifactQueries } from '@/hooks/orders/_order-artifact-cache';
 import { invalidateOrderPaymentLedger } from '@/hooks/orders/_order-payment-cache';
 import type {
   ListRmasInput,
@@ -365,6 +366,12 @@ export function useProcessRma() {
             orderId: result.orderId,
             appliedOrderId: appliedCredit ? result.orderId : null,
             refreshReporting: appliedCredit,
+          });
+        } else if (variables.resolution === 'replacement') {
+          invalidateOrderArtifactQueries(queryClient, {
+            orderId: result.replacementOrderId,
+            sourceOrderId: result.orderId,
+            customerId: result.customerId,
           });
         } else {
           queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(result.orderId) });

@@ -61,6 +61,21 @@ describe('RMA workflow trace contract', () => {
     expect(projectionIndex).toBeGreaterThan(guardIndex);
   });
 
+  it('keeps RMA replacement remedies on the order artifact cache contract', () => {
+    const hook = read('src/hooks/support/use-rma.ts');
+    const orderCache = read('src/hooks/orders/_order-artifact-cache.ts');
+
+    expect(hook).toContain('invalidateOrderArtifactQueries');
+    expect(hook).toContain("variables.resolution === 'replacement'");
+    expect(hook).toContain('orderId: result.replacementOrderId');
+    expect(hook).toContain('sourceOrderId: result.orderId');
+    expect(orderCache).toContain('queryKeys.orders.detail(orderId)');
+    expect(orderCache).toContain('queryKeys.orders.withCustomer(orderId)');
+    expect(orderCache).toContain('queryKeys.orders.lists()');
+    expect(orderCache).toContain('queryKeys.orders.infiniteLists()');
+    expect(orderCache).toContain('queryKeys.orders.byCustomer(options.customerId)');
+  });
+
   it('keeps updateRma documented as a permissioned non-workflow patch', () => {
     const schema = read('src/lib/schemas/support/rma.ts');
     const updateTrace = read('docs/code-traces/18-rma-field-update.md');
