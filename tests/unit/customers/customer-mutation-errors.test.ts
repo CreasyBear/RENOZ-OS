@@ -76,6 +76,7 @@ describe('customer mutation error formatting', () => {
   it('keeps customer list mutation feedback on the formatter contract', () => {
     const list = read('src/components/domain/customers/customers-list-container.tsx');
     const detail = read('src/hooks/customers/use-customer-detail.ts');
+    const hierarchy = read('src/components/domain/customers/containers/customer-hierarchy-container.tsx');
     const savedFilters = read('src/hooks/customers/use-saved-filters.ts');
     const index = read('src/hooks/customers/index.ts');
 
@@ -95,6 +96,12 @@ describe('customer mutation error formatting', () => {
     expect(detail).toContain("formatCustomerMutationError(error, 'Unable to delete customer.')");
     expect(detail).not.toContain('error instanceof Error && error.message');
     expect(detail).not.toContain("'Failed to delete customer'");
+
+    expect(hierarchy).toContain('formatCustomerMutationError(');
+    expect(hierarchy).toContain("'Unable to set customer parent.'");
+    expect(hierarchy).toContain("'Unable to remove customer parent.'");
+    expect(hierarchy).not.toContain('error instanceof Error ? error.message');
+    expect(hierarchy).not.toContain('Failed to ${action}');
 
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'save')");
     expect(savedFilters).toContain("formatCustomerSavedFilterMutationError(error, 'update')");

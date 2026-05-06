@@ -9,7 +9,12 @@
  */
 
 import { useMemo, useCallback } from 'react';
-import { useCustomers, useUpdateCustomer, useCustomerNavigation } from '@/hooks/customers';
+import {
+  formatCustomerMutationError,
+  useCustomers,
+  useUpdateCustomer,
+  useCustomerNavigation,
+} from '@/hooks/customers';
 import { toastSuccess, toastError, useConfirmation } from '@/hooks';
 import { CustomerHierarchyTree, type CustomerNode } from '../customer-hierarchy-tree';
 
@@ -163,7 +168,12 @@ export function CustomerHierarchyContainer({
       });
       toastSuccess(`Customer ${action} updated`);
     } catch (error) {
-      toastError(error instanceof Error ? error.message : `Failed to ${action}`);
+      toastError(
+        formatCustomerMutationError(
+          error,
+          parentId ? 'Unable to set customer parent.' : 'Unable to remove customer parent.'
+        )
+      );
     }
   }, [updateCustomerMutation, customersData, confirmation]);
   
