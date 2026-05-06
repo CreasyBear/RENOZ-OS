@@ -486,13 +486,24 @@ export const deleteOrder = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
-      await tx
+      const [deletedOrder] = await tx
         .update(orders)
         .set({
           deletedAt: new Date(),
           ...buildOrderAggregateVersionUpdate(ctx.user.id),
         })
-        .where(and(eq(orders.id, data.id), eq(orders.organizationId, ctx.organizationId)));
+        .where(
+          and(
+            eq(orders.id, data.id),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .returning({ id: orders.id });
+
+      if (!deletedOrder) {
+        throw new NotFoundError('Order not found', 'order');
+      }
 
       await enqueueSearchIndexOutbox(
         {
