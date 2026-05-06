@@ -50,7 +50,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toastSuccess, toastError } from "@/hooks";
 import { FormatAmount } from "@/components/shared/format";
-import type { CreateQuoteVersionInput } from "@/hooks/pipeline";
+import {
+  formatPipelineQuoteMutationError,
+  type CreateQuoteVersionInput,
+} from "@/hooks/pipeline";
 import {
   ProductSelector,
   type OrderLineItemDraft,
@@ -227,7 +230,7 @@ export const QuoteBuilderPresenter = memo(function QuoteBuilderPresenter({
           onSave?.(data.quoteVersion);
         },
         onError: (error) => {
-          toastError(error instanceof Error ? error.message : "Failed to save quote");
+          toastError(formatPipelineQuoteMutationError(error, "save"));
         },
       }
     );

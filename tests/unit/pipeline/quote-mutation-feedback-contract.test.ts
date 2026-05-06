@@ -63,6 +63,7 @@ describe('pipeline quote mutation feedback contract', () => {
     const opportunityQuoteTab = read(
       'src/components/domain/pipeline/opportunities/tabs/opportunity-quote-tab.tsx'
     );
+    const quoteBuilder = read('src/components/domain/pipeline/quotes/quote-builder.tsx');
 
     expect(index).toContain('formatPipelineQuoteMutationError');
     expect(formatter).toContain('PIPELINE_QUOTE_CODE_MESSAGES');
@@ -74,6 +75,7 @@ describe('pipeline quote mutation feedback contract', () => {
     expect(opportunityDetail).toContain("formatPipelineQuoteMutationError(error, 'send')");
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'save')");
     expect(opportunityQuoteTab).toContain("formatPipelineQuoteMutationError(error, 'generatePdf')");
+    expect(quoteBuilder).toContain('formatPipelineQuoteMutationError(error, "save")');
 
     expect(quoteDetail).not.toContain(
       "error instanceof Error ? error.message : 'Failed to generate PDF'"
@@ -93,6 +95,9 @@ describe('pipeline quote mutation feedback contract', () => {
     );
     expect(opportunityQuoteTab).not.toContain(
       "error instanceof Error ? error.message : 'Failed to generate PDF'"
+    );
+    expect(quoteBuilder).not.toContain(
+      'error instanceof Error ? error.message : "Failed to save quote"'
     );
   });
 });
