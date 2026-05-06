@@ -103,13 +103,30 @@ export async function markShipmentAsShipped(
         updatedBy: ctx.user.id,
         ...(data.shippingCost !== undefined && { shippingCost: data.shippingCost }),
       })
-      .where(eq(orderShipments.id, data.id))
+      .where(
+        and(
+          eq(orderShipments.id, data.id),
+          eq(orderShipments.organizationId, ctx.organizationId),
+          eq(orderShipments.status, 'pending')
+        )
+      )
       .returning();
+
+    if (!updatedShipment) {
+      throw new ValidationError('Shipment already shipped', {
+        status: ['Shipment is no longer pending. Refresh fulfillment and review the shipment.'],
+      });
+    }
 
     const items = await tx
       .select()
       .from(shipmentItems)
-      .where(eq(shipmentItems.shipmentId, data.id));
+      .where(
+        and(
+          eq(shipmentItems.shipmentId, data.id),
+          eq(shipmentItems.organizationId, ctx.organizationId)
+        )
+      );
 
     const sortedItems = [...items].sort((a, b) =>
       a.orderLineItemId.localeCompare(b.orderLineItemId)
@@ -166,12 +183,25 @@ export async function markShipmentAsShipped(
     let touchesSerializedInventory = false;
 
     for (const item of sortedItems) {
-      await tx
+      const [updatedLineItem] = await tx
         .update(orderLineItems)
         .set({
           qtyShipped: sql`${orderLineItems.qtyShipped} + ${item.quantity}`,
         })
-        .where(eq(orderLineItems.id, item.orderLineItemId));
+        .where(
+          and(
+            eq(orderLineItems.id, item.orderLineItemId),
+            eq(orderLineItems.orderId, existing.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        )
+        .returning({ id: orderLineItems.id });
+
+      if (!updatedLineItem) {
+        throw new ValidationError('Line item not found or does not belong to order', {
+          [item.orderLineItemId]: ['Line item not found'],
+        });
+      }
 
       const [lineItemWithProduct] = await tx
         .select({
@@ -189,7 +219,13 @@ export async function markShipmentAsShipped(
             isNull(products.deletedAt)
           )
         )
-        .where(eq(orderLineItems.id, item.orderLineItemId))
+        .where(
+          and(
+            eq(orderLineItems.id, item.orderLineItemId),
+            eq(orderLineItems.orderId, existing.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
 
       if (!lineItemWithProduct) {
@@ -613,7 +649,12 @@ export async function reopenShipmentHandler({
         serialNumbers: shipmentItems.serialNumbers,
       })
       .from(shipmentItems)
-      .where(eq(shipmentItems.shipmentId, existing.id));
+      .where(
+        and(
+          eq(shipmentItems.shipmentId, existing.id),
+          eq(shipmentItems.organizationId, ctx.organizationId)
+        )
+      );
 
     const shouldReverseShippedQuantities =
       existing.status === 'in_transit' || existing.status === 'out_for_delivery';
@@ -678,12 +719,25 @@ export async function reopenShipmentHandler({
 
     for (const item of items) {
       if (shouldReverseShippedQuantities) {
-        await tx
+        const [updatedLineItem] = await tx
           .update(orderLineItems)
           .set({
             qtyShipped: sql`greatest(${orderLineItems.qtyShipped} - ${item.quantity}, 0)`,
           })
-          .where(eq(orderLineItems.id, item.orderLineItemId));
+          .where(
+            and(
+              eq(orderLineItems.id, item.orderLineItemId),
+              eq(orderLineItems.orderId, existing.orderId),
+              eq(orderLineItems.organizationId, ctx.organizationId)
+            )
+          )
+          .returning({ id: orderLineItems.id });
+
+        if (!updatedLineItem) {
+          throw new ValidationError('Line item not found or does not belong to order', {
+            [item.orderLineItemId]: ['Line item not found'],
+          });
+        }
       }
 
       const [lineItemWithProduct] = await tx
@@ -702,7 +756,13 @@ export async function reopenShipmentHandler({
             isNull(products.deletedAt)
           )
         )
-        .where(eq(orderLineItems.id, item.orderLineItemId))
+        .where(
+          and(
+            eq(orderLineItems.id, item.orderLineItemId),
+            eq(orderLineItems.orderId, existing.orderId),
+            eq(orderLineItems.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
 
       if (!shouldReverseShippedQuantities) {
@@ -927,8 +987,20 @@ export async function reopenShipmentHandler({
         operationalDocumentRevision: sql`${orderShipments.operationalDocumentRevision} + 1`,
         updatedBy: ctx.user.id,
       })
-      .where(eq(orderShipments.id, existing.id))
+      .where(
+        and(
+          eq(orderShipments.id, existing.id),
+          eq(orderShipments.organizationId, ctx.organizationId),
+          eq(orderShipments.status, existing.status)
+        )
+      )
       .returning();
+
+    if (!updatedShipment) {
+      throw new ValidationError('Shipment cannot be reopened from the current state', {
+        status: ['Shipment changed while the reopen operation was running.'],
+      });
+    }
 
     await recomputeOrderFulfillmentStatus(tx, {
       organizationId: ctx.organizationId,
