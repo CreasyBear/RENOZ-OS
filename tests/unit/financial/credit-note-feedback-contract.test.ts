@@ -92,6 +92,14 @@ describe('credit note mutation feedback contract', () => {
     expect(hooks).toContain('queryKeys.orders.detail(orderId)');
     expect(hooks).toContain('queryKeys.orders.lists()');
     expect(hooks).toContain('appliedOrderId: result.appliedToOrderId ?? data.orderId');
+    expect(hooks).toContain('refreshReporting?: boolean');
+    expect(hooks).toContain('if (options.refreshReporting)');
+    expect(hooks).toContain('queryKeys.financial.arAging()');
+    expect(hooks).toContain('queryKeys.financial.dashboard()');
+    expect(hooks).toContain('queryKeys.financial.outstandingInvoices()');
+    expect(hooks).toContain('queryKeys.financial.topCustomers()');
+    expect(hooks).toContain('queryKeys.financial.reminderCandidates()');
+    expect(hooks).toContain('refreshReporting: true');
 
     expect(route).toContain("formatCreditNoteMutationError(error, 'create')");
     expect(route).not.toContain("error.message || 'Failed to create credit note'");

@@ -39,6 +39,7 @@ function invalidateCreditNoteQueries(
     customerId?: string | null;
     orderId?: string | null;
     appliedOrderId?: string | null;
+    refreshReporting?: boolean;
   } = {}
 ) {
   queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
@@ -66,6 +67,14 @@ function invalidateCreditNoteQueries(
 
   if (affectedOrderIds.size > 0) {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+  }
+
+  if (options.refreshReporting) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.financial.arAging() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.financial.dashboard() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.financial.outstandingInvoices() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.financial.topCustomers() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderCandidates() });
   }
 }
 
@@ -167,6 +176,7 @@ export function useApplyCreditNote() {
         customerId: result.customerId,
         orderId: result.orderId,
         appliedOrderId: result.appliedToOrderId ?? data.orderId,
+        refreshReporting: true,
       });
     },
   });

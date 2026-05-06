@@ -46,4 +46,22 @@ describe('financial query key contract', () => {
       queryKeys.financial.recognitionSummary('2026-01-01', '2026-01-31', 'month')
     );
   });
+
+  it('keeps reporting query roots available for scoped mutation invalidation', () => {
+    expect(queryKeys.financial.arAgingReport({ bucket: 'overdue' }).slice(0, 2)).toEqual(
+      queryKeys.financial.arAging()
+    );
+    expect(queryKeys.financial.dashboardMetrics({ includePreviousPeriod: true }).slice(0, 2)).toEqual(
+      queryKeys.financial.dashboard()
+    );
+    expect(queryKeys.financial.outstandingInvoicesList({ page: 1 }).slice(0, 2)).toEqual(
+      queryKeys.financial.outstandingInvoices()
+    );
+    expect(queryKeys.financial.topCustomersList({ basis: 'invoiced' }).slice(0, 2)).toEqual(
+      queryKeys.financial.topCustomers()
+    );
+    expect(queryKeys.financial.ordersForReminders({ page: 1 }).slice(0, 3)).toEqual(
+      queryKeys.financial.reminderCandidates()
+    );
+  });
 });

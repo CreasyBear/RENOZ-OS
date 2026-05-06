@@ -1579,10 +1579,11 @@ export const queryKeys = {
     all: ['financial'] as const,
 
     // AR Aging
+    arAging: () => [...queryKeys.financial.all, 'arAging'] as const,
     arAgingReport: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'arAging', 'report', filters ?? {}] as const,
+      [...queryKeys.financial.arAging(), 'report', filters ?? {}] as const,
     arAgingCustomer: (customerId: string) =>
-      [...queryKeys.financial.all, 'arAging', 'customer', customerId] as const,
+      [...queryKeys.financial.arAging(), 'customer', customerId] as const,
 
     // Credit Notes
     creditNotes: () => [...queryKeys.financial.all, 'creditNotes'] as const,
@@ -1602,14 +1603,17 @@ export const queryKeys = {
       [...queryKeys.financial.revenue(), 'byPeriod', periodType, filters ?? {}] as const,
 
     // Dashboard Metrics
+    dashboard: () => [...queryKeys.financial.all, 'dashboard'] as const,
     dashboardMetrics: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'dashboard', filters ?? {}] as const,
+      [...queryKeys.financial.dashboard(), filters ?? {}] as const,
     closeReadiness: () => [...queryKeys.financial.all, 'closeReadiness'] as const,
 
     // Reminders
     reminders: () => [...queryKeys.financial.all, 'reminders'] as const,
+    reminderCandidates: () =>
+      [...queryKeys.financial.reminders(), 'orders-for-reminders'] as const,
     ordersForReminders: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.reminders(), 'orders-for-reminders', filters ?? {}] as const,
+      [...queryKeys.financial.reminderCandidates(), filters ?? {}] as const,
     reminderHistory: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.reminders(), 'history', filters ?? {}] as const,
     reminderTemplates: () => [...queryKeys.financial.reminders(), 'templates'] as const,
@@ -1639,14 +1643,16 @@ export const queryKeys = {
 
     // Other
     deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
-    outstandingInvoices: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'outstandingInvoices', filters ?? {}] as const,
+    outstandingInvoices: () => [...queryKeys.financial.all, 'outstandingInvoices'] as const,
+    outstandingInvoicesList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.outstandingInvoices(), filters ?? {}] as const,
     recognitions: (filters?: Record<string, unknown>) =>
       [...queryKeys.financial.all, 'recognitions', filters ?? {}] as const,
     recognitionSummary: (dateFrom?: string, dateTo?: string, groupBy?: string) =>
       [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? '', groupBy ?? ''] as const,
-    topCustomers: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'topCustomers', filters ?? {}] as const,
+    topCustomers: () => [...queryKeys.financial.all, 'topCustomers'] as const,
+    topCustomersList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.topCustomers(), filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------

@@ -163,7 +163,7 @@ export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOption
   const fn = useServerFn(getTopCustomersByRevenue);
 
   return useQuery({
-    queryKey: queryKeys.financial.topCustomers({
+    queryKey: queryKeys.financial.topCustomersList({
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       commercialOnly: params.commercialOnly,
@@ -209,7 +209,7 @@ export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = 
   const fn = useServerFn(getOutstandingInvoices);
 
   return useQuery({
-    queryKey: queryKeys.financial.outstandingInvoices({
+    queryKey: queryKeys.financial.outstandingInvoicesList({
       overdueOnly: params.overdueOnly,
       customerType: params.customerType,
       pageSize: params.pageSize,
@@ -235,4 +235,3 @@ export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = 
     staleTime: 60 * 1000,
   });
 }
-
