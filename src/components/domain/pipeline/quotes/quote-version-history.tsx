@@ -58,6 +58,10 @@ import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
+import {
+  PIPELINE_READ_MESSAGES,
+  formatPipelineReadError,
+} from "@/lib/pipeline/read-error-messages";
 import { useOrgFormat } from "@/hooks/use-org-format";
 import {
   formatPipelineQuoteMutationError,
@@ -223,6 +227,8 @@ export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPre
 
   // Error state
   if (error) {
+    const errorMessage = formatPipelineReadError(error, PIPELINE_READ_MESSAGES.quoteVersionHistory);
+
     return (
       <Card className={className}>
         <CardHeader>
@@ -233,7 +239,7 @@ export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPre
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Failed to load version history.
+            {errorMessage}
           </p>
         </CardContent>
       </Card>
