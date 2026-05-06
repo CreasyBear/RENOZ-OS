@@ -107,9 +107,11 @@ export {
 } from './use-product-pricing';
 
 export {
+  formatProductCoreMutationError,
   formatProductPricingMutationError,
+  type ProductCoreMutationAction,
   type ProductPricingMutationAction,
-} from './product-pricing-error-messages';
+} from './product-mutation-error-messages';
 
 // Product bundle hooks
 export {

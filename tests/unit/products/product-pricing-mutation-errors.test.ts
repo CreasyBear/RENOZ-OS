@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { formatProductPricingMutationError } from '@/hooks/products/product-pricing-error-messages';
+import { formatProductPricingMutationError } from '@/hooks/products/product-mutation-error-messages';
 
 const root = process.cwd();
 
@@ -50,7 +50,7 @@ describe('product pricing mutation errors', () => {
     const hook = read('src/hooks/products/use-product-pricing.ts');
     const index = read('src/hooks/products/index.ts');
 
-    expect(index).toContain("export {\n  formatProductPricingMutationError,");
+    expect(index).toContain('formatProductPricingMutationError');
     expect(hook).toContain("formatProductPricingMutationError(error, 'createTier')");
     expect(hook).toContain("formatProductPricingMutationError(error, 'updateTier')");
     expect(hook).toContain("formatProductPricingMutationError(error, 'deleteTier')");

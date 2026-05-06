@@ -15,7 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
-import { formatProductPricingMutationError } from './product-pricing-error-messages';
+import { formatProductPricingMutationError } from './product-mutation-error-messages';
 import {
   resolvePrice,
   listPriceTiers,

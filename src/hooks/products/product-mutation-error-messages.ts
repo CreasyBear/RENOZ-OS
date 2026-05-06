@@ -19,7 +19,43 @@ const PRODUCT_PRICING_FALLBACKS = {
     'Product price adjustment is temporarily unavailable. Please refresh and try again.',
 } as const;
 
+const PRODUCT_CORE_FALLBACKS = {
+  createProduct:
+    'Product creation is temporarily unavailable. Please refresh and try again.',
+  updateProduct:
+    'Product update is temporarily unavailable. Please refresh and try again.',
+  deleteProduct:
+    'Product deletion is temporarily unavailable. Please refresh and try again.',
+  bulkDelete:
+    'Bulk product deletion is temporarily unavailable. Please refresh and try again.',
+  duplicateProduct:
+    'Product duplication is temporarily unavailable. Please refresh and try again.',
+  createCategory:
+    'Product category creation is temporarily unavailable. Please refresh and try again.',
+  updateCategory:
+    'Product category update is temporarily unavailable. Please refresh and try again.',
+  deleteCategory:
+    'Product category deletion is temporarily unavailable. Please refresh and try again.',
+  importProducts:
+    'Product import is temporarily unavailable. Please refresh and try again.',
+  bulkUpdateProducts:
+    'Bulk product update is temporarily unavailable. Please refresh and try again.',
+  bulkAdjustPrices:
+    'Bulk product price adjustment is temporarily unavailable. Please refresh and try again.',
+  exportProducts:
+    'Product export is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const PRODUCT_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: 'Product record could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage products.',
+  AUTH_ERROR: 'Your session has expired. Sign in again before managing products.',
+  RATE_LIMIT: 'Too many product changes were attempted. Wait a moment and retry.',
+  CONFLICT: 'Product details conflict with an existing record.',
+};
+
 const PRODUCT_PRICING_CODE_MESSAGES: Record<string, string> = {
+  ...PRODUCT_CODE_MESSAGES,
   NOT_FOUND: 'Product pricing record could not be found. Refresh and try again.',
   PERMISSION_DENIED: 'You do not have permission to manage product pricing.',
   AUTH_ERROR: 'Your session has expired. Sign in again before managing product pricing.',
@@ -28,6 +64,7 @@ const PRODUCT_PRICING_CODE_MESSAGES: Record<string, string> = {
 };
 
 export type ProductPricingMutationAction = keyof typeof PRODUCT_PRICING_FALLBACKS;
+export type ProductCoreMutationAction = keyof typeof PRODUCT_CORE_FALLBACKS;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
@@ -175,11 +212,11 @@ function isUnsafeMessage(message: string): boolean {
   );
 }
 
-export function formatProductPricingMutationError(
+function formatProductMutationError(
   error: unknown,
-  action: ProductPricingMutationAction
+  fallback: string,
+  codeMessages: Record<string, string>
 ): string {
-  const fallback = PRODUCT_PRICING_FALLBACKS[action];
   const fieldMessage = extractFieldErrorMessage(error);
 
   if (fieldMessage && !isUnsafeMessage(fieldMessage)) {
@@ -188,8 +225,7 @@ export function formatProductPricingMutationError(
 
   const code = extractCode(error);
   const codeMessage = code
-    ? PRODUCT_PRICING_CODE_MESSAGES[code] ??
-      PRODUCT_PRICING_CODE_MESSAGES[code.toUpperCase()]
+    ? codeMessages[code] ?? codeMessages[code.toUpperCase()]
     : undefined;
 
   if (codeMessage) {
@@ -207,4 +243,26 @@ export function formatProductPricingMutationError(
   }
 
   return fallback;
+}
+
+export function formatProductPricingMutationError(
+  error: unknown,
+  action: ProductPricingMutationAction
+): string {
+  return formatProductMutationError(
+    error,
+    PRODUCT_PRICING_FALLBACKS[action],
+    PRODUCT_PRICING_CODE_MESSAGES
+  );
+}
+
+export function formatProductCoreMutationError(
+  error: unknown,
+  action: ProductCoreMutationAction
+): string {
+  return formatProductMutationError(
+    error,
+    PRODUCT_CORE_FALLBACKS[action],
+    PRODUCT_CODE_MESSAGES
+  );
 }

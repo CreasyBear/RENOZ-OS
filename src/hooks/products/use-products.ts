@@ -13,6 +13,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '../_shared/use-toast';
+import { formatProductCoreMutationError } from './product-mutation-error-messages';
 import {
   listProducts,
   getProduct,
@@ -234,8 +235,8 @@ export function useCreateProduct() {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create product');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'createProduct'));
     },
   });
 }
@@ -260,8 +261,8 @@ export function useUpdateProduct() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.id) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update product');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'updateProduct'));
     },
   });
 }
@@ -279,8 +280,8 @@ export function useDeleteProduct() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables) });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete product');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'deleteProduct'));
     },
   });
 }
@@ -302,8 +303,8 @@ export function useBulkDeleteProducts() {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete products');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'bulkDelete'));
     },
   });
 }
@@ -327,8 +328,8 @@ export function useDuplicateProduct() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       return newProduct;
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to duplicate product');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'duplicateProduct'));
     },
   });
 }
@@ -346,8 +347,8 @@ export function useCreateCategory() {
       toast.success('Category created');
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create category');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'createCategory'));
     },
   });
 }
@@ -365,8 +366,8 @@ export function useUpdateCategory() {
       toast.success('Category updated');
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update category');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'updateCategory'));
     },
   });
 }
@@ -383,8 +384,8 @@ export function useDeleteCategory() {
       toast.success('Category deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete category');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'deleteCategory'));
     },
   });
 }
@@ -532,8 +533,8 @@ export function useImportProducts() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
       return result as ImportProductsResult;
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to import products');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'importProducts'));
     },
   });
 }
@@ -567,8 +568,8 @@ export function useBulkUpdateProducts() {
         queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update products');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'bulkUpdateProducts'));
     },
   });
 }
@@ -597,8 +598,8 @@ export function useBulkAdjustPrices() {
         queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
       });
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to adjust prices');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'bulkAdjustPrices'));
     },
   });
 }
@@ -619,8 +620,8 @@ export function useExportProducts() {
     onSuccess: () => {
       toast.success('Export complete');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to export products');
+    onError: (error) => {
+      toast.error(formatProductCoreMutationError(error, 'exportProducts'));
     },
   });
 }
