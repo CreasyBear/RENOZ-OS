@@ -214,8 +214,14 @@ function isUnsafeMessage(message: string): boolean {
     normalized.includes('postgres') ||
     normalized.includes('supabase') ||
     normalized.includes('database') ||
+    normalized.includes('sql') ||
     normalized.includes('stack') ||
-    normalized.includes('internal server error')
+    normalized.includes('internal server error') ||
+    normalized.includes('typeerror') ||
+    normalized.includes('referenceerror') ||
+    normalized.includes('not a function') ||
+    /cannot (read|set) properties of (undefined|null)/.test(normalized) ||
+    /\bat\s+[\w.$<>]+\s*\(/.test(message)
   );
 }
 

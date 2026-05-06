@@ -71,6 +71,30 @@ describe('warranty mutation error formatter', () => {
     ).toBe('Warranty claim approval is temporarily unavailable. Please refresh and try again.');
   });
 
+  it('suppresses implementation-shaped client error messages', () => {
+    expect(
+      formatWarrantyClaimMutationError(
+        {
+          statusCode: 400,
+          message: 'TypeError: Cannot read properties of undefined (reading claimantSnapshot)',
+        },
+        'submit'
+      )
+    ).toBe('Warranty claim submission is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatWarrantyBulkImportMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            csvContent: ['SQL syntax error at or near "warranty_number"'],
+          },
+        },
+        'preview'
+      )
+    ).toBe('Warranty import preview is temporarily unavailable. Please refresh and try again.');
+  });
+
   it('formats policy mutation failures with action-specific unavailable copy', () => {
     expect(
       formatWarrantyPolicyMutationError(
