@@ -13,4 +13,4 @@ export * from './use-credit-notes';
 export * from './use-payment-schedules';
 export * from './use-statements';
 export * from './use-financial';
-export { formatCreditNoteMutationError } from './_mutation-errors';
+export { formatCreditNoteMutationError, formatPaymentPlanMutationError } from './_mutation-errors';

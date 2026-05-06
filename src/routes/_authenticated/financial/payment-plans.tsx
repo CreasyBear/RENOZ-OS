@@ -21,6 +21,7 @@ import {
   useCreatePaymentPlan,
   useRecordInstallmentPayment,
   useOverdueInstallments,
+  formatPaymentPlanMutationError,
 } from '@/hooks/financial';
 import { paymentPlansSearchSchema, type PaymentPlanType } from '@/lib/schemas';
 import { toast } from '@/lib/toast';
@@ -106,7 +107,7 @@ function PaymentPlansPage() {
             });
           },
           onError: (error) => {
-            toast.error(error.message || 'Failed to create payment plan');
+            toast.error(formatPaymentPlanMutationError(error, 'create'));
           },
         }
       );
@@ -144,7 +145,7 @@ function PaymentPlansPage() {
             });
           },
           onError: (error) => {
-            toast.error(error.message || 'Failed to record payment');
+            toast.error(formatPaymentPlanMutationError(error, 'recordPayment'));
           },
         }
       );
