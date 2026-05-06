@@ -48,6 +48,15 @@ export async function validateShipmentItems(
   if (items.length === 0) return;
 
   const lineItemIds = items.map((i) => i.orderLineItemId);
+  const requestedQuantityByLineItem = new Map<string, number>();
+  const requestedSerialsByLineItem = new Map<string, Set<string>>();
+
+  for (const item of items) {
+    requestedQuantityByLineItem.set(
+      item.orderLineItemId,
+      (requestedQuantityByLineItem.get(item.orderLineItemId) ?? 0) + item.quantity
+    );
+  }
 
   const rows = await executor
     .select({
@@ -154,10 +163,13 @@ export async function validateShipmentItems(
       Number(lineData.qtyShipped ?? 0) -
       Number(pendingReservations.quantitiesByLineItem.get(item.orderLineItemId) ?? 0);
     const available = Math.max(0, pickedAvailable);
-    if (item.quantity > available) {
+    const requestedQuantityForLine =
+      requestedQuantityByLineItem.get(item.orderLineItemId) ?? item.quantity;
+
+    if (requestedQuantityForLine > available) {
       throw new ValidationError('Insufficient picked quantity available for shipment', {
         [item.orderLineItemId]: [
-          `Only ${available} picked unit${available !== 1 ? 's are' : ' is'} available for shipment, requested ${item.quantity}`,
+          `Only ${available} picked unit${available !== 1 ? 's are' : ' is'} available for shipment, requested ${requestedQuantityForLine}`,
         ],
       });
     }
@@ -166,10 +178,10 @@ export async function validateShipmentItems(
       const reservedQuantity = (activeReservationsByLineItem.get(item.orderLineItemId) ?? [])
         .reduce((sum, reservation) => sum + reservation.quantity, 0);
 
-      if (item.quantity > reservedQuantity) {
+      if (requestedQuantityForLine > reservedQuantity) {
         throw new ValidationError('Picked inventory is not reserved', {
           [item.orderLineItemId]: [
-            `Only ${reservedQuantity} reserved picked unit${reservedQuantity !== 1 ? 's are' : ' is'} available for "${lineData.description}". Unpick and pick this line again so stock is reserved before shipping.`,
+            `Only ${reservedQuantity} reserved picked unit${reservedQuantity !== 1 ? 's are' : ' is'} available for "${lineData.description}", requested ${requestedQuantityForLine}. Unpick and pick this line again so stock is reserved before shipping.`,
           ],
         });
       }
@@ -212,9 +224,19 @@ export async function validateShipmentItems(
           lineData.allocatedSerialNumbers.map((sn) => normalizeSerial(sn))
         ).map((sn) => normalizeSerial(sn))
       );
+      const requestedSerialsForLine =
+        requestedSerialsByLineItem.get(item.orderLineItemId) ?? new Set<string>();
       const pendingReservedSerials =
         pendingReservations.reservedSerialsByLineItem.get(item.orderLineItemId) ?? new Set<string>();
       for (const sn of serials) {
+        if (requestedSerialsForLine.has(sn)) {
+          throw new ValidationError('Duplicate serial number', {
+            [item.orderLineItemId]: [
+              `Serial number "${sn}" appears multiple times in shipment items for "${lineData.description}"`,
+            ],
+          });
+        }
+        requestedSerialsForLine.add(sn);
         if (!allocatedSet.has(sn)) {
           throw new ValidationError('Serial number not allocated to this line item', {
             [item.orderLineItemId]: [`Serial number "${sn}" is not allocated to "${lineData.description}"`],
@@ -228,6 +250,7 @@ export async function validateShipmentItems(
           });
         }
       }
+      requestedSerialsByLineItem.set(item.orderLineItemId, requestedSerialsForLine);
     }
   }
 }

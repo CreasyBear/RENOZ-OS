@@ -26,6 +26,7 @@ export async function getPendingShipmentReservations(
     eq(orderShipments.organizationId, params.organizationId),
     eq(orderShipments.orderId, params.orderId),
     eq(orderShipments.status, 'pending'),
+    eq(shipmentItems.organizationId, params.organizationId),
   ];
   if (params.excludeShipmentId) {
     conditions.push(ne(orderShipments.id, params.excludeShipmentId));
