@@ -12,14 +12,14 @@
 import { cache } from 'react';
 import { createServerFn } from '@tanstack/react-start';
 import { setResponseStatus } from '@tanstack/react-start/server';
-import { eq, and, gte, lte, sql, desc, asc, inArray, or, ilike } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, desc, asc, inArray, or, ilike, isNull } from 'drizzle-orm';
 import { decodeCursor, buildCursorCondition, buildStandardCursorResponse, cursorPaginationSchema } from '@/lib/db/pagination';
 import { containsPattern } from '@/lib/db/utils';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, jobPhotos, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError, AuthError } from '@/lib/server/errors';
+import { NotFoundError, AuthError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { logger as appLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
@@ -72,6 +72,65 @@ type JobAssignmentMetadata = z.infer<typeof jobAssignmentMetadataSchema>;
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+function jobInstallerJoinCondition() {
+  return and(
+    eq(jobAssignments.installerId, users.id),
+    eq(users.organizationId, jobAssignments.organizationId),
+    isNull(users.deletedAt)
+  );
+}
+
+function jobCustomerJoinCondition() {
+  return and(
+    eq(jobAssignments.customerId, customers.id),
+    eq(customers.organizationId, jobAssignments.organizationId),
+    isNull(customers.deletedAt)
+  );
+}
+
+async function assertJobAssignmentCreateRelations(
+  customerId: string,
+  installerId: string,
+  organizationId: string
+): Promise<void> {
+  const [[customer], [installer]] = await Promise.all([
+    db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.id, customerId),
+          eq(customers.organizationId, organizationId),
+          isNull(customers.deletedAt)
+        )
+      )
+      .limit(1),
+    db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.id, installerId),
+          eq(users.organizationId, organizationId),
+          isNull(users.deletedAt)
+        )
+      )
+      .limit(1),
+  ]);
+
+  if (!customer) {
+    throw new ValidationError('Customer not found', {
+      customerId: ['Customer does not exist or is not accessible'],
+    });
+  }
+
+  if (!installer) {
+    throw new ValidationError('Installer not found', {
+      installerId: ['Installer does not exist or is not accessible'],
+    });
+  }
+}
 
 /**
  * Convert database row to API response format
@@ -149,6 +208,12 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
     const activityLogger = createActivityLoggerWithContext(ctx);
 
     try {
+      await assertJobAssignmentCreateRelations(
+        data.customerId,
+        data.installerId,
+        ctx.organizationId
+      );
+
       // Generate job number if not provided
       const jobNumber = data.jobNumber || (await generateJobNumber(ctx.organizationId));
 
@@ -189,9 +254,9 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
           },
         })
         .from(jobAssignments)
-        .where(eq(jobAssignments.id, newJob.id))
-        .innerJoin(users, eq(jobAssignments.installerId, users.id))
-        .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+        .where(and(eq(jobAssignments.id, newJob.id), eq(jobAssignments.organizationId, ctx.organizationId)))
+        .innerJoin(users, jobInstallerJoinCondition())
+        .innerJoin(customers, jobCustomerJoinCondition())
         .limit(1);
 
       // Log job assignment creation
@@ -256,8 +321,8 @@ const _getJobAssignmentCached = cache(
           eq(jobAssignments.organizationId, organizationId)
         )
       )
-      .innerJoin(users, eq(jobAssignments.installerId, users.id))
-      .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+      .innerJoin(users, jobInstallerJoinCondition())
+      .innerJoin(customers, jobCustomerJoinCondition())
       .limit(1);
 
     if (!jobWithRelations) return null;
@@ -413,8 +478,8 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
         })
         .from(jobAssignments)
         .where(and(...conditions))
-        .innerJoin(users, eq(jobAssignments.installerId, users.id))
-        .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+        .innerJoin(users, jobInstallerJoinCondition())
+        .innerJoin(customers, jobCustomerJoinCondition())
         .orderBy(sortOrder(sortColumn))
         .limit(filters.limit)
         .offset(filters.offset);
@@ -524,8 +589,8 @@ export const listJobAssignmentsCursor = createServerFn({ method: 'GET' })
       })
       .from(jobAssignments)
       .where(and(...conditions))
-      .innerJoin(users, eq(jobAssignments.installerId, users.id))
-      .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+      .innerJoin(users, jobInstallerJoinCondition())
+      .innerJoin(customers, jobCustomerJoinCondition())
       .orderBy(orderDir(jobAssignments.createdAt), orderDir(jobAssignments.id))
       .limit(pageSize + 1);
 
@@ -561,11 +626,15 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
       const { id, organizationId, ...updateData } = data;
 
       try {
+        if (organizationId !== ctx.organizationId) {
+          throw new NotFoundError('Job assignment not found', 'jobAssignment');
+        }
+
         // Get existing job assignment for change tracking
         const [existingJob] = await db
           .select()
           .from(jobAssignments)
-          .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, organizationId)))
+          .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, ctx.organizationId)))
           .limit(1);
 
         if (!existingJob) {
@@ -582,7 +651,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
             updatedBy: ctx.user.id,
             updatedAt: new Date(),
           })
-          .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, organizationId)))
+          .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, ctx.organizationId)))
           .returning();
 
         // Fetch with related data for response
@@ -600,9 +669,9 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
             },
           })
           .from(jobAssignments)
-          .where(eq(jobAssignments.id, updatedJob.id))
-          .innerJoin(users, eq(jobAssignments.installerId, users.id))
-          .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
+          .where(and(eq(jobAssignments.id, updatedJob.id), eq(jobAssignments.organizationId, ctx.organizationId)))
+          .innerJoin(users, jobInstallerJoinCondition())
+          .innerJoin(customers, jobCustomerJoinCondition())
           .limit(1);
 
         // Log job assignment update
@@ -672,7 +741,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .limit(1);
@@ -692,7 +761,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         );
 
@@ -749,7 +818,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .limit(1);
@@ -772,7 +841,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .returning();
@@ -827,7 +896,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .limit(1);
@@ -850,7 +919,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .returning();
@@ -902,13 +971,22 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
       const [jobAssignment] = await db
         .select({ jobNumber: jobAssignments.jobNumber, title: jobAssignments.title })
         .from(jobAssignments)
-        .where(eq(jobAssignments.id, data.jobAssignmentId))
+        .where(
+          and(
+            eq(jobAssignments.id, data.jobAssignmentId),
+            eq(jobAssignments.organizationId, ctx.organizationId)
+          )
+        )
         .limit(1);
+
+      if (!jobAssignment) {
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
+      }
 
       const [newPhoto] = await db
         .insert(jobPhotos)
         .values({
-          organizationId: data.organizationId,
+          organizationId: ctx.organizationId,
           jobAssignmentId: data.jobAssignmentId,
           type: data.type,
           photoUrl: data.photoUrl,
@@ -967,7 +1045,7 @@ export const getJobPhotos = createServerFn({ method: 'GET' })
         .where(
           and(
             eq(jobPhotos.jobAssignmentId, data.jobAssignmentId),
-            eq(jobPhotos.organizationId, data.organizationId)
+            eq(jobPhotos.organizationId, ctx.organizationId)
           )
         )
         .orderBy(desc(jobPhotos.createdAt));
