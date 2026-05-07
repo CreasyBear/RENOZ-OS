@@ -16,6 +16,11 @@ import { containsPattern } from '@/lib/db/utils';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { withAuth } from '@/lib/server/protected';
 import { ValidationError } from '@/lib/server/errors';
+import {
+  formatBulkJobRowParseError,
+  formatJobFieldParseError,
+  formatJobImportRowError,
+} from '@/lib/jobs/job-import-errors';
 import { z } from 'zod';
 import type { JsonValue } from '@/lib/schemas/_shared/patterns';
 import {
@@ -131,13 +136,13 @@ export const parseJobData = createServerFn({ method: 'POST' })
             success: !!formattedDate,
             error: formattedDate ? undefined : 'Invalid date format',
           });
-        } catch (error) {
+        } catch {
           parsingResults.push({
             field,
             originalValue: rawValue as JsonValue,
             parsedValue: null as JsonValue,
             success: false,
-            error: error instanceof Error ? error.message : 'Date parsing error',
+            error: formatJobFieldParseError('date'),
           });
         }
       }
@@ -158,13 +163,13 @@ export const parseJobData = createServerFn({ method: 'POST' })
             success: !!parsedTime,
             error: parsedTime ? undefined : 'Invalid time format',
           });
-        } catch (error) {
+        } catch {
           parsingResults.push({
             field,
             originalValue: rawValue as JsonValue,
             parsedValue: null as JsonValue,
             success: false,
-            error: error instanceof Error ? error.message : 'Time parsing error',
+            error: formatJobFieldParseError('time'),
           });
         }
       }
@@ -188,13 +193,13 @@ export const parseJobData = createServerFn({ method: 'POST' })
             success: !!parsedAmount,
             error: parsedAmount ? undefined : 'Invalid amount format',
           });
-        } catch (error) {
+        } catch {
           parsingResults.push({
             field,
             originalValue: rawValue as JsonValue,
             parsedValue: null as JsonValue,
             success: false,
-            error: error instanceof Error ? error.message : 'Amount parsing error',
+            error: formatJobFieldParseError('amount'),
           });
         }
       }
@@ -215,13 +220,13 @@ export const parseJobData = createServerFn({ method: 'POST' })
             success: !!parsedJobNumber,
             error: parsedJobNumber ? undefined : 'Invalid job number format',
           });
-        } catch (error) {
+        } catch {
           parsingResults.push({
             field,
             originalValue: rawValue as JsonValue,
             parsedValue: null as JsonValue,
             success: false,
-            error: error instanceof Error ? error.message : 'Job number parsing error',
+            error: formatJobFieldParseError('jobNumber'),
           });
         }
       }
@@ -397,8 +402,8 @@ export const bulkParseJobData = createServerFn({ method: 'POST' })
             }
           }
         }
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : 'Parsing error');
+      } catch {
+        errors.push(formatBulkJobRowParseError());
       }
 
       const isValid = Boolean(
@@ -591,14 +596,13 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
           continue;
         }
 
-        // Create new job - requires customerId and installerId
-        // TODO(PHASE12-008): Add customer/installer lookup logic before production use
-        // For now, these must be provided in parsedData or the import will fail validation
+        // Caller must resolve lookup candidates before import; this mutation never
+        // auto-selects ambiguous customer or installer matches.
         const customerId = jobData.customerId as string | undefined;
         const installerId = jobData.installerId as string | undefined;
 
         if (!customerId || !installerId) {
-          throw new ValidationError('Missing required fields: customerId and installerId must be provided in job data');
+          throw new ValidationError('Select a customer and installer before importing this row.');
         }
 
         const newJob = await db
@@ -620,10 +624,9 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
           jobId: newJob[0].id,
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         results.errors.push({
           jobNumber: row.parsedData.jobNumber || 'unknown',
-          error: errorMessage,
+          error: formatJobImportRowError(error),
         });
       }
     }
