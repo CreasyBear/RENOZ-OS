@@ -241,7 +241,7 @@ export function InventoryDetailContainer({
       quantity: data.quantity,
       serialNumbers: data.serialNumbers,
       reason: data.reason,
-      notes: data.reason,
+      notes: data.notes,
     });
     onBack?.();
   };

@@ -92,6 +92,12 @@ export const transferInventory = createServerFn({ method: 'POST' })
       const affectedLayerIds = new Set<string>();
       let valuationBefore = 0;
       let valuationAfter = 0;
+      const transferNotes = data.notes ?? data.reason;
+      const transferMetadata = {
+        fromLocationId: data.fromLocationId,
+        toLocationId: data.toLocationId,
+        ...(data.reason ? { reason: data.reason } : {}),
+      };
       const layerDeltas: Array<{
         inventoryId?: string;
         layerId?: string;
@@ -183,11 +189,10 @@ export const transferInventory = createServerFn({ method: 'POST' })
             totalCost: sql`${-1} * COALESCE(${row.unitCost}, 0)`,
             referenceType: 'transfer',
             metadata: {
+              ...transferMetadata,
               serialNumbers: [serialNumber],
-              fromLocationId: data.fromLocationId,
-              toLocationId: data.toLocationId,
             },
-            notes: data.notes,
+            notes: transferNotes,
             createdBy: ctx.user.id,
           });
 
@@ -324,11 +329,10 @@ export const transferInventory = createServerFn({ method: 'POST' })
             totalCost: row.unitCost,
             referenceType: 'transfer',
             metadata: {
+              ...transferMetadata,
               serialNumbers: [serialNumber],
-              fromLocationId: data.fromLocationId,
-              toLocationId: data.toLocationId,
             },
-            notes: data.notes,
+            notes: transferNotes,
             createdBy: ctx.user.id,
           });
 
@@ -411,7 +415,8 @@ export const transferInventory = createServerFn({ method: 'POST' })
         unitCost: sourceInventory.unitCost,
         totalCost: sql`${-data.quantity} * COALESCE(${sourceInventory.unitCost}, 0)`,
         referenceType: 'transfer',
-        notes: data.notes,
+        metadata: transferMetadata,
+        notes: transferNotes,
         createdBy: ctx.user.id,
       });
 
@@ -532,7 +537,8 @@ export const transferInventory = createServerFn({ method: 'POST' })
           unitCost: sourceInventory.unitCost,
           totalCost: sql`${data.quantity} * COALESCE(${sourceInventory.unitCost}, 0)`,
           referenceType: 'transfer',
-          notes: data.notes,
+          metadata: transferMetadata,
+          notes: transferNotes,
           createdBy: ctx.user.id,
         })
         .returning();
@@ -552,6 +558,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
             quantity: data.quantity,
             fromLocationId: data.fromLocationId,
             toLocationId: data.toLocationId,
+            ...(data.reason ? { reason: data.reason } : {}),
           },
         });
       }

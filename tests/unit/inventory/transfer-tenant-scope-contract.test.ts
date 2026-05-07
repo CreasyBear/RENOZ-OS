@@ -45,4 +45,19 @@ describe('inventory transfer tenant-scope contract', () => {
     expect(source).toContain('addSerializedItemEvent');
     expect(source).toContain('inventoryFinanceMutationSuccess');
   });
+
+  it('persists transfer reason as movement context without container-side notes duplication', () => {
+    const transferServer = read('src/server/functions/inventory/transfers.ts');
+    const detailContainer = read(
+      'src/components/domain/inventory/containers/inventory-detail-container.tsx'
+    );
+
+    expect(transferServer).toContain('const transferNotes = data.notes ?? data.reason;');
+    expect(transferServer).toContain('...(data.reason ? { reason: data.reason } : {})');
+    expect(transferServer).toContain('metadata: transferMetadata');
+    expect(transferServer).toContain('notes: transferNotes');
+    expect(detailContainer).toContain('reason: data.reason');
+    expect(detailContainer).toContain('notes: data.notes');
+    expect(detailContainer).not.toContain('notes: data.reason');
+  });
 });

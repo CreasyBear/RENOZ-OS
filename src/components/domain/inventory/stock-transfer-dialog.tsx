@@ -64,6 +64,7 @@ export interface TransferFormData {
   quantity: number;
   serialNumbers?: string[];
   reason?: string;
+  notes?: string;
 }
 
 // ============================================================================
