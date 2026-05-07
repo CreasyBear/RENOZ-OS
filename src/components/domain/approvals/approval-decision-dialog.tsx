@@ -67,7 +67,7 @@ interface ApprovalDecisionDialogProps {
   onDecision: (
     decision: 'approve' | 'reject' | 'escalate',
     data: { comments: string; escalateTo?: string }
-  ) => void;
+  ) => void | Promise<void>;
   escalationUsers: Array<{ id: string; name: string | null; email: string | null }>;
   /** @source useApprovalDetails in /approvals/index.tsx */
   approvalDetails?: {

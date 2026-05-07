@@ -54,9 +54,13 @@ export interface ApprovalDashboardProps {
   onDecision: (
     decision: 'approve' | 'reject' | 'escalate',
     data: { comments: string; escalateTo?: string }
-  ) => void;
+  ) => void | Promise<void>;
   /** @source bulk approval decision handler in /approvals/index.tsx */
-  onBulkDecision: (decision: string, comments: string, selectedIds: string[]) => void;
+  onBulkDecision: (
+    decision: 'approve' | 'reject',
+    comments: string,
+    selectedIds: string[]
+  ) => void | Promise<void>;
   /** @source useUsers in /approvals/index.tsx */
   escalationUsers: Array<{ id: string; name: string | null; email: string | null }>;
   /** @source useState(selectedItem) in /approvals/index.tsx */
@@ -365,8 +369,8 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
         approvalDetails={approvalDetails}
         approvalDetailsError={approvalDetailsError}
         isLoadingApprovalDetails={isLoadingApprovalDetails}
-        onDecision={(decision, data) => {
-          onDecision(decision, data);
+        onDecision={async (decision, data) => {
+          await onDecision(decision, data);
           onDecisionDialogOpenChange(false);
           onSelectedItemChange(null);
         }}
@@ -377,8 +381,8 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
         open={bulkDialogOpen}
         onOpenChange={setBulkDialogOpen}
         selectedItems={selectedItems}
-        onBulkDecision={(decision, comments) => {
-          onBulkDecision(decision, comments, selectedItems);
+        onBulkDecision={async (decision, comments) => {
+          await onBulkDecision(decision, comments, selectedItems);
           setBulkDialogOpen(false);
           setSelectedItems([]);
         }}

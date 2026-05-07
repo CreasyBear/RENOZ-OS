@@ -27,6 +27,7 @@ import {
   useApproveItem,
   useRejectItem,
   useBulkApprove,
+  useBulkReject,
   useEscalateApproval,
   useApprovalDetails,
 } from '@/hooks/suppliers';
@@ -143,6 +144,7 @@ export default function ApprovalsPage() {
   const approveMutation = useApproveItem();
   const rejectMutation = useRejectItem();
   const bulkApproveMutation = useBulkApprove();
+  const bulkRejectMutation = useBulkReject();
   const escalateMutation = useEscalateApproval();
   const handleActiveTabChange = useCallback(
     (tab: string) => {
@@ -190,45 +192,45 @@ export default function ApprovalsPage() {
     ) => {
       if (!selectedItem) return;
 
-      try {
-        if (decision === 'approve') {
-          await approveMutation.mutateAsync({
-            approvalId: selectedItem.id,
-            comments: data.comments,
-          });
-          toast.success('Approval submitted', {
-            description: `${selectedItem.poNumber || 'Item'} has been approved`,
-          });
-        } else if (decision === 'reject') {
-          await rejectMutation.mutateAsync({
-            approvalId: selectedItem.id,
-            reason: 'other' as ApprovalRejectionReason,
-            comments: data.comments,
-          });
-          toast.success('Rejection submitted', {
-            description: `${selectedItem.poNumber || 'Item'} has been rejected`,
-          });
-        } else if (decision === 'escalate') {
-          if (!data.escalateTo || !data.comments) {
-            throw new Error('Escalation requires a user and reason');
-          }
-          await escalateMutation.mutateAsync({
-            approvalId: selectedItem.id,
-            escalateTo: data.escalateTo,
-            reason: data.comments,
-          });
-          toast.success('Approval escalated', {
-            description: `${selectedItem.poNumber || 'Item'} has been escalated`,
-          });
+      if (decision === 'approve') {
+        await approveMutation.mutateAsync({
+          approvalId: selectedItem.id,
+          comments: data.comments,
+        });
+        toast.success('Approval submitted', {
+          description: `${selectedItem.poNumber || 'Item'} has been approved`,
+        });
+      } else if (decision === 'reject') {
+        await rejectMutation.mutateAsync({
+          approvalId: selectedItem.id,
+          reason: 'other' as ApprovalRejectionReason,
+          comments: data.comments,
+        });
+        toast.success('Rejection submitted', {
+          description: `${selectedItem.poNumber || 'Item'} has been rejected`,
+        });
+      } else if (decision === 'escalate') {
+        if (!data.escalateTo || !data.comments) {
+          throw {
+            statusCode: 400,
+            errors: {
+              escalateTo: ['Select a user and provide an escalation reason.'],
+            },
+          };
         }
 
-        setSelectedItem(null);
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-      } catch (err) {
-        toast.error('Decision failed', {
-          description: err instanceof Error ? err.message : 'An error occurred',
+        await escalateMutation.mutateAsync({
+          approvalId: selectedItem.id,
+          escalateTo: data.escalateTo,
+          reason: data.comments,
+        });
+        toast.success('Approval escalated', {
+          description: `${selectedItem.poNumber || 'Item'} has been escalated`,
         });
       }
+
+      setSelectedItem(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
     },
     [selectedItem, approveMutation, rejectMutation, escalateMutation, queryClient]
   );
@@ -242,26 +244,40 @@ export default function ApprovalsPage() {
         return;
       }
 
-      try {
-        if (decision === 'approve') {
-          const result = await bulkApproveMutation.mutateAsync({
-            approvalIds: selectedIds,
-            comments,
-          });
-          toast.success('Bulk approval complete', {
-            description: `${result.approved.length} items approved, ${result.failed.length} failed`,
-          });
+      if (decision === 'approve') {
+        const result = await bulkApproveMutation.mutateAsync({
+          approvalIds: selectedIds,
+          comments,
+        });
+        toast.success('Bulk approval complete', {
+          description: `${result.approved.length} items approved, ${result.failed.length} failed`,
+        });
+      } else if (decision === 'reject') {
+        const trimmedComments = comments.trim();
+        if (!trimmedComments) {
+          throw {
+            statusCode: 400,
+            errors: {
+              comments: ['Bulk rejection comments are required.'],
+            },
+          };
         }
-        // Bulk reject would need a different approach since it requires reasons
 
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-      } catch (err) {
-        toast.error('Bulk operation failed', {
-          description: err instanceof Error ? err.message : 'An error occurred',
+        const result = await bulkRejectMutation.mutateAsync(
+          selectedIds.map((approvalId) => ({
+            approvalId,
+            reason: 'other' as ApprovalRejectionReason,
+            comments: trimmedComments,
+          }))
+        );
+        toast.success('Bulk rejection complete', {
+          description: `${result.rejected.length} items rejected, ${result.failed.length} failed`,
         });
       }
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
     },
-    [bulkApproveMutation, queryClient]
+    [bulkApproveMutation, bulkRejectMutation, queryClient]
   );
 
   // ============================================================================

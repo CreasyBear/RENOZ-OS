@@ -34,7 +34,7 @@ interface BulkApprovalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedItems: string[];
-  onBulkDecision: (decision: 'approve' | 'reject', comments: string) => void;
+  onBulkDecision: (decision: 'approve' | 'reject', comments: string) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -118,9 +118,9 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
             <CardContent>
               <div className="space-y-2">
                 <Label htmlFor="bulk-comments">
-                  Comments (Optional)
+                  Comments
                   <span className="text-muted-foreground ml-1 text-sm">
-                    Will be applied to all selected items
+                    Required for rejection, optional for approval
                   </span>
                 </Label>
                 <Textarea
