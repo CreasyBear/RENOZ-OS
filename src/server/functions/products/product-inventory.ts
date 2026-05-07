@@ -100,6 +100,14 @@ function movementLocationJoinCondition(organizationId: string) {
   );
 }
 
+function inventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 // ============================================================================
 // LOCATION CRUD
 // ============================================================================
@@ -516,7 +524,7 @@ export const getLocationInventory = createServerFn({ method: 'GET' })
         },
       })
       .from(inventory)
-      .innerJoin(products, eq(inventory.productId, products.id))
+      .innerJoin(products, inventoryProductJoinCondition(ctx.organizationId))
       .where(searchCondition ? and(...conditions, searchCondition) : and(...conditions));
 
     const [results, countResult] = await Promise.all([
@@ -524,7 +532,7 @@ export const getLocationInventory = createServerFn({ method: 'GET' })
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(inventory)
-        .innerJoin(products, eq(inventory.productId, products.id))
+        .innerJoin(products, inventoryProductJoinCondition(ctx.organizationId))
         .where(searchCondition ? and(...conditions, searchCondition) : and(...conditions)),
     ]);
 
