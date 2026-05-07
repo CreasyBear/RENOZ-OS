@@ -104,6 +104,7 @@ import { useTableSelection, BulkActionsBar, CheckboxCell } from '@/components/sh
 import { useDebounce } from '@/hooks/_shared';
 import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
+import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 
 // Types
 import {
@@ -903,7 +904,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>{bomData === undefined ? 'Materials unavailable' : 'Showing cached materials'}</AlertTitle>
       <AlertDescription className="flex items-center justify-between gap-3">
-        <span>{error.message || 'Project materials are temporarily unavailable. Please refresh and try again.'}</span>
+        <span>{getProjectMaterialsReadErrorMessage(error)}</span>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           Retry
         </Button>

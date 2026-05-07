@@ -9,6 +9,9 @@ export const PROJECT_NOTES_READ_FALLBACK_MESSAGE =
 export const PROJECT_FILES_READ_FALLBACK_MESSAGE =
   'Project files are temporarily unavailable. Please refresh and try again.';
 
+export const PROJECT_MATERIALS_READ_FALLBACK_MESSAGE =
+  'Project materials are temporarily unavailable. Please refresh and try again.';
+
 function getProjectReadErrorMessage(error: unknown, fallbackMessage: string): string {
   if (isReadQueryError(error) && error.message.trim().length > 0) {
     return error.message;
@@ -27,4 +30,8 @@ export function getProjectNotesReadErrorMessage(error: unknown): string {
 
 export function getProjectFilesReadErrorMessage(error: unknown): string {
   return getProjectReadErrorMessage(error, PROJECT_FILES_READ_FALLBACK_MESSAGE);
+}
+
+export function getProjectMaterialsReadErrorMessage(error: unknown): string {
+  return getProjectReadErrorMessage(error, PROJECT_MATERIALS_READ_FALLBACK_MESSAGE);
 }
