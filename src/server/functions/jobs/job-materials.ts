@@ -10,7 +10,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, sql, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
@@ -62,6 +62,14 @@ const JOB_MATERIAL_EXCLUDED_FIELDS: string[] = [
   'organizationId',
 ];
 
+function jobMaterialProductJoinCondition() {
+  return and(
+    eq(jobMaterials.productId, products.id),
+    eq(products.organizationId, jobMaterials.organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 // ============================================================================
 // LIST JOB MATERIALS
 // ============================================================================
@@ -100,7 +108,7 @@ export const listJobMaterials = createServerFn({ method: 'GET' })
         productDescription: products.description,
       })
       .from(jobMaterials)
-      .leftJoin(products, eq(jobMaterials.productId, products.id))
+      .leftJoin(products, jobMaterialProductJoinCondition())
       .where(
         and(eq(jobMaterials.jobId, data.jobId), eq(jobMaterials.organizationId, ctx.organizationId))
       )
@@ -298,7 +306,8 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(products.id, material.productId),
-          eq(products.organizationId, ctx.organizationId)
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
         )
       )
       .limit(1);
@@ -392,7 +401,8 @@ export const removeJobMaterial = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(products.id, existingMaterial.productId),
-          eq(products.organizationId, ctx.organizationId)
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
         )
       )
       .limit(1);
@@ -611,9 +621,18 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
         productDescription: products.description,
       })
       .from(jobMaterials)
-      .leftJoin(products, eq(jobMaterials.productId, products.id))
-      .where(eq(jobMaterials.id, data.materialId))
+      .leftJoin(products, jobMaterialProductJoinCondition())
+      .where(
+        and(
+          eq(jobMaterials.id, data.materialId),
+          eq(jobMaterials.organizationId, ctx.organizationId)
+        )
+      )
       .limit(1);
+
+    if (!material) {
+      throw new NotFoundError('Material not found');
+    }
 
     const response: MaterialResponse = {
       id: material.id,
@@ -682,7 +701,8 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
       .where(
         and(
           eq(products.id, existingMaterial.productId),
-          eq(products.organizationId, ctx.organizationId)
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
         )
       )
       .limit(1);
