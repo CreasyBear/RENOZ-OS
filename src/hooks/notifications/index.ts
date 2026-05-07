@@ -9,3 +9,8 @@ export {
   useMarkNotificationRead,
   type UseNotificationsOptions,
 } from './use-notifications';
+
+export {
+  formatNotificationMutationError,
+  type NotificationMutationAction,
+} from './_mutation-errors';

@@ -19,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { NotificationListItem } from './notification-list-item';
+import { getNotificationReadErrorMessage } from './notification-read-error-messages';
 import type { NotificationItem } from '@/lib/schemas/notifications';
 
 // ============================================================================
@@ -139,9 +140,9 @@ export function NotificationCenterPopover({
             <div className="px-4 pt-3">
               <Alert>
                 <AlertDescription>
-                  {notifications.length > 0
-                    ? error.message || 'Notifications are temporarily unavailable. Showing the most recent notifications.'
-                    : error.message || 'Notifications are temporarily unavailable. Please refresh and try again.'}
+                  {getNotificationReadErrorMessage(error, {
+                    hasCachedNotifications: notifications.length > 0,
+                  })}
                 </AlertDescription>
               </Alert>
             </div>

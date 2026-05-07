@@ -295,7 +295,9 @@ describe('system/operational query normalization wave 6b', () => {
     );
 
     expect(
-      screen.getByText('Notifications are temporarily unavailable. Please refresh and try again.')
+      screen.getByText(
+        'Notifications are temporarily unavailable. Showing the most recent notifications.'
+      )
     ).toBeInTheDocument();
     expect(screen.getByText('Sync finished')).toBeInTheDocument();
     expect(screen.queryByText('No new notifications')).not.toBeInTheDocument();

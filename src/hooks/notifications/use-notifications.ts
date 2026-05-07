@@ -17,6 +17,7 @@ import {
   listNotifications,
   markNotificationRead,
 } from '@/server/functions/notifications';
+import { formatNotificationMutationError } from './_mutation-errors';
 import type { ListNotificationsResult } from '@/lib/schemas/notifications';
 
 // ============================================================================
@@ -77,7 +78,7 @@ export function useMarkNotificationRead() {
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to mark notification as read');
+      toast.error(formatNotificationMutationError(error, 'markRead'));
     },
   });
 }
