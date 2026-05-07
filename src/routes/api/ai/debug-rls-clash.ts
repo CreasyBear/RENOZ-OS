@@ -7,6 +7,8 @@
  */
 import { and, count, eq, isNull, notInArray, sql, sum } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { getAIDebugRlsErrorPayload } from '@/lib/ai/api-error-responses'
+import { logger } from '@/lib/logger'
 import { customers, orders } from 'drizzle/schema'
 
 type Range = '7d' | '30d' | '90d' | '365d' | 'all'
@@ -135,9 +137,9 @@ export async function GET({ request }: { request: Request }) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    logger.error('[API /ai/debug-rls-clash] Error', error as Error, {})
     return new Response(
-      JSON.stringify({ ok: false, error: message }),
+      JSON.stringify(getAIDebugRlsErrorPayload(error)),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }

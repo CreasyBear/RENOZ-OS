@@ -48,4 +48,14 @@ describe('AI feedback contract', () => {
     expect(chatPanel).toContain('getAIChatErrorMessage(error)');
     expect(chatPanel).not.toContain('{error.message}');
   });
+
+  it('keeps AI API failure payloads behind route-safe helpers', () => {
+    const artifactRoute = read('src/routes/api/ai/artifacts.$id.ts');
+    const debugRoute = read('src/routes/api/ai/debug-rls-clash.ts');
+
+    expect(artifactRoute).toContain('getAIArtifactStreamErrorPayload(error)');
+    expect(debugRoute).toContain('getAIDebugRlsErrorPayload(error)');
+    expect(artifactRoute).not.toContain('message: error instanceof Error ? error.message');
+    expect(debugRoute).not.toContain('error instanceof Error ? error.message');
+  });
 });

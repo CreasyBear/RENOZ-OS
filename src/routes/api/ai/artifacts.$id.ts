@@ -13,6 +13,7 @@ import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
+import { getAIArtifactStreamErrorPayload } from '@/lib/ai/api-error-responses';
 import { aiConversations, aiAgentTasks } from '../../../../drizzle/schema/_ai';
 
 // ============================================================================
@@ -86,10 +87,8 @@ function createSSEStream(
           controller.enqueue(encoder.encode(sseData));
         }
       } catch (error) {
-        const errorEvent = formatSSE('error', {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          code: 'STREAM_ERROR',
-        });
+        logger.error('[API /ai/artifacts/:id] Stream error', error as Error, {});
+        const errorEvent = formatSSE('error', getAIArtifactStreamErrorPayload(error));
         controller.enqueue(encoder.encode(errorEvent));
       } finally {
         controller.close();

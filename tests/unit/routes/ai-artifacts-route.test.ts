@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AI_ARTIFACT_STREAM_ERROR_MESSAGE } from '@/lib/ai/api-error-responses';
 
 const mockWithAuth = vi.fn();
 const mockLogger = {
@@ -113,5 +114,31 @@ describe('ai artifacts route', () => {
     expect(body).toContain('"stage":"error"');
     expect(body).toContain('Report artifact not found for the referenced AI task');
     expect(body).not.toContain('Report data not yet available');
+  });
+
+  it('streams safe failure copy when artifact data loading throws', async () => {
+    mockDb.select.mockImplementationOnce(() => {
+      throw new Error('OpenAI provider token leaked in stream stack');
+    });
+
+    const { GET } = await import('@/routes/api/ai/artifacts.$id');
+
+    const responsePromise = GET({ params: { id: 'task_leaky' } });
+    await vi.runAllTimersAsync();
+    const response = await responsePromise;
+    const bodyPromise = response.text();
+    await vi.runAllTimersAsync();
+    const body = await bodyPromise;
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('"code":"STREAM_ERROR"');
+    expect(body).toContain(AI_ARTIFACT_STREAM_ERROR_MESSAGE);
+    expect(body).not.toContain('provider token');
+    expect(body).not.toContain('stream stack');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      '[API /ai/artifacts/:id] Stream error',
+      expect.any(Error),
+      {}
+    );
   });
 });
