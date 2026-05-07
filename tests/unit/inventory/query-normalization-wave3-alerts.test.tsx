@@ -13,11 +13,13 @@ const mockAcknowledgeAlert = vi.fn();
 const mockGetAlertAnalytics = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
+const mockToastInfo = vi.fn();
 
 vi.mock('@/hooks/_shared/use-toast', () => ({
   toast: {
     error: (...args: unknown[]) => mockToastError(...args),
     success: (...args: unknown[]) => mockToastSuccess(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
   },
 }));
 
@@ -161,6 +163,34 @@ describe('inventory alerts query normalization wave 3', () => {
     expect(screen.queryByText('All Clear')).not.toBeInTheDocument();
   });
 
+  it('does not offer acknowledgement actions for read-only fallback alerts', async () => {
+    const onAcknowledge = vi.fn();
+    const { AlertsPanel } = await import('@/components/domain/inventory/alerts/alerts-panel');
+
+    render(
+      <AlertsPanel
+        alerts={[
+          {
+            id: '00000000-0000-4000-8000-000000000001',
+            alertType: 'low_stock',
+            severity: 'warning',
+            productName: 'Battery Module',
+            message: 'Battery Module is below the fallback stock threshold',
+            value: 2,
+            threshold: 10,
+            triggeredAt: new Date('2026-05-07T00:00:00Z'),
+            isFallback: true,
+          },
+        ]}
+        onAcknowledge={onAcknowledge}
+      />
+    );
+
+    expect(screen.getByText('Rule required')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /acknowledge alert/i })).not.toBeInTheDocument();
+    expect(onAcknowledge).not.toHaveBeenCalled();
+  });
+
   it('renders alert-rule failures as unavailable instead of no rules', async () => {
     const { AlertsList } = await import('@/components/domain/inventory/alerts/alerts-list');
 
@@ -254,6 +284,33 @@ describe('inventory alerts query normalization wave 3', () => {
     );
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to acknowledge alert');
+  });
+
+  it('does not claim fallback alert acknowledgements as persisted changes', async () => {
+    mockAcknowledgeAlert.mockResolvedValueOnce({
+      alert: null,
+      acknowledged: false,
+      acknowledgedBy: null,
+      acknowledgedAt: null,
+      message:
+        'Fallback inventory alerts are read-only. Create an alert rule to track and acknowledge this condition.',
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useAcknowledgeAlert } = await import('@/hooks/inventory/use-alerts');
+
+    const { result } = renderHook(() => useAcknowledgeAlert(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await expect(
+      result.current.mutateAsync('00000000-0000-4000-8000-000000000001')
+    ).resolves.toMatchObject({ acknowledged: false });
+
+    expect(mockToastInfo).toHaveBeenCalledWith(
+      'Fallback inventory alerts are read-only. Create an alert rule to track and acknowledge this condition.'
+    );
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Alert acknowledged');
   });
 
   it('uses safe route submit copy instead of raw alert rule errors', async () => {

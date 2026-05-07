@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,15 +67,12 @@ vi.mock('@/components/ui/button', () => ({
   Button: ({
     children,
     onClick,
-  }: {
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     children: ReactNode;
-    onClick?: () => void;
     variant?: string;
     size?: string;
-    className?: string;
-    title?: string;
-    'aria-label'?: string;
-  }) => <button onClick={onClick}>{children}</button>,
+  }) => <button onClick={onClick} aria-label={props['aria-label']} title={props.title}>{children}</button>,
   buttonVariants: () => 'button',
 }));
 
@@ -411,6 +408,48 @@ describe('inventory dashboard query normalization wave 3', () => {
 
     expect(await screen.findByText('Total Value delta 10')).toBeInTheDocument();
     expect(screen.queryByText('Allocatable Alerts delta 4')).not.toBeInTheDocument();
+  });
+
+  it('dismisses read-only fallback dashboard alerts without acknowledging them', async () => {
+    const acknowledge = vi.fn();
+    mockUseAcknowledgeAlert.mockReturnValueOnce({ mutate: acknowledge });
+    mockUseTriggeredAlerts.mockReturnValueOnce({
+      data: {
+        alerts: [
+          {
+            alert: {
+              id: '00000000-0000-4000-8000-000000000001',
+              alertType: 'low_stock',
+              lastTriggeredAt: new Date('2026-05-07T00:00:00Z'),
+            },
+            severity: 'high',
+            product: { id: 'prod-1', name: 'Battery Module', sku: 'BAT-001' },
+            location: null,
+            message: 'Battery Module is below the fallback stock threshold',
+            currentValue: 2,
+            thresholdValue: 10,
+            affectedItems: [],
+            isFallback: true,
+          },
+        ],
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+
+    const { UnifiedInventoryDashboard } = await import(
+      '@/components/domain/inventory/unified-inventory-dashboard'
+    );
+
+    render(<UnifiedInventoryDashboard />);
+
+    const dismissButton = await screen.findByRole('button', {
+      name: /dismiss read-only alert/i,
+    });
+    fireEvent.click(dismissButton);
+
+    expect(acknowledge).not.toHaveBeenCalled();
+    expect(screen.queryByText('Battery Module is below the fallback stock threshold')).not.toBeInTheDocument();
   });
 
   it('keeps dashboard panels visible with degraded warnings when stale data exists', async () => {

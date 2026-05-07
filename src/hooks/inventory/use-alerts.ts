@@ -212,7 +212,15 @@ export function useAcknowledgeAlert() {
 
   return useMutation({
     mutationFn: (alertId: string) => acknowledgeAlert({ data: { alertId } }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result.acknowledged === false) {
+        toast.info(
+          result.message ??
+            'Fallback inventory alerts are read-only. Create an alert rule to track and acknowledge this condition.'
+        );
+        return;
+      }
+
       toast.success('Alert acknowledged');
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.triggeredAlerts() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.alertAnalytics() });

@@ -41,7 +41,6 @@ import {
 } from "@/hooks/inventory";
 import { useProducts } from "@/hooks/products";
 import type { TriggeredAlertResult, ListTriggeredAlertsResult, CreateAlert, AlertListItem } from "@/lib/schemas/inventory";
-import { logger } from "@/lib/logger";
 import {
   getAlertRulesReadErrorMessage,
   getAlertRuleSubmitError,
@@ -51,6 +50,21 @@ import {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
+
+function getCurrentTriggerAcknowledgedAt(alert: TriggeredAlertResult["alert"]): Date | undefined {
+  if (!alert.updatedAt || !alert.lastTriggeredAt) {
+    return undefined;
+  }
+
+  const updatedAt = new Date(alert.updatedAt);
+  const triggeredAt = new Date(alert.lastTriggeredAt);
+
+  if (Number.isNaN(updatedAt.getTime()) || Number.isNaN(triggeredAt.getTime())) {
+    return undefined;
+  }
+
+  return updatedAt > triggeredAt ? updatedAt : undefined;
+}
 
 export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState<"active" | "rules" | "history">("active");
@@ -165,11 +179,7 @@ export default function AlertsPage() {
       threshold: a.thresholdValue,
       // Use alert.lastTriggeredAt as triggeredAt (fallback to current date if not set)
       triggeredAt: a.alert.lastTriggeredAt ? new Date(a.alert.lastTriggeredAt) : new Date(),
-      // Note: Acknowledgment tracking is not per-triggered-instance, using alert.updatedAt as proxy
-      // This is not ideal but matches current implementation where acknowledgeAlert updates the alert rule
-      acknowledgedAt: a.alert.updatedAt && a.alert.lastTriggeredAt && a.alert.updatedAt > a.alert.lastTriggeredAt
-        ? new Date(a.alert.updatedAt)
-        : undefined,
+      acknowledgedAt: getCurrentTriggerAcknowledgedAt(a.alert),
       acknowledgedBy: a.alert.updatedBy ?? undefined,
       // Flag to distinguish fallback alerts (cannot be acknowledged)
       isFallback: a.isFallback ?? false,
@@ -265,13 +275,6 @@ export default function AlertsPage() {
 
   const handleAcknowledgeAlert = useCallback(
     async (alertId: string) => {
-      // Check if this is a fallback alert (cannot be acknowledged)
-      if (alertId.startsWith('00000000-0000-4000-8000-')) {
-        // Fallback alerts cannot be acknowledged - show message to user
-        // In a real implementation, this would show a toast or modal
-        logger.warn('Fallback alerts cannot be acknowledged. Please create an alert rule to track this item.');
-        return;
-      }
       await acknowledgeMutation.mutateAsync(alertId);
     },
     [acknowledgeMutation]

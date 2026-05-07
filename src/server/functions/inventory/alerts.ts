@@ -665,16 +665,15 @@ export const acknowledgeAlert = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
-    // Check if this is a fallback alert (IDs starting with '00000000-0000-4000-8000-')
-    // Fallback alerts cannot be acknowledged as they don't exist in the database
+    // Fallback alerts are computed read models; there is no alert rule row to mutate.
     if (data.alertId.startsWith('00000000-0000-4000-8000-')) {
-      // Return success but indicate this is a fallback alert that cannot be persisted
       return {
         alert: null,
         acknowledged: false,
         acknowledgedBy: null,
         acknowledgedAt: null,
-        message: 'Fallback alerts cannot be acknowledged. Please create an alert rule to track this item.',
+        message:
+          'Fallback inventory alerts are read-only. Create an alert rule to track and acknowledge this condition.',
       };
     }
 
@@ -693,12 +692,15 @@ export const acknowledgeAlert = createServerFn({ method: 'POST' })
       throw new NotFoundError('Alert not found', 'inventoryAlert');
     }
 
-    // For now, just update the timestamp to mark as acknowledged
-    // In a full implementation, this would create an acknowledgment record
+    const acknowledgedAt = new Date();
+
+    // Current schema acknowledges the alert rule's active trigger by moving
+    // updatedAt past lastTriggeredAt. The next trigger updates lastTriggeredAt
+    // and makes the alert visible again.
     const [updated] = await db
       .update(inventoryAlerts)
       .set({
-        updatedAt: new Date(),
+        updatedAt: acknowledgedAt,
         updatedBy: ctx.user.id,
       })
       .where(
@@ -713,7 +715,7 @@ export const acknowledgeAlert = createServerFn({ method: 'POST' })
       alert: updated,
       acknowledged: true,
       acknowledgedBy: ctx.user.id,
-      acknowledgedAt: new Date(),
+      acknowledgedAt,
     };
   });
 

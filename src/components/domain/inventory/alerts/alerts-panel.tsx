@@ -115,6 +115,7 @@ const AlertItem = memo(function AlertItem({
   const severityBgColor = SEVERITY_BG_COLORS[alert.severity] ?? SEVERITY_BG_COLORS.warning;
   const severityIconColor = SEVERITY_ICON_COLORS[alert.severity] ?? SEVERITY_ICON_COLORS.warning;
   const SeverityIcon = ALERT_SEVERITY_CONFIG[alert.severity]?.icon ?? AlertTriangle;
+  const canAcknowledge = !alert.acknowledgedAt && !alert.isFallback && !!onAcknowledge;
 
   return (
     <div
@@ -156,6 +157,11 @@ const AlertItem = memo(function AlertItem({
                   @ {alert.locationName}
                 </span>
               )}
+              {alert.isFallback && !alert.acknowledgedAt && (
+                <Badge variant="secondary" className="text-xs">
+                  Rule required
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -191,7 +197,7 @@ const AlertItem = memo(function AlertItem({
           </span>
 
           <div className="flex items-center gap-1">
-            {!alert.acknowledgedAt && onAcknowledge && (
+            {canAcknowledge && (
               <Button
                 size="sm"
                 variant="ghost"

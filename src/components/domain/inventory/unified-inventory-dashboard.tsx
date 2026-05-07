@@ -104,6 +104,7 @@ interface DashboardAlert {
   value: number;
   threshold: number;
   triggeredAt: Date;
+  isFallback?: boolean;
 }
 
 function DashboardReadWarning({
@@ -269,6 +270,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
       value: a.currentValue,
       threshold: a.thresholdValue,
       triggeredAt: a.alert?.lastTriggeredAt ? new Date(a.alert.lastTriggeredAt) : new Date(),
+      isFallback: a.isFallback ?? false,
     };
   });
 
@@ -822,9 +824,16 @@ function AlertsSection({
             variant="ghost"
             size="icon"
             className="absolute top-2 right-2 h-6 w-6 opacity-50 hover:opacity-100"
+            aria-label={
+              alert.isFallback
+                ? `Dismiss read-only alert: ${alert.message}`
+                : `Acknowledge alert: ${alert.message}`
+            }
             onClick={() => {
               setDismissed((prev) => new Set([...prev, alert.id]));
-              onAcknowledge(alert.id);
+              if (!alert.isFallback) {
+                onAcknowledge(alert.id);
+              }
             }}
           >
             <X className="h-3 w-3" />
