@@ -36,6 +36,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { toastError } from '@/hooks';
+import { formatSerialBatchParseError } from './receiving-feedback-messages';
 import { parseSerialNumberCSV, validateSerialNumberFormat } from './serial-number-csv-parser';
 
 // ============================================================================
@@ -236,7 +237,7 @@ export function SerialNumberBatchEntry({
             const file = e.target.files?.[0];
             if (file) {
               handleCSVUpload(file).catch((err) => {
-                toastError(err instanceof Error ? err.message : 'Failed to parse CSV');
+                toastError(formatSerialBatchParseError(err));
               });
             }
           }}
