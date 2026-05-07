@@ -124,9 +124,6 @@ export function useTarget({ id, enabled = true }: UseTargetOptions) {
 
 /**
  * Get progress toward active targets.
- *
- * Uses direct server function call (no useServerFn) per backup pattern -
- * matches working implementation from renoz-v3 6.
  */
 export function useTargetProgress(options: UseTargetProgressOptions = {}) {
   const { enabled = true, ...filters } = options;
@@ -137,9 +134,6 @@ export function useTargetProgress(options: UseTargetProgressOptions = {}) {
     queryFn: async () => {
       try {
         const result = await getTargetProgressFn({ data: filters });
-        if (import.meta.env.DEV) {
-          console.debug('[useTargetProgress] raw-result', result);
-        }
         return requireReadResult(result, {
           message: 'Target progress returned no data',
           contractType: 'always-shaped',

@@ -26,6 +26,8 @@ describe('target settings progress read-state contract', () => {
     expect(route).not.toContain('{progressData?.overall?.achieved ?? 0}');
 
     expect(hook).toContain('Target progress is temporarily unavailable. Please refresh and try again.');
+    expect(hook).not.toContain('console.debug');
+    expect(hook).not.toContain('raw-result');
     expect(widget).toContain('function TargetProgressError');
     expect(widget).toContain('onRetry');
     expect(widget).toContain('No active targets');
