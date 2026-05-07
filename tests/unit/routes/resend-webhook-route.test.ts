@@ -88,4 +88,40 @@ describe("resend webhook route", () => {
       }),
     });
   });
+
+  it("rejects invalid signatures without logging raw verifier text", async () => {
+    mockVerify.mockImplementationOnce(() => {
+      throw new Error("svix signature mismatch for secret webhook payload");
+    });
+
+    const { POST } = await import("@/routes/api/webhooks/resend");
+
+    const response = await POST({
+      request: new Request("http://localhost/api/webhooks/resend", {
+        method: "POST",
+        body: JSON.stringify({ ok: true }),
+        headers: {
+          "content-type": "application/json",
+          "svix-id": "msg_123",
+          "svix-timestamp": "1234567890",
+          "svix-signature": "sig_123",
+        },
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid signature",
+    });
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      "[resend-webhook] Signature verification failed",
+      expect.objectContaining({
+        verificationFailure: "invalid_signature",
+        svixId: "msg_123",
+        svixTimestamp: "1234567890...",
+      })
+    );
+    expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain("secret webhook payload");
+    expect(JSON.stringify(mockLogger.warn.mock.calls)).not.toContain("signature mismatch");
+  });
 });

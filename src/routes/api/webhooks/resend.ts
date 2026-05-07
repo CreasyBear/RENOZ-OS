@@ -25,6 +25,7 @@ import {
 } from '@/lib/server/rate-limit';
 import { client } from '@/trigger/client';
 import { logger } from '@/lib/logger';
+import { getResendWebhookSignatureFailureLogContext } from '@/lib/email-providers/resend-webhook-errors';
 
 // ============================================================================
 // CONFIGURATION
@@ -205,7 +206,7 @@ export async function POST({ request }: { request: Request }) {
     }) as ResendWebhookEvent;
   } catch (error) {
     logger.warn('[resend-webhook] Signature verification failed', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      ...getResendWebhookSignatureFailureLogContext(error),
       svixId,
       svixTimestamp: svixTimestamp.substring(0, 10) + '...',
     });

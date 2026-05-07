@@ -85,6 +85,13 @@ describe('communications domain remediation trace', () => {
     expect(warranty).toContain('_shared/suppression-read');
   });
 
+  it('keeps Resend webhook signature failures behind provider-owned log context', () => {
+    const route = read('src/routes/api/webhooks/resend.ts');
+
+    expect(route).toContain('getResendWebhookSignatureFailureLogContext(error)');
+    expect(route).not.toContain('error instanceof Error ? error.message');
+  });
+
   it('separates campaign cancel from pause and preserves recipient customer identity', () => {
     const page = read('src/routes/_authenticated/communications/campaigns/campaigns-page.tsx');
     const recipients = read('src/server/functions/communications/_shared/campaign-recipient-read.ts');
