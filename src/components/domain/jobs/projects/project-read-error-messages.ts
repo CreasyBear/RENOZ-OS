@@ -24,6 +24,9 @@ export const PROJECT_DOCUMENTS_READ_FALLBACK_MESSAGE =
 export const PROJECT_TASKS_READ_FALLBACK_MESSAGE =
   'Project tasks are temporarily unavailable. Please refresh and try again.';
 
+export const PROJECT_TIME_TRACKING_READ_FALLBACK_MESSAGE =
+  'Time tracking is temporarily unavailable. Please refresh and try again.';
+
 function getProjectReadErrorMessage(error: unknown, fallbackMessage: string): string {
   if (isReadQueryError(error) && error.message.trim().length > 0) {
     return error.message;
@@ -62,4 +65,8 @@ export function getProjectDocumentsReadErrorMessage(error: unknown): string {
 
 export function getProjectTasksReadErrorMessage(error: unknown): string {
   return getProjectReadErrorMessage(error, PROJECT_TASKS_READ_FALLBACK_MESSAGE);
+}
+
+export function getProjectTimeTrackingReadErrorMessage(error: unknown): string {
+  return getProjectReadErrorMessage(error, PROJECT_TIME_TRACKING_READ_FALLBACK_MESSAGE);
 }

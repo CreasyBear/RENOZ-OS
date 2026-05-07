@@ -23,6 +23,7 @@ import {
   formatJobTimeMutationError,
 } from '@/hooks/jobs';
 import { toastSuccess, toastError } from '@/hooks';
+import { getProjectTimeTrackingReadErrorMessage } from '../project-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -130,11 +131,7 @@ export function TimeCard({ projectId, canTrackTime = true, className }: TimeCard
                 {timeData === undefined ? 'Time tracking unavailable' : 'Showing cached time tracking'}
               </AlertTitle>
               <AlertDescription className="flex items-center justify-between gap-3">
-                <span>
-                  {error instanceof Error
-                    ? error.message
-                    : 'Time tracking is temporarily unavailable. Please refresh and try again.'}
-                </span>
+                <span>{getProjectTimeTrackingReadErrorMessage(error)}</span>
                 <Button variant="outline" size="sm" onClick={() => void refetch()}>
                   Retry
                 </Button>
