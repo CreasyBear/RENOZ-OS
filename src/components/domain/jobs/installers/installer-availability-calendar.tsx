@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useInstallers, useInstallerAvailability } from '@/hooks/jobs';
+import { getInstallerAvailabilityReadErrorMessage } from './installer-read-error-messages';
 
 
 // ============================================================================
@@ -342,11 +343,7 @@ export function InstallerAvailabilityCalendar({
                 : 'Showing cached installer availability'}
             </AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
-              <span>
-                {error instanceof Error
-                  ? error.message
-                  : 'Installer directory is temporarily unavailable. Please refresh and try again.'}
-              </span>
+              <span>{getInstallerAvailabilityReadErrorMessage(error)}</span>
               <Button variant="outline" size="sm" onClick={() => void refetch()}>
                 Retry
               </Button>
