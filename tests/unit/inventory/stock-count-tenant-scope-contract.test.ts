@@ -60,14 +60,18 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
   });
 
-  it('keeps stock count read joins inside the organization boundary', () => {
+  it('keeps stock count read product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 
+    expect(source).toContain('functionstockCountProductJoinCondition(organizationId:string)');
+    expect(source).toContain(
+      'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
     expect(source).toContain(
       'leftJoin(inventory,and(eq(stockCountItems.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
     );
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventory.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'leftJoin(products,stockCountProductJoinCondition(ctx.organizationId))'
     );
     expect(source).toContain(
       'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,ctx.organizationId)))'
@@ -76,7 +80,7 @@ describe('inventory stock count tenant-scope contract', () => {
       'innerJoin(inventory,and(eq(stockCountItems.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
     );
     expect(source).toContain(
-      'innerJoin(products,and(eq(inventory.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'innerJoin(products,stockCountProductJoinCondition(ctx.organizationId))'
     );
   });
 

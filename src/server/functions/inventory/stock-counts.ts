@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gte, ne, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, gte, ne, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -48,6 +48,14 @@ import {
 // ============================================================================
 // TYPES
 // ============================================================================
+
+function stockCountProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
 
 // ============================================================================
 // STOCK COUNT CRUD
@@ -145,10 +153,7 @@ export const getStockCount = createServerFn({ method: 'GET' })
       )
       .leftJoin(
         products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
+        stockCountProductJoinCondition(ctx.organizationId)
       )
       .leftJoin(
         warehouseLocations,
@@ -455,10 +460,7 @@ export const startStockCount = createServerFn({ method: 'POST' })
         )
         .leftJoin(
           products,
-          and(
-            eq(inventory.productId, products.id),
-            eq(products.organizationId, ctx.organizationId)
-          )
+          stockCountProductJoinCondition(ctx.organizationId)
         )
         .leftJoin(
           warehouseLocations,
@@ -1089,10 +1091,7 @@ export const getCountVarianceAnalysis = createServerFn({ method: 'GET' })
       )
       .innerJoin(
         products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
+        stockCountProductJoinCondition(ctx.organizationId)
       )
       .where(eq(stockCountItems.stockCountId, data.id));
 
