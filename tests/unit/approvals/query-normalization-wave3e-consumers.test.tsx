@@ -6,6 +6,7 @@ const mockUsePendingApprovals = vi.fn();
 const mockUseApproveItem = vi.fn();
 const mockUseRejectItem = vi.fn();
 const mockUseBulkApprove = vi.fn();
+const mockUseBulkReject = vi.fn();
 const mockUseEscalateApproval = vi.fn();
 const mockUseApprovalDetails = vi.fn();
 const mockUseUsers = vi.fn();
@@ -69,6 +70,7 @@ vi.mock('@/hooks/suppliers', () => ({
   useApproveItem: () => mockUseApproveItem(),
   useRejectItem: () => mockUseRejectItem(),
   useBulkApprove: () => mockUseBulkApprove(),
+  useBulkReject: () => mockUseBulkReject(),
   useEscalateApproval: () => mockUseEscalateApproval(),
   useApprovalDetails: (...args: unknown[]) => mockUseApprovalDetails(...args),
 }));
@@ -201,6 +203,7 @@ describe('approvals consumer normalization wave 3e', () => {
     mockUseApproveItem.mockReturnValue({ mutateAsync: vi.fn() });
     mockUseRejectItem.mockReturnValue({ mutateAsync: vi.fn() });
     mockUseBulkApprove.mockReturnValue({ mutateAsync: vi.fn() });
+    mockUseBulkReject.mockReturnValue({ mutateAsync: vi.fn() });
     mockUseEscalateApproval.mockReturnValue({ mutateAsync: vi.fn() });
     mockUseApprovalDetails.mockReturnValue({
       data: undefined,
@@ -251,7 +254,9 @@ describe('approvals consumer normalization wave 3e', () => {
       />
     );
 
-    expect(screen.getByText('The requested approval could not be found.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Approval line items are temporarily unavailable. Please refresh and try again.')
+    ).toBeInTheDocument();
     expect(screen.queryByText('No items available.')).not.toBeInTheDocument();
   });
 });

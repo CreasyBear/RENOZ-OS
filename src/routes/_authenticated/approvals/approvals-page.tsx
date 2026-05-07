@@ -61,15 +61,16 @@ export default function ApprovalsPage() {
   const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(null);
   const activeTab = search.tab ?? APPROVAL_TABS_WITH_ALL.PENDING;
   const hasUnsupportedType = search.type === 'amendment';
+  const supportedType = search.type === 'purchase_order' ? 'purchase_order' : 'all';
   
   // Memoize filters with stable reference - only recreate when search values actually change
   const filters = useMemo<ApprovalFilters>(() => {
     return {
-      type: 'all',
+      type: supportedType,
       priority: search.priority ?? 'all',
       search: search.search ?? '',
     };
-  }, [search.priority, search.search]);
+  }, [search.priority, search.search, supportedType]);
 
   useEffect(() => {
     if (!hasUnsupportedType) return;
@@ -95,6 +96,7 @@ export default function ApprovalsPage() {
 
   const { data, isLoading, error } = usePendingApprovals({
     status: TAB_STATUS_MAP[activeTab],
+    type: filters.type !== 'all' ? filters.type : undefined,
     search: filters.search || undefined,
     priority: filters.priority !== 'all' ? (filters.priority as 'low' | 'medium' | 'high' | 'urgent') : undefined,
   });
@@ -166,7 +168,7 @@ export default function ApprovalsPage() {
       navigate({
         search: (prev) => ({
           ...prev,
-          type: undefined,
+          type: nextFilters.type !== 'all' ? nextFilters.type : undefined,
           priority: nextFilters.priority as 'all' | 'low' | 'medium' | 'high' | 'urgent',
           search: nextFilters.search || undefined,
         }),

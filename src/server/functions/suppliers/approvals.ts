@@ -71,11 +71,26 @@ const ACTIONABLE_APPROVAL_STATUSES = [
   APPROVAL_STATUS.ESCALATED,
 ] as const;
 
+const UNSUPPORTED_APPROVAL_TYPE_MESSAGE =
+  'Only purchase-order approvals are currently supported.';
+
 // Removed AUTO_ESCALATE_BATCH_SIZE - deprecated function removed
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+function assertSupportedApprovalTypeFilter(
+  type: 'all' | 'purchase_order' | 'amendment' | undefined
+) {
+  if (!type || type === 'all' || type === 'purchase_order') {
+    return;
+  }
+
+  throw new ValidationError(UNSUPPORTED_APPROVAL_TYPE_MESSAGE, {
+    type: [UNSUPPORTED_APPROVAL_TYPE_MESSAGE],
+  });
+}
 
 /**
  * Verify that the current user is authorized to act on an approval.
@@ -307,14 +322,9 @@ export const listPendingApprovals = createServerFn({ method: 'GET' })
       conditions.push(eq(purchaseOrderApprovals.status, status));
     }
 
-    // Type filter: Currently all approvals are purchase orders
-    // Reject non-'all' values until type field is implemented in schema
-    if (type && type !== 'all') {
-      throw new ValidationError(
-        'Type filtering is not yet supported. All approvals are purchase orders.',
-        { type: ['Type filtering not implemented'] }
-      );
-    }
+    // Purchase-order is currently the only persisted approval type, so this
+    // filter is a supported no-op while legacy amendment URLs stay rejected.
+    assertSupportedApprovalTypeFilter(type);
 
     // Priority filter: Filter by dueAt date ranges
     if (priority && priority !== 'all') {
@@ -434,12 +444,7 @@ export const listPendingApprovalsCursor = createServerFn({ method: 'GET' })
     ];
 
     if (status) conditions.push(eq(purchaseOrderApprovals.status, status));
-    if (type && type !== 'all') {
-      throw new ValidationError(
-        'Type filtering is not yet supported. All approvals are purchase orders.',
-        { type: ['Type filtering not implemented'] }
-      );
-    }
+    assertSupportedApprovalTypeFilter(type);
     if (priority && priority !== 'all') {
       const now = new Date();
       conditions.push(buildPriorityCondition(priority, now));
