@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { supabase } from '@/lib/supabase/client';
 import type { Factor } from '@supabase/supabase-js';
+import { formatMfaStatusError } from './mfa-error-messages';
 
 export interface MFAState {
   isEnrolled: boolean;
@@ -190,7 +191,7 @@ export function useMFA() {
     currentLevel: null,
     nextLevel: null,
     loading: query.isLoading,
-    error: query.error?.message ?? null,
+    error: query.error ? formatMfaStatusError(query.error) : null,
   };
 
   return {
