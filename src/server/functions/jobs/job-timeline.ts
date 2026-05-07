@@ -153,7 +153,6 @@ export const listTimelineJobs = createServerFn({ method: 'GET' })
         duration: row.job.estimatedDuration ?? 120,
         status: row.job.status,
         jobType: row.job.jobType,
-        priority: 'medium', // TODO: Add priority field to jobAssignments table
         installer: row.installer,
         customer: row.customer,
         timelineSpan: span,

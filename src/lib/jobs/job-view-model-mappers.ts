@@ -52,7 +52,7 @@ export function toJobViewModelFromCalendarTask(task: CalendarKanbanTask): JobVie
     description: task.description,
     status: task.status,
     jobType: task.jobType,
-    priority: task.priority,
+    priority: undefined,
     startDate: task.startTime,
     endDate: task.endTime,
     durationMinutes: task.duration,
@@ -72,7 +72,6 @@ export function toCalendarTaskFromJobViewModel(model: JobViewModel): CalendarKan
     duration: model.durationMinutes,
     status: model.status,
     jobType: model.jobType,
-    priority: model.priority ?? 'medium',
     installer: {
       id: model.installer.id,
       name: model.installer.name ?? null,
@@ -95,7 +94,7 @@ export function toJobViewModelFromTimelineItem(item: TimelineJobItem): JobViewMo
     description: item.description,
     status: item.status,
     jobType: item.jobType,
-    priority: item.priority,
+    priority: undefined,
     startDate: item.startDate,
     endDate: item.endDate,
     durationMinutes: item.duration,
@@ -120,7 +119,6 @@ export function toTimelineItemFromJobViewModel(model: JobViewModel): TimelineJob
     duration: model.durationMinutes,
     status: model.status,
     jobType: model.jobType,
-    priority: model.priority ?? 'medium',
     installer: {
       id: model.installer.id,
       name: model.installer.name ?? null,

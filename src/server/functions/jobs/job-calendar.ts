@@ -353,7 +353,6 @@ export const listCalendarTasksForKanban = createServerFn({ method: 'GET' })
         jobType: row.job.jobType,
         installer: row.installer,
         customer: row.customer,
-        priority: 'medium', // Default priority - field doesn't exist on jobAssignments
         createdAt: row.job.createdAt,
         updatedAt: row.job.updatedAt,
       };

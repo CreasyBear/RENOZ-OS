@@ -52,7 +52,6 @@ export interface TimelineJobItem {
   duration: number; // in minutes
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold';
   jobType: 'installation' | 'service' | 'warranty' | 'inspection' | 'commissioning';
-  priority: 'low' | 'medium' | 'high';
   installer: {
     id: string;
     name: string | null;
