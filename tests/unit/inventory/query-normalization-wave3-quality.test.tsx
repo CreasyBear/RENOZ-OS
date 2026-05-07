@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -250,6 +252,16 @@ describe('inventory quality query normalization wave 3', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Quality History' }));
     expect(retry).toHaveBeenCalled();
+  });
+
+  it('does not wire no-op tab prefetch handlers into the detail presenter', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/components/domain/inventory/views/inventory-detail-view.tsx'),
+      'utf8'
+    );
+
+    expect(source).not.toContain('prefetchTab');
+    expect(source).not.toContain('no-op placeholder');
   });
 
   it('uses safe mutation fallback copy instead of raw quality inspection errors', async () => {

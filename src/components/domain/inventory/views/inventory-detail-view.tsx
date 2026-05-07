@@ -15,7 +15,7 @@
  * @see STANDARDS.md - Container/Presenter pattern
  */
 
-import { memo, useCallback, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { format, formatDistanceToNow, isPast, isBefore, addDays } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -1041,13 +1041,6 @@ export const InventoryDetailView = memo(function InventoryDetailView({
     [movements]
   );
 
-  // Tab prefetch on hover/focus for lazy loading optimization
-  const prefetchTab = useCallback((tabId: string) => {
-    // Future: Implement actual lazy loading with React.lazy() imports
-    // For now, this is a no-op placeholder for the pattern
-    void tabId;
-  }, []);
-
   return (
     <div className={cn('space-y-6', className)}>
       {/* Zone 1: Entity Header with panel toggle */}
@@ -1127,32 +1120,24 @@ export const InventoryDetailView = memo(function InventoryDetailView({
               <TabsTrigger
                 value="movements"
                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                onMouseEnter={() => prefetchTab('movements')}
-                onFocus={() => prefetchTab('movements')}
               >
                 Movements{movementsCount > 0 ? ` (${movementsCount})` : ''}
               </TabsTrigger>
               <TabsTrigger
                 value="cost-layers"
                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                onMouseEnter={() => prefetchTab('cost-layers')}
-                onFocus={() => prefetchTab('cost-layers')}
               >
                 Cost Layers{costLayersCount > 0 ? ` (${costLayersCount})` : ''}
               </TabsTrigger>
               <TabsTrigger
                 value="quality"
                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                onMouseEnter={() => prefetchTab('quality')}
-                onFocus={() => prefetchTab('quality')}
               >
                 Quality{qualityCount > 0 ? ` (${qualityCount})` : ''}
               </TabsTrigger>
               <TabsTrigger
                 value="activity"
                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-3"
-                onMouseEnter={() => prefetchTab('activity')}
-                onFocus={() => prefetchTab('activity')}
               >
                 Activity{activitiesCount > 0 ? ` (${activitiesCount})` : ''}
               </TabsTrigger>
