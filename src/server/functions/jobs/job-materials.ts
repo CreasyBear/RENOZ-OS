@@ -10,7 +10,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import {
@@ -453,10 +453,13 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
     // Verify job access
     await verifyJobExists(data.jobId, ctx.organizationId);
 
-    // Get materials to reserve
+    // Get materials to preview for reservation.
     let materials;
-    if (data.materialIds && data.materialIds.length > 0) {
-      // Reserve specific materials
+    const requestedMaterialIds = [...new Set(data.materialIds ?? [])];
+
+    if (requestedMaterialIds.length > 0) {
+      // Preview specific materials. Missing IDs are rejected instead of silently
+      // shrinking the reservation preview.
       materials = await db
         .select({
           id: jobMaterials.id,
@@ -468,11 +471,15 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
           and(
             eq(jobMaterials.jobId, data.jobId),
             eq(jobMaterials.organizationId, ctx.organizationId),
-            sql`${jobMaterials.id} = ANY(${data.materialIds})`
+            inArray(jobMaterials.id, requestedMaterialIds)
           )
         );
+
+      if (materials.length !== requestedMaterialIds.length) {
+        throw new NotFoundError('One or more job materials were not found');
+      }
     } else {
-      // Reserve all materials for the job
+      // Preview all materials for the job.
       materials = await db
         .select({
           id: jobMaterials.id,
@@ -488,7 +495,8 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
         );
     }
 
-    // TODO(PHASE12-007): Integrate with inventory domain to create actual reservations
+    // Inventory reservations are owned by the Inventory domain. Until that
+    // integration exists, return an explicit preview-only contract.
 
     return {
       jobId: data.jobId,
