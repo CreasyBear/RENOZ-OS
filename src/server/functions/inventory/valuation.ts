@@ -1565,7 +1565,11 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
       .select({ id: products.id })
       .from(products)
       .where(
-        and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
       )
       .limit(1);
 
@@ -1611,7 +1615,11 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
       .update(products)
       .set({ costPrice: weightedAvgCost })
       .where(
-        and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
       );
 
     return { productId: data.productId, costPrice: weightedAvgCost, updated: true };

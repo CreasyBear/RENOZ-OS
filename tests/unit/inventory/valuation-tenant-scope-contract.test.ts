@@ -59,18 +59,18 @@ describe('inventory valuation tenant-scope contract', () => {
     );
   });
 
-  it('keeps product cost-layer reads and weighted-average writes tenant-owned', () => {
+  it('keeps product cost-layer reads and weighted-average writes active and tenant-owned', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
 
     expect(source).toContain(
       'eq(inventoryCostLayers.organizationId,ctx.organizationId),eq(inventory.productId,data.productId),eq(inventory.organizationId,ctx.organizationId)'
     );
     expect(source).toContain(
-      'select({id:products.id}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId)))'
+      'select({id:products.id}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
     );
     expect(source).toContain("thrownewNotFoundError('Productnotfound','product')");
     expect(source).toContain(
-      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId)))'
+      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
     );
     expect(source).not.toContain('update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,data.productId))');
   });
