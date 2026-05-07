@@ -10,12 +10,23 @@ export type AuthErrorCode =
 
 const DEFAULT_CODE: AuthErrorCode = 'unknown_error';
 
-export function toAuthErrorCode(raw: unknown): AuthErrorCode {
-  if (typeof raw !== 'string' || raw.length === 0) {
-    return DEFAULT_CODE;
+function getAuthErrorCodeSource(raw: unknown): string | null {
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw;
   }
 
-  const value = raw.toLowerCase();
+  if (raw instanceof Error && raw.message.length > 0) {
+    return raw.message;
+  }
+
+  return null;
+}
+
+export function toAuthErrorCode(raw: unknown): AuthErrorCode {
+  const source = getAuthErrorCodeSource(raw);
+  if (!source) return DEFAULT_CODE;
+
+  const value = source.toLowerCase();
   if (value.includes('rate') && value.includes('limit')) return 'rate_limited';
   if (value.includes('token exchange')) return 'token_exchange_failed';
   if (value.includes('account creation')) return 'account_creation_failed';

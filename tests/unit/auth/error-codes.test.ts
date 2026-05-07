@@ -7,6 +7,9 @@ describe('auth error codes', () => {
     expect(toAuthErrorCode('Google token exchange failed: bad_verification_code')).toBe(
       'token_exchange_failed'
     );
+    expect(toAuthErrorCode(new Error('Rate limit exceeded while confirming account'))).toBe(
+      'rate_limited'
+    );
     expect(toAuthErrorCode('some-provider-internal-stack-trace')).toBe('unknown_error');
   });
 

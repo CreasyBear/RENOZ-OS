@@ -47,7 +47,7 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
         throw redirect({ href: next });
       }
 
-      const code = toAuthErrorCode(error?.message);
+      const code = toAuthErrorCode(error);
       throw redirect({
         to: `/auth/error`,
         search: { error: code, error_description: authErrorMessage(code) },
