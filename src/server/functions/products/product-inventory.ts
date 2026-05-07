@@ -85,6 +85,21 @@ interface LowStockAlert {
   status: 'critical' | 'warning';
 }
 
+function movementProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventoryMovements.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
+function movementLocationJoinCondition(organizationId: string) {
+  return and(
+    eq(inventoryMovements.locationId, locations.id),
+    eq(locations.organizationId, organizationId)
+  );
+}
+
 // ============================================================================
 // LOCATION CRUD
 // ============================================================================
@@ -902,8 +917,8 @@ export const getProductMovements = createServerFn({ method: 'GET' })
           },
         })
         .from(inventoryMovements)
-        .innerJoin(products, eq(inventoryMovements.productId, products.id))
-        .innerJoin(locations, eq(inventoryMovements.locationId, locations.id))
+        .innerJoin(products, movementProductJoinCondition(ctx.organizationId))
+        .innerJoin(locations, movementLocationJoinCondition(ctx.organizationId))
         .where(and(...conditions))
         .orderBy(desc(inventoryMovements.createdAt))
         .limit(data.limit)
@@ -1075,8 +1090,8 @@ export const getLocationMovements = createServerFn({ method: 'GET' })
           },
         })
         .from(inventoryMovements)
-        .innerJoin(products, eq(inventoryMovements.productId, products.id))
-        .innerJoin(locations, eq(inventoryMovements.locationId, locations.id))
+        .innerJoin(products, movementProductJoinCondition(ctx.organizationId))
+        .innerJoin(locations, movementLocationJoinCondition(ctx.organizationId))
         .where(and(...conditions))
         .orderBy(desc(inventoryMovements.createdAt))
         .limit(data.limit)
