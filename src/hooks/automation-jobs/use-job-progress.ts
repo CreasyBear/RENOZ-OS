@@ -15,6 +15,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { getJobStatus, getActiveJobs } from '@/server/automation-jobs';
 import type { Job, JobStatus } from '@/lib/schemas/automation-jobs';
 import { toast } from 'sonner';
+import { formatAutomationJobFailureMessage } from './job-progress-feedback';
 
 // ============================================================================
 // TYPES
@@ -146,8 +147,7 @@ export function useJobProgress({
           toast.success(`${job.name} completed successfully`);
         }
       } else if (job.status === 'failed') {
-        const metadata = job.metadata as { error?: { message?: string } } | null;
-        const errorMessage = metadata?.error?.message;
+        const errorMessage = formatAutomationJobFailureMessage(job.metadata);
         onError?.(job, errorMessage);
         if (showCompletionToast) {
           toast.error(`${job.name} failed`, {
