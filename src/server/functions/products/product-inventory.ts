@@ -108,6 +108,13 @@ function inventoryProductJoinCondition(organizationId: string) {
   );
 }
 
+function inventoryLocationJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.locationId, locations.id),
+    eq(locations.organizationId, organizationId)
+  );
+}
+
 // ============================================================================
 // LOCATION CRUD
 // ============================================================================
@@ -419,19 +426,22 @@ export const getProductInventory = createServerFn({ method: 'POST' })
       return tx
         .select({
           locationId: inventory.locationId,
+          locationCode: locations.locationCode,
+          locationName: locations.name,
           quantityOnHand: sum(inventory.quantityOnHand),
           quantityAllocated: sum(inventory.quantityAllocated),
           quantityAvailable: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.status} = 'available' THEN ${inventory.quantityAvailable} ELSE 0 END), 0)::numeric`,
           totalValue: sum(inventory.totalValue),
         })
         .from(inventory)
+        .innerJoin(locations, inventoryLocationJoinCondition(ctx.organizationId))
         .where(
           and(
             eq(inventory.productId, data.productId),
             eq(inventory.organizationId, ctx.organizationId)
           )
         )
-        .groupBy(inventory.locationId)
+        .groupBy(inventory.locationId, locations.locationCode, locations.name)
         .orderBy(asc(inventory.locationId));
     });
 
@@ -451,8 +461,8 @@ export const getProductInventory = createServerFn({ method: 'POST' })
 
         return {
           locationId: inv.locationId,
-          locationCode: '',
-          locationName: 'Location',
+          locationCode: inv.locationCode,
+          locationName: inv.locationName,
           quantityOnHand: onHand,
           quantityAllocated: allocated,
           quantityAvailable: available,
