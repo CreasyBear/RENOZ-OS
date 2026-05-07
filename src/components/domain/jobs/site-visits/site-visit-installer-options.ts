@@ -1,3 +1,4 @@
+import { getInstallerDirectoryReadErrorMessage } from '../installers/installer-read-error-messages';
 import type { InstallerListItem } from '@/lib/schemas/jobs/installers';
 
 export const CURRENT_USER_INSTALLER_OPTION_VALUE = 'current-user';
@@ -26,7 +27,5 @@ export function resolveSiteVisitInstallerId(installerId?: string | null) {
 }
 
 export function formatInstallerDirectoryReadError(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : 'Installer directory is temporarily unavailable. Please refresh and try again.';
+  return getInstallerDirectoryReadErrorMessage(error);
 }
