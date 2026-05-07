@@ -39,6 +39,10 @@ import { useUserLookup } from '@/hooks/users';
 import { CustomerSignOffDialog } from '@/components/domain/jobs/projects/customer-sign-off-dialog';
 import { toast } from '@/lib/toast';
 import { TaskList } from '@/components/domain/jobs/projects/task-list';
+import {
+  getProjectSiteVisitDetailReadErrorMessage,
+  getProjectTasksReadErrorMessage,
+} from '@/components/domain/jobs/projects/project-read-error-messages';
 
 const VISIT_STATUS_CONFIG: Record<
   string,
@@ -160,7 +164,7 @@ export default function SiteVisitDetailPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-destructive">{error?.message || 'Not found'}</p>
+              <p className="text-destructive">{getProjectSiteVisitDetailReadErrorMessage(error)}</p>
               <Button variant="outline" className="mt-4" onClick={handleBack}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
@@ -235,7 +239,7 @@ export default function SiteVisitDetailPage() {
                 {projectTasksError ? (
                   <div className="mb-4 rounded-md border px-4 py-3 text-sm">
                     <div className="flex items-center gap-2">
-                      <span>{projectTasksError.message}</span>
+                      <span>{getProjectTasksReadErrorMessage(projectTasksError)}</span>
                       <Button
                         variant="link"
                         className="h-auto p-0"
