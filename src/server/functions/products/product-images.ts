@@ -14,7 +14,9 @@ import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { products, productImages } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { NotFoundError, ServerError, ValidationError } from '@/lib/server/errors';
+import { createClient } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -26,6 +28,25 @@ type ProductImage = typeof productImages.$inferSelect;
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_IMAGES_PER_PRODUCT = 20;
+const PRODUCT_IMAGE_STORAGE_BUCKET = 'public';
+
+const productImageDimensionsSchema = z
+  .object({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  })
+  .optional();
+
+interface ProductImageRecordInput {
+  productId: string;
+  imageUrl: string;
+  altText?: string;
+  caption?: string;
+  fileSize?: number;
+  dimensions?: { width: number; height: number };
+  mimeType?: string;
+  setAsPrimary?: boolean;
+}
 
 // ============================================================================
 // VALIDATION
@@ -50,6 +71,136 @@ function validateImageFile(mimeType: string, fileSize: number): { valid: boolean
   }
 
   return { valid: true };
+}
+
+function getImageExtension(mimeType: string): string {
+  switch (mimeType) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'image/gif':
+      return 'gif';
+    default:
+      return 'jpg';
+  }
+}
+
+function createStorageObjectId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function decodeBase64ToArrayBuffer(base64Content: string): ArrayBuffer {
+  const buffer = Buffer.from(base64Content, 'base64');
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+async function createProductImageRecord(params: {
+  organizationId: string;
+  userId: string;
+  data: ProductImageRecordInput;
+}): Promise<ProductImage> {
+  const { organizationId, userId, data } = params;
+
+  // Verify product exists
+  const [product] = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(
+      and(
+        eq(products.id, data.productId),
+        eq(products.organizationId, organizationId),
+        isNull(products.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!product) {
+    throw new NotFoundError('Product not found', 'product');
+  }
+
+  // Validate file if mime type provided
+  if (data.mimeType && data.fileSize) {
+    const validation = validateImageFile(data.mimeType, data.fileSize);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!, {
+        imageUrl: [validation.error!],
+      });
+    }
+  }
+
+  // Check image count limit
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(productImages)
+    .where(
+      and(
+        eq(productImages.organizationId, organizationId),
+        eq(productImages.productId, data.productId)
+      )
+    );
+
+  if ((countResult?.count ?? 0) >= MAX_IMAGES_PER_PRODUCT) {
+    throw new ValidationError(`Maximum ${MAX_IMAGES_PER_PRODUCT} images per product`, {
+      imageUrl: [`Product already has maximum number of images`],
+    });
+  }
+
+  // Get max sort order
+  const [maxSort] = await db
+    .select({ max: productImages.sortOrder })
+    .from(productImages)
+    .where(
+      and(
+        eq(productImages.organizationId, organizationId),
+        eq(productImages.productId, data.productId)
+      )
+    )
+    .limit(1);
+
+  const sortOrder = (maxSort?.max ?? -1) + 1;
+
+  return db.transaction(async (tx) => {
+    // If setting as primary, unset current primary
+    if (data.setAsPrimary) {
+      await tx
+        .update(productImages)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(productImages.organizationId, organizationId),
+            eq(productImages.productId, data.productId),
+            eq(productImages.isPrimary, true)
+          )
+        );
+    }
+
+    // Check if this is the first image (auto-set as primary)
+    const isFirstImage = (countResult?.count ?? 0) === 0;
+
+    // Insert image
+    const [image] = await tx
+      .insert(productImages)
+      .values({
+        organizationId,
+        productId: data.productId,
+        imageUrl: data.imageUrl,
+        altText: data.altText,
+        caption: data.caption,
+        fileSize: data.fileSize,
+        dimensions: data.dimensions,
+        sortOrder,
+        isPrimary: data.setAsPrimary || isFirstImage,
+        uploadedBy: userId,
+      })
+      .returning();
+
+    return image;
+  });
 }
 
 // ============================================================================
@@ -127,12 +278,7 @@ export const addProductImage = createServerFn({ method: 'POST' })
       altText: z.string().max(255).optional(),
       caption: z.string().max(1000).optional(),
       fileSize: z.number().int().positive().optional(),
-      dimensions: z
-        .object({
-          width: z.number().int().positive(),
-          height: z.number().int().positive(),
-        })
-        .optional(),
+      dimensions: productImageDimensionsSchema,
       mimeType: z.string().optional(),
       setAsPrimary: z.boolean().default(false),
     })
@@ -140,101 +286,94 @@ export const addProductImage = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<ProductImage> => {
     const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
-    // Verify product exists
-    const [product] = await db
-      .select({ id: products.id })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      )
-      .limit(1);
+    return createProductImageRecord({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      data,
+    });
+  });
 
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
-
-    // Validate file if mime type provided
-    if (data.mimeType && data.fileSize) {
-      const validation = validateImageFile(data.mimeType, data.fileSize);
-      if (!validation.valid) {
-        throw new ValidationError(validation.error!, {
-          imageUrl: [validation.error!],
-        });
-      }
-    }
-
-    // Check image count limit
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(productImages)
-      .where(
-        and(
-          eq(productImages.organizationId, ctx.organizationId),
-          eq(productImages.productId, data.productId)
-        )
-      );
-
-    if ((countResult?.count ?? 0) >= MAX_IMAGES_PER_PRODUCT) {
-      throw new ValidationError(`Maximum ${MAX_IMAGES_PER_PRODUCT} images per product`, {
-        imageUrl: [`Product already has maximum number of images`],
+/**
+ * Upload an image file to Supabase Storage and record product image metadata.
+ */
+export const uploadProductImageFile = createServerFn({ method: 'POST' })
+  .inputValidator(
+    z.object({
+      productId: z.string().uuid(),
+      filename: z.string().min(1),
+      base64Content: z.string().min(1),
+      mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+      sizeBytes: z.number().int().positive().max(MAX_FILE_SIZE),
+      dimensions: productImageDimensionsSchema,
+      altText: z.string().max(255).optional(),
+      caption: z.string().max(1000).optional(),
+      setAsPrimary: z.boolean().default(false),
+    })
+  )
+  .handler(async ({ data }): Promise<ProductImage> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
+    const validation = validateImageFile(data.mimeType, data.sizeBytes);
+    if (!validation.valid) {
+      throw new ValidationError(validation.error!, {
+        imageUrl: [validation.error!],
       });
     }
 
-    // Get max sort order
-    const [maxSort] = await db
-      .select({ max: productImages.sortOrder })
-      .from(productImages)
-      .where(
-        and(
-          eq(productImages.organizationId, ctx.organizationId),
-          eq(productImages.productId, data.productId)
-        )
-      )
-      .limit(1);
+    const supabase = await createClient();
+    const extension = getImageExtension(data.mimeType);
+    const storagePath = `products/${ctx.organizationId}/${data.productId}/${createStorageObjectId()}.${extension}`;
+    const fileBody = decodeBase64ToArrayBuffer(data.base64Content);
 
-    const sortOrder = (maxSort?.max ?? -1) + 1;
+    const { error: uploadError } = await supabase.storage
+      .from(PRODUCT_IMAGE_STORAGE_BUCKET)
+      .upload(storagePath, fileBody, {
+        contentType: data.mimeType,
+        upsert: false,
+      });
 
-    return db.transaction(async (tx) => {
-      // If setting as primary, unset current primary
-      if (data.setAsPrimary) {
-        await tx
-          .update(productImages)
-          .set({ isPrimary: false })
-          .where(
-            and(
-              eq(productImages.organizationId, ctx.organizationId),
-              eq(productImages.productId, data.productId),
-              eq(productImages.isPrimary, true)
-            )
-          );
+    if (uploadError) {
+      logger.error('[uploadProductImageFile] Failed to upload product image', uploadError, {
+        productId: data.productId,
+      });
+      throw new ServerError(
+        'Product image upload is temporarily unavailable. Please refresh and try again.',
+        500,
+        'UPLOAD_ERROR'
+      );
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PRODUCT_IMAGE_STORAGE_BUCKET).getPublicUrl(storagePath);
+
+    try {
+      return await createProductImageRecord({
+        organizationId: ctx.organizationId,
+        userId: ctx.user.id,
+        data: {
+          productId: data.productId,
+          imageUrl: publicUrl,
+          altText: data.altText,
+          caption: data.caption,
+          fileSize: data.sizeBytes,
+          dimensions: data.dimensions,
+          mimeType: data.mimeType,
+          setAsPrimary: data.setAsPrimary,
+        },
+      });
+    } catch (error) {
+      const { error: removeError } = await supabase.storage
+        .from(PRODUCT_IMAGE_STORAGE_BUCKET)
+        .remove([storagePath]);
+
+      if (removeError) {
+        logger.error('[uploadProductImageFile] Failed to remove orphaned product image', removeError, {
+          productId: data.productId,
+        });
       }
 
-      // Check if this is the first image (auto-set as primary)
-      const isFirstImage = (countResult?.count ?? 0) === 0;
-
-      // Insert image
-      const [image] = await tx
-      .insert(productImages)
-      .values({
-        organizationId: ctx.organizationId,
-        productId: data.productId,
-        imageUrl: data.imageUrl,
-        altText: data.altText,
-        caption: data.caption,
-        fileSize: data.fileSize,
-        dimensions: data.dimensions,
-        sortOrder,
-        isPrimary: data.setAsPrimary || isFirstImage,
-        uploadedBy: ctx.user.id,
-      })
-        .returning();
-
-      return image;
-    });
+      throw error;
+    }
   });
 
 /**

@@ -18,14 +18,15 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
   formatProductImageMutationError,
-  useAddProductImage,
+  useUploadProductImageFile,
 } from "@/hooks/products";
 import { toastError } from "@/hooks";
 
 // Validation constants
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_IMAGES_PER_UPLOAD = 10;
+type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
 
 interface UploadFile {
   id: string;
@@ -65,13 +66,30 @@ function getImageDimensions(
   });
 }
 
+function readFileAsBase64Content(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const [, base64Content = ""] = result.split(",");
+      if (!base64Content) {
+        reject(new Error("Unable to read product image file."));
+        return;
+      }
+      resolve(base64Content);
+    };
+    reader.onerror = () => reject(new Error("Unable to read product image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 // Validate file
 function validateFile(
   file: File,
   existingCount: number,
   maxImages: number
 ): { valid: boolean; error?: string } {
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  if (!ALLOWED_MIME_TYPES.includes(file.type as AllowedMimeType)) {
     return {
       valid: false,
       error: `Invalid file type. Allowed: JPG, PNG, WebP, GIF`,
@@ -108,7 +126,7 @@ export function ImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use mutation hook
-  const addImageMutation = useAddProductImage();
+  const uploadImageMutation = useUploadProductImageFile();
 
   // Calculate remaining slots
   const remainingSlots = maxImagesPerProduct - existingImageCount - files.length;
@@ -201,35 +219,18 @@ export function ImageUploader({
     );
 
     try {
-      // For now, we'll create a mock URL since Supabase Storage integration
-      // would require client-side setup. In production, this would:
-      // 1. Upload to Supabase Storage
-      // 2. Get the public URL
-      // 3. Register with addProductImage
+      const base64Content = await readFileAsBase64Content(uploadFile.file);
+      setFiles((prev) =>
+        prev.map((f) => (f.id === uploadFile.id ? { ...f, progress: 45 } : f))
+      );
 
-      // Simulate upload progress
-      for (let progress = 20; progress <= 80; progress += 20) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        setFiles((prev) =>
-          prev.map((f) => (f.id === uploadFile.id ? { ...f, progress } : f))
-        );
-      }
-
-      // In a real implementation, you would:
-      // 1. Upload to Supabase: const { data } = await supabase.storage.from('product-images').upload(path, file)
-      // 2. Get public URL: const { publicUrl } = supabase.storage.from('product-images').getPublicUrl(data.path)
-
-      // For demo purposes, we'll use the local preview URL
-      // In production, replace with actual storage URL
-      const imageUrl = uploadFile.preview;
-
-      // Register image with server using the hook
-      await addImageMutation.mutateAsync({
+      await uploadImageMutation.mutateAsync({
         productId,
-        imageUrl,
-        fileSize: uploadFile.file.size,
+        filename: uploadFile.file.name,
+        base64Content,
+        mimeType: uploadFile.file.type as AllowedMimeType,
+        sizeBytes: uploadFile.file.size,
         dimensions: uploadFile.dimensions,
-        mimeType: uploadFile.file.type,
         setAsPrimary: false,
       });
 

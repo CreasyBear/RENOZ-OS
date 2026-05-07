@@ -75,6 +75,7 @@ export {
   useProductImageStats,
   useProductPrimaryImage,
   useAddProductImage,
+  useUploadProductImageFile,
   useUpdateProductImage,
   useDeleteProductImage,
   useDeleteProductImage as useDeleteImage, // Alias for backwards compatibility
@@ -84,6 +85,7 @@ export {
   useBulkUpdateAltText,
   type UseProductImagesOptions,
   type AddProductImageInput,
+  type UploadProductImageFileInput,
   type UpdateProductImageInput,
 } from './use-product-images';
 

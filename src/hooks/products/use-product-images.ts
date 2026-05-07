@@ -22,6 +22,7 @@ import {
   getImageStats,
   getPrimaryImage,
   addProductImage,
+  uploadProductImageFile,
   updateProductImage,
   deleteProductImage,
   setPrimaryImage,
@@ -47,6 +48,18 @@ export interface AddProductImageInput {
   fileSize?: number;
   dimensions?: { width: number; height: number };
   mimeType?: string;
+  setAsPrimary?: boolean;
+}
+
+export interface UploadProductImageFileInput {
+  productId: string;
+  filename: string;
+  base64Content: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  sizeBytes: number;
+  dimensions?: { width: number; height: number };
+  altText?: string;
+  caption?: string;
   setAsPrimary?: boolean;
 }
 
@@ -157,6 +170,30 @@ export function useAddProductImage() {
     },
     onError: (error) => {
       toast.error(formatProductImageMutationError(error, 'add'));
+    },
+  });
+}
+
+/**
+ * Upload a product image file and create its gallery metadata.
+ */
+export function useUploadProductImageFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UploadProductImageFileInput) => uploadProductImageFile({ data: input }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.images.list(variables.productId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.images.stats(variables.productId),
+      });
+      if (variables.setAsPrimary) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.images.primary(variables.productId),
+        });
+      }
     },
   });
 }
