@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table';
 import { usePurchaseOrderReceipts } from '@/hooks/suppliers';
 import { cn } from '@/lib/utils';
+import { getPurchaseOrderReadErrorMessage } from '../po-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -74,8 +75,7 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
       <Alert variant="destructive">
         <AlertTitle>Receipt history unavailable</AlertTitle>
         <AlertDescription>
-          {error?.message ??
-            'Purchase order receipts are temporarily unavailable. Please refresh and try again.'}
+          {getPurchaseOrderReadErrorMessage(error, 'receipts')}
         </AlertDescription>
       </Alert>
     );
@@ -97,8 +97,7 @@ export function POReceiptsTab({ poId }: POReceiptsTabProps) {
         <Alert>
           <AlertTitle>Receipt history may be outdated</AlertTitle>
           <AlertDescription>
-            {error?.message ??
-              'Purchase order receipts are temporarily unavailable. Please refresh and try again.'}
+            {getPurchaseOrderReadErrorMessage(error, 'receipts')}
           </AlertDescription>
         </Alert>
       ) : null}

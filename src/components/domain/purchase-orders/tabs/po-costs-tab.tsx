@@ -62,6 +62,7 @@ import {
 } from '@/hooks/suppliers';
 import { useOrganizationSettings } from '~/contexts/organization-settings-context';
 import { useOrgFormat } from '@/hooks/use-org-format';
+import { getPurchaseOrderReadErrorMessage } from '../po-read-error-messages';
 
 import {
   poCostTypeSchema,
@@ -250,8 +251,7 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
         <Alert variant="destructive">
           <AlertTitle>Purchase order costs unavailable</AlertTitle>
           <AlertDescription>
-            {costsError?.message ??
-              'Purchase order costs are temporarily unavailable. Please refresh and try again.'}
+            {getPurchaseOrderReadErrorMessage(costsError, 'costs')}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -260,8 +260,7 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
         <Alert>
           <AlertTitle>Cost data may be outdated</AlertTitle>
           <AlertDescription>
-            {costsError?.message ??
-              'Purchase order costs are temporarily unavailable. Please refresh and try again.'}
+            {getPurchaseOrderReadErrorMessage(costsError, 'costs')}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -270,8 +269,7 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
         <Alert variant="destructive">
           <AlertTitle>Landed cost allocation unavailable</AlertTitle>
           <AlertDescription>
-            {allocationError?.message ??
-              'Landed cost allocation is temporarily unavailable. Please refresh and try again.'}
+            {getPurchaseOrderReadErrorMessage(allocationError, 'allocation')}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -280,8 +278,7 @@ export function POCostsTab({ poId, poStatus, totalPOValue, poCurrency }: POCosts
         <Alert>
           <AlertTitle>Allocation preview may be outdated</AlertTitle>
           <AlertDescription>
-            {allocationError?.message ??
-              'Landed cost allocation is temporarily unavailable. Please refresh and try again.'}
+            {getPurchaseOrderReadErrorMessage(allocationError, 'allocation')}
           </AlertDescription>
         </Alert>
       ) : null}
