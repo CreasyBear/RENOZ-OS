@@ -20,6 +20,14 @@ import {
 } from 'drizzle/schema';
 import { allocatableStockCountSql } from './_allocatable-stock-sql';
 
+function dashboardMovementProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventoryMovements.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 /**
  * Get inventory dashboard metrics.
  */
@@ -90,13 +98,7 @@ export const getInventoryDashboard = createServerFn({ method: 'POST' }).handler(
       totalQuantity: sql<number>`SUM(ABS(${inventoryMovements.quantity}))::int`,
     })
     .from(inventoryMovements)
-    .leftJoin(
-      products,
-      and(
-        eq(inventoryMovements.productId, products.id),
-        eq(products.organizationId, ctx.organizationId)
-      )
-    )
+    .leftJoin(products, dashboardMovementProductJoinCondition(ctx.organizationId))
     .where(
       and(
         eq(inventoryMovements.organizationId, ctx.organizationId),

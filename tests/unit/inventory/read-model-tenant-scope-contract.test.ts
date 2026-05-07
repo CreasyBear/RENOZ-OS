@@ -62,11 +62,17 @@ describe('inventory read-model tenant-scope contract', () => {
     );
   });
 
-  it('keeps standard dashboard movement joins organization-bounded', () => {
+  it('keeps standard dashboard movement product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/dashboard.ts'));
 
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventoryMovements.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'functiondashboardMovementProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'eq(inventoryMovements.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'leftJoin(products,dashboardMovementProductJoinCondition(ctx.organizationId))'
     );
     expect(source).not.toContain('leftJoin(products,eq(inventoryMovements.productId,products.id))');
   });
