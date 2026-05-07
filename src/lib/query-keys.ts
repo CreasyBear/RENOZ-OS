@@ -114,6 +114,12 @@ export interface JobFilters {
 
 export type InventoryFilters = Partial<InventoryListQuery>
 
+export interface ProductStockAlertFilters {
+  locationId?: string
+  reorderPoint?: number
+  criticalThreshold?: number
+}
+
 export interface ContactFilters {
   customerId?: string
   search?: string
@@ -1270,8 +1276,8 @@ export const queryKeys = {
     stockLevels: (productId: string) =>
       [...queryKeys.products.all, 'stockLevels', productId] as const,
     stockAlertsAll: () => [...queryKeys.products.all, 'stockAlerts'] as const,
-    stockAlerts: (scope: string) =>
-      [...queryKeys.products.stockAlertsAll(), scope] as const,
+    stockAlerts: (filters?: ProductStockAlertFilters) =>
+      [...queryKeys.products.stockAlertsAll(), filters ?? {}] as const,
     movementsForProduct: (productId: string) =>
       [...queryKeys.products.all, 'movements', productId] as const,
     movements: (productId: string, filters?: Record<string, unknown>) =>

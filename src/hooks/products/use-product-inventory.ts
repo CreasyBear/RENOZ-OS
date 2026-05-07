@@ -177,13 +177,14 @@ export function useLowStockAlerts(options: {
   enabled?: boolean;
 } = {}) {
   const { reorderPoint, criticalThreshold, locationId, enabled = true } = options;
+  const alertFilters = { reorderPoint, criticalThreshold, locationId };
 
   return useQuery({
-    queryKey: queryKeys.products.stockAlerts(locationId ?? 'all'),
+    queryKey: queryKeys.products.stockAlerts(alertFilters),
     queryFn: async () => {
       try {
         return await getLowStockAlerts({
-          data: { reorderPoint, criticalThreshold, locationId }
+          data: alertFilters,
         });
       } catch (error) {
         throw normalizeReadQueryError(error, {
