@@ -64,7 +64,7 @@ async function entitlementExistsTx(
   return null;
 }
 
-async function placeholderReviewEntitlementExistsTx(
+async function unitizedReviewEntitlementExistsTx(
   tx: TransactionExecutor,
   organizationId: string,
   shipmentItemId: string
@@ -170,7 +170,7 @@ export async function createEntitlementsForDeliveredShipmentTx(
     }
 
     if (quantityUnits == null) {
-      const existing = await placeholderReviewEntitlementExistsTx(
+      const existing = await unitizedReviewEntitlementExistsTx(
         tx,
         params.organizationId,
         item.shipmentItemId

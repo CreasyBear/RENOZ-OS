@@ -22,4 +22,14 @@ describe('warranty entitlement serialization requirements', () => {
     expect(source).toContain('serializedItemId:serializedItem.id');
     expect(source).not.toContain('serializedItemId:serializedItem?.id??null');
   });
+
+  it('treats review-required unitized entitlements as real coverage records', () => {
+    const source = compact(read('src/server/functions/warranty/_shared/entitlement-core.ts'));
+
+    expect(source).toContain('unitizedReviewEntitlementExistsTx');
+    expect(source).toContain("eq(warrantyEntitlements.evidenceType,'unitized')");
+    expect(source).toContain("eq(warrantyEntitlements.status,'needs_review')");
+    expect(source).toContain("status:'needs_review'");
+    expect(source).not.toContain('placeholderReviewEntitlementExistsTx');
+  });
 });
