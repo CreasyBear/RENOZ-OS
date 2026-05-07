@@ -35,6 +35,13 @@ export interface GetAvailableSerialsResult {
   totalAvailable: number;
 }
 
+function serialLocationJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.locationId, locations.id),
+    eq(locations.organizationId, organizationId)
+  );
+}
+
 /**
  * Get available serial numbers for a product.
  *
@@ -76,7 +83,7 @@ export const getAvailableSerials = createServerFn({ method: 'GET' })
             eq(inventory.organizationId, ctx.organizationId)
           )
         )
-        .leftJoin(locations, eq(inventory.locationId, locations.id))
+        .leftJoin(locations, serialLocationJoinCondition(ctx.organizationId))
         .leftJoin(
           orderLineSerialAllocations,
           and(
@@ -151,7 +158,7 @@ export const getAvailableSerials = createServerFn({ method: 'GET' })
         createdAt: inventory.createdAt,
       })
       .from(inventory)
-      .leftJoin(locations, eq(inventory.locationId, locations.id))
+      .leftJoin(locations, serialLocationJoinCondition(ctx.organizationId))
       .where(
         and(
           ...conditions,
