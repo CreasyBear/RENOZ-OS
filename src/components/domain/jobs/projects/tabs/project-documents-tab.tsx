@@ -33,6 +33,7 @@ import {
   getDocumentTypeLabel,
   type DocumentType,
 } from '@/hooks/documents';
+import { getProjectDocumentsReadErrorMessage } from '../project-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -359,7 +360,7 @@ export const ProjectDocumentsTab = memo(function ProjectDocumentsTab({
           {error ? (
             <Alert>
               <AlertDescription>
-                {error.message || 'Documents are temporarily unavailable. Showing the most recent documents.'}
+                {getProjectDocumentsReadErrorMessage(error)}
               </AlertDescription>
             </Alert>
           ) : null}

@@ -18,6 +18,9 @@ export const PROJECT_SITE_VISITS_READ_FALLBACK_MESSAGE =
 export const PROJECT_ALERTS_READ_FALLBACK_MESSAGE =
   'Project alerts are temporarily unavailable. Please refresh and try again.';
 
+export const PROJECT_DOCUMENTS_READ_FALLBACK_MESSAGE =
+  'Documents are temporarily unavailable. Showing the most recent documents.';
+
 function getProjectReadErrorMessage(error: unknown, fallbackMessage: string): string {
   if (isReadQueryError(error) && error.message.trim().length > 0) {
     return error.message;
@@ -48,4 +51,8 @@ export function getProjectSiteVisitsReadErrorMessage(error: unknown): string {
 
 export function getProjectAlertsReadErrorMessage(error: unknown): string {
   return getProjectReadErrorMessage(error, PROJECT_ALERTS_READ_FALLBACK_MESSAGE);
+}
+
+export function getProjectDocumentsReadErrorMessage(error: unknown): string {
+  return getProjectReadErrorMessage(error, PROJECT_DOCUMENTS_READ_FALLBACK_MESSAGE);
 }
