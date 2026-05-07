@@ -1140,8 +1140,21 @@ export const getLowStockAlerts = createServerFn({ method: 'GET' })
         quantityAvailable: inventory.quantityAvailable,
       })
       .from(inventory)
-      .innerJoin(products, eq(inventory.productId, products.id))
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(
+        products,
+        and(
+          eq(inventory.productId, products.id),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      )
+      .innerJoin(
+        locations,
+        and(
+          eq(inventory.locationId, locations.id),
+          eq(locations.organizationId, ctx.organizationId)
+        )
+      )
       .where(and(...conditions))
       .orderBy(asc(inventory.quantityAvailable));
 
