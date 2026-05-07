@@ -23,6 +23,7 @@ import { NotFoundError, AuthError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { logger as appLogger } from '@/lib/logger';
 import { computeChanges } from '@/lib/activity-logger';
+import { formatJobAssignmentServerMutationError } from '@/lib/jobs/job-assignment-errors';
 
 // ============================================================================
 // ACTIVITY LOGGING HELPERS
@@ -231,7 +232,7 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
       appLogger.error('Failed to create job assignment', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create job assignment',
+        error: formatJobAssignmentServerMutationError(error, 'create'),
       };
     }
   });
@@ -647,7 +648,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
         appLogger.error('Failed to update job assignment', error);
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Failed to update job assignment',
+          error: formatJobAssignmentServerMutationError(error, 'update'),
         };
       }
     }
@@ -725,7 +726,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
       appLogger.error('Failed to delete job assignment', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete job assignment',
+        error: formatJobAssignmentServerMutationError(error, 'delete'),
       };
     }
   });
@@ -803,7 +804,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
       appLogger.error('Failed to start job assignment', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to start job assignment',
+        error: formatJobAssignmentServerMutationError(error, 'start'),
       };
     }
   });
@@ -881,7 +882,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
       appLogger.error('Failed to complete job assignment', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to complete job assignment',
+        error: formatJobAssignmentServerMutationError(error, 'complete'),
       };
     }
   });
@@ -945,7 +946,7 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
       appLogger.error('Failed to create job photo', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create job photo',
+        error: formatJobAssignmentServerMutationError(error, 'photoCreate'),
       };
     }
   });
