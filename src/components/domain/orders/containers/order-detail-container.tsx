@@ -62,6 +62,7 @@ import {
   getOrderWorkflowActionErrorMessage,
   getReopenShipmentActionErrorMessage,
 } from '@/hooks/orders/order-workflow-action-errors';
+import { getOrderEditSubmitErrorMessage } from '@/hooks/orders/order-edit-action-errors';
 import { OrderDetailView } from '../views/order-detail-view';
 import { OrderEditDialog } from '../cards/order-edit-dialog';
 import { PickItemsDialog } from '../fulfillment/pick-items-dialog';
@@ -1127,7 +1128,7 @@ export function OrderDetailContainer({
         isLoadingCustomers={false}
         onSubmit={containerActions.handleEditSubmit}
         isSubmitting={containerActions.updateOrderMutation.isPending}
-        submitError={containerActions.updateOrderMutation.error?.message}
+        submitError={getOrderEditSubmitErrorMessage(containerActions.updateOrderMutation.error)}
       />
 
       {/* RMA Create Dialog */}
