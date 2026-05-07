@@ -51,7 +51,13 @@ export const receiveInventory = createServerFn({ method: 'POST' })
     const [product] = await db
       .select({ id: products.id, isSerialized: products.isSerialized })
       .from(products)
-      .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(products.id, data.productId),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      )
       .limit(1);
 
     if (!product) {

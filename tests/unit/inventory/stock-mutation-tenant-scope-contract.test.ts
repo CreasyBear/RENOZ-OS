@@ -43,6 +43,9 @@ describe('inventory stock mutation tenant-scope contract', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.receive})');
+    expect(source).toContain(
+      'select({id:products.id,isSerialized:products.isSerialized}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(
       'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'
