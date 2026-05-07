@@ -9,12 +9,21 @@
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-001a/b
  */
 
+import { randomUUID } from 'node:crypto';
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { jobAssignments, jobPhotos } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
+import { deleteFile, uploadFile } from '@/lib/storage';
+import {
+  buildJobDocumentPhotoUrl,
+  buildJobDocumentStoragePath,
+  extractJobDocumentStoragePath,
+  JOB_DOCUMENT_STORAGE_BUCKET,
+} from '@/lib/jobs/job-document-storage';
 import {
   detectJobDocumentFormat,
   extractJobNumberFromDocument,
@@ -67,6 +76,36 @@ function validateDocumentFile(
   return { valid: true };
 }
 
+function formatJobDocumentFailure(error: unknown, fallbackMessage: string): string {
+  if (error instanceof ValidationError || error instanceof NotFoundError) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
+
+async function removeJobDocumentStorageObject(params: {
+  storagePath: string | null;
+  operation: string;
+  jobAssignmentId: string;
+  documentId?: string;
+}): Promise<void> {
+  if (!params.storagePath) return;
+
+  try {
+    await deleteFile({
+      path: params.storagePath,
+      bucket: JOB_DOCUMENT_STORAGE_BUCKET,
+    });
+  } catch (error) {
+    logger.error('Failed to remove job document storage object', error, {
+      operation: params.operation,
+      jobAssignmentId: params.jobAssignmentId,
+      documentId: params.documentId,
+    });
+  }
+}
+
 // ============================================================================
 // DOCUMENT UPLOAD
 // ============================================================================
@@ -85,7 +124,8 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
     return validated;
   })
   .handler(async ({ data }: { data: UploadJobDocumentInput }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.job.create });
+    let uploadedStoragePath: string | null = null;
 
     try {
       // Verify job assignment exists and user has access
@@ -122,23 +162,36 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
       let extractedJobNumber: string | undefined;
       if (format.fileType === 'document' || format.fileType === 'pdf') {
         try {
-          // This would integrate with midday document loader
-          // For now, we'll skip OCR/text extraction and just use filename
           extractedJobNumber = extractJobNumberFromDocument(data.file.name, format);
         } catch (error) {
           logger.warn('Failed to extract job number from document', { error });
         }
       }
 
-      // Generate unique filename
-      const fileExtension = data.file.name.split('.').pop() || 'unknown';
-      const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(2, 15);
-      const filename = `${data.jobAssignmentId}_${timestamp}_${randomId}.${fileExtension}`;
-
-      // In a real implementation, this would upload to cloud storage (Supabase, S3, etc.)
-      // For now, we'll simulate the upload and store metadata
-      const photoUrl = `/api/files/job-documents/${filename}`; // Placeholder URL
+      const storagePath = buildJobDocumentStoragePath({
+        organizationId: ctx.organizationId,
+        jobAssignmentId: data.jobAssignmentId,
+        objectId: randomUUID(),
+        filename: data.file.name,
+      });
+      const uploadResult = await uploadFile({
+        path: storagePath,
+        fileBody: fileBuffer,
+        contentType: data.file.type,
+        bucket: JOB_DOCUMENT_STORAGE_BUCKET,
+        metadata: {
+          organizationId: ctx.organizationId,
+          jobAssignmentId: data.jobAssignmentId,
+          originalFilename: data.file.name,
+          documentType: data.type,
+        },
+        upsert: false,
+      });
+      uploadedStoragePath = uploadResult.path;
+      const photoUrl = buildJobDocumentPhotoUrl({
+        storagePath: uploadResult.path,
+        publicUrl: uploadResult.publicUrl,
+      });
 
       // Create job photo record
       const [newPhoto] = await db
@@ -190,10 +243,18 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
 
       return response;
     } catch (error) {
+      await removeJobDocumentStorageObject({
+        storagePath: uploadedStoragePath,
+        operation: 'uploadRollback',
+        jobAssignmentId: data.jobAssignmentId,
+      });
       logger.error('Failed to upload job document', error);
       const response: UploadJobDocumentResponse = {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to upload document',
+        error: formatJobDocumentFailure(
+          error,
+          'Job document upload is temporarily unavailable. Please refresh and try again.'
+        ),
       };
       return response;
     }
@@ -206,7 +267,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
 export const listJobDocuments = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(listJobDocumentsSchema))
   .handler(async ({ data }: { data: ListJobDocumentsInput }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
     try {
       // Verify job assignment access
@@ -266,10 +327,9 @@ export const listJobDocuments = createServerFn({ method: 'GET' })
 export const deleteJobDocument = createServerFn({ method: 'POST' })
   .inputValidator(deleteJobDocumentSchema.parse)
   .handler(async ({ data }: { data: DeleteJobDocumentInput }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
 
     try {
-      // Delete the photo record (this would also need to delete the actual file)
       const [deletedPhoto] = await db
         .delete(jobPhotos)
         .where(
@@ -285,8 +345,12 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
         throw new NotFoundError('Document not found', 'document');
       }
 
-      // In a real implementation, also delete the file from storage
-      // await deleteFileFromStorage(deletedPhoto.photoUrl);
+      await removeJobDocumentStorageObject({
+        storagePath: extractJobDocumentStoragePath(deletedPhoto.photoUrl),
+        operation: 'delete',
+        jobAssignmentId: data.jobAssignmentId,
+        documentId: data.documentId,
+      });
 
       const response: DeleteJobDocumentResponse = { success: true };
       return response;
@@ -294,7 +358,10 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
       logger.error('Failed to delete job document', error);
       const response: DeleteJobDocumentResponse = {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete document',
+        error: formatJobDocumentFailure(
+          error,
+          'Job document deletion is temporarily unavailable. Please refresh and try again.'
+        ),
       };
       return response;
     }
@@ -380,8 +447,7 @@ async function classifyJobImage(params: {
   filename: string;
   format: JobDocumentFormat;
 }): Promise<void> {
-  // This would integrate with AI/ML classification service
-  // For now, use filename-based classification from our existing utility
+  // Uses filename/content-type classification until an OCR/ML classifier is configured.
   logger.debug('Classified image', {
     photoId: params.photoId,
     classification: params.format.classification,
@@ -402,15 +468,16 @@ async function classifyJobDocument(params: {
   format: JobDocumentFormat;
 }): Promise<void> {
   try {
-    // Extract text content (would use midday document loader)
+    // Extract text content when the uploaded format already contains text.
     let extractedText: string | undefined;
 
     if (params.mimeType === 'text/plain') {
       extractedText = new TextDecoder().decode(params.fileData);
     } else {
-      // For PDFs and other documents, would use document processing library
-      // extractedText = await extractTextFromDocument(params.fileData, params.mimeType);
-      extractedText = 'Sample extracted text'; // Placeholder
+      logger.debug('Skipped job document text extraction without a configured extractor', {
+        photoId: params.photoId,
+        mimeType: params.mimeType,
+      });
     }
 
     if (extractedText) {
