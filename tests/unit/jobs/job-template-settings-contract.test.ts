@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  JOB_TEMPLATE_LIST_READ_FALLBACK_MESSAGE,
+  getJobTemplateListReadErrorMessage,
+} from '@/components/domain/jobs/job-templates/job-template-read-error-messages';
 import { formatJobTemplateMutationError } from '@/hooks/jobs/_mutation-errors';
+import { normalizeReadQueryError } from '@/lib/read-path-policy';
 
 const root = process.cwd();
 
@@ -14,6 +19,29 @@ function compact(source: string): string {
 }
 
 describe('job template settings contract', () => {
+  it('formats job template list read failures without leaking unsafe internals', () => {
+    const normalized = normalizeReadQueryError(
+      {
+        statusCode: 503,
+        code: 'INTERNAL_ERROR',
+        message: 'select from job_templates violates row level security policy',
+      },
+      {
+        contractType: 'always-shaped',
+        fallbackMessage: JOB_TEMPLATE_LIST_READ_FALLBACK_MESSAGE,
+      }
+    );
+
+    expect(getJobTemplateListReadErrorMessage(normalized)).toBe(
+      JOB_TEMPLATE_LIST_READ_FALLBACK_MESSAGE
+    );
+    expect(
+      getJobTemplateListReadErrorMessage(
+        new Error('duplicate key violates job_templates_org_name_idx postgres stack')
+      )
+    ).toBe(JOB_TEMPLATE_LIST_READ_FALLBACK_MESSAGE);
+  });
+
   it('formats job template mutation failures without leaking unsafe internals', () => {
     expect(
       formatJobTemplateMutationError(
@@ -62,6 +90,13 @@ describe('job template settings contract', () => {
     expect(form).not.toContain('catch {');
 
     expect(list).toContain("toast.error(formatJobTemplateMutationError(error, 'delete'))");
+    expect(list).toContain(
+      "import { getJobTemplateListReadErrorMessage } from './job-template-read-error-messages';"
+    );
+    expect(list).toContain('message={getJobTemplateListReadErrorMessage(error)}');
+    expect(list).not.toContain(
+      "message={error instanceof Error ? error.message : 'An error occurred'}"
+    );
     expect(list).not.toContain('catch {');
 
     expect(jobsIndex).toContain("formatJobTemplateMutationError");

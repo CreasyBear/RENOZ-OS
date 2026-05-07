@@ -46,6 +46,7 @@ import {
   ClipboardCheck,
   Clock,
 } from 'lucide-react';
+import { getJobTemplateListReadErrorMessage } from './job-template-read-error-messages';
 
 interface JobTemplateListProps {
   onCreateTemplate?: () => void;
@@ -241,7 +242,7 @@ export function JobTemplateList({
       <div className={className}>
         <ErrorState
           title="Failed to load templates"
-          message={error instanceof Error ? error.message : 'An error occurred'}
+          message={getJobTemplateListReadErrorMessage(error)}
           onRetry={() => refetch()}
         />
       </div>
