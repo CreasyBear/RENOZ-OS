@@ -63,6 +63,7 @@ import {
   KeyFeaturesColumns,
 } from './project-overview-panels';
 import { ProjectTimelineGantt } from './project-timeline-gantt';
+import { getProjectSiteVisitsReadErrorMessage } from './project-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -333,7 +334,7 @@ export function ProjectVisitsTab({
         <Alert variant={!hasData ? 'destructive' : 'default'}>
           <AlertTitle>{!hasData ? 'Site visits unavailable' : 'Showing cached site visits'}</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{error.message || 'Project site visits are temporarily unavailable. Please refresh and try again.'}</span>
+            <span>{getProjectSiteVisitsReadErrorMessage(error)}</span>
             {onRetry ? (
               <Button variant="outline" size="sm" onClick={onRetry}>
                 Retry
