@@ -11,7 +11,12 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useConfirmation, toast } from '@/hooks';
-import { useGroups, useCreateGroup, useDeleteGroup } from '@/hooks/users';
+import {
+  formatUserMutationError,
+  useGroups,
+  useCreateGroup,
+  useDeleteGroup,
+} from '@/hooks/users';
 import { PageLayout } from '@/components/layout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
@@ -88,7 +93,7 @@ export default function GroupsPageContainer() {
       setNewGroupDescription('');
       setNewGroupColor(GROUP_COLORS[0]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create group');
+      toast.error(formatUserMutationError(error, 'createGroup'));
     }
   }, [newGroupName, newGroupDescription, newGroupColor, createGroupMutation]);
 
@@ -105,7 +110,7 @@ export default function GroupsPageContainer() {
         await deleteGroupMutation.mutateAsync(groupId);
         toast.success('Group deleted successfully');
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete group');
+        toast.error(formatUserMutationError(error, 'deleteGroup'));
       }
     }
   }, [confirm, deleteGroupMutation]);

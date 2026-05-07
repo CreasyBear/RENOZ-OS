@@ -39,6 +39,18 @@ describe('user administration mutation errors', () => {
         'acceptInvitation'
       )
     ).toBe('This invitation has expired. Ask an administrator for a new invitation.');
+
+    expect(
+      formatUserMutationError(
+        {
+          statusCode: 400,
+          errors: {
+            name: ['Group name is required.'],
+          },
+        },
+        'createGroup'
+      )
+    ).toBe('Group name is required.');
   });
 
   it('suppresses unsafe infrastructure and implementation messages', () => {
@@ -80,6 +92,13 @@ describe('user administration mutation errors', () => {
         'transferOwnership'
       )
     ).toBe('Ownership transfer is temporarily unavailable. Please refresh and try again.');
+
+    expect(
+      formatUserMutationError(
+        new Error('duplicate key value violates unique constraint user_groups_name_key'),
+        'createGroup'
+      )
+    ).toBe('Group creation is temporarily unavailable. Please refresh and try again.');
 
     expect(isUnsafeUserMutationMessage('ReferenceError: sessionToken is not defined')).toBe(true);
   });
@@ -147,5 +166,26 @@ describe('user administration mutation errors', () => {
 
     expect(inviteDialog).toContain('The hook owns invitation failure copy');
     expect(inviteDialog).not.toContain("err instanceof Error ? err.message : 'Failed to send invitation'");
+  });
+
+  it('keeps group admin pages off raw mutation messages', () => {
+    const list = read('src/routes/_authenticated/admin/groups/groups-page-container.tsx');
+    const detail = read('src/routes/_authenticated/admin/groups/group-detail-page-container.tsx');
+
+    expect(list).toContain("formatUserMutationError(error, 'createGroup')");
+    expect(list).toContain("formatUserMutationError(error, 'deleteGroup')");
+    expect(detail).toContain("formatUserMutationError(error, 'updateGroup')");
+    expect(detail).toContain("formatUserMutationError(error, 'addGroupMember')");
+    expect(detail).toContain("formatUserMutationError(error, 'updateGroupMemberRole')");
+    expect(detail).toContain("formatUserMutationError(error, 'removeGroupMember')");
+
+    expect(list).not.toContain("error instanceof Error ? error.message : 'Failed to create group'");
+    expect(list).not.toContain("error instanceof Error ? error.message : 'Failed to delete group'");
+    expect(detail).not.toContain("error instanceof Error ? error.message : 'Failed to update group'");
+    expect(detail).not.toContain("error instanceof Error ? error.message : 'Failed to add member'");
+    expect(detail).not.toContain(
+      "error instanceof Error ? error.message : 'Failed to update member role'"
+    );
+    expect(detail).not.toContain("error instanceof Error ? error.message : 'Failed to remove member'");
   });
 });

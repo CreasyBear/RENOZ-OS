@@ -21,6 +21,7 @@ import {
   useUpdateGroupMemberRole,
   useRemoveGroupMember,
   useUsers,
+  formatUserMutationError,
 } from '@/hooks/users';
 import { PageLayout } from '@/components/layout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -83,7 +84,7 @@ export default function GroupDetailPageContainer() {
       });
       toast.success('Group updated successfully');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update group');
+      toast.error(formatUserMutationError(error, 'updateGroup'));
       throw error;
     }
   }, [groupId, updateGroupMutation]);
@@ -97,7 +98,7 @@ export default function GroupDetailPageContainer() {
       });
       toast.success('Member added to group successfully');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to add member');
+      toast.error(formatUserMutationError(error, 'addGroupMember'));
       throw error;
     }
   }, [groupId, addMemberMutation]);
@@ -111,7 +112,7 @@ export default function GroupDetailPageContainer() {
       });
       toast.success('Member role updated successfully');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update member role');
+      toast.error(formatUserMutationError(error, 'updateGroupMemberRole'));
       throw error;
     }
   }, [updateMemberRoleMutation]);
@@ -133,7 +134,7 @@ export default function GroupDetailPageContainer() {
       });
       toast.success('Member removed from group successfully');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove member');
+      toast.error(formatUserMutationError(error, 'removeGroupMember'));
       throw error;
     }
   }, [confirm, removeMemberMutation]);

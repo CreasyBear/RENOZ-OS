@@ -7,7 +7,14 @@ const USER_MUTATION_FALLBACKS = {
   bulkUpdateUsers: 'Bulk user update is temporarily unavailable. Please refresh and try again.',
   exportUsers: 'User export is temporarily unavailable. Please refresh and try again.',
   transferOwnership: 'Ownership transfer is temporarily unavailable. Please refresh and try again.',
+  createGroup: 'Group creation is temporarily unavailable. Please refresh and try again.',
+  updateGroup: 'Group update is temporarily unavailable. Please refresh and try again.',
+  deleteGroup: 'Group deletion is temporarily unavailable. Please refresh and try again.',
   addGroupMember: 'Group membership update is temporarily unavailable. Please refresh and try again.',
+  updateGroupMemberRole:
+    'Group member role update is temporarily unavailable. Please refresh and try again.',
+  removeGroupMember:
+    'Group member removal is temporarily unavailable. Please refresh and try again.',
   updateProfile: 'Profile update is temporarily unavailable. Please refresh and try again.',
   updatePreference:
     'Preference update is temporarily unavailable. Please refresh and try again.',
