@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   getClientErrorMessage,
@@ -57,6 +59,15 @@ describe('order client contracts', () => {
     expect(getClientErrorMessage(error, 'Unable to update order.')).toBe(
       'Unable to update order. Refresh and try again.'
     );
+  });
+
+  it('keeps client error display copy off raw error.message fallback patterns', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/hooks/orders/order-mutation-client-errors.ts'),
+      'utf8'
+    );
+
+    expect(source).not.toContain('error.message ||');
   });
 
   it('keeps safe validation field guidance on normalized order errors', () => {

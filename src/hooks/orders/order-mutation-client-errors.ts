@@ -305,21 +305,26 @@ export function getClientErrorMessage(
   error: OrderMutationClientError | ShipmentMutationClientError,
   fallbackMessage: string
 ): string {
-  if (error.kind === 'conflict') {
-    return error.message || `${fallbackMessage} Refresh and try again.`;
-  }
-
-  if (error.kind === 'retryable') {
-    return error.message || `${fallbackMessage} Please retry in a moment.`;
-  }
-
-  if (error.kind === 'not_found') {
-    return error.message || `${fallbackMessage} The record could not be found.`;
-  }
-
   if (error.kind === 'unknown') {
     return fallbackMessage;
   }
 
-  return error.message || fallbackMessage;
+  const message = error.message.trim();
+  if (message) {
+    return message;
+  }
+
+  if (error.kind === 'conflict') {
+    return `${fallbackMessage} Refresh and try again.`;
+  }
+
+  if (error.kind === 'retryable') {
+    return `${fallbackMessage} Please retry in a moment.`;
+  }
+
+  if (error.kind === 'not_found') {
+    return `${fallbackMessage} The record could not be found.`;
+  }
+
+  return fallbackMessage;
 }
