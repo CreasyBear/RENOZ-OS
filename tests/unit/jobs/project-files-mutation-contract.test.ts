@@ -60,6 +60,9 @@ describe('project files mutation contract', () => {
     expect(dialog).toContain("formatProjectFileMutationError(error, 'upload')");
     expect(dialog).toContain('description: data.description');
     expect(dialog).toContain('filename: selectedFile.name');
+    expect(dialog).toContain('discardUploadedProjectFile({');
+    expect(dialog).toContain('path: uploadResult.path');
+    expect(dialog).toContain('bucket: uploadResult.bucket');
     expect(dialog).not.toContain('const storagePath = `projects/${projectId}/');
     expect(dialog).not.toContain("error instanceof Error ? error.message : 'Unknown error'");
     expect(dialog).not.toContain('toast.error(`Failed to upload file: ${message}`)');
@@ -94,6 +97,9 @@ describe('project files mutation contract', () => {
     expect(uploadServer).toContain('withAuth({ permission: PERMISSIONS.job.create })');
     expect(uploadServer).toContain('verifyProjectExists(params.projectId, ctx.organizationId)');
     expect(uploadServer).toContain('buildProjectFileStoragePath({');
-    expect(uploadServer).not.toContain('path: params.path');
+    expect(uploadServer).toContain('discardUploadedProjectFile');
+    expect(uploadServer).toContain('isProjectFileStoragePathForProject({');
+    expect(uploadServer).toContain('deleteFile({');
+    expect(uploadServer).toContain('path: storagePath');
   });
 });

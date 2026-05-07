@@ -26,7 +26,10 @@ import {
   useCreateFile,
   type CreateFileInput,
 } from '@/hooks/jobs';
-import { uploadProjectFile } from '@/server/functions/files/upload-project-file';
+import {
+  discardUploadedProjectFile,
+  uploadProjectFile,
+} from '@/server/functions/files/upload-project-file';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -99,6 +102,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
       }
 
       setSubmitError(null);
+      let uploadResult: Awaited<ReturnType<typeof uploadProjectFile>> | null = null;
       try {
         setIsUploading(true);
         setUploadProgress(0);
@@ -114,7 +118,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
           });
         }, 100);
 
-        const uploadResult = await uploadProjectFile({
+        uploadResult = await uploadProjectFile({
           projectId,
           filename: selectedFile.name,
           fileBody: selectedFile,
@@ -149,6 +153,13 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         setUploadProgress(0);
         onSuccess?.();
       } catch (error) {
+        if (uploadResult) {
+          await discardUploadedProjectFile({
+            projectId,
+            path: uploadResult.path,
+            bucket: uploadResult.bucket,
+          });
+        }
         const message = formatProjectFileMutationError(error, 'upload');
         setSubmitError(message);
         toast.error(message);

@@ -30,6 +30,16 @@ export function buildProjectFileStoragePath(params: {
   ].join('/');
 }
 
+export function isProjectFileStoragePathForProject(params: {
+  storagePath: string;
+  organizationId: string;
+  projectId: string;
+}): boolean {
+  return params.storagePath.startsWith(
+    `organizations/${params.organizationId}/projects/${params.projectId}/files/`
+  );
+}
+
 export function extractProjectFileStoragePath(fileUrl: string | null | undefined): string | null {
   if (!fileUrl) return null;
 
