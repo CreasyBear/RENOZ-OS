@@ -29,6 +29,7 @@ import { ScheduleDashboard } from './schedule-dashboard';
 import { ScheduleVisitCreateDialog } from './schedule-visit-create-dialog';
 import { VisitPreviewSheet } from './visit-preview-sheet';
 import { PastDueSidebar } from './past-due-sidebar';
+import { getScheduleDataReadErrorMessage } from './schedule-read-error-messages';
 import { toast } from '@/lib/toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -515,9 +516,7 @@ export function ScheduleCalendarContainer({ Layout }: ScheduleCalendarContainerP
           <Alert variant={data === undefined ? 'destructive' : 'default'} className="mb-4">
             <AlertTitle>{data === undefined ? 'Schedule unavailable' : 'Showing cached schedule'}</AlertTitle>
             <AlertDescription className="flex items-center gap-2">
-              <span>
-                {error.message || 'Schedule data is temporarily unavailable. Please refresh and try again.'}
-              </span>
+              <span>{getScheduleDataReadErrorMessage(error)}</span>
               <Button variant="link" className="p-0 h-auto underline" onClick={() => void refetch()}>
                 Retry
               </Button>
