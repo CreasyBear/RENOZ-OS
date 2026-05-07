@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, asc, gte, lte, inArray, desc } from 'drizzle-orm';
+import { eq, and, sql, asc, gte, lte, inArray, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -33,6 +33,13 @@ import {
 // TYPES
 // ============================================================================
 
+function forecastProductWhereCondition(productId: string, organizationId: string) {
+  return and(
+    eq(products.id, productId),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
 
 // Period schema (not exported from inventory.ts yet)
 const forecastPeriodSchema = z.enum(['daily', 'weekly', 'monthly', 'quarterly']);
@@ -124,7 +131,7 @@ export const getProductForecast = createServerFn({ method: 'GET' })
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
+      .where(forecastProductWhereCondition(data.productId, ctx.organizationId))
       .limit(1);
 
     if (!product) {
@@ -197,7 +204,7 @@ export const upsertForecast = createServerFn({ method: 'POST' })
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
+      .where(forecastProductWhereCondition(data.productId, ctx.organizationId))
       .limit(1);
 
     if (!product) {
@@ -281,7 +288,11 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
       .select({ id: products.id })
       .from(products)
       .where(
-        and(eq(products.organizationId, ctx.organizationId), inArray(products.id, productIds))
+        and(
+          eq(products.organizationId, ctx.organizationId),
+          inArray(products.id, productIds),
+          isNull(products.deletedAt)
+        )
       );
 
     if (ownedProducts.length !== productIds.length) {
@@ -371,7 +382,7 @@ export const calculateSafetyStock = createServerFn({ method: 'GET' })
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
+      .where(forecastProductWhereCondition(data.productId, ctx.organizationId))
       .limit(1);
 
     if (!product) {
@@ -508,7 +519,13 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
       )
       .leftJoin(latestForecasts, eq(latestForecasts.productId, products.id))
       .leftJoin(latestDailyForecasts, eq(latestDailyForecasts.productId, products.id))
-      .where(and(eq(products.organizationId, ctx.organizationId), eq(products.isActive, true)))
+      .where(
+        and(
+          eq(products.organizationId, ctx.organizationId),
+          eq(products.isActive, true),
+          isNull(products.deletedAt)
+        )
+      )
       .groupBy(
         products.id,
         products.sku,

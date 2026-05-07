@@ -23,12 +23,18 @@ describe('inventory forecasting tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(inventoryForecasts.id,existing.id))');
   });
 
-  it('validates bulk forecast product ownership before writing', () => {
+  it('validates forecast products as active and tenant-owned before writing', () => {
     const source = compact(read('src/server/functions/inventory/forecasting.ts'));
 
+    expect(source).toContain('functionforecastProductWhereCondition(productId:string,organizationId:string)');
+    expect(source).toContain(
+      'eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain('where(forecastProductWhereCondition(data.productId,ctx.organizationId))');
     expect(source).toContain('constproductIds=Array.from(newSet(data.forecasts.map');
     expect(source).toContain('eq(products.organizationId,ctx.organizationId)');
     expect(source).toContain('inArray(products.id,productIds)');
+    expect(source).toContain('isNull(products.deletedAt)');
     expect(source).toContain('if(ownedProducts.length!==productIds.length)');
     expect(source).toContain("thrownewNotFoundError('Oneormoreproductsnotfound','product')");
   });
@@ -41,6 +47,9 @@ describe('inventory forecasting tenant-scope contract', () => {
     );
     expect(source).toContain(
       'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,ctx.organizationId)))'
+    );
+    expect(source).toContain(
+      'where(and(eq(products.organizationId,ctx.organizationId),eq(products.isActive,true),isNull(products.deletedAt)))'
     );
   });
 
