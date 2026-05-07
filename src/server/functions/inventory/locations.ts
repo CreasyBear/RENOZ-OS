@@ -64,6 +64,14 @@ function ensureIsActive(value: boolean | null | undefined): boolean {
   return value ?? true;
 }
 
+function locationInventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 // ============================================================================
 // SIMPLE LOCATIONS (Storage Locations)
 // ============================================================================
@@ -213,10 +221,7 @@ export const getLocation = createServerFn({ method: 'GET' })
         product: products,
       })
       .from(inventory)
-      .leftJoin(
-        products,
-        and(eq(inventory.productId, products.id), eq(products.organizationId, ctx.organizationId))
-      )
+      .leftJoin(products, locationInventoryProductJoinCondition(ctx.organizationId))
       .where(
         and(
           eq(inventory.locationId, data.id),

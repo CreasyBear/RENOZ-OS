@@ -32,10 +32,16 @@ describe('inventory location permission contract', () => {
     expect(source).toContain('export const bulkCreateLocations');
   });
 
-  it('keeps location detail and utilization inventory joins organization-scoped', () => {
+  it('keeps location detail product descriptors active and inventory joins organization-scoped', () => {
     const source = read('src/server/functions/inventory/locations.ts');
 
-    expect(source).toContain('eq(products.organizationId, ctx.organizationId)');
+    const compactSource = source.replace(/\s+/g, '');
+
+    expect(compactSource).toContain('functionlocationInventoryProductJoinCondition(organizationId:string)');
+    expect(compactSource).toContain(
+      'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(compactSource).toContain('leftJoin(products,locationInventoryProductJoinCondition(ctx.organizationId))');
     expect(source).toContain('eq(inventory.organizationId, ctx.organizationId)');
     expect(source).toContain('leftJoin(');
   });
