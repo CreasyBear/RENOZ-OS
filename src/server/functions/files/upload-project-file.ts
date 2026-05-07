@@ -3,23 +3,49 @@
 /**
  * Server action for uploading project files.
  *
- * Wraps @/lib/storage uploadFile to keep storage module server-only.
+ * Authenticates and scopes @/lib/storage uploadFile to the selected project.
  * Prevents process.env from being bundled into client when file-dialogs
  * triggers uploads.
  *
  * @see src/components/domain/jobs/projects/file-dialogs.tsx
  */
+import { randomUUID } from 'node:crypto';
+import { PERMISSIONS } from '@/lib/auth/permissions';
+import {
+  buildProjectFileStoragePath,
+  PROJECT_FILE_STORAGE_BUCKET,
+} from '@/lib/jobs/project-file-storage';
+import { withAuth } from '@/lib/server/protected';
 import { uploadFile } from '@/lib/storage';
+import { verifyProjectExists } from '@/server/functions/_shared/entity-verification';
 import type { UploadFileResult } from '@/lib/storage';
 
 export async function uploadProjectFile(params: {
-  path: string;
+  projectId: string;
+  filename: string;
   fileBody: File;
   contentType: string;
 }): Promise<UploadFileResult> {
+  const ctx = await withAuth({ permission: PERMISSIONS.job.create });
+  await verifyProjectExists(params.projectId, ctx.organizationId);
+
+  const storagePath = buildProjectFileStoragePath({
+    organizationId: ctx.organizationId,
+    projectId: params.projectId,
+    objectId: randomUUID(),
+    filename: params.filename,
+  });
+
   return uploadFile({
-    path: params.path,
+    path: storagePath,
     fileBody: params.fileBody,
     contentType: params.contentType,
+    bucket: PROJECT_FILE_STORAGE_BUCKET,
+    metadata: {
+      organizationId: ctx.organizationId,
+      projectId: params.projectId,
+      originalFilename: params.filename,
+    },
+    upsert: false,
   });
 }

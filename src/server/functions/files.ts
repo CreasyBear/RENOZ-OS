@@ -16,6 +16,10 @@ import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectFiles } from 'drizzle/schema';
 import {
+  extractProjectFileStoragePath,
+  PROJECT_FILE_STORAGE_BUCKET,
+} from '@/lib/jobs/project-file-storage';
+import {
   createFileSchema,
   updateFileSchema,
   fileIdSchema,
@@ -25,6 +29,28 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
+import { deleteFile as deleteStorageFile } from '@/lib/storage';
+import { logger } from '@/lib/logger';
+
+async function removeProjectFileStorageObject(params: {
+  storagePath: string | null;
+  projectId: string;
+  fileId: string;
+}): Promise<void> {
+  if (!params.storagePath) return;
+
+  try {
+    await deleteStorageFile({
+      path: params.storagePath,
+      bucket: PROJECT_FILE_STORAGE_BUCKET,
+    });
+  } catch (error) {
+    logger.error('Failed to remove project file storage object', error, {
+      projectId: params.projectId,
+      fileId: params.fileId,
+    });
+  }
+}
 
 // ============================================================================
 // FILE CRUD
@@ -202,7 +228,7 @@ export const deleteFile = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
 
-    await db.transaction(async (tx) => {
+    const deletedFile = await db.transaction(async (tx) => {
       // Get file to find its position and protect the route project boundary.
       const [file] = await tx
         .select()
@@ -246,6 +272,14 @@ export const deleteFile = createServerFn({ method: 'POST' })
             sql`${projectFiles.position} > ${file.position}`
           )
         );
+
+      return file;
+    });
+
+    await removeProjectFileStorageObject({
+      storagePath: extractProjectFileStoragePath(deletedFile.fileUrl),
+      projectId: data.projectId,
+      fileId: data.id,
     });
 
     return {

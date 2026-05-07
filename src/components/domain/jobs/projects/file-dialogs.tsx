@@ -103,9 +103,6 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         setIsUploading(true);
         setUploadProgress(0);
 
-        // Step 1: Upload to Supabase Storage
-        const storagePath = `projects/${projectId}/${Date.now()}_${selectedFile.name}`;
-
         // Simulate progress during upload (actual upload doesn't have progress callback in this util)
         const progressInterval = setInterval(() => {
           setUploadProgress((prev) => {
@@ -118,7 +115,8 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
         }, 100);
 
         const uploadResult = await uploadProjectFile({
-          path: storagePath,
+          projectId,
+          filename: selectedFile.name,
           fileBody: selectedFile,
           contentType: selectedFile.type || 'application/octet-stream',
         });
@@ -131,7 +129,7 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
 
         // Step 2: Create project file record
         const fileData: Omit<CreateFileInput, 'projectId'> = {
-          fileUrl: publicUrl || `storage://${storagePath}`,
+          fileUrl: publicUrl || `storage://${uploadResult.bucket}/${uploadResult.path}`,
           fileName: data.title || selectedFile.name,
           fileSize: selectedFile.size,
           mimeType: selectedFile.type || 'application/octet-stream',

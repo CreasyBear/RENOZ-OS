@@ -48,6 +48,7 @@ describe('project files mutation contract', () => {
     const hooks = read('src/hooks/jobs/use-files.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/files.ts');
+    const uploadServer = read('src/server/functions/files/upload-project-file.ts');
     const schema = read('src/lib/schemas/jobs/workstreams-notes.ts');
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
@@ -58,6 +59,8 @@ describe('project files mutation contract', () => {
 
     expect(dialog).toContain("formatProjectFileMutationError(error, 'upload')");
     expect(dialog).toContain('description: data.description');
+    expect(dialog).toContain('filename: selectedFile.name');
+    expect(dialog).not.toContain('const storagePath = `projects/${projectId}/');
     expect(dialog).not.toContain("error instanceof Error ? error.message : 'Unknown error'");
     expect(dialog).not.toContain('toast.error(`Failed to upload file: ${message}`)');
     expect(dialog).not.toContain('position: 0,');
@@ -74,6 +77,8 @@ describe('project files mutation contract', () => {
     expect(hooks).toContain('queryKeys.projectFiles.detail(result.data.id)');
 
     expect(server).toContain('projectScopedFileIdSchema');
+    expect(server).toContain('extractProjectFileStoragePath(deletedFile.fileUrl)');
+    expect(server).toContain('deleteStorageFile({');
     expect(server).toContain("description: data.description ?? null");
     expect(server).toContain("throw new NotFoundError('Project file not found', 'projectFile')");
     expect(compactServer).toContain('awaitdb.transaction(async(tx)=>');
@@ -85,5 +90,10 @@ describe('project files mutation contract', () => {
     );
     expect(compactServer).not.toContain('.where(eq(projectFiles.id,data.id))');
     expect(compactServer).not.toContain('description:null');
+
+    expect(uploadServer).toContain('withAuth({ permission: PERMISSIONS.job.create })');
+    expect(uploadServer).toContain('verifyProjectExists(params.projectId, ctx.organizationId)');
+    expect(uploadServer).toContain('buildProjectFileStoragePath({');
+    expect(uploadServer).not.toContain('path: params.path');
   });
 });
