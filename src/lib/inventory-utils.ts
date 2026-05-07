@@ -48,6 +48,14 @@ export interface ReorderAnalysis {
   message: string;
 }
 
+export type InventoryQualityStatus = "good" | "damaged" | "expired" | "quarantined";
+
+export interface InventoryQualityStatusInput {
+  status?: string | null;
+  expiryDate?: Date | string | null;
+  now?: Date;
+}
+
 // ============================================================================
 // FIFO COST CALCULATIONS
 // ============================================================================
@@ -188,6 +196,27 @@ export function getStockLevelPercentage(
   const target = reorderPoint + safetyStock;
   if (target <= 0) return 100;
   return Math.min(100, (quantityOnHand / target) * 100);
+}
+
+/**
+ * Derive the exceptional quality status for an inventory item.
+ * The inventory table does not store a quality_status column; detail views and
+ * item alerts derive it from stock status and expiry date.
+ */
+export function deriveInventoryQualityStatus({
+  status,
+  expiryDate,
+  now = new Date(),
+}: InventoryQualityStatusInput): Exclude<InventoryQualityStatus, "good"> | undefined {
+  if (status === "damaged") return "damaged";
+  if (status === "quarantined") return "quarantined";
+
+  if (!expiryDate) return undefined;
+
+  const expiry = expiryDate instanceof Date ? expiryDate : new Date(expiryDate);
+  if (Number.isNaN(expiry.getTime())) return undefined;
+
+  return expiry.getTime() < now.getTime() ? "expired" : undefined;
 }
 
 // ============================================================================
@@ -467,6 +496,7 @@ export default {
   calculateInventoryValue,
   getStockStatus,
   getStockLevelPercentage,
+  deriveInventoryQualityStatus,
   calculateAge,
   getAgeRisk,
   analyzeAging,

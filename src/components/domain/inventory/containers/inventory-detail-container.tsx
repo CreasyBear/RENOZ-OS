@@ -37,6 +37,7 @@ import { InventoryDetailView } from '../views/inventory-detail-view';
 import type { ItemDetailData } from '../item-detail';
 import type { MovementRecord, CostLayer, QualityRecord } from '../item-tabs';
 import type { MovementWithRelations, InventoryCostLayerRow } from '@/lib/schemas/inventory';
+import { deriveInventoryQualityStatus } from '@/lib/inventory-utils';
 import {
   StockTransferDialog,
   type TransferFormData,
@@ -146,6 +147,10 @@ export function InventoryDetailContainer({
       unitCost: item.unitCost ? Number(item.unitCost) : 0,
       totalValue: item.totalValue ? Number(item.totalValue) : 0,
       status: (item.status as ItemDetailData['status']) ?? 'available',
+      qualityStatus: deriveInventoryQualityStatus({
+        status: item.status,
+        expiryDate: item.expiryDate,
+      }),
       serialNumber: item.serialNumber ?? undefined,
       lotNumber: item.lotNumber ?? undefined,
       expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,

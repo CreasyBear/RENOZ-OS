@@ -37,6 +37,7 @@ import type { InventoryItemAlert } from '@/lib/schemas/inventory/item-alerts';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import type { UpdateProduct } from '@/lib/schemas/products';
 import type { StockAdjustment, StockTransfer, HookWarehouseLocation } from '@/lib/schemas/inventory';
+import { deriveInventoryQualityStatus } from '@/lib/inventory-utils';
 
 // ============================================================================
 // TYPES
@@ -244,14 +245,10 @@ export function useInventoryDetail(inventoryId: string): UseInventoryDetailRetur
       safetyStock: null, // Not available - would need to fetch from forecasts if needed
       expiryDate: item.expiryDate,
       status: item.status,
-      // Note: qualityStatus is not in inventory table schema (PRD mentions it but not implemented)
-      // Derive from status field: damaged/quarantined statuses map to quality statuses
-      // Expired would need expiryDate check (not implemented here)
-      qualityStatus: item.status === 'damaged' 
-        ? 'damaged' as const
-        : item.status === 'quarantined'
-        ? 'quarantined' as const
-        : undefined,
+      qualityStatus: deriveInventoryQualityStatus({
+        status: item.status,
+        expiryDate: item.expiryDate,
+      }),
     };
   }, [item]);
 
