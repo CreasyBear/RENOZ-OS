@@ -80,6 +80,12 @@ describe('project notes mutation contract', () => {
 
     expect(server).toContain('projectScopedNoteIdSchema');
     expect(server).toContain("throw new NotFoundError('Project note not found', 'projectNote')");
+    expect(server).toContain('removeProjectNoteAudioStorageObject');
+    expect(server).toContain('extractProjectFileStoragePath(params.audioData?.fileUrl)');
+    expect(server).toContain('deleteStorageFile({');
+    expect(server).toContain('previousAudioData.fileUrl !== note.audioData?.fileUrl');
+    expect(server).toContain('returning({ id: projectNotes.id, audioData: projectNotes.audioData })');
+    expect(server).toContain("logger.error('Failed to remove project note audio storage object'");
     expect(tab).toContain('<audio controls src={url}');
     expect(tab).toContain('url={note.audioData.fileUrl}');
     expect(tab).not.toContain('const [isPlaying, setIsPlaying] = useState(false);');

@@ -16,6 +16,10 @@ import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { projectNotes, type AudioNoteData } from 'drizzle/schema';
 import {
+  extractProjectFileStoragePath,
+  PROJECT_FILE_STORAGE_BUCKET,
+} from '@/lib/jobs/project-file-storage';
+import {
   createNoteSchema,
   updateNoteSchema,
   noteIdSchema,
@@ -25,6 +29,31 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
+import { deleteFile as deleteStorageFile } from '@/lib/storage';
+import { logger } from '@/lib/logger';
+
+async function removeProjectNoteAudioStorageObject(params: {
+  audioData: AudioNoteData | null | undefined;
+  projectId: string;
+  noteId: string;
+  operation: 'replace' | 'delete';
+}): Promise<void> {
+  const storagePath = extractProjectFileStoragePath(params.audioData?.fileUrl);
+  if (!storagePath) return;
+
+  try {
+    await deleteStorageFile({
+      path: storagePath,
+      bucket: PROJECT_FILE_STORAGE_BUCKET,
+    });
+  } catch (error) {
+    logger.error('Failed to remove project note audio storage object', error, {
+      operation: params.operation,
+      projectId: params.projectId,
+      noteId: params.noteId,
+    });
+  }
+}
 
 // ============================================================================
 // NOTE CRUD
@@ -152,6 +181,28 @@ export const updateNote = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
 
     const { id, projectId, ...updates } = data;
+    const isReplacingAudio = updates.audioData !== undefined;
+    let previousAudioData: AudioNoteData | null = null;
+
+    if (isReplacingAudio) {
+      const [existing] = await db
+        .select({ audioData: projectNotes.audioData })
+        .from(projectNotes)
+        .where(
+          and(
+            eq(projectNotes.id, id),
+            eq(projectNotes.projectId, projectId),
+            eq(projectNotes.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        throw new NotFoundError('Project note not found', 'projectNote');
+      }
+
+      previousAudioData = existing.audioData ?? null;
+    }
 
     const [note] = await db
       .update(projectNotes)
@@ -171,6 +222,19 @@ export const updateNote = createServerFn({ method: 'POST' })
 
     if (!note) {
       throw new NotFoundError('Project note not found', 'projectNote');
+    }
+
+    if (
+      isReplacingAudio &&
+      previousAudioData?.fileUrl &&
+      previousAudioData.fileUrl !== note.audioData?.fileUrl
+    ) {
+      await removeProjectNoteAudioStorageObject({
+        audioData: previousAudioData,
+        projectId,
+        noteId: id,
+        operation: 'replace',
+      });
     }
 
     return {
@@ -196,11 +260,18 @@ export const deleteNote = createServerFn({ method: 'POST' })
           eq(projectNotes.organizationId, ctx.organizationId)
         )
       )
-      .returning({ id: projectNotes.id });
+      .returning({ id: projectNotes.id, audioData: projectNotes.audioData });
 
     if (!note) {
       throw new NotFoundError('Project note not found', 'projectNote');
     }
+
+    await removeProjectNoteAudioStorageObject({
+      audioData: note.audioData,
+      projectId: data.projectId,
+      noteId: data.id,
+      operation: 'delete',
+    });
 
     return {
       success: true,
