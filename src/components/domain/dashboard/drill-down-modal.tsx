@@ -22,6 +22,7 @@ import { memo, useCallback } from 'react';
 import { X, Download, ExternalLink, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from './dashboard-error-messages';
 import {
   Dialog,
   DialogContent,
@@ -139,7 +140,7 @@ function DrillDownModalError({ error }: DrillDownModalErrorProps) {
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
       <AlertDescription>
-        {error.message || 'Failed to load drill-down data. Please try again.'}
+        {getDashboardErrorMessage(error, 'drillDown')}
       </AlertDescription>
     </Alert>
   );

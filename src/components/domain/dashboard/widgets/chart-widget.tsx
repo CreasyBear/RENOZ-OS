@@ -57,6 +57,7 @@ import {
 import { ChartControls } from '../chart-controls';
 import { AlertCircle, BarChart3, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from '../dashboard-error-messages';
 
 // ============================================================================
 // TYPES
@@ -184,7 +185,7 @@ function ChartWidgetError({ error, onRetry, className }: ChartWidgetErrorProps) 
         <Alert variant="destructive" className="max-w-md">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="flex flex-col items-start gap-3">
-            <span>{error.message || 'Failed to load chart data'}</span>
+            <span>{getDashboardErrorMessage(error, 'chartData')}</span>
             {onRetry && (
               <Button
                 variant="outline"

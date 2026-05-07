@@ -18,6 +18,7 @@
 
 import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from '../dashboard-error-messages';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -176,7 +177,9 @@ const InsightsError = memo(function InsightsError({
         <AlertTriangle className="size-6 text-destructive" />
       </div>
       <h4 className="mb-1 text-sm font-medium">Unable to Load Insights</h4>
-      <p className="mb-4 text-sm text-muted-foreground">{error.message}</p>
+      <p className="mb-4 text-sm text-muted-foreground">
+        {getDashboardErrorMessage(error, 'aiInsights')}
+      </p>
       {onRetry && (
         <Button variant="outline" size="sm" onClick={onRetry}>
           <RefreshCw className="mr-2 size-4" />

@@ -23,6 +23,7 @@
 import { memo, useId, useCallback } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from '../dashboard-error-messages';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TrendIndicator } from './trend-indicator';
@@ -99,7 +100,7 @@ function KPIWidgetError({ error, onRetry, className }: KPIWidgetErrorProps) {
           aria-hidden="true"
         />
         <p className="text-sm text-muted-foreground mb-2">
-          {error.message || 'Failed to load data'}
+          {getDashboardErrorMessage(error, 'kpiData')}
         </p>
         {onRetry && (
           <button

@@ -15,6 +15,7 @@
 
 import { memo, useState, useCallback, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from '../dashboard-error-messages';
 import { Spinner } from '@/components/ui/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PullToRefresh } from './pull-to-refresh';
@@ -200,7 +201,7 @@ const ErrorState = memo(function ErrorState({ error, onRetry }: ErrorStateProps)
       </div>
       <h3 className="mb-2 text-lg font-semibold">Unable to load dashboard</h3>
       <p className="mb-6 text-sm text-muted-foreground">
-        {error.message || 'An unexpected error occurred'}
+        {getDashboardErrorMessage(error, 'mobileDashboard')}
       </p>
       <button
         type="button"

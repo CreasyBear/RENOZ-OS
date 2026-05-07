@@ -21,6 +21,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { ExternalLink, Activity, AlertCircle, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from '../dashboard-error-messages';
 import {
   Card,
   CardContent,
@@ -181,7 +182,7 @@ function ActivityFeedWidgetError({
           aria-hidden="true"
         />
         <p className="text-sm text-muted-foreground mb-2">
-          {error.message || 'Failed to load activities'}
+          {getDashboardErrorMessage(error, 'activityFeed')}
         </p>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry}>

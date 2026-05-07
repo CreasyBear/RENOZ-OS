@@ -16,6 +16,7 @@
 import { memo, useMemo } from 'react';
 import { Target, Clock, Check, AlertTriangle, TrendingUp, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from './dashboard-error-messages';
 import {
   Card,
   CardContent,
@@ -222,7 +223,7 @@ function TargetProgressError({
           aria-hidden="true"
         />
         <p className="text-sm text-muted-foreground mb-2">
-          {error.message || 'Failed to load targets'}
+          {getDashboardErrorMessage(error, 'targets')}
         </p>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry}>

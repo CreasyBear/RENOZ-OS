@@ -21,6 +21,7 @@ import { DragOverlay, useDndContext } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
+import { getDashboardErrorMessage } from './dashboard-error-messages';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, GripVertical, LayoutGrid } from 'lucide-react';
 
@@ -187,7 +188,7 @@ function ErrorState({ error }: { error: Error }) {
       </div>
       <div className="space-y-1">
         <p className="text-sm font-medium text-red-800">Failed to load widgets</p>
-        <p className="text-xs text-red-600">{error.message || 'An unexpected error occurred'}</p>
+        <p className="text-xs text-red-600">{getDashboardErrorMessage(error, 'widgets')}</p>
       </div>
     </div>
   );
