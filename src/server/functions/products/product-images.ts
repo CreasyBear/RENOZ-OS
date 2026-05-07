@@ -17,6 +17,10 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ServerError, ValidationError } from '@/lib/server/errors';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import {
+  extractStoragePathFromPublicUrl,
+  isOurStorageUrl,
+} from '@/lib/storage/storage-url-utils';
 
 // ============================================================================
 // TYPES
@@ -201,6 +205,38 @@ async function createProductImageRecord(params: {
 
     return image;
   });
+}
+
+async function removeProductImageStorageObjects(imageUrls: Array<string | null | undefined>) {
+  const storagePaths = Array.from(
+    new Set(
+      imageUrls
+        .filter((url): url is string => isOurStorageUrl(url))
+        .map((url) => extractStoragePathFromPublicUrl(url, PRODUCT_IMAGE_STORAGE_BUCKET))
+        .filter((path): path is string => Boolean(path))
+    )
+  );
+
+  if (storagePaths.length === 0) {
+    return;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.storage
+      .from(PRODUCT_IMAGE_STORAGE_BUCKET)
+      .remove(storagePaths);
+
+    if (error) {
+      logger.error('[productImages] Failed to remove product image storage objects', error, {
+        storageObjectCount: storagePaths.length,
+      });
+    }
+  } catch (error) {
+    logger.error('[productImages] Error removing product image storage objects', error, {
+      storageObjectCount: storagePaths.length,
+    });
+  }
 }
 
 // ============================================================================
@@ -411,9 +447,7 @@ export const updateProductImage = createServerFn({ method: 'POST' })
   });
 
 /**
- * Delete a product image.
- * Note: This only removes the database record.
- * Actual file deletion from Supabase Storage should be handled separately.
+ * Delete a product image and best-effort remove the backing storage object.
  */
 export const deleteProductImage = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
@@ -434,7 +468,7 @@ export const deleteProductImage = createServerFn({ method: 'POST' })
 
     const wasPrimary = existing.isPrimary;
 
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       await tx.delete(productImages).where(eq(productImages.id, data.id));
 
       // If was primary, set next image as primary
@@ -461,6 +495,9 @@ export const deleteProductImage = createServerFn({ method: 'POST' })
 
       return { success: true, wassPrimary: wasPrimary };
     });
+
+    await removeProductImageStorageObjects([existing.imageUrl]);
+    return result;
   });
 
 // ============================================================================
@@ -605,7 +642,7 @@ export const bulkDeleteImages = createServerFn({ method: 'POST' })
     // Get product IDs where primary image was deleted
     const primaryImageProductIds = images.filter((i) => i.isPrimary).map((i) => i.productId);
 
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Delete images
       await tx.delete(productImages).where(inArray(productImages.id, data.imageIds));
 
@@ -650,6 +687,9 @@ export const bulkDeleteImages = createServerFn({ method: 'POST' })
 
       return { deleted: images.length, primaryReassigned };
     });
+
+    await removeProductImageStorageObjects(images.map((image) => image.imageUrl));
+    return result;
   });
 
 /**
