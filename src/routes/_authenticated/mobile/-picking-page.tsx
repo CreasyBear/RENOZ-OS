@@ -36,7 +36,11 @@ import { usePickOrderItems } from "@/hooks/orders/use-picking";
 import { useAvailableSerials } from "@/hooks/inventory";
 import { SerialPicker } from "@/components/domain/orders/fulfillment/serial-picker";
 import type { PickItem, PickList, PendingPick } from "./picking-types";
-import { formatMobileWarehouseActionError } from "./mobile-warehouse-action-errors";
+import {
+  formatMobileWarehouseActionError,
+  isSerializedPickSyncFailure,
+  SERIALIZED_PICK_SYNC_DESKTOP_MESSAGE,
+} from "./mobile-warehouse-action-errors";
 
 interface PickItemRowProps {
   item: PickItem;
@@ -343,14 +347,8 @@ export default function MobilePickingPage({ orderId }: { orderId?: string }) {
           ],
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (
-          /serial|Serial/.test(msg) &&
-          (!item.serialNumbers || item.serialNumbers.length === 0)
-        ) {
-          throw new Error(
-            "Serialized pick could not sync - open order on desktop to complete"
-          );
+        if (isSerializedPickSyncFailure(err, item.serialNumbers)) {
+          throw new Error(SERIALIZED_PICK_SYNC_DESKTOP_MESSAGE);
         }
         throw err;
       }
