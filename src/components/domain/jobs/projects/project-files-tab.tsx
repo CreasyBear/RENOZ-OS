@@ -75,6 +75,7 @@ import type { ProjectFile } from '@/lib/schemas/jobs';
 
 // Dialogs
 import { FileUploadDialog } from './file-dialogs';
+import { getProjectFilesReadErrorMessage } from './project-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -784,9 +785,7 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>{files.length === 0 ? 'Files unavailable' : 'Showing cached files'}</AlertTitle>
       <AlertDescription className="flex items-center justify-between gap-3">
-        <span>
-          {error.message || 'Project files are temporarily unavailable. Please refresh and try again.'}
-        </span>
+        <span>{getProjectFilesReadErrorMessage(error)}</span>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           Retry
         </Button>
