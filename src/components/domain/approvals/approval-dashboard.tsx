@@ -28,7 +28,11 @@ import { getApprovalDashboardReadErrorMessage } from './approval-dashboard-error
 // ============================================================================
 
 // Import types from schemas (single source of truth per SCHEMA-TRACE.md)
-import type { ApprovalItem, ApprovalFilters } from '@/lib/schemas/approvals';
+import type {
+  ApprovalFilters,
+  ApprovalItem,
+  ApprovalRejectionReason,
+} from '@/lib/schemas/approvals';
 
 // Re-export for backward compatibility
 export type { ApprovalItem, ApprovalFilters };
@@ -53,13 +57,18 @@ export interface ApprovalDashboardProps {
   /** @source approval decision handler in /approvals/index.tsx */
   onDecision: (
     decision: 'approve' | 'reject' | 'escalate',
-    data: { comments: string; escalateTo?: string }
+    data: {
+      comments: string;
+      escalateTo?: string;
+      reason?: ApprovalRejectionReason;
+    }
   ) => void | Promise<void>;
   /** @source bulk approval decision handler in /approvals/index.tsx */
   onBulkDecision: (
     decision: 'approve' | 'reject',
     comments: string,
-    selectedIds: string[]
+    selectedIds: string[],
+    rejectionReason?: ApprovalRejectionReason
   ) => void | Promise<void>;
   /** @source useUsers in /approvals/index.tsx */
   escalationUsers: Array<{ id: string; name: string | null; email: string | null }>;
@@ -381,8 +390,8 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
         open={bulkDialogOpen}
         onOpenChange={setBulkDialogOpen}
         selectedItems={selectedItems}
-        onBulkDecision={async (decision, comments) => {
-          await onBulkDecision(decision, comments, selectedItems);
+        onBulkDecision={async (decision, comments, rejectionReason) => {
+          await onBulkDecision(decision, comments, selectedItems, rejectionReason);
           setBulkDialogOpen(false);
           setSelectedItems([]);
         }}

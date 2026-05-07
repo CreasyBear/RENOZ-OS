@@ -25,6 +25,18 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toastError } from '@/hooks';
 import { logger } from '@/lib/logger';
 import { formatApprovalDecisionMutationError } from '@/hooks/suppliers/approval-mutation-errors';
+import {
+  approvalRejectionReasonLabels,
+  approvalRejectionReasons,
+  type ApprovalRejectionReason,
+} from '@/lib/schemas/approvals';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ============================================================================
 // TYPES
@@ -34,7 +46,11 @@ interface BulkApprovalDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedItems: string[];
-  onBulkDecision: (decision: 'approve' | 'reject', comments: string) => void | Promise<void>;
+  onBulkDecision: (
+    decision: 'approve' | 'reject',
+    comments: string,
+    rejectionReason?: ApprovalRejectionReason
+  ) => void | Promise<void>;
 }
 
 // ============================================================================
@@ -48,12 +64,16 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
   onBulkDecision,
 }: BulkApprovalDialogProps) {
   const [comments, setComments] = useState('');
+  const [rejectionReason, setRejectionReason] = useState<ApprovalRejectionReason | ''>('');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when dialog opens
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setComments('');
+      setRejectionReason('');
+      setDecisionError(null);
       setIsSubmitting(false);
     }
     onOpenChange(newOpen);
@@ -61,9 +81,22 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
 
   // Handle bulk decision
   const handleBulkDecision = async (decision: 'approve' | 'reject') => {
+    setDecisionError(null);
+
+    if (decision === 'reject') {
+      if (!rejectionReason) {
+        setDecisionError('Select a rejection reason.');
+        return;
+      }
+      if (!comments.trim()) {
+        setDecisionError('Add rejection comments before rejecting.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      await onBulkDecision(decision, comments);
+      await onBulkDecision(decision, comments.trim(), rejectionReason || undefined);
       handleOpenChange(false);
     } catch (error) {
       logger.error('Bulk decision error', error);
@@ -115,7 +148,27 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
             <CardHeader>
               <CardTitle className="text-lg">Decision Comments</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Rejection Reason</Label>
+                <Select
+                  value={rejectionReason}
+                  onValueChange={(value) =>
+                    setRejectionReason(value as ApprovalRejectionReason)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Required when rejecting" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {approvalRejectionReasons.map((reason) => (
+                      <SelectItem key={reason} value={reason}>
+                        {approvalRejectionReasonLabels[reason]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="bulk-comments">
                   Comments
@@ -131,6 +184,12 @@ export const BulkApprovalDialog = memo(function BulkApprovalDialog({
                   rows={3}
                 />
               </div>
+              {decisionError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{decisionError}</AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
 

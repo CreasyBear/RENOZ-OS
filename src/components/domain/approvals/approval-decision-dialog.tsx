@@ -52,7 +52,12 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { StatusCell } from '@/components/shared/data-table';
 import { APPROVAL_PRIORITY_CONFIG } from './approval-status-config';
-import type { ApprovalItem } from '@/lib/schemas/approvals';
+import {
+  approvalRejectionReasonLabels,
+  approvalRejectionReasons,
+  type ApprovalItem,
+  type ApprovalRejectionReason,
+} from '@/lib/schemas/approvals';
 import { formatApprovalDecisionMutationError } from '@/hooks/suppliers/approval-mutation-errors';
 import { getApprovalDetailsReadErrorMessage } from './approval-dashboard-error-messages';
 
@@ -66,7 +71,11 @@ interface ApprovalDecisionDialogProps {
   item: ApprovalItem | null;
   onDecision: (
     decision: 'approve' | 'reject' | 'escalate',
-    data: { comments: string; escalateTo?: string }
+    data: {
+      comments: string;
+      escalateTo?: string;
+      reason?: ApprovalRejectionReason;
+    }
   ) => void | Promise<void>;
   escalationUsers: Array<{ id: string; name: string | null; email: string | null }>;
   /** @source useApprovalDetails in /approvals/index.tsx */
@@ -101,9 +110,11 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   isLoadingApprovalDetails = false,
 }: ApprovalDecisionDialogProps) {
   const [comments, setComments] = useState('');
+  const [rejectionReason, setRejectionReason] = useState<ApprovalRejectionReason | ''>('');
   const [escalateTo, setEscalateTo] = useState('');
   const [escalationReason, setEscalationReason] = useState('');
   const [escalationError, setEscalationError] = useState<string | null>(null);
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { formatCurrency, formatDate } = useOrgFormat();
 
@@ -111,10 +122,12 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setComments('');
+      setRejectionReason('');
       setIsSubmitting(false);
       setEscalateTo('');
       setEscalationReason('');
       setEscalationError(null);
+      setRejectionError(null);
     }
     onOpenChange(newOpen);
   };
@@ -122,6 +135,22 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
   // Handle decision
   const handleDecision = async (decision: 'approve' | 'reject' | 'escalate') => {
     if (!item) return;
+
+    setRejectionError(null);
+    setEscalationError(null);
+
+    let selectedRejectionReason: ApprovalRejectionReason | undefined;
+    if (decision === 'reject') {
+      if (!rejectionReason) {
+        setRejectionError('Select a rejection reason.');
+        return;
+      }
+      if (!comments.trim()) {
+        setRejectionError('Add rejection comments before rejecting.');
+        return;
+      }
+      selectedRejectionReason = rejectionReason;
+    }
 
     if (decision === 'escalate') {
       if (!escalateTo || !escalationReason.trim()) {
@@ -134,8 +163,13 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
     try {
       if (decision === 'escalate') {
         await onDecision(decision, { comments: escalationReason, escalateTo });
+      } else if (decision === 'reject') {
+        await onDecision(decision, {
+          comments: comments.trim(),
+          reason: selectedRejectionReason,
+        });
       } else {
-        await onDecision(decision, { comments });
+        await onDecision(decision, { comments: comments.trim() });
       }
       handleOpenChange(false);
     } catch (error) {
@@ -333,12 +367,32 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
             <CardHeader>
               <CardTitle className="text-lg">Decision Comments</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Rejection Reason</Label>
+                <Select
+                  value={rejectionReason}
+                  onValueChange={(value) =>
+                    setRejectionReason(value as ApprovalRejectionReason)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Required when rejecting" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {approvalRejectionReasons.map((reason) => (
+                      <SelectItem key={reason} value={reason}>
+                        {approvalRejectionReasonLabels[reason]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="comments">
-                  Comments (Optional)
+                  Comments
                   <span className="text-muted-foreground ml-1 text-sm">
-                    Add notes about your decision
+                    Required for rejection, optional for approval
                   </span>
                 </Label>
                 <Textarea
@@ -349,6 +403,12 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                   rows={3}
                 />
               </div>
+              {rejectionError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{rejectionError}</AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
 

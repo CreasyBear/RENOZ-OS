@@ -188,7 +188,11 @@ export default function ApprovalsPage() {
   const handleDecision = useCallback(
     async (
       decision: 'approve' | 'reject' | 'escalate',
-      data: { comments: string; escalateTo?: string }
+      data: {
+        comments: string;
+        escalateTo?: string;
+        reason?: ApprovalRejectionReason;
+      }
     ) => {
       if (!selectedItem) return;
 
@@ -201,9 +205,18 @@ export default function ApprovalsPage() {
           description: `${selectedItem.poNumber || 'Item'} has been approved`,
         });
       } else if (decision === 'reject') {
+        if (!data.reason) {
+          throw {
+            statusCode: 400,
+            errors: {
+              reason: ['Select a rejection reason.'],
+            },
+          };
+        }
+
         await rejectMutation.mutateAsync({
           approvalId: selectedItem.id,
-          reason: 'other' as ApprovalRejectionReason,
+          reason: data.reason,
           comments: data.comments,
         });
         toast.success('Rejection submitted', {
@@ -236,7 +249,12 @@ export default function ApprovalsPage() {
   );
 
   const handleBulkDecision = useCallback(
-    async (decision: string, comments: string, selectedIds: string[]) => {
+    async (
+      decision: 'approve' | 'reject',
+      comments: string,
+      selectedIds: string[],
+      rejectionReason?: ApprovalRejectionReason
+    ) => {
       if (selectedIds.length === 0) {
         toast.warning('No items selected', {
           description: 'Please select items to approve or reject',
@@ -254,6 +272,15 @@ export default function ApprovalsPage() {
         });
       } else if (decision === 'reject') {
         const trimmedComments = comments.trim();
+        if (!rejectionReason) {
+          throw {
+            statusCode: 400,
+            errors: {
+              reason: ['Select a rejection reason.'],
+            },
+          };
+        }
+
         if (!trimmedComments) {
           throw {
             statusCode: 400,
@@ -266,7 +293,7 @@ export default function ApprovalsPage() {
         const result = await bulkRejectMutation.mutateAsync(
           selectedIds.map((approvalId) => ({
             approvalId,
-            reason: 'other' as ApprovalRejectionReason,
+            reason: rejectionReason,
             comments: trimmedComments,
           }))
         );

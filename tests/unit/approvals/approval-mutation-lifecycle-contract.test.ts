@@ -16,14 +16,16 @@ describe('approval mutation lifecycle contract', () => {
 
     const decisionAwait = dashboard.indexOf('await onDecision(decision, data);');
     const decisionClose = dashboard.indexOf('onDecisionDialogOpenChange(false);', decisionAwait);
-    const bulkAwait = dashboard.indexOf('await onBulkDecision(decision, comments, selectedItems);');
+    const bulkAwait = dashboard.indexOf(
+      'await onBulkDecision(decision, comments, selectedItems, rejectionReason);'
+    );
     const bulkClose = dashboard.indexOf('setBulkDialogOpen(false);', bulkAwait);
 
     expect(decisionDialog).toContain(
-      'data: { comments: string; escalateTo?: string }\n  ) => void | Promise<void>;'
+      'reason?: ApprovalRejectionReason;'
     );
     expect(bulkDialog).toContain(
-      "onBulkDecision: (decision: 'approve' | 'reject', comments: string) => void | Promise<void>;"
+      'rejectionReason?: ApprovalRejectionReason'
     );
     expect(decisionAwait).toBeGreaterThan(-1);
     expect(decisionClose).toBeGreaterThan(decisionAwait);
@@ -41,6 +43,27 @@ describe('approval mutation lifecycle contract', () => {
     expect(route).not.toContain("description: err instanceof Error ? err.message : 'An error occurred'");
     expect(route).not.toContain('catch (err)');
     expect(route).not.toContain('Bulk reject would need a different approach');
+  });
+
+  it('preserves approval rejection reasons through single and bulk mutation paths', () => {
+    const route = read('src/routes/_authenticated/approvals/approvals-page.tsx');
+    const dashboard = read('src/components/domain/approvals/approval-dashboard.tsx');
+    const singleDialog = read('src/components/domain/approvals/approval-decision-dialog.tsx');
+    const bulkDialog = read('src/components/domain/approvals/bulk-approval-dialog.tsx');
+
+    expect(singleDialog).toContain('approvalRejectionReasonLabels');
+    expect(singleDialog).toContain('approvalRejectionReasons.map');
+    expect(singleDialog).toContain('reason: selectedRejectionReason');
+    expect(bulkDialog).toContain('approvalRejectionReasonLabels');
+    expect(bulkDialog).toContain('approvalRejectionReasons.map');
+    expect(bulkDialog).toContain('rejectionReason || undefined');
+    expect(dashboard).toContain(
+      'await onBulkDecision(decision, comments, selectedItems, rejectionReason);'
+    );
+    expect(route).toContain("reason: ['Select a rejection reason.']");
+    expect(route).toContain('reason: data.reason,');
+    expect(route).toContain('reason: rejectionReason,');
+    expect(route).not.toContain("reason: 'other' as ApprovalRejectionReason");
   });
 
   it('keeps approval dialog catches on the safe mutation formatter', () => {
