@@ -47,6 +47,7 @@ import {
   useGenerateInvoice,
   useDocumentPolling,
 } from '@/hooks/documents/use-generate-document';
+import { formatDocumentGenerationError } from '@/hooks/documents/document-error-messages';
 
 // ============================================================================
 // TYPES
@@ -198,11 +199,7 @@ export const DownloadPdfButton = memo(function DownloadPdfButton({
       } catch (error) {
         dismissToast(id);
         setToastId(null);
-        toastError(
-          error instanceof Error
-            ? error.message
-            : `Failed to generate ${getDocumentLabel(documentType)} PDF`
-        );
+        toastError(formatDocumentGenerationError(error, getDocumentLabel(documentType)));
       }
     },
     [documentType, entityId, dueDate, generateQuote, generateInvoice]

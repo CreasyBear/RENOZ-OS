@@ -58,6 +58,7 @@ import {
   type DocumentType,
   type GeneratedDocument,
 } from '@/hooks/documents/use-document-history';
+import { getDocumentHistoryReadErrorMessage } from '@/hooks/documents/document-error-messages';
 
 // ============================================================================
 // TYPES
@@ -362,7 +363,9 @@ export const DocumentHistoryList = memo(function DocumentHistoryList({
     const degradedAlert = error ? (
       <Alert className="mb-4">
         <AlertDescription>
-          {error.message || 'Document history is temporarily unavailable. Showing the most recent documents.'}
+          {getDocumentHistoryReadErrorMessage(error, {
+            hasCachedDocuments: data.documents.length > 0,
+          })}
         </AlertDescription>
       </Alert>
     ) : null;

@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { getGeneratedDocuments } from '@/server/functions/documents/get-generated-documents';
 import { queryKeys } from '@/lib/query-keys';
+import { DOCUMENT_HISTORY_READ_FALLBACK_MESSAGE } from './document-error-messages';
 
 // ============================================================================
 // TYPES
@@ -158,7 +159,7 @@ export function useDocumentHistory(filters: DocumentHistoryFilters) {
       } catch (error) {
         throw normalizeReadQueryError(error, {
           contractType: 'always-shaped',
-          fallbackMessage: 'Document history is temporarily unavailable. Please refresh and try again.',
+          fallbackMessage: DOCUMENT_HISTORY_READ_FALLBACK_MESSAGE,
         });
       }
     },
