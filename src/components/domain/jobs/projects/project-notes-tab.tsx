@@ -27,8 +27,6 @@ import {
   MoreHorizontal,
   Trash2,
   Edit3,
-  Play,
-  Pause,
   Clock,
   CheckCircle2,
   Loader2,
@@ -53,7 +51,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Progress } from '@/components/ui/progress';
 import { toast } from '@/lib/toast';
 
 // Hooks
@@ -158,61 +155,23 @@ const NOTE_STATUS_CONFIG: Record<ProjectNoteStatus, {
 // ============================================================================
 
 function AudioPlayer({ 
+  url,
   duration, 
   transcript 
 }: { 
+  url: string;
   duration: string; 
   transcript?: NoteTranscriptSegment[];
 }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [_progress, _setProgress] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
-
-  // Parse duration string "HH:mm:ss" or "mm:ss" to seconds
-  const parseDuration = (durationStr: string): number => {
-    const parts = durationStr.split(':').map(Number);
-    if (parts.length === 3) {
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    return parts[0] * 60 + parts[1];
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const durationSeconds = parseDuration(duration);
 
   return (
     <div className="space-y-2">
-      {/* Player */}
-      <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-10 w-10 rounded-full shrink-0"
-          onClick={() => setIsPlaying(!isPlaying)}
-        >
-          {isPlaying ? (
-            <Pause className="h-4 w-4" />
-          ) : (
-            <Play className="h-4 w-4 ml-0.5" />
-          )}
-        </Button>
-        
-        <div className="flex-1">
-          <Progress value={_progress} className="h-1.5" />
-          <div className="flex justify-between mt-1">
-            <span className="text-xs text-muted-foreground">
-              {formatTime((_progress / 100) * durationSeconds)}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {formatTime(durationSeconds)}
-            </span>
-          </div>
-        </div>
+      <div className="space-y-2 p-3 bg-muted rounded-lg">
+        <audio controls src={url} className="w-full" preload="metadata">
+          <a href={url}>Open audio recording</a>
+        </audio>
+        <p className="text-xs text-muted-foreground">Duration: {duration}</p>
       </div>
 
       {/* Transcript */}
@@ -375,6 +334,7 @@ function NoteCard({
         {isAudio && note.audioData && (
           <div className="mt-3">
             <AudioPlayer 
+              url={note.audioData.fileUrl}
               duration={note.audioData.duration}
               transcript={note.audioData.transcript}
             />

@@ -21,8 +21,12 @@ import {
   SelectField,
 } from '@/components/shared/forms';
 import { formatProjectNoteMutationError, useCreateNote, useUpdateNote } from '@/hooks/jobs';
+import {
+  discardUploadedProjectFile,
+  uploadProjectFile,
+} from '@/server/functions/files/upload-project-file';
 import { toast } from 'sonner';
-import type { ProjectNote } from '@/lib/schemas/jobs';
+import type { AudioNoteData, ProjectNote } from '@/lib/schemas/jobs';
 
 // ============================================================================
 // SCHEMAS
@@ -48,6 +52,49 @@ const noteStatusOptions = [
   { value: 'processing', label: 'Processing' },
 ];
 
+interface RecordedAudio {
+  file: File;
+  duration: string;
+}
+
+function formatAudioDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((part) => part.toString().padStart(2, '0'))
+    .join(':');
+}
+
+function makeRecordedAudioFile(chunks: Blob[], projectId: string): File {
+  const blob = new Blob(chunks, { type: 'audio/webm' });
+  return new File([blob], `project-${projectId}-audio-${Date.now()}.webm`, {
+    type: 'audio/webm',
+  });
+}
+
+async function uploadRecordedAudio(projectId: string, recordedAudio: RecordedAudio) {
+  const uploadResult = await uploadProjectFile({
+    projectId,
+    filename: recordedAudio.file.name,
+    fileBody: recordedAudio.file,
+    contentType: recordedAudio.file.type || 'audio/webm',
+  });
+  const fileUrl = uploadResult.publicUrl || `storage://${uploadResult.bucket}/${uploadResult.path}`;
+  const audioData: AudioNoteData = {
+    fileUrl,
+    fileName: recordedAudio.file.name,
+    duration: recordedAudio.duration,
+    aiSummary: 'Transcription is not available yet for this audio note.',
+    keyPoints: [],
+    insights: [],
+    transcript: [],
+  };
+
+  return { uploadResult, audioData };
+}
+
 // ============================================================================
 // CREATE DIALOG
 // ============================================================================
@@ -64,9 +111,11 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingTimeRef = useRef(0);
 
   const form = useTanStackForm({
     schema: noteFormSchema,
@@ -79,20 +128,37 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       toast.error('Please fix the errors below and try again.');
     },
     onSubmit: async (data) => {
+      if (isRecording) stopRecording();
       setSubmitError(null);
+      let uploadResult: Awaited<ReturnType<typeof uploadProjectFile>> | null = null;
       try {
+        const audioPayload = recordedAudio
+          ? await uploadRecordedAudio(projectId, recordedAudio)
+          : null;
+        uploadResult = audioPayload?.uploadResult ?? null;
+
         await createNote.mutateAsync({
           title: data.title,
           content: data.content,
-          noteType: data.noteType,
+          noteType: audioPayload ? 'audio' : data.noteType,
           status: 'completed',
+          audioData: audioPayload?.audioData,
         });
 
         toast.success('Note created');
         onOpenChange(false);
         form.reset();
+        setRecordedAudio(null);
+        setRecordingTime(0);
         onSuccess?.();
       } catch (error) {
+        if (uploadResult) {
+          await discardUploadedProjectFile({
+            projectId,
+            path: uploadResult.path,
+            bucket: uploadResult.bucket,
+          });
+        }
         const msg = formatProjectNoteMutationError(error, 'create');
         setSubmitError(msg);
         toast.error(msg);
@@ -102,7 +168,12 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
 
   useEffect(() => {
     if (open) {
-      setTimeout(() => setSubmitError(null), 0);
+      setTimeout(() => {
+        setSubmitError(null);
+        setRecordedAudio(null);
+        setRecordingTime(0);
+        recordingTimeRef.current = 0;
+      }, 0);
       form.reset({
         title: '',
         content: '',
@@ -125,13 +196,13 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       };
 
       mediaRecorder.onstop = async () => {
-        // Audio blob created - in production, upload to storage
-        new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        // In a real implementation, we'd upload this and process it
-        // For now, just add a placeholder
-        const currentContent = form.getFieldValue('content') ?? '';
-        form.setFieldValue('content', currentContent + '\n\n[Audio recording attached]');
-        toast.success('Audio recorded and attached');
+        const file = makeRecordedAudioFile(audioChunksRef.current, projectId);
+        setRecordedAudio({
+          file,
+          duration: formatAudioDuration(Math.max(1, recordingTimeRef.current)),
+        });
+        form.setFieldValue('noteType', 'audio');
+        toast.success('Audio recorded');
 
         // Stop all tracks
         stream.getTracks().forEach((track) => track.stop());
@@ -140,10 +211,15 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
+      recordingTimeRef.current = 0;
 
       // Start timer
       timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
+        setRecordingTime((prev) => {
+          const next = prev + 1;
+          recordingTimeRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch {
       toast.error('Could not access microphone');
@@ -256,6 +332,11 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
                 />
               )}
             </form.Field>
+            {recordedAudio && !isRecording && (
+              <p className="text-xs text-muted-foreground">
+                Audio recorded: {recordedAudio.duration}
+              </p>
+            )}
           </div>
     </FormDialog>
   );
@@ -284,9 +365,11 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingTimeRef = useRef(0);
 
   const form = useTanStackForm({
     schema: noteEditFormSchema,
@@ -304,17 +387,34 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
 
       if (isRecording) stopRecording();
       setSubmitError(null);
+      let uploadResult: Awaited<ReturnType<typeof uploadProjectFile>> | null = null;
       try {
+        const audioPayload = recordedAudio
+          ? await uploadRecordedAudio(note.projectId, recordedAudio)
+          : null;
+        uploadResult = audioPayload?.uploadResult ?? null;
+
         await updateNote.mutateAsync({
           id: note.id,
           ...data,
+          noteType: audioPayload ? 'audio' : data.noteType,
+          audioData: audioPayload?.audioData,
         });
 
         toast.success('Note updated successfully');
         form.reset();
+        setRecordedAudio(null);
+        setRecordingTime(0);
         onOpenChange(false);
         onSuccess?.();
       } catch (error) {
+        if (uploadResult) {
+          await discardUploadedProjectFile({
+            projectId: note.projectId,
+            path: uploadResult.path,
+            bucket: uploadResult.bucket,
+          });
+        }
         const msg = formatProjectNoteMutationError(error, 'update');
         setSubmitError(msg);
         toast.error(msg);
@@ -324,7 +424,12 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
 
   useEffect(() => {
     if (open && note) {
-      setTimeout(() => setSubmitError(null), 0);
+      setTimeout(() => {
+        setSubmitError(null);
+        setRecordedAudio(null);
+        setRecordingTime(0);
+        recordingTimeRef.current = 0;
+      }, 0);
       form.reset({
         title: note.title,
         content: note.content ?? '',
@@ -348,17 +453,25 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
       };
 
       mediaRecorder.onstop = () => {
-        // Audio blob created - in production, this would be uploaded to storage
-        // For now, the recording is captured but not persisted
-        new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = makeRecordedAudioFile(audioChunksRef.current, note?.projectId ?? 'project');
+        setRecordedAudio({
+          file,
+          duration: formatAudioDuration(Math.max(1, recordingTimeRef.current)),
+        });
+        form.setFieldValue('noteType', 'audio');
       };
 
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
+      recordingTimeRef.current = 0;
 
       recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
+        setRecordingTime((prev) => {
+          const next = prev + 1;
+          recordingTimeRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch {
       toast.error('Could not access microphone');
@@ -379,6 +492,9 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
   const handleCancel = () => {
     if (isRecording) stopRecording();
     setSubmitError(null);
+    setRecordedAudio(null);
+    setRecordingTime(0);
+    recordingTimeRef.current = 0;
     form.reset();
     onOpenChange(false);
   };
@@ -490,6 +606,11 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
               />
             )}
           </form.Field>
+          {recordedAudio && !isRecording && (
+            <p className="text-xs text-muted-foreground">
+              Audio recorded: {recordedAudio.duration}
+            </p>
+          )}
     </FormDialog>
   );
 }

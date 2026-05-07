@@ -58,8 +58,15 @@ describe('project notes mutation contract', () => {
 
     expect(dialogs).toContain("formatProjectNoteMutationError(error, 'create')");
     expect(dialogs).toContain("formatProjectNoteMutationError(error, 'update')");
+    expect(dialogs).toContain('uploadRecordedAudio(projectId, recordedAudio)');
+    expect(dialogs).toContain('uploadRecordedAudio(note.projectId, recordedAudio)');
+    expect(dialogs).toContain('discardUploadedProjectFile({');
+    expect(dialogs).toContain("noteType: audioPayload ? 'audio' : data.noteType");
+    expect(dialogs).toContain('audioData: audioPayload?.audioData');
     expect(dialogs).not.toContain("err instanceof Error ? err.message : 'Failed to create note'");
     expect(dialogs).not.toContain("err instanceof Error ? err.message : 'Failed to update note'");
+    expect(dialogs).not.toContain('[Audio recording attached]');
+    expect(dialogs).not.toContain('captured but not persisted');
 
     expect(jobsIndex).toContain('formatProjectNoteMutationError');
     expect(schema).toContain('projectScopedNoteIdSchema');
@@ -73,6 +80,9 @@ describe('project notes mutation contract', () => {
 
     expect(server).toContain('projectScopedNoteIdSchema');
     expect(server).toContain("throw new NotFoundError('Project note not found', 'projectNote')");
+    expect(tab).toContain('<audio controls src={url}');
+    expect(tab).toContain('url={note.audioData.fileUrl}');
+    expect(tab).not.toContain('const [isPlaying, setIsPlaying] = useState(false);');
     expect(compactServer).toContain(
       'where(and(eq(projectNotes.id,id),eq(projectNotes.projectId,projectId),eq(projectNotes.organizationId,ctx.organizationId)))'
     );
