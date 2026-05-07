@@ -39,6 +39,11 @@ export const jobAssignmentStatusSchema = z.enum(jobAssignmentStatusValues);
 export const jobAssignmentTypeSchema = z.enum(jobAssignmentTypeValues);
 export const jobPhotoTypeSchema = z.enum(jobPhotoTypeValues);
 
+const optionalGeneratedJobNumberSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim().length === 0 ? undefined : value),
+  z.string().trim().min(1).max(50).optional()
+);
+
 // ============================================================================
 // LOCATION SCHEMA
 // ============================================================================
@@ -73,7 +78,7 @@ export const createJobAssignmentSchema = z.object({
   customerId: z.string().uuid(),
   installerId: z.string().uuid(),
   jobType: jobAssignmentTypeSchema.default('installation'),
-  jobNumber: z.string().min(1).max(50),
+  jobNumber: optionalGeneratedJobNumberSchema,
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format

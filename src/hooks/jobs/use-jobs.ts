@@ -173,7 +173,7 @@ export function useCreateJob() {
           organizationId,
           customerId: input.customerId,
           installerId: input.installerId,
-          jobNumber: input.jobNumber ?? '', // Will be auto-generated if empty
+          jobNumber: input.jobNumber,
           title: input.title,
           description: input.description,
           scheduledDate: input.scheduledDate,
