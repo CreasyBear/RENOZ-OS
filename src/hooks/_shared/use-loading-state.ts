@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
+import { formatMutationError } from '@/lib/mutation-error-feedback';
 
 // ============================================================================
 // TYPES
@@ -167,11 +168,14 @@ export function useAsyncLoading() {
 
         return result;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+        const errorMessage = formatMutationError(
+          error,
+          'Operation failed. Please retry.'
+        );
         loading.setError(errorMessage);
 
         if (onError) {
-          onError(error as Error);
+          onError(error instanceof Error ? error : new Error(errorMessage));
         }
 
         // Show error toast
@@ -225,11 +229,14 @@ export function useFileUploadLoading() {
 
         return result;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+        const errorMessage = formatMutationError(
+          error,
+          'Upload failed. Please retry.'
+        );
         loading.setError(errorMessage);
 
         if (options.onError) {
-          options.onError(error as Error);
+          options.onError(error instanceof Error ? error : new Error(errorMessage));
         }
 
         import('@/lib/toast').then(({ toast }) => {

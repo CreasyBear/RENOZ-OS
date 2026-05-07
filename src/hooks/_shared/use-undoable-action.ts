@@ -25,6 +25,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { showConfirmationToast } from '~/components/shared/notifications/confirmation-toast';
 import { toast } from 'sonner';
+import { formatMutationError } from '@/lib/mutation-error-feedback';
 
 export interface UseUndoableActionOptions<T> {
   /** The action to execute (called immediately, can be undone) */
@@ -99,7 +100,7 @@ export function useUndoableAction<T>({
         });
       } catch (error) {
         toast.error('Action failed', {
-          description: error instanceof Error ? error.message : 'Unknown error',
+          description: formatMutationError(error, 'Action failed. Please retry.'),
         });
       } finally {
         setIsExecuting(false);
