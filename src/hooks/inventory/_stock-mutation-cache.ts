@@ -115,7 +115,7 @@ function invalidateProductInventoryQueries(
       queryKey: queryKeys.products.inventoryStats(productId),
     });
     queryClient.invalidateQueries({
-      queryKey: queryKeys.products.stockAlerts(productId),
+      queryKey: queryKeys.products.stockAlertsAll(),
     });
     queryClient.invalidateQueries({
       queryKey: queryKeys.products.movementsForProduct(productId),

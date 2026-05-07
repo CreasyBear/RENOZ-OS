@@ -153,7 +153,7 @@ describe('useReceiveInventory', () => {
       queryKey: queryKeys.products.inventoryStats('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.products.stockAlerts('product-1'),
+      queryKey: queryKeys.products.stockAlertsAll(),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.products.movementsForProduct('product-1'),

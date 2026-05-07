@@ -1269,8 +1269,9 @@ export const queryKeys = {
     // Product stock/inventory extended
     stockLevels: (productId: string) =>
       [...queryKeys.products.all, 'stockLevels', productId] as const,
-    stockAlerts: (productId: string) =>
-      [...queryKeys.products.all, 'stockAlerts', productId] as const,
+    stockAlertsAll: () => [...queryKeys.products.all, 'stockAlerts'] as const,
+    stockAlerts: (scope: string) =>
+      [...queryKeys.products.stockAlertsAll(), scope] as const,
     movementsForProduct: (productId: string) =>
       [...queryKeys.products.all, 'movements', productId] as const,
     movements: (productId: string, filters?: Record<string, unknown>) =>

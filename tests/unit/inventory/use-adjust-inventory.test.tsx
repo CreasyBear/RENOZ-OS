@@ -234,6 +234,9 @@ describe('useAdjustInventory', () => {
       queryKey: queryKeys.products.inventory('product-1'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.stockAlertsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
     })
   })

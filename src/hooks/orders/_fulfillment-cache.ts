@@ -110,7 +110,7 @@ function invalidateAffectedProductStockQueries(
     queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(productId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.products.inventory(productId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.products.inventoryStats(productId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.products.stockAlerts(productId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.stockAlertsAll() });
     queryClient.invalidateQueries({ queryKey: queryKeys.products.movementsForProduct(productId) });
     queryClient.invalidateQueries({
       queryKey: queryKeys.products.movementsAggregatedForProduct(productId),

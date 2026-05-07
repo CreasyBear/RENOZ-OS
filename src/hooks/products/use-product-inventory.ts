@@ -311,7 +311,7 @@ export function useAdjustStock() {
         queryKey: queryKeys.products.inventoryStats(variables.productId),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.products.stockAlerts(variables.productId),
+        queryKey: queryKeys.products.stockAlertsAll(),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.movements(variables.productId, {}),
