@@ -32,6 +32,7 @@ import { calculateMetrics as calculateMetricsAggregator } from '@/server/functio
 import { getMetric } from '@/lib/metrics/registry';
 import { organizations } from 'drizzle/schema/settings/organizations';
 import { fetchOrganizationForDocument } from '@/server/functions/documents/organization-for-pdf';
+import { deriveScheduledReportStatus } from '@/lib/reports/scheduled-report-status';
 import { TextEncoder } from 'util';
 import { randomUUID } from 'crypto';
 import { createElement } from 'react';
@@ -203,6 +204,9 @@ export const getScheduledReportStatus = createServerFn({ method: 'GET' })
         name: scheduledReports.name,
         isActive: scheduledReports.isActive,
         lastRunAt: scheduledReports.lastRunAt,
+        lastSuccessAt: scheduledReports.lastSuccessAt,
+        lastErrorAt: scheduledReports.lastErrorAt,
+        lastError: scheduledReports.lastError,
         nextRunAt: scheduledReports.nextRunAt,
       })
       .from(scheduledReports)
@@ -218,12 +222,16 @@ export const getScheduledReportStatus = createServerFn({ method: 'GET' })
       throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
-    // TODO(PHASE12-004): Get actual last run status from Trigger.dev job history. See REPORTS-007.
-    // Currently returns null; implement by querying report run events or job status API.
+    const { lastRunStatus, lastRunMessage } = deriveScheduledReportStatus(report);
+
     return {
-      ...report,
-      lastRunStatus: null,
-      lastRunMessage: null,
+      id: report.id,
+      name: report.name,
+      isActive: report.isActive,
+      lastRunAt: report.lastRunAt,
+      nextRunAt: report.nextRunAt,
+      lastRunStatus,
+      lastRunMessage,
     };
   });
 
