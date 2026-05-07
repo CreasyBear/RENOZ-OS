@@ -13,18 +13,25 @@ function compact(source: string): string {
 }
 
 describe('inventory read-model tenant-scope contract', () => {
-  it('keeps inventory list and quick-search descriptor joins organization-bounded', () => {
+  it('keeps inventory list and quick-search product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/reads.ts'));
 
     expect(source).toContain(
-      'constproductJoin=and(eq(inventory.productId,products.id),eq(products.organizationId,organizationId))!'
+      'functioninventoryProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'constproductJoin=inventoryProductJoinCondition(organizationId);'
     );
     expect(source).toContain(
       'constlocationJoin=and(eq(inventory.locationId,locations.id),eq(locations.organizationId,organizationId))!'
     );
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventory.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'leftJoin(products,inventoryProductJoinCondition(ctx.organizationId))'
     );
+    expect(source).toContain('eq(products.id,item.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)');
     expect(source).toContain(
       'leftJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'
     );

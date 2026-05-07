@@ -34,6 +34,14 @@ import {
 
 type InventoryMovementRecord = typeof inventoryMovements.$inferSelect;
 
+function inventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  )!;
+}
+
 /**
  * Get paginated list of inventory items with filtering and sorting.
  *
@@ -144,10 +152,7 @@ const _listInventory = cache(
       conditions.push(lte(inventory.totalValue, filters.maxValue));
     }
 
-    const productJoin = and(
-      eq(inventory.productId, products.id),
-      eq(products.organizationId, organizationId)
-    )!;
+    const productJoin = inventoryProductJoinCondition(organizationId);
     const locationJoin = and(
       eq(inventory.locationId, locations.id),
       eq(locations.organizationId, organizationId)
@@ -255,13 +260,7 @@ export const quickSearchInventory = createServerFn({ method: 'GET' })
         serialNumber: inventory.serialNumber,
       })
       .from(inventory)
-      .leftJoin(
-        products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
+      .leftJoin(products, inventoryProductJoinCondition(ctx.organizationId))
       .leftJoin(
         locations,
         and(
@@ -335,7 +334,8 @@ const _getInventoryItem = cache(
         .where(
           and(
             eq(products.id, item.productId),
-            eq(products.organizationId, organizationId)
+            eq(products.organizationId, organizationId),
+            isNull(products.deletedAt)
           )
         )
         .limit(1)
