@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, or, sql, desc, asc, gt } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -35,6 +35,22 @@ import { allocatableQuantitySumSql } from './_allocatable-stock-sql';
 // ============================================================================
 
 type AlertRecord = typeof inventoryAlerts.$inferSelect;
+
+function alertProductWhereCondition(productId: string, organizationId: string) {
+  return and(
+    eq(products.id, productId),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
+function alertInventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
 
 // ============================================================================
 // ALERT CRUD
@@ -155,9 +171,7 @@ export const getAlert = createServerFn({ method: 'GET' })
         ? db
             .select()
             .from(products)
-            .where(
-              and(eq(products.id, alert.productId), eq(products.organizationId, ctx.organizationId))
-            )
+            .where(alertProductWhereCondition(alert.productId, ctx.organizationId))
             .limit(1)
             .then((r) => r[0] || null)
         : Promise.resolve(null),
@@ -197,9 +211,7 @@ export const createAlert = createServerFn({ method: 'POST' })
       const [product] = await db
         .select()
         .from(products)
-        .where(
-          and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
-        )
+        .where(alertProductWhereCondition(data.productId, ctx.organizationId))
         .limit(1);
 
       if (!product) {
@@ -268,9 +280,7 @@ export const updateAlert = createServerFn({ method: 'POST' })
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(
-          and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
-        )
+        .where(alertProductWhereCondition(data.productId, ctx.organizationId))
         .limit(1);
 
       if (!product) {
@@ -391,13 +401,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
             itemCount: sql<number>`COUNT(*)::int`,
           })
           .from(inventory)
-          .innerJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, ctx.organizationId)
-            )
-          )
+          .innerJoin(products, alertInventoryProductJoinCondition(ctx.organizationId))
           .leftJoin(
             warehouseLocations,
             and(
@@ -457,13 +461,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
                 quantityAvailable: inventory.quantityAvailable,
               })
               .from(inventory)
-              .innerJoin(
-                products,
-                and(
-                  eq(inventory.productId, products.id),
-                  eq(products.organizationId, ctx.organizationId)
-                )
-              )
+              .innerJoin(products, alertInventoryProductJoinCondition(ctx.organizationId))
               .where(
                 and(
                   eq(inventory.organizationId, ctx.organizationId),
@@ -851,13 +849,7 @@ async function checkAlertTriggered(
             itemCount: sql<number>`COUNT(*)::int`,
           })
           .from(inventory)
-          .innerJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, organizationId)
-            )
-          )
+          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
           .leftJoin(
             warehouseLocations,
             and(
@@ -894,13 +886,7 @@ async function checkAlertTriggered(
                 quantity: inventory.quantityAvailable,
               })
               .from(inventory)
-              .innerJoin(
-                products,
-                and(
-                  eq(inventory.productId, products.id),
-                  eq(products.organizationId, organizationId)
-                )
-              )
+              .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
               .where(
                 and(
                   eq(inventory.organizationId, organizationId),
@@ -935,10 +921,7 @@ async function checkAlertTriggered(
           itemCount: sql<number>`COUNT(*)::int`,
         })
         .from(inventory)
-        .innerJoin(
-          products,
-          and(eq(inventory.productId, products.id), eq(products.organizationId, organizationId))
-        )
+        .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
         .leftJoin(
           warehouseLocations,
           and(
@@ -972,13 +955,7 @@ async function checkAlertTriggered(
             quantity: inventory.quantityAvailable,
           })
           .from(inventory)
-          .innerJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, organizationId)
-            )
-          )
+          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
           .where(
             and(
               eq(inventory.organizationId, organizationId),
@@ -1008,13 +985,7 @@ async function checkAlertTriggered(
             quantity: inventory.quantityOnHand,
           })
           .from(inventory)
-          .innerJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, organizationId)
-            )
-          )
+          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
           .where(and(...invConditions, gt(inventory.quantityOnHand, threshold.maxQuantity)));
 
         if (overstock.length > 0) {
@@ -1045,13 +1016,7 @@ async function checkAlertTriggered(
             quantity: inventory.quantityOnHand,
           })
           .from(inventory)
-          .innerJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, organizationId)
-            )
-          )
+          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
           .where(
             and(
               ...invConditions,
@@ -1092,6 +1057,7 @@ async function checkAlertTriggered(
             JOIN products p ON i.product_id = p.id
             WHERE i.organization_id = ${organizationId}
               AND p.organization_id = ${organizationId}
+              AND p.deleted_at IS NULL
               ${alert.productId ? sql`AND i.product_id = ${alert.productId}` : sql``}
               ${alert.locationId ? sql`AND i.location_id = ${alert.locationId}` : sql``}
               AND i.quantity_on_hand > 0
@@ -1137,9 +1103,7 @@ async function checkAlertTriggered(
       ? db
           .select()
           .from(products)
-          .where(
-            and(eq(products.id, alert.productId), eq(products.organizationId, organizationId))
-          )
+          .where(alertProductWhereCondition(alert.productId, organizationId))
           .limit(1)
           .then((r) => r[0] || null)
       : Promise.resolve(null),
