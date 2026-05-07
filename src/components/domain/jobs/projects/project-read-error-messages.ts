@@ -3,10 +3,21 @@ import { isReadQueryError } from '@/lib/read-path-policy';
 export const PROJECT_LIST_READ_FALLBACK_MESSAGE =
   'Projects are temporarily unavailable. Please refresh and try again.';
 
-export function getProjectListReadErrorMessage(error: unknown): string {
+export const PROJECT_NOTES_READ_FALLBACK_MESSAGE =
+  'Project notes are temporarily unavailable. Please refresh and try again.';
+
+function getProjectReadErrorMessage(error: unknown, fallbackMessage: string): string {
   if (isReadQueryError(error) && error.message.trim().length > 0) {
     return error.message;
   }
 
-  return PROJECT_LIST_READ_FALLBACK_MESSAGE;
+  return fallbackMessage;
+}
+
+export function getProjectListReadErrorMessage(error: unknown): string {
+  return getProjectReadErrorMessage(error, PROJECT_LIST_READ_FALLBACK_MESSAGE);
+}
+
+export function getProjectNotesReadErrorMessage(error: unknown): string {
+  return getProjectReadErrorMessage(error, PROJECT_NOTES_READ_FALLBACK_MESSAGE);
 }

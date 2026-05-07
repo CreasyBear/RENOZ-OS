@@ -63,6 +63,7 @@ import { useUserLookup } from '@/hooks/users';
 
 // Dialogs
 import { NoteCreateDialog, NoteEditDialog } from './note-dialogs';
+import { getProjectNotesReadErrorMessage } from './project-read-error-messages';
 
 // Types
 import type { ProjectNote, ProjectNoteType, ProjectNoteStatus, NoteTranscriptSegment } from '@/lib/schemas/jobs';
@@ -632,9 +633,7 @@ export function ProjectNotesTab({ projectId }: ProjectNotesTabProps) {
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>{notes.length === 0 ? 'Notes unavailable' : 'Showing cached notes'}</AlertTitle>
       <AlertDescription className="flex items-center justify-between gap-3">
-        <span>
-          {error.message || 'Project notes are temporarily unavailable. Please refresh and try again.'}
-        </span>
+        <span>{getProjectNotesReadErrorMessage(error)}</span>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           Retry
         </Button>
