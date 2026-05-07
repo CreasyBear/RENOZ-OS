@@ -148,6 +148,7 @@ export {
 } from './use-job-templates-config';
 
 export {
+  formatJobCalendarMutationError,
   formatInstallerProfileMutationError,
   formatJobTemplateMutationError,
   formatJobTimeMutationError,
@@ -161,6 +162,7 @@ export {
 } from './_mutation-errors';
 export type {
   InstallerProfileMutationAction,
+  JobCalendarMutationAction,
   JobTemplateMutationAction,
   JobTimeMutationAction,
   ProjectBomMutationAction,

@@ -186,6 +186,21 @@ const JOB_TIME_MUTATION_CODE_MESSAGES: Record<string, string> = {
   VALIDATION_ERROR: 'Check the time entry details and try again.',
 };
 
+const JOB_CALENDAR_MUTATION_FALLBACKS = {
+  sync: 'Calendar sync is temporarily unavailable. Please refresh and try again.',
+  update: 'Calendar event update is temporarily unavailable. Please refresh and try again.',
+  remove: 'Calendar event removal is temporarily unavailable. Please refresh and try again.',
+} as const;
+
+const JOB_CALENDAR_MUTATION_CODE_MESSAGES: Record<string, string> = {
+  AUTH_ERROR: 'Your calendar session has expired. Reconnect your calendar and try again.',
+  CONFLICT: 'Calendar event details conflict with the current schedule state.',
+  NOT_FOUND: 'The calendar event could not be found. Refresh and try again.',
+  PERMISSION_DENIED: 'You do not have permission to manage calendar events.',
+  RATE_LIMIT: 'Too many calendar changes were attempted. Wait a moment and retry.',
+  VALIDATION_ERROR: 'Check the calendar event details and try again.',
+};
+
 export type JobTemplateMutationAction = keyof typeof JOB_TEMPLATE_MUTATION_FALLBACKS;
 export type InstallerProfileMutationAction =
   keyof typeof INSTALLER_PROFILE_MUTATION_FALLBACKS;
@@ -198,6 +213,7 @@ export type ProjectBomMutationAction = keyof typeof PROJECT_BOM_MUTATION_FALLBAC
 export type ProjectMutationAction = keyof typeof PROJECT_MUTATION_FALLBACKS;
 export type SiteVisitMutationAction = keyof typeof SITE_VISIT_MUTATION_FALLBACKS;
 export type JobTimeMutationAction = keyof typeof JOB_TIME_MUTATION_FALLBACKS;
+export type JobCalendarMutationAction = keyof typeof JOB_CALENDAR_MUTATION_FALLBACKS;
 
 export function formatJobTemplateMutationError(
   error: unknown,
@@ -291,5 +307,14 @@ export function formatJobTimeMutationError(
 ): string {
   return formatMutationError(error, JOB_TIME_MUTATION_FALLBACKS[action], {
     codeMessages: JOB_TIME_MUTATION_CODE_MESSAGES,
+  });
+}
+
+export function formatJobCalendarMutationError(
+  error: unknown,
+  action: JobCalendarMutationAction
+): string {
+  return formatMutationError(error, JOB_CALENDAR_MUTATION_FALLBACKS[action], {
+    codeMessages: JOB_CALENDAR_MUTATION_CODE_MESSAGES,
   });
 }

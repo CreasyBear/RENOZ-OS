@@ -31,6 +31,7 @@ import {
   getCalendarOAuthConnection,
 } from '@/server/functions/jobs/oauth-bridge';
 import { useJobDataMutationSync } from './use-jobs-view-sync';
+import { formatJobCalendarMutationError } from './_mutation-errors';
 import type {
   ListCalendarJobsInput,
   ListUnscheduledJobsInput,
@@ -469,7 +470,7 @@ export function useSyncJobToCalendar() {
     },
     onError: (error) => {
       toast.error('Calendar sync failed', {
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        description: formatJobCalendarMutationError(error, 'sync'),
       });
     },
   });
@@ -512,7 +513,7 @@ export function useUpdateJobCalendarEvent() {
     },
     onError: (error) => {
       toast.error('Calendar update failed', {
-        description: error instanceof Error ? error.message : 'Failed to update calendar event',
+        description: formatJobCalendarMutationError(error, 'update'),
       });
     },
   });
@@ -545,7 +546,7 @@ export function useRemoveJobFromCalendar() {
     },
     onError: (error) => {
       toast.error('Calendar removal failed', {
-        description: error instanceof Error ? error.message : 'Failed to remove from calendar',
+        description: formatJobCalendarMutationError(error, 'remove'),
       });
     },
   });
