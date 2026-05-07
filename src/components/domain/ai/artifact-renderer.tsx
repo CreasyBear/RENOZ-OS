@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getAIArtifactErrorMessage } from './ai-error-messages';
 
 // ============================================================================
 // TYPES
@@ -313,7 +314,7 @@ export const ArtifactRenderer = memo(function ArtifactRenderer({
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <AlertCircle className="h-8 w-8 text-destructive mb-2" />
           <p className="text-sm text-muted-foreground">
-            {error.message || 'Failed to load artifact'}
+            {getAIArtifactErrorMessage(error)}
           </p>
         </div>
       );

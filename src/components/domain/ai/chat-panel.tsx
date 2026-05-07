@@ -43,6 +43,7 @@ import {
   type AIChatResult,
   type Message,
 } from '@/hooks/ai';
+import { getAIChatErrorMessage } from './ai-error-messages';
 
 // ============================================================================
 // TYPES
@@ -636,7 +637,7 @@ export const AIChatPanel = memo(function AIChatPanel({
       {/* Error display */}
       {error && (
         <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
-          <p className="text-sm text-destructive">{error.message}</p>
+          <p className="text-sm text-destructive">{getAIChatErrorMessage(error)}</p>
         </div>
       )}
 
@@ -798,7 +799,7 @@ export const ControlledAIChatPanel = memo(function ControlledAIChatPanel({
 
       {error && (
         <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
-          <p className="text-sm text-destructive">{error.message}</p>
+          <p className="text-sm text-destructive">{getAIChatErrorMessage(error)}</p>
         </div>
       )}
 
