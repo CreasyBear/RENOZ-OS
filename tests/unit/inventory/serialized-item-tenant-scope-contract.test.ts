@@ -13,11 +13,15 @@ function compact(source: string): string {
 }
 
 describe('inventory serialized item tenant-scope contract', () => {
-  it('keeps serialized read model joins inside the organization boundary', () => {
+  it('keeps serialized read product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/serialized-items.ts'));
 
+    expect(source).toContain('functionserializedProductJoinCondition(organizationId:string)');
     expect(source).toContain(
-      'leftJoin(products,and(eq(products.id,serializedItems.productId),eq(products.organizationId,ctx.organizationId)))'
+      'eq(products.id,serializedItems.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'leftJoin(products,serializedProductJoinCondition(ctx.organizationId))'
     );
     expect(source).toContain(
       'leftJoin(inventory,and(eq(inventory.id,serializedItems.currentInventoryId),eq(inventory.organizationId,ctx.organizationId)))'
@@ -33,15 +37,19 @@ describe('inventory serialized item tenant-scope contract', () => {
     );
   });
 
-  it('validates serialized product ownership on create and update', () => {
+  it('validates serialized product ownership as active on create and update', () => {
     const source = read('src/server/functions/inventory/serialized-items.ts');
     const compactSource = compact(source);
     const productOwnershipChecks = (
       compactSource.match(
-        /and\(eq\(products\.id,data\.productId\),eq\(products\.organizationId,ctx\.organizationId\)\)/g
+        /serializedProductWhereCondition\(data\.productId,ctx\.organizationId\)/g
       ) ?? []
     ).length;
 
+    expect(compactSource).toContain('functionserializedProductWhereCondition(productId:string,organizationId:string)');
+    expect(compactSource).toContain(
+      'eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
     expect(productOwnershipChecks).toBeGreaterThanOrEqual(2);
     expect(compactSource).toContain("thrownewNotFoundError('Productnotfound','product')");
   });

@@ -7,7 +7,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeSerial } from '@/lib/serials';
@@ -75,6 +75,22 @@ function okMutationResult(
   });
 }
 
+function serializedProductJoinCondition(organizationId: string) {
+  return and(
+    eq(products.id, serializedItems.productId),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
+function serializedProductWhereCondition(productId: string, organizationId: string) {
+  return and(
+    eq(products.id, productId),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 export const listSerializedItems = createServerFn({ method: 'GET' })
   .inputValidator(serializedItemListQuerySchema)
   .handler(async ({ data }): Promise<SerializedItemListResult> => {
@@ -101,13 +117,7 @@ export const listSerializedItems = createServerFn({ method: 'GET' })
       const [totals] = await db
         .select({ value: count() })
         .from(serializedItems)
-        .leftJoin(
-          products,
-          and(
-            eq(products.id, serializedItems.productId),
-            eq(products.organizationId, ctx.organizationId)
-          )
-        )
+        .leftJoin(products, serializedProductJoinCondition(ctx.organizationId))
         .where(where);
 
       const rows = await db
@@ -230,13 +240,7 @@ export const listSerializedItems = createServerFn({ method: 'GET' })
           updatedBy: serializedItems.updatedBy,
         })
         .from(serializedItems)
-        .leftJoin(
-          products,
-          and(
-            eq(products.id, serializedItems.productId),
-            eq(products.organizationId, ctx.organizationId)
-          )
-        )
+        .leftJoin(products, serializedProductJoinCondition(ctx.organizationId))
         .leftJoin(
           inventory,
           and(
@@ -410,13 +414,7 @@ export const getSerializedItem = createServerFn({ method: 'GET' })
           updatedBy: serializedItems.updatedBy,
         })
         .from(serializedItems)
-        .leftJoin(
-          products,
-          and(
-            eq(products.id, serializedItems.productId),
-            eq(products.organizationId, ctx.organizationId)
-          )
-        )
+        .leftJoin(products, serializedProductJoinCondition(ctx.organizationId))
         .leftJoin(
           inventory,
           and(
@@ -524,9 +522,7 @@ export const createSerializedItem = createServerFn({ method: 'POST' })
         const [product] = await tx
           .select({ id: products.id })
           .from(products)
-          .where(
-            and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
-          )
+          .where(serializedProductWhereCondition(data.productId, ctx.organizationId))
           .limit(1);
 
         if (!product) {
@@ -652,9 +648,7 @@ export const updateSerializedItem = createServerFn({ method: 'POST' })
           const [product] = await tx
             .select({ id: products.id })
             .from(products)
-            .where(
-              and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
-            )
+            .where(serializedProductWhereCondition(data.productId, ctx.organizationId))
             .limit(1);
 
           if (!product) {
