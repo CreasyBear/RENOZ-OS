@@ -7,15 +7,16 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { db } from '@/lib/db';
-import { jobAssignments, users } from 'drizzle/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { jobAssignments, users, customers } from 'drizzle/schema';
+import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
 import { z } from 'zod';
 import { flexibleJsonSchema } from '@/lib/schemas/_shared/patterns';
 import { processJobOperations } from '@/lib/job-batch-processing';
-import { NotFoundError, ConflictError } from '@/lib/server/errors';
+import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
 import { logger } from '@/lib/logger';
 import type { JobBatchResult, JobRollbackData } from '@/lib/schemas/jobs/job-batch';
+import { formatBulkJobImportRowError } from '@/lib/jobs/job-batch-errors';
 
 // ============================================================================
 // SCHEMAS
@@ -51,6 +52,30 @@ export type ProcessJobBatchResult = {
   };
   rollbackData?: JobRollbackData[];
 };
+
+type BulkImportJobInput = {
+  jobNumber: string;
+  customerId: string;
+  installerId: string;
+};
+
+function assertBulkJobImportRelations(
+  jobData: BulkImportJobInput,
+  scopedCustomerIds: Set<string>,
+  scopedInstallerIds: Set<string>
+): void {
+  if (!scopedCustomerIds.has(jobData.customerId)) {
+    throw new ValidationError('Customer not found', {
+      customerId: ['Customer does not exist or is not accessible'],
+    });
+  }
+
+  if (!scopedInstallerIds.has(jobData.installerId)) {
+    throw new ValidationError('Installer not found', {
+      installerId: ['Installer does not exist or is not accessible'],
+    });
+  }
+}
 
 // ============================================================================
 // BATCH PROCESSING FUNCTIONS
@@ -302,22 +327,56 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
 
     // Pre-fetch all existing jobs to avoid N+1 queries
     const allJobNumbers = data.jobs.map((job) => job.jobNumber);
-    const existingJobsResult = await db
-      .select({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber })
-      .from(jobAssignments)
-      .where(
-        and(
-          eq(jobAssignments.organizationId, ctx.organizationId),
-          inArray(jobAssignments.jobNumber, allJobNumbers)
-        )
-      );
+    const existingJobsResult =
+      allJobNumbers.length > 0
+        ? await db
+            .select({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber })
+            .from(jobAssignments)
+            .where(
+              and(
+                eq(jobAssignments.organizationId, ctx.organizationId),
+                inArray(jobAssignments.jobNumber, allJobNumbers)
+              )
+            )
+        : [];
 
     // Create a Map for O(1) lookups by jobNumber
     const existingJobsMap = new Map(
       existingJobsResult.map((job) => [job.jobNumber, job])
     );
 
-    // Process all jobs in a single transaction for atomicity
+    const customerIds = [...new Set(data.jobs.map((job) => job.customerId))];
+    const installerIds = [...new Set(data.jobs.map((job) => job.installerId))];
+    const [scopedCustomers, scopedInstallers] = await Promise.all([
+      customerIds.length > 0
+        ? db
+            .select({ id: customers.id })
+            .from(customers)
+            .where(
+              and(
+                eq(customers.organizationId, ctx.organizationId),
+                isNull(customers.deletedAt),
+                inArray(customers.id, customerIds)
+              )
+            )
+        : [],
+      installerIds.length > 0
+        ? db
+            .select({ id: users.id })
+            .from(users)
+            .where(
+              and(
+                eq(users.organizationId, ctx.organizationId),
+                isNull(users.deletedAt),
+                inArray(users.id, installerIds)
+              )
+            )
+        : [],
+    ]);
+    const scopedCustomerIds = new Set(scopedCustomers.map((customer) => customer.id));
+    const scopedInstallerIds = new Set(scopedInstallers.map((installer) => installer.id));
+
+    // Process rows in one transaction while preserving per-row import results.
     await db.transaction(async (tx) => {
       const batchSize = 10;
       for (let i = 0; i < data.jobs.length; i += batchSize) {
@@ -325,6 +384,8 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
 
         for (const jobData of batch) {
           try {
+            assertBulkJobImportRelations(jobData, scopedCustomerIds, scopedInstallerIds);
+
             // Check for existing job using pre-fetched Map (O(1) lookup)
             const existingJob = existingJobsMap.get(jobData.jobNumber);
 
@@ -385,10 +446,9 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
 
             results.imported.push(newJob[0].jobNumber);
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
             results.errors.push({
               jobNumber: jobData.jobNumber,
-              error: errorMessage,
+              error: formatBulkJobImportRowError(error),
             });
           }
         }
