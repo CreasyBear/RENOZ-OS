@@ -19,6 +19,7 @@ import type { SortDirection } from "@/components/shared/data-table/server-sortin
 import { ProjectsTablePresenter } from "./projects-table-presenter";
 import { ProjectsMobileCards } from "./projects-mobile-cards";
 import type { ProjectTableItem } from "./project-columns";
+import { getProjectListReadErrorMessage } from "./project-read-error-messages";
 
 export interface ProjectsListPresenterProps {
   /** Projects to display */
@@ -201,7 +202,7 @@ export const ProjectsListPresenter = memo(function ProjectsListPresenter({
       <DataTableEmpty
         variant="error"
         title="Failed to load projects"
-        description={error.message ?? "An unexpected error occurred"}
+        description={getProjectListReadErrorMessage(error)}
         className={className}
       />
     );
