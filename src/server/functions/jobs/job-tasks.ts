@@ -12,7 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc, or, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobTasks, jobAssignments, users, siteVisits, projects, customers } from 'drizzle/schema';
+import { jobTasks, jobAssignments, users, siteVisits } from 'drizzle/schema';
 import {
   verifyJobExists,
   verifyProjectExists,
@@ -145,16 +145,16 @@ export const listJobTasks = createServerFn({ method: 'GET' })
   });
 
 /**
- * Get or create project placeholder job for project-level tasks.
- * Uses migratedToProjectId to link job to project.
+ * Get or create the legacy job carrier required for project-scoped tasks.
+ * Uses migratedToProjectId so project and site-visit tasks keep project lineage.
  */
-async function getOrCreateProjectPlaceholderJob(
+async function getOrCreateProjectTaskJob(
   projectId: string,
   organizationId: string,
   project: { customerId: string; projectNumber: string; title: string },
+  installerId: string,
   userId: string
 ): Promise<string> {
-  // Look for existing job linked to this project
   const [existing] = await db
     .select({ id: jobAssignments.id })
     .from(jobAssignments)
@@ -168,13 +168,12 @@ async function getOrCreateProjectPlaceholderJob(
 
   if (existing) return existing.id;
 
-  // Create placeholder job for project-level tasks
   const [newJob] = await db
     .insert(jobAssignments)
     .values({
       organizationId,
       customerId: project.customerId,
-      installerId: userId, // Placeholder: current user
+      installerId,
       title: project.title,
       jobNumber: `PRJ-${project.projectNumber}`,
       jobType: 'installation',
@@ -207,6 +206,7 @@ export const createTask = createServerFn({ method: 'POST' })
 
     // Determine jobId and verify access
     let jobId: string;
+    let projectId: string | undefined;
     let siteVisitId: string | undefined;
     let customerId: string | undefined;
 
@@ -221,65 +221,24 @@ export const createTask = createServerFn({ method: 'POST' })
       if (!siteVisit.installerId) {
         throw new ValidationError('Site visit must have an installer to create tasks');
       }
+      projectId = siteVisit.projectId;
 
-      // For site visits, we need to find or create a job assignment
-      // First, check if there's an existing job assignment linked to this site visit
-      // For now, we'll create a placeholder job assignment
-      const [existingJob] = await db
-        .select({ id: jobAssignments.id })
-        .from(jobAssignments)
-        .where(
-          and(
-            eq(jobAssignments.organizationId, ctx.organizationId),
-            // Link by customer - this is a temporary workaround
-            // In the future, site visits should have a direct jobId column
-            eq(jobAssignments.installerId, siteVisit.installerId)
-          )
-        )
-        .limit(1);
-
-      if (existingJob) {
-        jobId = existingJob.id;
-      } else {
-        // Create a minimal job assignment for this site visit
-        // Get project and customer info
-        const [projectWithCustomer] = await db
-          .select({
-            customerId: projects.customerId,
-            customerName: customers.name,
-          })
-          .from(projects)
-          .leftJoin(customers, eq(projects.customerId, customers.id))
-          .where(and(eq(projects.id, siteVisit.projectId), eq(projects.organizationId, ctx.organizationId)))
-          .limit(1);
-
-        // Generate a job number
-        const jobNumber = `SV-${siteVisit.visitNumber}-${Date.now()}`;
-        const title = `Site Visit ${siteVisit.visitNumber}${projectWithCustomer?.customerName ? ` - ${projectWithCustomer.customerName}` : ''}`;
-
-        const customerIdForJob = projectWithCustomer?.customerId;
-        if (!customerIdForJob) {
-          throw new ValidationError('Project must have a customer to create tasks');
-        }
-        const [newJob] = await db
-          .insert(jobAssignments)
-          .values({
-            organizationId: ctx.organizationId,
-            customerId: customerIdForJob,
-            installerId: siteVisit.installerId,
-            title,
-            jobNumber,
-            jobType: 'installation',
-            status: 'scheduled',
-            scheduledDate: new Date().toISOString().split('T')[0],
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          })
-          .returning();
-
-        jobId = newJob.id;
-        customerId = projectWithCustomer?.customerId;
+      const project = await verifyProjectExists(siteVisit.projectId, ctx.organizationId);
+      if (!project.customerId) {
+        throw new ValidationError('Project must have a customer to create tasks');
       }
+      jobId = await getOrCreateProjectTaskJob(
+        siteVisit.projectId,
+        ctx.organizationId,
+        {
+          customerId: project.customerId,
+          projectNumber: project.projectNumber ?? String(project.id.slice(0, 8)),
+          title: project.title ?? `Site Visit ${siteVisit.visitNumber}`,
+        },
+        siteVisit.installerId,
+        ctx.user.id
+      );
+      customerId = project.customerId;
     } else if (data.jobId) {
       // Legacy model: Job assignment
       jobId = data.jobId;
@@ -287,11 +246,12 @@ export const createTask = createServerFn({ method: 'POST' })
       customerId = job.customerId ?? undefined;
     } else if (data.projectId) {
       // Project-level task (no site visit)
+      projectId = data.projectId;
       const project = await verifyProjectExists(data.projectId, ctx.organizationId);
       if (!project.customerId) {
         throw new ValidationError('Project must have a customer to create tasks');
       }
-      jobId = await getOrCreateProjectPlaceholderJob(
+      jobId = await getOrCreateProjectTaskJob(
         data.projectId,
         ctx.organizationId,
         {
@@ -299,6 +259,7 @@ export const createTask = createServerFn({ method: 'POST' })
           projectNumber: project.projectNumber ?? String(project.id.slice(0, 8)),
           title: project.title ?? 'Project',
         },
+        ctx.user.id,
         ctx.user.id
       );
       siteVisitId = undefined;
@@ -327,7 +288,7 @@ export const createTask = createServerFn({ method: 'POST' })
       .values({
         organizationId: ctx.organizationId,
         jobId,
-        projectId: data.projectId ?? null,
+        projectId: projectId ?? null,
         siteVisitId,
         title: data.title,
         description: data.description ?? null,
@@ -356,6 +317,7 @@ export const createTask = createServerFn({ method: 'POST' })
       }),
       metadata: {
         customerId,
+        projectId: task.projectId ?? undefined,
         taskId: task.id,
         taskTitle: task.title,
         jobAssignmentId: task.jobId,

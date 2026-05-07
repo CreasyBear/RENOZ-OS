@@ -87,6 +87,16 @@ describe('project tasks mutation contract', () => {
       "deleteTaskSchema=z.object({taskId:z.string().uuid('InvalidtaskIDformat'),jobId:z.string().uuid('InvalidjobIDformat')"
     );
 
+    expect(server).toContain('async function getOrCreateProjectTaskJob');
+    expect(compactServer).toContain('eq(jobAssignments.migratedToProjectId,projectId)');
+    expect(compactServer).toContain('projectId=siteVisit.projectId;');
+    expect(compactServer).toContain(
+      'jobId=awaitgetOrCreateProjectTaskJob(siteVisit.projectId,ctx.organizationId'
+    );
+    expect(compactServer).toContain('projectId:projectId??null');
+    expect(server).not.toContain('temporary workaround');
+    expect(server).not.toContain('SV-${siteVisit.visitNumber}');
+
     expect(server).toContain('if (data.jobId)');
     expect(compactServer).toContain('taskScope.push(eq(jobTasks.jobId,data.jobId))');
     expect(compactServer).toContain(
