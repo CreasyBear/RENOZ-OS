@@ -57,6 +57,7 @@ import { PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_CONFIG } from '../project-statu
 import { StatusProgressCircle } from '../progress-circle';
 import { ProjectAlerts } from '../alerts';
 import { ProjectLifecycleProgress } from '../project-lifecycle-progress';
+import { getProjectAlertsReadErrorMessage } from '../project-read-error-messages';
 import {
   CustomerCard,
   SiteAddressCard,
@@ -597,7 +598,7 @@ export const ProjectDetailView = memo(function ProjectDetailView({
         <Alert variant={!alertsHasData ? 'destructive' : 'default'}>
           <AlertTitle>{!alertsHasData ? 'Project alerts unavailable' : 'Showing cached alerts'}</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-3">
-            <span>{alertsError.message || 'Project alerts are temporarily unavailable. Please refresh and try again.'}</span>
+            <span>{getProjectAlertsReadErrorMessage(alertsError)}</span>
             {onRetryAlerts ? (
               <Button variant="outline" size="sm" onClick={onRetryAlerts}>
                 Retry
