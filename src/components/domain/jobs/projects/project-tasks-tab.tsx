@@ -99,6 +99,7 @@ import {
 import { useUserLookup } from '@/hooks/users';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
+import { getProjectTasksReadErrorMessage } from './project-read-error-messages';
 
 // Types
 import type {
@@ -1355,7 +1356,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Tasks unavailable</AlertTitle>
           <AlertDescription className="flex items-center gap-2">
-            <span>{error.message}</span>
+            <span>{getProjectTasksReadErrorMessage(error)}</span>
             <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
               Retry
             </Button>
@@ -1373,7 +1374,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Showing cached tasks</AlertTitle>
             <AlertDescription className="flex items-center gap-2">
-              <span>{error.message}</span>
+              <span>{getProjectTasksReadErrorMessage(error)}</span>
               <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
                 Retry
               </Button>
@@ -1416,7 +1417,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Showing cached tasks</AlertTitle>
           <AlertDescription className="flex items-center gap-2">
-            <span>{error.message}</span>
+            <span>{getProjectTasksReadErrorMessage(error)}</span>
             <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
               Retry
             </Button>
