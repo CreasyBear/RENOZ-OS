@@ -8,7 +8,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { and, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -32,6 +32,22 @@ import {
 } from 'drizzle/schema';
 import { allocatableStockCountSql } from './_allocatable-stock-sql';
 
+function wmsInventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
+function wmsMovementProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventoryMovements.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
+
 /**
  * Get stock aggregated by product category.
  * Returns unit counts and total value per category.
@@ -51,13 +67,7 @@ export const getStockByCategory = createServerFn({ method: 'GET' }).handler(asyn
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
     })
     .from(inventory)
-    .leftJoin(
-      products,
-      and(
-        eq(inventory.productId, products.id),
-        eq(products.organizationId, ctx.organizationId)
-      )
-    )
+    .leftJoin(products, wmsInventoryProductJoinCondition(ctx.organizationId))
     .leftJoin(
       categories,
       and(
@@ -157,13 +167,7 @@ export const getRecentMovementsTimeline = createServerFn({ method: 'GET' })
         locationCode: locations.locationCode,
       })
       .from(inventoryMovements)
-      .leftJoin(
-        products,
-        and(
-          eq(inventoryMovements.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
+      .leftJoin(products, wmsMovementProductJoinCondition(ctx.organizationId))
       .leftJoin(
         locations,
         and(
@@ -362,13 +366,7 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
             totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
           })
           .from(inventory)
-          .leftJoin(
-            products,
-            and(
-              eq(inventory.productId, products.id),
-              eq(products.organizationId, ctx.organizationId)
-            )
-          )
+          .leftJoin(products, wmsInventoryProductJoinCondition(ctx.organizationId))
           .leftJoin(
             categories,
             and(
@@ -415,13 +413,7 @@ export const getWMSDashboard = createServerFn({ method: 'POST' })
             locationName: locations.name,
           })
           .from(inventoryMovements)
-          .leftJoin(
-            products,
-            and(
-              eq(inventoryMovements.productId, products.id),
-              eq(products.organizationId, ctx.organizationId)
-            )
-          )
+          .leftJoin(products, wmsMovementProductJoinCondition(ctx.organizationId))
           .leftJoin(
             locations,
             and(

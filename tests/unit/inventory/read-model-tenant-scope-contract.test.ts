@@ -77,11 +77,23 @@ describe('inventory read-model tenant-scope contract', () => {
     expect(source).not.toContain('leftJoin(products,eq(inventoryMovements.productId,products.id))');
   });
 
-  it('keeps WMS dashboard product category location and movement joins organization-bounded', () => {
+  it('keeps WMS dashboard product descriptors active and joins organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/wms-dashboard.ts'));
 
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventory.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'functionwmsInventoryProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'functionwmsMovementProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'eq(inventoryMovements.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'leftJoin(products,wmsInventoryProductJoinCondition(ctx.organizationId))'
     );
     expect(source).toContain(
       'leftJoin(categories,and(eq(products.categoryId,categories.id),eq(categories.organizationId,ctx.organizationId)))'
@@ -90,7 +102,7 @@ describe('inventory read-model tenant-scope contract', () => {
       'innerJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'
     );
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventoryMovements.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'leftJoin(products,wmsMovementProductJoinCondition(ctx.organizationId))'
     );
     expect(source).toContain(
       'leftJoin(locations,and(eq(inventoryMovements.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'
