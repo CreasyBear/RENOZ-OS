@@ -39,11 +39,17 @@ describe('inventory read-model tenant-scope contract', () => {
     expect(source).not.toContain('leftJoin(locations,eq(inventory.locationId,locations.id))');
   });
 
-  it('keeps movement descriptor and reference joins organization-bounded', () => {
+  it('keeps movement product descriptors active and reference joins organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/movements.ts'));
 
     expect(source).toContain(
-      'leftJoin(products,and(eq(inventoryMovements.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'functionmovementProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'eq(inventoryMovements.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'leftJoin(products,movementProductJoinCondition(ctx.organizationId))'
     );
     expect(source).toContain(
       'leftJoin(locations,and(eq(inventoryMovements.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'

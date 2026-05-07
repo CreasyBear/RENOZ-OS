@@ -8,7 +8,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { movementListQuerySchema, type ListMovementsResult } from '@/lib/schemas/inventory';
@@ -21,6 +21,14 @@ import {
   purchaseOrders,
   warehouseLocations as locations,
 } from 'drizzle/schema';
+
+function movementProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventoryMovements.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
 
 /**
  * List inventory movements with filtering.
@@ -98,13 +106,7 @@ export const listMovements = createServerFn({ method: 'GET' })
         purchaseOrder: purchaseOrders,
       })
       .from(inventoryMovements)
-      .leftJoin(
-        products,
-        and(
-          eq(inventoryMovements.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
+      .leftJoin(products, movementProductJoinCondition(ctx.organizationId))
       .leftJoin(
         locations,
         and(
