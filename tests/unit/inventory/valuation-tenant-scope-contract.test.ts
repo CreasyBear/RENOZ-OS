@@ -13,11 +13,23 @@ function compact(source: string): string {
 }
 
 describe('inventory valuation tenant-scope contract', () => {
-  it('keeps valuation report descriptor joins organization-bounded', () => {
+  it('keeps valuation report product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
 
     expect(source).toContain(
-      'innerJoin(products,and(eq(inventory.productId,products.id),eq(products.organizationId,ctx.organizationId)))'
+      'functionvaluationInventoryProductJoinCondition(organizationId:string)'
+    );
+    expect(source).toContain(
+      'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(source).toContain(
+      'leftJoin(products,valuationInventoryProductJoinCondition(ctx.organizationId))'
+    );
+    expect(source).toContain(
+      "productId:inventory.productId,productSku:sql<string>`COALESCE(${products.sku},'')`,productName:sql<string>`COALESCE(${products.name},'UnknownProduct')`"
+    );
+    expect(source).toContain(
+      'leftJoin(costLayerCounts,eq(costLayerCounts.productId,inventory.productId))'
     );
     expect(source).toContain(
       'leftJoin(categories,and(eq(products.categoryId,categories.id),eq(categories.organizationId,ctx.organizationId)))'
@@ -34,7 +46,7 @@ describe('inventory valuation tenant-scope contract', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
 
     expect(source).toContain(
-      'LEFTJOINproductspONp.id=i.product_idANDp.organization_id=${organizationId}'
+      'LEFTJOINproductspONp.id=i.product_idANDp.organization_id=${organizationId}ANDp.deleted_atISNULL'
     );
     expect(source).toContain(
       'LEFTJOINwarehouse_locationslONl.id=i.location_idANDl.organization_id=${organizationId}'

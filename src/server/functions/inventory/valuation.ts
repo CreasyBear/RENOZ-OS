@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gt, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, gt, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -51,6 +51,14 @@ import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/in
 // ============================================================================
 
 type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
+
+function valuationInventoryProductJoinCondition(organizationId: string) {
+  return and(
+    eq(inventory.productId, products.id),
+    eq(products.organizationId, organizationId),
+    isNull(products.deletedAt)
+  );
+}
 
 // ============================================================================
 // TYPE HELPERS
@@ -248,6 +256,7 @@ async function getFinanceIntegritySummary(
       LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
       LEFT JOIN products p ON p.id = i.product_id
         AND p.organization_id = ${organizationId}
+        AND p.deleted_at IS NULL
       LEFT JOIN warehouse_locations l ON l.id = i.location_id
         AND l.organization_id = ${organizationId}
       WHERE i.organization_id = ${organizationId}
@@ -533,13 +542,7 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         skuCount: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
       })
       .from(inventory)
-      .innerJoin(
-        products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
+      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
       .leftJoin(
         categories,
         and(
@@ -603,9 +606,9 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
     // Get by product
     const byProduct = await db
       .select({
-        productId: products.id,
-        productSku: products.sku,
-        productName: products.name,
+        productId: inventory.productId,
+        productSku: sql<string>`COALESCE(${products.sku}, '')`,
+        productName: sql<string>`COALESCE(${products.name}, 'Unknown Product')`,
         totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
         weightedAverageCost: sql<number>`
           CASE
@@ -617,16 +620,10 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         costLayers: sql<number>`COALESCE(${costLayerCounts.costLayerCount}, 0)::int`,
       })
       .from(inventory)
-      .innerJoin(
-        products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
-      .leftJoin(costLayerCounts, eq(costLayerCounts.productId, products.id))
+      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
+      .leftJoin(costLayerCounts, eq(costLayerCounts.productId, inventory.productId))
       .where(and(...invConditions))
-      .groupBy(products.id, products.sku, products.name, costLayerCounts.costLayerCount)
+      .groupBy(inventory.productId, products.sku, products.name, costLayerCounts.costLayerCount)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`))
       .limit(50);
 
@@ -965,13 +962,7 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
           eq(inventory.organizationId, ctx.organizationId)
         )
       )
-      .innerJoin(
-        products,
-        and(
-          eq(inventory.productId, products.id),
-          eq(products.organizationId, ctx.organizationId)
-        )
-      )
+      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
       .leftJoin(
         locations,
         and(
