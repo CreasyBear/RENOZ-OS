@@ -41,6 +41,7 @@ import { logger } from '@/lib/logger';
 import { normalizeError, getUserFriendlyMessage, isRetryableError } from '@/lib/error-handling';
 
 import { useMyTasksKanban, useUpdateTask, type MyTaskKanban } from '@/hooks/jobs';
+import { getMyTasksReadErrorMessage } from './my-tasks-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -259,7 +260,7 @@ export const MyTasksKanban = memo(function MyTasksKanban({
         <XCircle className="h-4 w-4" />
         <AlertTitle>Tasks unavailable</AlertTitle>
         <AlertDescription className="flex items-center gap-2">
-          <span>{error.message}</span>
+          <span>{getMyTasksReadErrorMessage(error)}</span>
           <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
             Retry
           </Button>
@@ -277,7 +278,7 @@ export const MyTasksKanban = memo(function MyTasksKanban({
             <XCircle className="h-4 w-4" />
             <AlertTitle>Showing cached tasks</AlertTitle>
             <AlertDescription className="flex items-center gap-2">
-              <span>{error.message}</span>
+              <span>{getMyTasksReadErrorMessage(error)}</span>
               <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
                 Retry
               </Button>
@@ -296,7 +297,7 @@ export const MyTasksKanban = memo(function MyTasksKanban({
           <XCircle className="h-4 w-4" />
           <AlertTitle>Showing cached tasks</AlertTitle>
           <AlertDescription className="flex items-center gap-2">
-            <span>{error.message}</span>
+            <span>{getMyTasksReadErrorMessage(error)}</span>
             <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
               Retry
             </Button>
