@@ -209,13 +209,14 @@ export function useProductMovements(options: {
   enabled?: boolean;
 }) {
   const { productId, page = 1, limit = 20, movementType, locationId, enabled = true } = options;
+  const movementFilters = { movementType, locationId, limit, page };
 
   return useQuery({
-    queryKey: queryKeys.products.movements(productId, { movementType, limit, page }),
+    queryKey: queryKeys.products.movements(productId, movementFilters),
     queryFn: async () => {
       try {
         return await getProductMovements({
-          data: { productId, movementType, limit, page, locationId },
+          data: { productId, ...movementFilters },
         });
       } catch (error) {
         throw normalizeReadQueryError(error, {
@@ -314,10 +315,10 @@ export function useAdjustStock() {
         queryKey: queryKeys.products.stockAlertsAll(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.products.movements(variables.productId, {}),
+        queryKey: queryKeys.products.movementsForProduct(variables.productId),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.products.movementsAggregated(variables.productId, {}),
+        queryKey: queryKeys.products.movementsAggregatedForProduct(variables.productId),
       });
     },
     onError: (error: Error) => {
