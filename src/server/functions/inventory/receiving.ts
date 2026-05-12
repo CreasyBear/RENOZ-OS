@@ -46,53 +46,54 @@ export const receiveInventory = createServerFn({ method: 'POST' })
   .inputValidator(receiveInventorySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
-
-    // Validate product exists and can create live inventory.
-    const [product] = await db
-      .select({
-        id: products.id,
-        isSerialized: products.isSerialized,
-        status: products.status,
-        isActive: products.isActive,
-        trackInventory: products.trackInventory,
-      })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
-    if (product.status !== 'active' || !product.isActive || !product.trackInventory) {
-      throw new ValidationError('Product is not available for manual receiving', {
-        productId: ['Select an active inventory-tracked product'],
-        code: ['product_not_receivable'],
-      });
-    }
     const normalizedSerialNumber = data.serialNumber ? normalizeSerial(data.serialNumber) : undefined;
-    const serializationIssues = getManualReceiveSerializationIssues({
-      isSerialized: product.isSerialized,
-      quantity: data.quantity,
-      serialNumber: normalizedSerialNumber,
-    });
-    if (serializationIssues.length > 0) {
-      const issue = serializationIssues[0];
-      throw new ValidationError(issue.message, {
-        [issue.path]: [issue.message],
-        code: [issue.code],
-      });
-    }
 
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [product] = await tx
+        .select({
+          id: products.id,
+          isSerialized: products.isSerialized,
+          status: products.status,
+          isActive: products.isActive,
+          trackInventory: products.trackInventory,
+        })
+        .from(products)
+        .where(
+          and(
+            eq(products.id, data.productId),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
+        )
+        .for('update')
+        .limit(1);
+
+      if (!product) {
+        throw new NotFoundError('Product not found', 'product');
+      }
+      if (product.status !== 'active' || !product.isActive || !product.trackInventory) {
+        throw new ValidationError('Product is not available for manual receiving', {
+          productId: ['Select an active inventory-tracked product'],
+          code: ['product_not_receivable'],
+        });
+      }
+      const serializationIssues = getManualReceiveSerializationIssues({
+        isSerialized: product.isSerialized,
+        quantity: data.quantity,
+        serialNumber: normalizedSerialNumber,
+      });
+      if (serializationIssues.length > 0) {
+        const issue = serializationIssues[0];
+        throw new ValidationError(issue.message, {
+          [issue.path]: [issue.message],
+          code: [issue.code],
+        });
+      }
+
       // Validate location exists (inside transaction)
       const [location] = await tx
         .select({ id: locations.id })

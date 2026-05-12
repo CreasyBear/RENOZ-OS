@@ -12,6 +12,14 @@ function compact(source: string): string {
   return source.replace(/\s+/g, '');
 }
 
+function sliceBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
 describe('inventory stock mutation tenant-scope contract', () => {
   it('keeps adjustment final inventory and serialized lineage writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/adjustments.ts'));
@@ -50,7 +58,7 @@ describe('inventory stock mutation tenant-scope contract', () => {
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.receive})');
     expect(source).toContain(
-      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for(\'update\')'
     );
     expect(source).toContain(
       "if(product.status!=='active'||!product.isActive||!product.trackInventory){thrownewValidationError('Productisnotavailableformanualreceiving',{productId:['Selectanactiveinventory-trackedproduct'],code:['product_not_receivable'],});}"
@@ -60,6 +68,23 @@ describe('inventory stock mutation tenant-scope contract', () => {
       'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'
     );
     expect(source).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
+  });
+
+  it('locks manual receive product availability before stock-in writes', () => {
+    const source = compact(read('src/server/functions/inventory/receiving.ts'));
+    const receiveBlock = sliceBetween(source, 'exportconstreceiveInventory', '});});');
+
+    expect(receiveBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(receiveBlock).toContain(
+      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1)"
+    );
+    expect(receiveBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      receiveBlock.indexOf('let[inventoryRecord]=awaittx')
+    );
+    expect(receiveBlock.indexOf('getManualReceiveSerializationIssues({')).toBeLessThan(
+      receiveBlock.indexOf('let[inventoryRecord]=awaittx')
+    );
+    expect(receiveBlock).not.toContain('const[product]=awaitdb.select()');
   });
 
   it('keeps manual receive cost-layer response reads organization-scoped', () => {
