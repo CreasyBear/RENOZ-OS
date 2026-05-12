@@ -49,6 +49,24 @@ export interface UpdateContactInput {
 // MUTATION HOOKS
 // ============================================================================
 
+function invalidateCustomerContactMutationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  customerId?: string | null,
+  contactId?: string | null
+) {
+  if (customerId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.contacts.byCustomer(customerId) });
+  } else {
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.contacts.lists() });
+  }
+
+  if (contactId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.contacts.detail(contactId) });
+  }
+}
+
 export function useCreateContact() {
   const queryClient = useQueryClient();
   const fn = useServerFn(createContact);
@@ -56,14 +74,7 @@ export function useCreateContact() {
   return useMutation({
     mutationFn: (data: CreateContactInput) => fn({ data }),
     onSuccess: (_result, variables) => {
-      // Invalidate customer detail to refresh contacts
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.customers.detail(variables.customerId),
-      });
-      // Invalidate contacts list if one exists
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.contacts.byCustomer(variables.customerId),
-      });
+      invalidateCustomerContactMutationQueries(queryClient, variables.customerId);
     },
   });
 }
@@ -74,10 +85,12 @@ export function useUpdateContact() {
 
   return useMutation({
     mutationFn: (data: UpdateContactInput) => fn({ data }),
-    onSuccess: () => {
-      // Invalidate all customer queries since we don't know which customer
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
+    onSuccess: (result, variables) => {
+      invalidateCustomerContactMutationQueries(
+        queryClient,
+        result?.customerId,
+        result?.id ?? variables.id
+      );
     },
   });
 }
@@ -88,10 +101,8 @@ export function useDeleteContact() {
 
   return useMutation({
     mutationFn: (id: string) => fn({ data: { id } }),
-    onSuccess: () => {
-      // Invalidate all customer queries since we don't know which customer
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
+    onSuccess: (result, id) => {
+      invalidateCustomerContactMutationQueries(queryClient, result?.customerId, result?.id ?? id);
     },
   });
 }

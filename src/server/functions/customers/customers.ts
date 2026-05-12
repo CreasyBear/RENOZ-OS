@@ -1250,7 +1250,7 @@ export const deleteContact = createServerFn({ method: 'POST' })
       throw new NotFoundError('Contact not found', 'contact');
     }
 
-    return { success: true, id: result[0].id };
+    return { success: true, id: result[0].id, customerId: result[0].customerId };
   });
 
 // ============================================================================
@@ -1354,7 +1354,7 @@ export const deleteAddress = createServerFn({ method: 'POST' })
       throw new NotFoundError('Address not found', 'address');
     }
 
-    return { success: true, id: result[0].id };
+    return { success: true, id: result[0].id, customerId: result[0].customerId };
   });
 
 // ============================================================================

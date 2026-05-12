@@ -47,6 +47,18 @@ export interface UpdateAddressInput {
 // MUTATION HOOKS
 // ============================================================================
 
+function invalidateCustomerAddressMutationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  customerId?: string | null
+) {
+  if (customerId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
+    return;
+  }
+
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });
+}
+
 export function useCreateAddress() {
   const queryClient = useQueryClient();
   const fn = useServerFn(createAddress);
@@ -54,10 +66,7 @@ export function useCreateAddress() {
   return useMutation({
     mutationFn: (data: CreateAddressInput) => fn({ data }),
     onSuccess: (_result, variables) => {
-      // Invalidate customer detail to refresh addresses
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.customers.detail(variables.customerId),
-      });
+      invalidateCustomerAddressMutationQueries(queryClient, variables.customerId);
     },
   });
 }
@@ -68,9 +77,8 @@ export function useUpdateAddress() {
 
   return useMutation({
     mutationFn: (data: UpdateAddressInput) => fn({ data }),
-    onSuccess: () => {
-      // Invalidate all customer queries since we don't know which customer
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    onSuccess: (result) => {
+      invalidateCustomerAddressMutationQueries(queryClient, result?.customerId);
     },
   });
 }
@@ -81,9 +89,8 @@ export function useDeleteAddress() {
 
   return useMutation({
     mutationFn: (id: string) => fn({ data: { id } }),
-    onSuccess: () => {
-      // Invalidate all customer queries since we don't know which customer
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    onSuccess: (result) => {
+      invalidateCustomerAddressMutationQueries(queryClient, result?.customerId);
     },
   });
 }
