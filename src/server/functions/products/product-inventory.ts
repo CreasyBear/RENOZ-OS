@@ -589,6 +589,7 @@ export const recordMovement = createServerFn({ method: 'POST' })
     if (data.movementType === 'adjust') {
       return adjustInventory({
         data: {
+          ...(data.inventoryId ? { inventoryId: data.inventoryId } : {}),
           productId: data.productId,
           locationId: data.locationId,
           adjustmentQty: data.quantity,
@@ -875,6 +876,7 @@ export const adjustStock = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     return adjustInventory({
       data: {
+        ...(data.inventoryId ? { inventoryId: data.inventoryId } : {}),
         productId: data.productId,
         locationId: data.locationId,
         adjustmentQty: data.adjustmentQty,

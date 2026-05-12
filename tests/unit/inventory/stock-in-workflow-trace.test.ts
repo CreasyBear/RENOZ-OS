@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const receiveInventoryMock = vi.hoisted(() => vi.fn(async () => ({ id: 'receive-result' })));
+const adjustInventoryMock = vi.hoisted(() => vi.fn(async () => ({ id: 'adjust-result' })));
 const transferInventoryMock = vi.hoisted(() => vi.fn(async () => ({ id: 'transfer-result' })));
 
 vi.mock('@tanstack/react-start', () => ({
@@ -18,7 +19,7 @@ vi.mock('@/server/functions/inventory/receiving', () => ({
 }));
 
 vi.mock('@/server/functions/inventory/adjustments', () => ({
-  adjustInventory: vi.fn(),
+  adjustInventory: adjustInventoryMock,
 }));
 
 vi.mock('@/server/functions/inventory/transfers', () => ({
@@ -34,6 +35,7 @@ function read(path: string): string {
 describe('stock-in workflow trace', () => {
   beforeEach(() => {
     receiveInventoryMock.mockClear();
+    adjustInventoryMock.mockClear();
     transferInventoryMock.mockClear();
   });
 
@@ -138,6 +140,61 @@ describe('stock-in workflow trace', () => {
         referenceId: '22222222-2222-2222-2222-222222222222',
         referenceType: 'manual',
         notes: 'legacy receive movement',
+      },
+    });
+  });
+
+  it('routes generic adjust movements through row-scoped canonical adjustment at runtime', async () => {
+    const { recordMovement } = await import('@/server/functions/products/product-inventory');
+
+    await recordMovement({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        locationId: 'location-1',
+        movementType: 'adjust',
+        quantity: -1,
+        metadata: {
+          reason: 'Cycle count variance',
+        },
+        notes: 'Cycle count variance',
+      },
+    });
+
+    expect(adjustInventoryMock).toHaveBeenCalledWith({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        locationId: 'location-1',
+        adjustmentQty: -1,
+        reason: 'Cycle count variance',
+        notes: 'Cycle count variance',
+      },
+    });
+  });
+
+  it('routes product adjustStock through row-scoped canonical adjustment when a row is provided', async () => {
+    const { adjustStock } = await import('@/server/functions/products/product-inventory');
+
+    await adjustStock({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        locationId: 'location-1',
+        adjustmentQty: 2,
+        reason: 'Inventory found',
+        notes: 'Recovered in warehouse',
+      },
+    });
+
+    expect(adjustInventoryMock).toHaveBeenCalledWith({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        locationId: 'location-1',
+        adjustmentQty: 2,
+        reason: 'Inventory found',
+        notes: 'Recovered in warehouse',
       },
     });
   });
