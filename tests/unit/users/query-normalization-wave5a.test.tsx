@@ -1,11 +1,13 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListUsers = vi.fn();
 const mockGetUser = vi.fn();
 const mockGetUserStats = vi.fn();
+const mockTransferOwnership = vi.fn();
 const mockGetUserActivity = vi.fn();
 const mockGetInvitationByToken = vi.fn();
 const mockListInvitations = vi.fn();
@@ -23,7 +25,7 @@ vi.mock('@/server/functions/users/users', () => ({
   bulkUpdateUsers: vi.fn(),
   getUserStats: (...args: unknown[]) => mockGetUserStats(...args),
   exportUsers: vi.fn(),
-  transferOwnership: vi.fn(),
+  transferOwnership: (...args: unknown[]) => mockTransferOwnership(...args),
 }));
 
 vi.mock('@/server/functions/_shared/audit-logs', () => ({
@@ -97,6 +99,18 @@ describe('users/admin query normalization wave 5a', () => {
       totalUsers: 0,
       byStatus: {},
       byRole: {},
+    });
+    mockTransferOwnership.mockResolvedValue({
+      success: true,
+      previousOwner: {
+        id: 'user-current',
+        newRole: 'admin',
+      },
+      newOwner: {
+        id: 'user-new-owner',
+        email: 'new-owner@example.com',
+        name: 'New Owner',
+      },
     });
     mockGetUserActivity.mockResolvedValue({
       items: [],
@@ -199,6 +213,45 @@ describe('users/admin query normalization wave 5a', () => {
       failureKind: 'not-found',
       contractType: 'detail-not-found',
       message: 'The requested user could not be found.',
+    });
+  });
+
+  it('refreshes ownership transfer users without current-user root invalidation', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useTransferOwnership } = await import('@/hooks/users/use-users');
+
+    const { result } = renderHook(() => useTransferOwnership(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync('user-new-owner');
+    });
+
+    expect(mockTransferOwnership).toHaveBeenCalledWith({
+      data: { newOwnerId: 'user-new-owner' },
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.users.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.users.stats(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.users.detail('user-new-owner'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.users.detail('user-current'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.currentUser.detail(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.currentUser.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.users.all,
     });
   });
 

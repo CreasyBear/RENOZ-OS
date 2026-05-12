@@ -211,13 +211,14 @@ export function useTransferOwnership() {
 
   return useMutation({
     mutationFn: (newOwnerId: string) => transferOwnership({ data: { newOwnerId } }),
-    onSuccess: (_, newOwnerId) => {
+    onSuccess: (result, newOwnerId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.stats() });
       // Invalidate new owner's detail cache (role changed to owner)
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(newOwnerId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(result.previousOwner.id) });
       // Also invalidate current user since their role may have changed
-      queryClient.invalidateQueries({ queryKey: queryKeys.currentUser.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.currentUser.detail() });
     },
   });
 }
