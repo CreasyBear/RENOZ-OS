@@ -737,6 +737,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
 
       const adjustments: (typeof inventoryMovements.$inferSelect)[] = [];
       const affectedInventoryIds = new Set<string>();
+      const affectedProductIds = new Set<string>();
       const affectedLayerIds = new Set<string>();
       let valuationBefore = 0;
       let valuationAfter = 0;
@@ -791,6 +792,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
             const previousValue = Number(inv.totalValue ?? 0);
             valuationBefore += previousValue;
             affectedInventoryIds.add(inv.id);
+            affectedProductIds.add(inv.productId);
 
             if (newQuantity < 0) {
               throw new ValidationError('Count adjustment would result in negative inventory', {
@@ -1041,6 +1043,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         'Stock count completed successfully',
         {
           affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedProductIds: Array.from(affectedProductIds),
           affectedLayerIds: Array.from(affectedLayerIds),
           financeMetadata: {
             valuationBefore,

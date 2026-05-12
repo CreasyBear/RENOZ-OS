@@ -33,6 +33,7 @@ export const inventoryFinanceMutationResultSchema = z.object({
   success: z.literal(true),
   message: z.string(),
   affectedInventoryIds: z.array(z.string().uuid()).optional(),
+  affectedProductIds: z.array(z.string().uuid()).optional(),
   affectedLayerIds: z.array(z.string().uuid()).optional(),
   financeMetadata: inventoryFinanceMetadataSchema.optional(),
   errorsById: z.record(z.string(), z.string()).optional(),

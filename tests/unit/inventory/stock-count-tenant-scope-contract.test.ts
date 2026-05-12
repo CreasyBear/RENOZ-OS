@@ -239,4 +239,13 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(completeBlock).toContain('affectedLayerIds:Array.from(affectedLayerIds)');
     expect(completeBlock).toContain('layerDeltas,');
   });
+
+  it('returns affected product ids from stock count reconciliation', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const completeBlock = sliceBetween(source, 'exportconstcompleteStockCount', 'exportconstcancelStockCount');
+
+    expect(completeBlock).toContain('constaffectedProductIds=newSet<string>();');
+    expect(completeBlock).toContain('affectedProductIds.add(inv.productId);');
+    expect(completeBlock).toContain('affectedProductIds:Array.from(affectedProductIds)');
+  });
 });

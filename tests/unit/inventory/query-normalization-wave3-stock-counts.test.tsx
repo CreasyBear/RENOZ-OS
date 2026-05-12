@@ -262,6 +262,7 @@ describe('inventory stock counts query normalization wave 3', () => {
     mockCompleteStockCount.mockResolvedValue({
       adjustments: [{ id: 'movement-1' }],
       affectedInventoryIds: ['inventory-row-a'],
+      affectedProductIds: ['product-1'],
       affectedLayerIds: ['layer-a'],
       financeMetadata: {
         valuationBefore: 100,
@@ -316,6 +317,27 @@ describe('inventory stock counts query normalization wave 3', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.detail('product-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventoryStats('product-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.stockAlertsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.movementsForProduct('product-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.movementsAggregatedForProduct('product-1'),
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
     });
   });
 });

@@ -67,13 +67,14 @@ Inventory-affecting mutations should return a standardized envelope:
 1. `success`
 2. `message`
 3. `affectedInventoryIds`
-4. `affectedLayerIds`
-5. `financeMetadata`:
+4. `affectedProductIds`
+5. `affectedLayerIds`
+6. `financeMetadata`:
    - `valuationBefore`
    - `valuationAfter`
    - `cogsImpact`
    - `layerDeltas[]` (per-layer quantity/cost deltas)
-6. Optional `partialFailure` and `errorsById` for mixed outcomes.
+7. Optional `partialFailure` and `errorsById` for mixed outcomes.
 
 Schema and helpers:
 
