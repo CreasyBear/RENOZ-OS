@@ -714,7 +714,7 @@ export const allocateStock = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
-        .where(eq(inventory.id, inv.id));
+        .where(and(eq(inventory.id, inv.id), eq(inventory.organizationId, ctx.organizationId)));
 
       // Record the movement
       const [movement] = await tx
@@ -813,7 +813,7 @@ export const deallocateStock = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
-        .where(eq(inventory.id, inv.id));
+        .where(and(eq(inventory.id, inv.id), eq(inventory.organizationId, ctx.organizationId)));
 
       // Record the movement
       const [movement] = await tx
