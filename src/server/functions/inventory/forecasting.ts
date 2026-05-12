@@ -37,6 +37,9 @@ function forecastProductWhereCondition(productId: string, organizationId: string
   return and(
     eq(products.id, productId),
     eq(products.organizationId, organizationId),
+    eq(products.status, 'active'),
+    eq(products.isActive, true),
+    eq(products.isPurchasable, true),
     isNull(products.deletedAt)
   );
 }
@@ -291,6 +294,9 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
         and(
           eq(products.organizationId, ctx.organizationId),
           inArray(products.id, productIds),
+          eq(products.status, 'active'),
+          eq(products.isActive, true),
+          eq(products.isPurchasable, true),
           isNull(products.deletedAt)
         )
       );

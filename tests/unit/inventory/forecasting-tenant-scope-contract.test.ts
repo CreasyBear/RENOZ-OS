@@ -23,17 +23,20 @@ describe('inventory forecasting tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(inventoryForecasts.id,existing.id))');
   });
 
-  it('validates forecast products as active and tenant-owned before writing', () => {
+  it('validates forecast products as active, purchasable, and tenant-owned before writing', () => {
     const source = compact(read('src/server/functions/inventory/forecasting.ts'));
 
     expect(source).toContain('functionforecastProductWhereCondition(productId:string,organizationId:string)');
     expect(source).toContain(
-      'eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+      "eq(products.id,productId),eq(products.organizationId,organizationId),eq(products.status,'active'),eq(products.isActive,true),eq(products.isPurchasable,true),isNull(products.deletedAt)"
     );
     expect(source).toContain('where(forecastProductWhereCondition(data.productId,ctx.organizationId))');
     expect(source).toContain('constproductIds=Array.from(newSet(data.forecasts.map');
     expect(source).toContain('eq(products.organizationId,ctx.organizationId)');
     expect(source).toContain('inArray(products.id,productIds)');
+    expect(source).toContain("eq(products.status,'active')");
+    expect(source).toContain('eq(products.isActive,true)');
+    expect(source).toContain('eq(products.isPurchasable,true)');
     expect(source).toContain('isNull(products.deletedAt)');
     expect(source).toContain('if(ownedProducts.length!==productIds.length)');
     expect(source).toContain("thrownewNotFoundError('Oneormoreproductsnotfound','product')");
