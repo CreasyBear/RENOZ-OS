@@ -34,11 +34,14 @@ vi.mock("@/components/domain/products/tabs/inventory-tab-view", () => ({
   ProductInventoryTabView: ({
     onOpenReceiveInventory,
     onOrderStock,
+    canIncreaseStock,
   }: {
     onOpenReceiveInventory: () => void;
     onOrderStock: () => void;
+    canIncreaseStock: boolean;
   }) => (
     <div>
+      <div>Can increase stock: {canIncreaseStock ? "yes" : "no"}</div>
       <button onClick={onOpenReceiveInventory}>Receive Inventory</button>
       <button onClick={onOrderStock}>Order Stock</button>
     </div>
@@ -63,6 +66,8 @@ describe("ProductInventoryTabContainer", () => {
         productId="product-1"
         trackInventory={true}
         isSerialized={false}
+        status="active"
+        isActive={true}
       />
     );
 
@@ -94,6 +99,8 @@ describe("ProductInventoryTabContainer", () => {
         productId="product-1"
         trackInventory={true}
         isSerialized={false}
+        status="active"
+        isActive={true}
       />
     );
 
@@ -120,6 +127,8 @@ describe("ProductInventoryTabContainer", () => {
         productId="product-1"
         trackInventory={true}
         isSerialized={false}
+        status="active"
+        isActive={true}
       />
     );
 
@@ -133,5 +142,23 @@ describe("ProductInventoryTabContainer", () => {
         returnToProductId: "product-1",
       },
     });
+  });
+
+  it("marks stock increases unavailable for inactive product state", async () => {
+    const { ProductInventoryTabContainer } = await import(
+      "@/components/domain/products/tabs/inventory-tab-container"
+    );
+
+    render(
+      <ProductInventoryTabContainer
+        productId="product-1"
+        trackInventory={true}
+        isSerialized={false}
+        status="inactive"
+        isActive={false}
+      />
+    );
+
+    expect(screen.getByText("Can increase stock: no")).toBeInTheDocument();
   });
 });

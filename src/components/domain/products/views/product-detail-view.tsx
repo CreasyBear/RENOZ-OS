@@ -825,6 +825,8 @@ export const ProductDetailView = memo(function ProductDetailView({
                     productId={product.id}
                     trackInventory={product.trackInventory}
                     isSerialized={product.isSerialized}
+                    status={product.status}
+                    isActive={product.isActive}
                   />
                 </TabsContent>
 

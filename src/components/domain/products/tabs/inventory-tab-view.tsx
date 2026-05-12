@@ -112,6 +112,7 @@ export interface ProductInventoryTabViewProps {
   productId: string;
   trackInventory: boolean;
   isSerialized: boolean;
+  canIncreaseStock: boolean;
   inventorySummary: ProductInventorySummary | null | undefined;
   stats: InventoryStats | null | undefined;
   lowStockAlerts: LowStockAlert[] | null | undefined;
@@ -137,6 +138,7 @@ export function ProductInventoryTabView({
   productId,
   trackInventory,
   isSerialized,
+  canIncreaseStock,
   inventorySummary,
   stats,
   isLowStock,
@@ -395,6 +397,7 @@ export function ProductInventoryTabView({
         productId={productId}
         productName={summary?.name ?? "Product"}
         currentStock={totalOnHand}
+        canIncreaseStock={canIncreaseStock}
         open={showAdjustment}
         onOpenChange={onShowAdjustmentChange}
         onAdjusted={onRefresh}

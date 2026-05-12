@@ -41,6 +41,7 @@ interface StockAdjustmentProps {
   productId: string;
   productName: string;
   currentStock: number;
+  canIncreaseStock?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdjusted?: () => void;
@@ -69,6 +70,7 @@ export function StockAdjustment({
   productId,
   productName,
   currentStock,
+  canIncreaseStock = true,
   open,
   onOpenChange,
   onAdjusted,
@@ -96,13 +98,23 @@ export function StockAdjustment({
     schema: adjustmentSchema,
     defaultValues: {
       locationId: defaultLocation?.id ?? "",
-      adjustmentType: "add",
+      adjustmentType: canIncreaseStock ? "add" : "subtract",
       quantity: 1,
       reason: "",
       notes: "",
     },
     onSubmit: async (data) => {
       setError(null);
+      const adjustmentQty =
+        data.adjustmentType === "add"
+          ? data.quantity
+          : data.adjustmentType === "subtract"
+            ? -data.quantity
+            : data.quantity - currentStock;
+      if (!canIncreaseStock && adjustmentQty > 0) {
+        setError("Only active inventory-tracked products can create or increase stock.");
+        return;
+      }
 
       const onSuccess = () => {
         onAdjusted?.();
@@ -119,7 +131,7 @@ export function StockAdjustment({
             {
               productId,
               locationId: data.locationId,
-              adjustmentQty: data.quantity,
+              adjustmentQty,
               reason: data.reason,
               notes: data.notes,
             },
@@ -132,7 +144,7 @@ export function StockAdjustment({
             {
               productId,
               locationId: data.locationId,
-              adjustmentQty: -data.quantity,
+              adjustmentQty,
               reason: data.reason,
               notes: data.notes,
             },
@@ -145,7 +157,7 @@ export function StockAdjustment({
             {
               productId,
               locationId: data.locationId,
-              adjustmentQty: data.quantity - currentStock,
+              adjustmentQty,
               reason: data.reason,
               notes: data.notes,
             },
@@ -158,7 +170,7 @@ export function StockAdjustment({
             {
               productId,
               locationId: data.locationId,
-              adjustmentQty: data.quantity,
+              adjustmentQty,
               reason: data.reason,
               notes: data.notes,
             },
@@ -184,7 +196,7 @@ export function StockAdjustment({
     if (open) {
       form.reset({
         locationId: defaultLocation?.id ?? "",
-        adjustmentType: "add",
+        adjustmentType: canIncreaseStock ? "add" : "subtract",
         quantity: 1,
         reason: "",
         notes: "",
@@ -192,7 +204,7 @@ export function StockAdjustment({
       setSelectedPreset("");
       setError(null);
     }
-  }, [open, defaultLocation?.id, form]);
+  }, [open, defaultLocation?.id, canIncreaseStock, form]);
 
   const getPreviewQuantity = () => {
     if (!quantity || quantity <= 0) return currentStock;
@@ -220,13 +232,20 @@ export function StockAdjustment({
 
   const previewQty = getPreviewQuantity();
   const willGoNegative = previewQty < 0;
+  const adjustmentQty =
+    adjustmentType === "add"
+      ? quantity
+      : adjustmentType === "subtract"
+        ? -quantity
+        : quantity - currentStock;
+  const blockedPositiveAdjustment = !canIncreaseStock && adjustmentQty > 0;
 
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
     if (isOpen) {
       form.reset({
         locationId: defaultLocation?.id ?? "",
-        adjustmentType: "add",
+        adjustmentType: canIncreaseStock ? "add" : "subtract",
         quantity: 1,
         reason: "",
         notes: "",
@@ -306,6 +325,7 @@ export function StockAdjustment({
                       variant={field.state.value === "add" ? "default" : "outline"}
                       size="sm"
                       onClick={() => field.handleChange("add")}
+                      disabled={!canIncreaseStock}
                       className="flex-1"
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -377,6 +397,13 @@ export function StockAdjustment({
               )}
             </div>
 
+            {!canIncreaseStock ? (
+              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+                This product cannot create or increase stock. Decrease existing stock or set a
+                lower stock level to clear inventory.
+              </div>
+            ) : null}
+
             <form.Field name="reason">
               {(field) => (
                 <div className="space-y-2">
@@ -443,7 +470,7 @@ export function StockAdjustment({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving || isLoadingLocations}>
+            <Button type="submit" disabled={isSaving || isLoadingLocations || blockedPositiveAdjustment}>
               {isSaving ? (
                 "Saving..."
               ) : (
