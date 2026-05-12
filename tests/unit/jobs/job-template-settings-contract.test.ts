@@ -103,6 +103,14 @@ describe('job template settings contract', () => {
 
     expect(hooks).toContain('queryKeys.jobTemplates.templates()');
     expect(hooks).toContain('queryKeys.jobTemplates.template(variables.templateId)');
+    expect(hooks).toContain('function invalidateJobFromTemplateViews');
+    expect(hooks).toContain('queryKeys.jobs.activeProjectsAll()');
+    expect(hooks).toContain('queryKeys.jobAssignments.kanbanSelectors()');
+    expect(hooks).toContain('queryKeys.jobCalendar.eventsRanges()');
+    expect(hooks).toContain('queryKeys.jobCalendar.timelineStatsAll()');
+    expect(hooks).toContain('queryKeys.jobTasks.lists()');
+    expect(hooks).toContain('queryKeys.jobMaterials.summary(jobId)');
+    expect(hooks).not.toContain('queryKey: queryKeys.jobCalendar.all');
     expect(compactQueryKeys).toContain('jobTemplates:{');
     expect(compactQueryKeys).toContain("templates:()=>[...queryKeys.jobTemplates.all,'list']");
     expect(compactQueryKeys).toContain(

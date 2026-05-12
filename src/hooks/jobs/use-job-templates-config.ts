@@ -8,7 +8,7 @@
  * @see src/server/functions/jobs/checklists.ts
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
@@ -115,6 +115,33 @@ export function useJobTemplate(templateId: string | undefined) {
 // JOB TEMPLATES MUTATIONS
 // ============================================================================
 
+function invalidateJobFromTemplateViews(queryClient: QueryClient, jobId?: string | null) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.active() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.activeProjectsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.kanbanSelectors() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventDetails() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.unscheduledLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.installerLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.kanbanRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineStatsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.kanban.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.myTasks.all });
+
+  if (jobId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.detail(jobId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.list(jobId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobMaterials.list(jobId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobMaterials.summary(jobId) });
+  }
+}
+
 /**
  * Create a new job template.
  */
@@ -172,10 +199,8 @@ export function useCreateJobFromTemplate() {
 
   return useMutation({
     mutationFn: (input: CreateJobFromTemplateInput) => createFn({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.lists() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
+    onSuccess: (result) => {
+      invalidateJobFromTemplateViews(queryClient, result.jobId);
     },
   });
 }
