@@ -14,6 +14,7 @@ import { Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
+import { useProduct } from "@/hooks/products";
 import type { ReorderRecommendation } from "./reorder-recommendations";
 import {
   createPOFromAlertFormSchema,
@@ -28,6 +29,7 @@ import {
   TextareaField,
 } from "@/components/shared/forms";
 import { getCreatePurchaseOrderSubmitError } from "../create-purchase-order-error-messages";
+import { getProcurementProductBlockMessage } from "../procurement-product-guard";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -81,6 +83,12 @@ export function CreatePOFromRecommendationDialog({
   const suppliers = suppliersData?.items ?? [];
 
   const createPO = useCreatePurchaseOrder();
+  const productId = recommendation?.productId ?? "";
+  const productQuery = useProduct(productId, open && !!productId);
+  const productBlockMessage =
+    !productId || productQuery.isLoading
+      ? null
+      : getProcurementProductBlockMessage(productQuery.data?.product);
 
   const defaultQuantity = recommendation?.recommendedQuantity ?? 10;
 
@@ -97,6 +105,10 @@ export function CreatePOFromRecommendationDialog({
     },
     onSubmit: async (values) => {
       if (!recommendation) return;
+      if (productBlockMessage) {
+        setError(productBlockMessage);
+        return;
+      }
 
       setError(null);
 
@@ -175,7 +187,12 @@ export function CreatePOFromRecommendationDialog({
       form={form}
       submitLabel="Create Purchase Order"
       submitError={error}
-      submitDisabled={createPO.isPending || loadingSuppliers}
+      submitDisabled={
+        createPO.isPending ||
+        loadingSuppliers ||
+        productQuery.isLoading ||
+        !!productBlockMessage
+      }
       size="md"
       className="sm:max-w-[500px]"
       resetOnClose={false}
@@ -185,6 +202,11 @@ export function CreatePOFromRecommendationDialog({
           <AlertDescription>
             Supplier options are temporarily unavailable. Refresh and try again if you need to select a supplier.
           </AlertDescription>
+        </Alert>
+      ) : null}
+      {productBlockMessage ? (
+        <Alert>
+          <AlertDescription>{productBlockMessage}</AlertDescription>
         </Alert>
       ) : null}
       {recommendation && (

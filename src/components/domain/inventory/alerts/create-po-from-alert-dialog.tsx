@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { Package, Truck } from "lucide-react";
 import { useSuppliers, useCreatePurchaseOrder } from "@/hooks/suppliers";
+import { useProduct } from "@/hooks/products";
 import type { InventoryAlert } from "./alerts-panel";
 import {
   createPOFromAlertFormSchema,
@@ -24,6 +25,7 @@ import {
 } from "@/components/shared/forms";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getCreatePurchaseOrderSubmitError } from "../create-purchase-order-error-messages";
+import { getProcurementProductBlockMessage } from "../procurement-product-guard";
 
 // ============================================================================
 // TYPES & SCHEMA
@@ -60,6 +62,12 @@ export function CreatePOFromAlertDialog({
   const suppliers = suppliersData?.items ?? [];
 
   const createPO = useCreatePurchaseOrder();
+  const productId = alert?.productId ?? "";
+  const productQuery = useProduct(productId, open && !!productId);
+  const productBlockMessage =
+    !productId || productQuery.isLoading
+      ? null
+      : getProcurementProductBlockMessage(productQuery.data?.product);
 
   const form = useTanStackForm<FormValues>({
     schema: createPOFromAlertFormSchema,
@@ -75,6 +83,10 @@ export function CreatePOFromAlertDialog({
     onSubmit: async (values) => {
       if (!alert?.productId || !alert?.productName) {
         setError("Product information is missing");
+        return;
+      }
+      if (productBlockMessage) {
+        setError(productBlockMessage);
         return;
       }
 
@@ -149,7 +161,7 @@ export function CreatePOFromAlertDialog({
       form={form}
       submitLabel="Create PO"
       submitError={error}
-      submitDisabled={createPO.isPending}
+      submitDisabled={createPO.isPending || productQuery.isLoading || !!productBlockMessage}
       size="md"
       className="sm:max-w-md"
       resetOnClose={false}
@@ -159,6 +171,11 @@ export function CreatePOFromAlertDialog({
           <AlertDescription>
             Supplier options are temporarily unavailable. Refresh and try again if you need to select a supplier.
           </AlertDescription>
+        </Alert>
+      ) : null}
+      {productBlockMessage ? (
+        <Alert>
+          <AlertDescription>{productBlockMessage}</AlertDescription>
         </Alert>
       ) : null}
       <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
