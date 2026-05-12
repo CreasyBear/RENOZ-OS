@@ -299,81 +299,86 @@ export const updateStockCount = createServerFn({ method: 'POST' })
   .handler(async ({ data: { id, data } }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    const [existing] = await db
-      .select()
-      .from(stockCounts)
-      .where(and(eq(stockCounts.id, id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .limit(1);
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
 
-    if (!existing) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
-
-    // Cannot update completed or cancelled counts
-    if (existing.status === 'completed' || existing.status === 'cancelled') {
-      throw new ValidationError(`Cannot update ${existing.status} stock count`, {
-        status: [`Count is already ${existing.status}`],
-      });
-    }
-
-    // Check for duplicate count code if changing
-    if (data.countCode && data.countCode !== existing.countCode) {
-      const [duplicate] = await db
+      const [existing] = await tx
         .select()
         .from(stockCounts)
-        .where(
-          and(
-            eq(stockCounts.organizationId, ctx.organizationId),
-            eq(stockCounts.countCode, data.countCode),
-            ne(stockCounts.id, id)
-          )
-        )
+        .where(and(eq(stockCounts.id, id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .for('update')
         .limit(1);
 
-      if (duplicate) {
-        throw new ConflictError(`Stock count with code '${data.countCode}' already exists`);
+      if (!existing) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
       }
-    }
 
-    // Validate updated location if changing
-    if (data.locationId !== undefined) {
-      const [location] = await db
-        .select({ id: warehouseLocations.id })
-        .from(warehouseLocations)
-        .where(
-          and(
-            eq(warehouseLocations.id, data.locationId),
-            eq(warehouseLocations.organizationId, ctx.organizationId)
+      if (existing.status !== 'draft') {
+        throw new ValidationError(`Cannot update ${existing.status} stock count`, {
+          status: ['Count must be in draft status'],
+        });
+      }
+
+      // Check for duplicate count code if changing
+      if (data.countCode && data.countCode !== existing.countCode) {
+        const [duplicate] = await tx
+          .select()
+          .from(stockCounts)
+          .where(
+            and(
+              eq(stockCounts.organizationId, ctx.organizationId),
+              eq(stockCounts.countCode, data.countCode),
+              ne(stockCounts.id, id)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (!location) {
-        throw new NotFoundError('Location not found', 'warehouseLocation');
+        if (duplicate) {
+          throw new ConflictError(`Stock count with code '${data.countCode}' already exists`);
+        }
       }
-    }
 
-    const [count] = await db
-      .update(stockCounts)
-      .set({
-        ...(data.countCode !== undefined && { countCode: data.countCode }),
-        ...(data.countType !== undefined && { countType: data.countType }),
-        ...(data.locationId !== undefined && { locationId: data.locationId }),
-        ...(data.assignedTo !== undefined && { assignedTo: data.assignedTo }),
-        ...(data.varianceThreshold !== undefined && {
-          varianceThreshold: String(data.varianceThreshold),
-        }),
-        ...(data.notes !== undefined && { notes: data.notes }),
-        ...(data.metadata !== undefined && { metadata: data.metadata }),
-        ...(data.status !== undefined && { status: data.status }),
-        updatedAt: new Date(),
-        updatedBy: ctx.user.id,
-        version: sql`${stockCounts.version} + 1`,
-      })
-      .where(and(eq(stockCounts.id, id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .returning();
+      // Validate updated location if changing
+      if (data.locationId !== undefined) {
+        const [location] = await tx
+          .select({ id: warehouseLocations.id })
+          .from(warehouseLocations)
+          .where(
+            and(
+              eq(warehouseLocations.id, data.locationId),
+              eq(warehouseLocations.organizationId, ctx.organizationId)
+            )
+          )
+          .limit(1);
 
-    return { count };
+        if (!location) {
+          throw new NotFoundError('Location not found', 'warehouseLocation');
+        }
+      }
+
+      const [count] = await tx
+        .update(stockCounts)
+        .set({
+          ...(data.countCode !== undefined && { countCode: data.countCode }),
+          ...(data.countType !== undefined && { countType: data.countType }),
+          ...(data.locationId !== undefined && { locationId: data.locationId }),
+          ...(data.assignedTo !== undefined && { assignedTo: data.assignedTo }),
+          ...(data.varianceThreshold !== undefined && {
+            varianceThreshold: String(data.varianceThreshold),
+          }),
+          ...(data.notes !== undefined && { notes: data.notes }),
+          ...(data.metadata !== undefined && { metadata: data.metadata }),
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+          version: sql`${stockCounts.version} + 1`,
+        })
+        .where(and(eq(stockCounts.id, id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .returning();
+
+      return { count };
+    });
   });
 
 // ============================================================================

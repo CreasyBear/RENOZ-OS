@@ -67,6 +67,23 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(startBlock).not.toContain('const[count]=awaitdb.select()');
   });
 
+  it('keeps stock count planning edits draft-only and lifecycle-owned', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const updateBlock = sliceBetween(
+      source,
+      'exportconstupdateStockCount',
+      'exportconststartStockCount'
+    );
+
+    expect(updateBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(updateBlock).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,id),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(updateBlock).toContain("if(existing.status!=='draft')");
+    expect(updateBlock).toContain("status:['Countmustbeindraftstatus']");
+    expect(updateBlock).not.toContain('...(data.status!==undefined&&{status:data.status})');
+  });
+
   it('validates stock count location updates inside the organization boundary', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 

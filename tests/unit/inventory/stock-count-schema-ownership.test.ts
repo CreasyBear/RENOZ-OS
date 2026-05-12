@@ -36,12 +36,11 @@ describe('inventory stock count schema ownership', () => {
       varianceThreshold: 5,
       metadata: {},
     });
-    expect(updateStockCountSchema.parse({ status: 'in_progress' })).toMatchObject({
-      status: 'in_progress',
-      countType: 'cycle',
-      varianceThreshold: 5,
-      metadata: {},
+    expect(updateStockCountSchema.parse({ notes: 'Check front rack' })).toMatchObject({
+      notes: 'Check front rack',
     });
+    expect(updateStockCountSchema.parse({})).toEqual({});
+    expect(() => updateStockCountSchema.parse({ status: 'in_progress' })).toThrow();
     expect(stockCountListQuerySchema.parse(undefined)).toMatchObject({
       page: 1,
       pageSize: 20,

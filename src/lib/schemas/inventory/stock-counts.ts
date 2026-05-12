@@ -40,8 +40,15 @@ export const createStockCountSchema = z.object({
 
 export type CreateStockCount = z.infer<typeof createStockCountSchema>;
 
-export const updateStockCountSchema = createStockCountSchema.partial().extend({
-  status: stockCountStatusSchema.optional(),
+export const updateStockCountSchema = z.object({
+  countCode: z.string().min(1, 'Count code is required').max(20).optional(),
+  countType: stockCountTypeSchema.optional(),
+  locationId: z.string().uuid().optional(),
+  assignedTo: z.string().uuid().optional(),
+  varianceThreshold: z.coerce.number().min(0).max(100).optional(),
+  notes: z.string().max(1000).optional(),
+  metadata: stockCountMetadataSchema.optional(),
+  status: z.never().optional(),
 });
 
 export type UpdateStockCount = z.infer<typeof updateStockCountSchema>;
