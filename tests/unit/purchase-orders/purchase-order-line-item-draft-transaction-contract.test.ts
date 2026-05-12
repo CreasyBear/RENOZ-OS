@@ -34,6 +34,12 @@ describe('purchase order line-item draft transaction contract', () => {
     expect(block).toContain(
       "if(!item){thrownewValidationError('Purchaseorderitemcouldnotbesaved.Refreshandtryagain.');}"
     );
+    expect(block).toContain(
+      'awaitassertLinkedPurchaseOrderProductsActive(tx,ctx.organizationId,[data.item.productId]);'
+    );
+    expect(block.indexOf('awaitassertLinkedPurchaseOrderProductsActive')).toBeLessThan(
+      block.indexOf('insert(purchaseOrderItems)')
+    );
     expect(block.indexOf('if(!item){thrownewValidationError(')).toBeLessThan(
       block.indexOf('awaitrecalculatePurchaseOrderTotals')
     );

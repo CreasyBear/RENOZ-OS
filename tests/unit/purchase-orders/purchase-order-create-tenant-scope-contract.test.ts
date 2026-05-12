@@ -54,4 +54,26 @@ describe('purchase order create tenant-scope contract', () => {
       "if(createdItems.length!==itemsWithTotals.length){thrownewValidationError('Purchaseorderitemscouldnotbesaved.Refreshandtryagain.');}"
     );
   });
+
+  it('rejects unavailable linked products before creating purchase orders', () => {
+    const source = compact(read('src/server/functions/suppliers/purchase-orders.ts'));
+    const block = exportedFunctionBlock(source, 'createPurchaseOrder');
+
+    expect(source).toContain("import{products}from'drizzle/schema/products/products';");
+    expect(source).toContain(
+      'functiongetLinkedPurchaseOrderProductIds(productIds:Array<string|null|undefined>):string[]{returnArray.from(newSet(productIds.filter((id):idisstring=>Boolean(id))));}'
+    );
+    expect(source).toContain(
+      'from(products).where(and(inArray(products.id,linkedProductIds),eq(products.organizationId,organizationId),isNull(products.deletedAt)))'
+    );
+    expect(source).toContain(
+      "if(productRows.length!==linkedProductIds.length){thrownewValidationError('Oneormorepurchaseorderitemsreferenceaproductthatisunavailableorarchived.Refreshproductdatabeforesavingthepurchaseorder.');}"
+    );
+    expect(block).toContain(
+      'awaitassertLinkedPurchaseOrderProductsActive(tx,ctx.organizationId,itemsWithTotals.map((item)=>item.productId));'
+    );
+    expect(block.indexOf('awaitassertLinkedPurchaseOrderProductsActive')).toBeLessThan(
+      block.indexOf('insert(purchaseOrders)')
+    );
+  });
 });

@@ -20,6 +20,7 @@ import {
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
+import { products } from 'drizzle/schema/products/products';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -570,6 +571,12 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
     const po = await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
+
+      await assertLinkedPurchaseOrderProductsActive(
+        tx,
+        ctx.organizationId,
+        itemsWithTotals.map((item) => item.productId)
       );
 
       // Create the purchase order
@@ -1483,6 +1490,8 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
         throw new ValidationError('Can only add items to draft purchase orders');
       }
 
+      await assertLinkedPurchaseOrderProductsActive(tx, ctx.organizationId, [data.item.productId]);
+
       // Get the next line number with row lock to prevent duplicate line numbers
       const lastItem = await tx
         .select({ lineNumber: purchaseOrderItems.lineNumber })
@@ -1674,6 +1683,38 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
 
 /** Type for db or transaction executor (select/update compatible) */
 type PoTotalsExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
+function getLinkedPurchaseOrderProductIds(
+  productIds: Array<string | null | undefined>
+): string[] {
+  return Array.from(new Set(productIds.filter((id): id is string => Boolean(id))));
+}
+
+async function assertLinkedPurchaseOrderProductsActive(
+  executor: PoTotalsExecutor,
+  organizationId: string,
+  productIds: Array<string | null | undefined>
+): Promise<void> {
+  const linkedProductIds = getLinkedPurchaseOrderProductIds(productIds);
+  if (linkedProductIds.length === 0) return;
+
+  const productRows = await executor
+    .select({ id: products.id })
+    .from(products)
+    .where(
+      and(
+        inArray(products.id, linkedProductIds),
+        eq(products.organizationId, organizationId),
+        isNull(products.deletedAt)
+      )
+    );
+
+  if (productRows.length !== linkedProductIds.length) {
+    throw new ValidationError(
+      'One or more purchase order items reference a product that is unavailable or archived. Refresh product data before saving the purchase order.'
+    );
+  }
+}
 
 /**
  * Recalculate purchase order totals from line items
