@@ -1716,10 +1716,12 @@ export const queryKeys = {
     entity: (entityType: string, entityId: string) =>
       [...queryKeys.activities.all, 'entity', entityType, entityId] as const,
     user: (userId: string) => [...queryKeys.activities.all, 'user', userId] as const,
+    statsAll: () => [...queryKeys.activities.all, 'stats'] as const,
     stats: (query?: Record<string, unknown>) =>
-      [...queryKeys.activities.all, 'stats', query ?? {}] as const,
+      [...queryKeys.activities.statsAll(), query ?? {}] as const,
+    leaderboards: () => [...queryKeys.activities.all, 'leaderboard'] as const,
     leaderboard: (filters?: Record<string, unknown>) =>
-      [...queryKeys.activities.all, 'leaderboard', filters ?? {}] as const,
+      [...queryKeys.activities.leaderboards(), filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------

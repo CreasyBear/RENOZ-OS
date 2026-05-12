@@ -29,6 +29,7 @@ import {
   rescheduleCall,
   completeCall,
 } from '@/server/functions/communications/scheduled-calls';
+import { invalidateCommunicationActivityMutationQueries } from './_activity-cache';
 
 // ============================================================================
 // QUERY HOOKS
@@ -224,16 +225,15 @@ export function useCompleteCall() {
 
   return useMutation({
     mutationFn: (input: CompleteCallInput) => completeCallFn({ data: input }),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCallDetail(variables.id),
       });
-      // Also invalidate customer activities since completing a call logs an activity
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.activities.all,
+      invalidateCommunicationActivityMutationQueries(queryClient, {
+        customerId: result?.customerId,
       });
     },
   });

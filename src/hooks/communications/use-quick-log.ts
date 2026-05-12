@@ -12,6 +12,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { QuickLogInput } from '@/lib/schemas/communications/quick-log';
 import { createQuickLog } from '@/server/functions/communications/quick-log';
+import { invalidateCommunicationActivityMutationQueries } from './_activity-cache';
 
 // ============================================================================
 // MUTATION HOOKS
@@ -24,57 +25,15 @@ export function useCreateQuickLog() {
   return useMutation({
     mutationFn: (input: QuickLogInput) => createQuickLogFn({ data: input }),
     onSuccess: (_, variables) => {
-      // Invalidate activities queries
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.activities.all,
+      invalidateCommunicationActivityMutationQueries(queryClient, {
+        customerId: variables.customerId,
+        opportunityId: variables.opportunityId,
       });
 
       // If a call was logged, also invalidate scheduled calls
       if (variables.type === 'call') {
         queryClient.invalidateQueries({
           queryKey: queryKeys.communications.scheduledCalls(),
-        });
-      }
-
-      // Invalidate customer-specific activities if customerId provided
-      if (variables.customerId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.activities.byCustomer(variables.customerId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.unifiedActivities.entityAudit('customer', variables.customerId),
-        });
-        // Invalidate entityAuditWithRelated (used by customer detail timeline)
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-            'customer',
-            variables.customerId,
-            null
-          ),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.communications.customerCommunications(variables.customerId),
-        });
-        // Invalidate order tabs (they show customer activities via relatedCustomerId)
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.unifiedActivities.entityPrefix('order'),
-        });
-      }
-
-      // Invalidate opportunity-specific activities if opportunityId provided
-      if (variables.opportunityId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.unifiedActivities.entityAudit('opportunity', variables.opportunityId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.unifiedActivities.entityAuditWithRelated(
-            'opportunity',
-            variables.opportunityId,
-            null
-          ),
         });
       }
     },
