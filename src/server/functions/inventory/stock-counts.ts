@@ -521,47 +521,51 @@ export const updateStockCountItem = createServerFn({ method: 'POST' })
   .handler(async ({ data: { countId, itemId, data } }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    // Verify count exists and is in progress
-    const [count] = await db
-      .select()
-      .from(stockCounts)
-      .where(and(eq(stockCounts.id, countId), eq(stockCounts.organizationId, ctx.organizationId)))
-      .limit(1);
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
 
-    if (!count) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
+      const [count] = await tx
+        .select()
+        .from(stockCounts)
+        .where(and(eq(stockCounts.id, countId), eq(stockCounts.organizationId, ctx.organizationId)))
+        .for('update')
+        .limit(1);
 
-    if (count.status !== 'in_progress') {
-      throw new ValidationError(`Cannot update items for ${count.status} count`, {
-        status: ['Count must be in progress'],
-      });
-    }
+      if (!count) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
+      }
 
-    // Find the item
-    const [item] = await db
-      .select()
-      .from(stockCountItems)
-      .where(and(eq(stockCountItems.id, itemId), eq(stockCountItems.stockCountId, countId)))
-      .limit(1);
+      if (count.status !== 'in_progress') {
+        throw new ValidationError(`Cannot update items for ${count.status} count`, {
+          status: ['Count must be in progress'],
+        });
+      }
 
-    if (!item) {
-      throw new NotFoundError('Stock count item not found', 'stockCountItem');
-    }
+      const [item] = await tx
+        .select()
+        .from(stockCountItems)
+        .where(and(eq(stockCountItems.id, itemId), eq(stockCountItems.stockCountId, countId)))
+        .limit(1);
 
-    // Update the item
-    const [updatedItem] = await db
-      .update(stockCountItems)
-      .set({
-        ...data,
-        countedBy: data.countedQuantity !== undefined ? ctx.user.id : item.countedBy,
-        countedAt: data.countedQuantity !== undefined ? new Date() : item.countedAt,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(stockCountItems.id, itemId), eq(stockCountItems.stockCountId, countId)))
-      .returning();
+      if (!item) {
+        throw new NotFoundError('Stock count item not found', 'stockCountItem');
+      }
 
-    return { item: updatedItem };
+      const [updatedItem] = await tx
+        .update(stockCountItems)
+        .set({
+          ...data,
+          countedBy: data.countedQuantity !== undefined ? ctx.user.id : item.countedBy,
+          countedAt: data.countedQuantity !== undefined ? new Date() : item.countedAt,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(stockCountItems.id, itemId), eq(stockCountItems.stockCountId, countId)))
+        .returning();
+
+      return { item: updatedItem };
+    });
   });
 
 /**
@@ -586,29 +590,30 @@ export const bulkUpdateCountItems = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    // Verify count exists and is in progress
-    const [count] = await db
-      .select()
-      .from(stockCounts)
-      .where(
-        and(eq(stockCounts.id, data.countId), eq(stockCounts.organizationId, ctx.organizationId))
-      )
-      .limit(1);
-
-    if (!count) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
-
-    if (count.status !== 'in_progress') {
-      throw new ValidationError(`Cannot update items for ${count.status} count`, {
-        status: ['Count must be in progress'],
-      });
-    }
-
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [count] = await tx
+        .select()
+        .from(stockCounts)
+        .where(
+          and(eq(stockCounts.id, data.countId), eq(stockCounts.organizationId, ctx.organizationId))
+        )
+        .for('update')
+        .limit(1);
+
+      if (!count) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
+      }
+
+      if (count.status !== 'in_progress') {
+        throw new ValidationError(`Cannot update items for ${count.status} count`, {
+          status: ['Count must be in progress'],
+        });
+      }
+
       // OPTIMIZED: Use bulk update with CASE statement instead of loop
       // This reduces N sequential updates to a single update query
       if (data.items.length === 0) {

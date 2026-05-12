@@ -86,6 +86,42 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(stockCountItems.id,itemId))');
   });
 
+  it('locks the parent count before item count edits', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const itemBlock = sliceBetween(
+      source,
+      'exportconstupdateStockCountItem',
+      'exportconstbulkUpdateCountItems'
+    );
+
+    expect(itemBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(itemBlock).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,countId),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(itemBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      itemBlock.indexOf('const[item]=awaittx.select().from(stockCountItems)')
+    );
+    expect(itemBlock).not.toContain('const[count]=awaitdb.select()');
+  });
+
+  it('locks the parent count before bulk count item edits', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const bulkBlock = sliceBetween(
+      source,
+      'exportconstbulkUpdateCountItems',
+      'exportconstcompleteStockCount'
+    );
+
+    expect(bulkBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(bulkBlock).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,data.countId),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(bulkBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      bulkBlock.indexOf('constitemIds=data.items.map')
+    );
+    expect(bulkBlock).not.toContain('const[count]=awaitdb.select()');
+  });
+
   it('keeps reconciliation inventory and serialized lineage writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 
