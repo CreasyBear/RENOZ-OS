@@ -4,7 +4,7 @@
  * TanStack Query hooks for rolling back bulk operations.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
 import type { CustomerBulkOperationFilters } from '@/lib/query-keys';
@@ -18,6 +18,28 @@ import {
   rollbackBulkOperation,
 } from '@/server/functions/customers/rollback';
 import { formatCustomerMutationError } from './_mutation-errors';
+
+function invalidateCustomerAnalyticsFamilies(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.kpisAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.trendsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.segments() });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.customerAnalytics.segmentAnalyticsAll(),
+  });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.healthDistribution() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.lifecycleStages() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.lifecycleCohortsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.churnMetricsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.conversionFunnelAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.acquisitionMetricsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.quickStatsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.topCustomersAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.valueTiers() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.valueKpisAll() });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.customerAnalytics.profitabilitySegmentsAll(),
+  });
+}
 
 // ============================================================================
 // HOOKS
@@ -76,7 +98,7 @@ export function useRollbackBulkOperation() {
         queryKey: queryKeys.customers.bulkOperations.recentLists(),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.health.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.all });
+      invalidateCustomerAnalyticsFamilies(queryClient);
 
       if (result.restoredCustomerIds.length === 0) {
         queryClient.invalidateQueries({ queryKey: queryKeys.customers.details() });

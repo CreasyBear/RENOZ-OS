@@ -2116,34 +2116,51 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   customerAnalytics: {
     all: ['customerAnalytics'] as const,
+    kpisAll: () => [...queryKeys.customerAnalytics.all, 'kpis'] as const,
     kpis: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'kpis', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.kpisAll(), filters ?? {}] as const,
+    trendsAll: () => [...queryKeys.customerAnalytics.all, 'trends'] as const,
     trends: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'trends', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.trendsAll(), filters ?? {}] as const,
     segments: () => [...queryKeys.customerAnalytics.all, 'segments'] as const,
+    segmentAnalyticsAll: () =>
+      [...queryKeys.customerAnalytics.all, 'segmentAnalytics'] as const,
     segmentAnalytics: (tagId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'segmentAnalytics', tagId, filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.segmentAnalyticsAll(), tagId, filters ?? {}] as const,
     healthDistribution: () =>
       [...queryKeys.customerAnalytics.all, 'healthDistribution'] as const,
     lifecycleStages: () =>
       [...queryKeys.customerAnalytics.all, 'lifecycleStages'] as const,
+    lifecycleCohortsAll: () =>
+      [...queryKeys.customerAnalytics.all, 'lifecycleCohorts'] as const,
     lifecycleCohorts: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'lifecycleCohorts', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.lifecycleCohortsAll(), filters ?? {}] as const,
+    churnMetricsAll: () =>
+      [...queryKeys.customerAnalytics.all, 'churnMetrics'] as const,
     churnMetrics: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'churnMetrics', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.churnMetricsAll(), filters ?? {}] as const,
+    conversionFunnelAll: () =>
+      [...queryKeys.customerAnalytics.all, 'conversionFunnel'] as const,
     conversionFunnel: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'conversionFunnel', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.conversionFunnelAll(), filters ?? {}] as const,
+    acquisitionMetricsAll: () =>
+      [...queryKeys.customerAnalytics.all, 'acquisitionMetrics'] as const,
     acquisitionMetrics: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'acquisitionMetrics', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.acquisitionMetricsAll(), filters ?? {}] as const,
+    quickStatsAll: () => [...queryKeys.customerAnalytics.all, 'quickStats'] as const,
     quickStats: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'quickStats', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.quickStatsAll(), filters ?? {}] as const,
+    topCustomersAll: () => [...queryKeys.customerAnalytics.all, 'topCustomers'] as const,
     topCustomers: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'topCustomers', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.topCustomersAll(), filters ?? {}] as const,
     valueTiers: () => [...queryKeys.customerAnalytics.all, 'valueTiers'] as const,
+    valueKpisAll: () => [...queryKeys.customerAnalytics.all, 'valueKpis'] as const,
     valueKpis: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'valueKpis', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.valueKpisAll(), filters ?? {}] as const,
+    profitabilitySegmentsAll: () =>
+      [...queryKeys.customerAnalytics.all, 'profitabilitySegments'] as const,
     profitabilitySegments: (filters?: Record<string, unknown>) =>
-      [...queryKeys.customerAnalytics.all, 'profitabilitySegments', filters ?? {}] as const,
+      [...queryKeys.customerAnalytics.profitabilitySegmentsAll(), filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------

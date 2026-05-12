@@ -256,7 +256,10 @@ describe('customer mutation error formatting', () => {
     expect(rollbackHook).toContain('queryKeys.customers.health.metrics(customerId)');
     expect(rollbackHook).toContain('queryKeys.customers.health.historyLists(customerId)');
     expect(rollbackHook).toContain('queryKeys.customers.health.all()');
-    expect(rollbackHook).toContain('queryKeys.customerAnalytics.all');
+    expect(rollbackHook).toContain('function invalidateCustomerAnalyticsFamilies');
+    expect(rollbackHook).toContain('queryKeys.customerAnalytics.kpisAll()');
+    expect(rollbackHook).toContain('queryKeys.customerAnalytics.profitabilitySegmentsAll()');
+    expect(rollbackHook).not.toContain('queryKeys.customerAnalytics.all');
     expect(rollbackHook).not.toContain("[...queryKeys.customers.all, 'bulk-operations', 'recent'");
     expect(healthHook).toContain('queryKeys.customers.health.historyLists(variables.customerId)');
 
