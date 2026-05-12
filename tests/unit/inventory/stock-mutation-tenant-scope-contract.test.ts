@@ -17,6 +17,12 @@ describe('inventory stock mutation tenant-scope contract', () => {
     const source = compact(read('src/server/functions/inventory/adjustments.ts'));
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.adjust})');
+    expect(source).toContain(
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    );
+    expect(source).toContain(
+      "if(!canCreateOrIncreaseStock&&(data.adjustmentQty>0||!inventoryRecord)){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
+    );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(
       'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'

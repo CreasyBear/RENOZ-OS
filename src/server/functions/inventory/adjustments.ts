@@ -47,7 +47,13 @@ export const adjustInventory = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
     const [product] = await db
-      .select({ id: products.id, isSerialized: products.isSerialized })
+      .select({
+        id: products.id,
+        isSerialized: products.isSerialized,
+        status: products.status,
+        isActive: products.isActive,
+        trackInventory: products.trackInventory,
+      })
       .from(products)
       .where(
         and(
@@ -91,6 +97,14 @@ export const adjustInventory = createServerFn({ method: 'POST' })
       const previousQuantity = inventoryRecord?.quantityOnHand ?? 0;
       const newQuantity = previousQuantity + data.adjustmentQty;
       const valuationBefore = Number(inventoryRecord?.totalValue ?? 0);
+      const canCreateOrIncreaseStock =
+        product.status === 'active' && product.isActive && product.trackInventory;
+      if (!canCreateOrIncreaseStock && (data.adjustmentQty > 0 || !inventoryRecord)) {
+        throw new ValidationError('Product is not available for stock increases', {
+          productId: ['Only active inventory-tracked products can create or increase stock'],
+          code: ['product_not_adjustable_in'],
+        });
+      }
       const layerDeltas: Array<{
         inventoryId?: string;
         layerId?: string;
