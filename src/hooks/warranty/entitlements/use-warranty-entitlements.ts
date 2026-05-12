@@ -19,6 +19,23 @@ import type {
 const LIST_STALE_TIME = 30 * 1000;
 const DETAIL_STALE_TIME = 60 * 1000;
 
+interface ActivatedWarrantyEntitlementResult {
+  entitlementId: string;
+  warrantyId: string;
+}
+
+function invalidateActivatedWarrantyEntitlementQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  result: ActivatedWarrantyEntitlementResult
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.warrantyEntitlements.lists() });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.warrantyEntitlements.detail(result.entitlementId),
+  });
+  queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.warranties.detail(result.warrantyId) });
+}
+
 export function useWarrantyEntitlements(filters: Partial<WarrantyEntitlementFilters> = {}) {
   const listWarrantyEntitlementsFn = useServerFn(listWarrantyEntitlements);
   const queryFilters: WarrantyEntitlementFilters = {
@@ -73,8 +90,7 @@ export function useActivateWarrantyFromEntitlement() {
     mutationFn: (input: ActivateWarrantyFromEntitlementInput) =>
       activateWarrantyFromEntitlementFn({ data: input }),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyEntitlements.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.warranties.all });
+      invalidateActivatedWarrantyEntitlementQueries(queryClient, result);
       toast.success(result.message ?? 'Warranty activated successfully');
     },
     onError: (error) => {
