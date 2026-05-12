@@ -130,9 +130,9 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 
 ## 8. Cache & read-after-write
 
-`useReceiveRma` `onSuccess`: `setQueryData` for RMA detail, invalidates `queryKeys.support.rmasList()`, **`queryKeys.inventory.all`** (broad — matches comment “lists, details, movements, dashboard”).
+`useReceiveRma` `onSuccess`: `setQueryData` for RMA detail, invalidates `queryKeys.support.rmasList()`, then calls `invalidateInventoryStockMutationQueries` with the mutation result and `includeMovements: true`.
 
-`useBulkReceiveRma`: invalidates list + `rmaDetails()` + `inventory.all`.
+`useBulkReceiveRma`: invalidates list + `rmaDetails()`, then calls the same stock mutation helper with aggregate `affectedInventoryIds`, `affectedProductIds`, and `touchesSerializedInventory` returned by successful delegated receives.
 
 ---
 
@@ -144,7 +144,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 | **Fixed AUD** in layers | `currency: 'AUD'` in `createReceiptLayersWithCostComponents` | Wrong for multi-currency orgs |
 | **Single-location fallback** | Server allows omitted `locationId` only when exactly one active location exists | API callers outside the detail dialog must still pass location explicitly in multi-location orgs |
 | **bulkReceiveRma** | Calls nested `receiveRma` server fn in a loop | Each call runs full auth + transaction; `withAuth` at bulk start is redundant with per-receive auth inside `receiveRma` |
-| **Product `continue`** | `if (!productId) continue` | Silent skip of malformed line linkage — could hide data issues |
+| **Integration coverage** | Contract tests guard the explicit receiving location and cache identity shape, but there is no row-level receive integration test | Transactional inventory movement/layer behavior could regress without executable DB proof |
 
 ---
 

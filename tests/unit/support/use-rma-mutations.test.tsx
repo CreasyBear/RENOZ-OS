@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/query-keys';
 const createRmaMock = vi.fn();
 const receiveRmaMock = vi.fn();
 const processRmaMock = vi.fn();
+const bulkReceiveRmaMock = vi.fn();
 
 vi.mock('@/server/functions/orders/rma', () => ({
   listRmas: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('@/server/functions/orders/rma', () => ({
   processRma: (args: unknown) => processRmaMock(args),
   cancelRma: vi.fn(),
   bulkApproveRma: vi.fn(),
-  bulkReceiveRma: vi.fn(),
+  bulkReceiveRma: (args: unknown) => bulkReceiveRmaMock(args),
 }));
 
 describe('useRma mutations hardening', () => {
@@ -27,6 +28,7 @@ describe('useRma mutations hardening', () => {
     createRmaMock.mockReset();
     receiveRmaMock.mockReset();
     processRmaMock.mockReset();
+    bulkReceiveRmaMock.mockReset();
   });
 
   function createWrapper(queryClient: QueryClient) {
@@ -137,6 +139,67 @@ describe('useRma mutations hardening', () => {
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.detail('order-1'),
+    });
+  });
+
+  it('refreshes exact inventory identities after bulk receiving RMAs', async () => {
+    bulkReceiveRmaMock.mockResolvedValue({
+      updated: 1,
+      failed: [],
+      affectedInventoryIds: ['inventory-return-1'],
+      affectedProductIds: ['product-return-1'],
+      touchesSerializedInventory: true,
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useBulkReceiveRma } = await import('@/hooks/support/use-rma');
+    const { result } = renderHook(() => useBulkReceiveRma(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        rmaIds: ['rma-1'],
+        locationId: 'loc-1',
+      });
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.support.rmasList(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.support.rmaDetails(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-return-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-return-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-return-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.movementsForProduct('product-return-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
     });
   });
 

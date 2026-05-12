@@ -54,6 +54,10 @@ describe('RMA receive location contract', () => {
     expect(server).toContain('affectedInventoryIds: result.affectedInventoryIds');
     expect(server).toContain('affectedProductIds: result.affectedProductIds');
     expect(server).toContain('touchesSerializedInventory: result.touchesSerializedInventory');
+    expect(server).toContain('(result.affectedInventoryIds ?? []).forEach((inventoryId) => {');
+    expect(server).toContain('(result.affectedProductIds ?? []).forEach((productId) => {');
+    expect(server).toContain('affectedInventoryIds: Array.from(affectedInventoryIds)');
+    expect(server).toContain('affectedProductIds: Array.from(affectedProductIds)');
   });
 
   it('keeps damaged non-serialized returns out of available aggregate rows', () => {

@@ -333,12 +333,12 @@ export function useBulkReceiveRma() {
 
   return useMutation({
     mutationFn: (data: BulkReceiveRmaInput) => bulkReceiveRma({ data }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmasList() });
       queryClient.invalidateQueries({ queryKey: queryKeys.support.rmaDetails() });
       invalidateInventoryStockMutationQueries(queryClient, {
+        result,
         includeMovements: true,
-        touchesSerializedInventory: true,
       });
     },
   });

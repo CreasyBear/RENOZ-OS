@@ -1637,16 +1637,27 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
     await withAuth({ permission: PERMISSIONS.inventory.receive });
     const updated: string[] = [];
     const failed: { rmaId: string; error: string }[] = [];
+    const affectedInventoryIds = new Set<string>();
+    const affectedProductIds = new Set<string>();
+    let touchesSerializedInventory = false;
 
     for (const rmaId of data.rmaIds) {
       try {
-        await receiveRma({
+        const result = await receiveRma({
           data: {
             rmaId,
             locationId: data.locationId,
             inspectionNotes: data.inspectionNotes,
           },
         });
+        (result.affectedInventoryIds ?? []).forEach((inventoryId) => {
+          affectedInventoryIds.add(inventoryId);
+        });
+        (result.affectedProductIds ?? []).forEach((productId) => {
+          affectedProductIds.add(productId);
+        });
+        touchesSerializedInventory =
+          touchesSerializedInventory || Boolean(result.touchesSerializedInventory);
         updated.push(rmaId);
       } catch (err) {
         failed.push({
@@ -1656,7 +1667,13 @@ export const bulkReceiveRma = createServerFn({ method: 'POST' })
       }
     }
 
-    return { updated: updated.length, failed };
+    return {
+      updated: updated.length,
+      failed,
+      affectedInventoryIds: Array.from(affectedInventoryIds),
+      affectedProductIds: Array.from(affectedProductIds),
+      touchesSerializedInventory,
+    };
   });
 
 // ============================================================================

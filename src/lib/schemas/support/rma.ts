@@ -231,6 +231,9 @@ export type BulkReceiveRmaInput = z.infer<typeof bulkReceiveRmaSchema>;
 export interface BulkRmaResult {
   updated: number;
   failed: { rmaId: string; error: string }[];
+  affectedInventoryIds?: string[];
+  affectedProductIds?: string[];
+  touchesSerializedInventory?: boolean;
 }
 
 // ============================================================================
