@@ -75,8 +75,9 @@ export const adjustInventory = createServerFn({ method: 'POST' })
         throw new NotFoundError('Product not found', 'product');
       }
 
-      // Read WITH lock inside transaction to prevent race conditions
-      let [inventoryRecord] = await tx
+      // Read WITH lock inside transaction to prevent race conditions. Unscoped
+      // product/location adjustments are only safe when they match one row.
+      const matchingInventoryRows = await tx
         .select({
           id: inventory.id,
           serialNumber: inventory.serialNumber,
@@ -94,7 +95,16 @@ export const adjustInventory = createServerFn({ method: 'POST' })
           )
         )
         .for('update')
-        .limit(1);
+        .limit(data.inventoryId ? 1 : 2);
+
+      if (!data.inventoryId && matchingInventoryRows.length > 1) {
+        throw new ValidationError('Adjustment requires a specific inventory row', {
+          inventoryId: ['Open the inventory browser and adjust the specific stock row'],
+          code: ['ambiguous_adjustment_source'],
+        });
+      }
+
+      let [inventoryRecord] = matchingInventoryRows;
 
       // Use fresh data from locked row
       const previousQuantity = inventoryRecord?.quantityOnHand ?? 0;

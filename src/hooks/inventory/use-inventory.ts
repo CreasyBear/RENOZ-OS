@@ -233,9 +233,9 @@ export function useAdjustInventory() {
         queryKey: queryKeys.inventory.details(),
       });
 
-      // Adjustment writes are row-scoped on the server. Product/location-only
-      // payloads still mutate one locked row, so aggregate optimistic math can
-      // overpatch sibling lot/serial rows. Let refetch reconcile exact rows.
+      // Adjustment writes are row-scoped or single-row product/location scoped
+      // on the server. Let refetch reconcile exact rows instead of patching
+      // aggregates across lots, dispositions, or serialized units.
       return { previousLists, previousDetails };
     },
     onError: (error, _variables, context) => {

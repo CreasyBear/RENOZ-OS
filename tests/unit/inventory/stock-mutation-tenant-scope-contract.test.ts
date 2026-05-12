@@ -31,6 +31,9 @@ describe('inventory stock mutation tenant-scope contract', () => {
     expect(source).toContain(
       "if(!canCreateOrIncreaseStock&&(data.adjustmentQty>0||!inventoryRecord)){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
     );
+    expect(source).toContain(
+      "if(!data.inventoryId&&matchingInventoryRows.length>1){thrownewValidationError('Adjustmentrequiresaspecificinventoryrow',{inventoryId:['Opentheinventorybrowserandadjustthespecificstockrow'],code:['ambiguous_adjustment_source'],});}"
+    );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(
       'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'
@@ -51,9 +54,25 @@ describe('inventory stock mutation tenant-scope contract', () => {
       "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1)"
     );
     expect(adjustBlock.indexOf("for('update').limit(1)")).toBeLessThan(
-      adjustBlock.indexOf('let[inventoryRecord]=awaittx')
+      adjustBlock.indexOf('constmatchingInventoryRows=awaittx')
     );
     expect(adjustBlock).not.toContain('const[product]=awaitdb.select()');
+  });
+
+  it('rejects ambiguous product-location adjustment sources before writing inventory', () => {
+    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
+    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+
+    expect(adjustBlock).toContain('.limit(data.inventoryId?1:2);');
+    expect(adjustBlock).toContain(
+      "if(!data.inventoryId&&matchingInventoryRows.length>1){thrownewValidationError('Adjustmentrequiresaspecificinventoryrow',{inventoryId:['Opentheinventorybrowserandadjustthespecificstockrow'],code:['ambiguous_adjustment_source'],});}"
+    );
+    expect(adjustBlock.indexOf('matchingInventoryRows.length>1')).toBeLessThan(
+      adjustBlock.indexOf('if(!inventoryRecord){')
+    );
+    expect(adjustBlock.indexOf('matchingInventoryRows.length>1')).toBeLessThan(
+      adjustBlock.indexOf('.update(inventory)')
+    );
   });
 
   it('keeps allocation and deallocation final inventory writes organization-scoped', () => {
