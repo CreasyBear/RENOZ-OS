@@ -19,6 +19,10 @@ import {
   inventoryMovements,
 } from 'drizzle/schema';
 import {
+  addSerializedItemEvent,
+  upsertSerializedItemForInventory,
+} from '@/server/functions/_shared/serialized-lineage';
+import {
   logActivityInTransaction,
 } from '@/server/functions/inventory/_activity';
 
@@ -27,6 +31,16 @@ const bulkUpdateStatusSchema = z.object({
   status: inventoryStatusSchema,
   reason: z.string().min(1),
 });
+
+type InventoryStatus = typeof inventory.$inferSelect.status;
+type SerializedStatus = 'available' | 'allocated' | 'shipped' | 'returned' | 'quarantined' | 'scrapped';
+
+function mapInventoryStatusToSerializedStatus(status: InventoryStatus): SerializedStatus {
+  if (status === 'sold') return 'shipped';
+  if (status === 'damaged') return 'scrapped';
+  if (status === 'returned' || status === 'quarantined') return status;
+  return status;
+}
 
 /**
  * Bulk update inventory status.
@@ -105,6 +119,34 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
             createdBy: ctx.user.id,
           }))
         );
+
+        const serializedStatus = mapInventoryStatusToSerializedStatus(data.status);
+        for (const item of updated) {
+          if (!item.serialNumber) {
+            continue;
+          }
+
+          const serializedItemId = await upsertSerializedItemForInventory(tx, {
+            organizationId: ctx.organizationId,
+            productId: item.productId,
+            serialNumber: item.serialNumber,
+            inventoryId: item.id,
+            status: serializedStatus,
+            userId: ctx.user.id,
+          });
+
+          if (serializedItemId) {
+            await addSerializedItemEvent(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId,
+              eventType: 'status_changed',
+              entityType: 'inventory',
+              entityId: item.id,
+              notes: `Bulk status update to ${data.status}: ${data.reason}`,
+              userId: ctx.user.id,
+            });
+          }
+        }
 
         // Log activities for bulk status update - inside transaction for atomicity
         // Log one activity per unique product (not per inventory item) to avoid spam

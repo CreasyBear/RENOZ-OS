@@ -114,6 +114,25 @@ describe('inventory stock mutation tenant-scope contract', () => {
     expect(statusBlock).not.toContain('inArray(inventory.id,data.inventoryIds)).returning()');
   });
 
+  it('keeps bulk status updates aligned with serialized lineage', () => {
+    const source = compact(read('src/server/functions/inventory/status-updates.ts'));
+    const statusBlock = sliceBetween(source, 'exportconstbulkUpdateStatus', '});});');
+
+    expect(source).toContain('functionmapInventoryStatusToSerializedStatus(status:InventoryStatus):SerializedStatus');
+    expect(source).toContain("if(status==='sold')return'shipped';");
+    expect(source).toContain("if(status==='damaged')return'scrapped';");
+    expect(source).toContain("if(status==='returned'||status==='quarantined')returnstatus;");
+    expect(source).toContain("import{addSerializedItemEvent,upsertSerializedItemForInventory,}from'@/server/functions/_shared/serialized-lineage';");
+    expect(statusBlock).toContain('constserializedStatus=mapInventoryStatusToSerializedStatus(data.status);');
+    expect(statusBlock).toContain('if(!item.serialNumber){continue;}');
+    expect(statusBlock).toContain(
+      'constserializedItemId=awaitupsertSerializedItemForInventory(tx,{organizationId:ctx.organizationId,productId:item.productId,serialNumber:item.serialNumber,inventoryId:item.id,status:serializedStatus,userId:ctx.user.id,});'
+    );
+    expect(statusBlock).toContain("eventType:'status_changed'");
+    expect(statusBlock).toContain("entityType:'inventory'");
+    expect(statusBlock).toContain('entityId:item.id');
+  });
+
   it('keeps manual receive final inventory writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
 
