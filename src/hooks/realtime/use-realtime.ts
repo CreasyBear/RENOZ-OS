@@ -312,10 +312,3 @@ export function getStatusLabel(status: ConnectionStatus): string {
       return 'Offline'
   }
 }
-
-// ============================================================================
-// RE-EXPORT LEGACY HOOK FOR BACKWARDS COMPATIBILITY
-// ============================================================================
-
-// The original postgres_changes hook is still available at ../use-realtime-subscription
-// This new hook uses broadcast channels which is the preferred pattern for multi-tenant apps
