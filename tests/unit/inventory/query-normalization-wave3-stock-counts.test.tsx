@@ -1,7 +1,8 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListStockCounts = vi.fn();
 const mockGetStockCount = vi.fn();
@@ -255,5 +256,66 @@ describe('inventory stock counts query normalization wave 3', () => {
     expect(mockToastError).toHaveBeenCalledWith(
       'Count cannot complete because some rows have missing cost layers.'
     );
+  });
+
+  it('refreshes inventory finance surfaces after count completion', async () => {
+    mockCompleteStockCount.mockResolvedValue({
+      adjustments: [{ id: 'movement-1' }],
+      affectedInventoryIds: ['inventory-row-a'],
+      affectedLayerIds: ['layer-a'],
+      financeMetadata: {
+        valuationBefore: 100,
+        valuationAfter: 90,
+      },
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useCompleteStockCount } = await import('@/hooks/inventory/use-stock-counts');
+
+    const { result } = renderHook(() => useCompleteStockCount(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: 'count-1',
+        applyAdjustments: true,
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.stockCountsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.stockCount('count-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-row-a'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-row-a'),
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.details(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.dashboard(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.wmsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.valuationAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availabilityAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.availableSerialsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    });
   });
 });

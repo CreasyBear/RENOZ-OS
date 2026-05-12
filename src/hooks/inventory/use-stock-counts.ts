@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import { formatInventoryMutationError } from './_mutation-errors';
+import { invalidateInventoryStockMutationQueries } from './_stock-mutation-cache';
 import {
   listStockCounts,
   getStockCount,
@@ -331,8 +332,10 @@ export function useCompleteStockCount() {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCountsAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stockCount(variables.id) });
-      // Also invalidate inventory lists since quantities may have changed
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.lists() });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        result,
+        includeMovements: true,
+      });
     },
     onError: (error: unknown) => {
       toast.error(
