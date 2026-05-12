@@ -26,7 +26,7 @@ describe('inventory stock mutation tenant-scope contract', () => {
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.adjust})');
     expect(source).toContain(
-      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for(\'update\')'
     );
     expect(source).toContain(
       "if(!canCreateOrIncreaseStock&&(data.adjustmentQty>0||!inventoryRecord)){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
@@ -40,6 +40,20 @@ describe('inventory stock mutation tenant-scope contract', () => {
     );
     expect(source).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
     expect(source).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
+  });
+
+  it('locks adjustment product availability before inventory writes', () => {
+    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
+    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+
+    expect(adjustBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(adjustBlock).toContain(
+      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1)"
+    );
+    expect(adjustBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      adjustBlock.indexOf('let[inventoryRecord]=awaittx')
+    );
+    expect(adjustBlock).not.toContain('const[product]=awaitdb.select()');
   });
 
   it('keeps allocation and deallocation final inventory writes organization-scoped', () => {

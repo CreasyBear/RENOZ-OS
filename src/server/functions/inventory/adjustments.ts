@@ -46,32 +46,35 @@ export const adjustInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockAdjustmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
-    const [product] = await db
-      .select({
-        id: products.id,
-        isSerialized: products.isSerialized,
-        status: products.status,
-        isActive: products.isActive,
-        trackInventory: products.trackInventory,
-      })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
 
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [product] = await tx
+        .select({
+          id: products.id,
+          isSerialized: products.isSerialized,
+          status: products.status,
+          isActive: products.isActive,
+          trackInventory: products.trackInventory,
+        })
+        .from(products)
+        .where(
+          and(
+            eq(products.id, data.productId),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
+        )
+        .for('update')
+        .limit(1);
+
+      if (!product) {
+        throw new NotFoundError('Product not found', 'product');
+      }
+
       // Read WITH lock inside transaction to prevent race conditions
       let [inventoryRecord] = await tx
         .select({
