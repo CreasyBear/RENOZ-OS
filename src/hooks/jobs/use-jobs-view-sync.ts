@@ -5,10 +5,42 @@
  * when data changes occur. Handles real-time updates and cross-view consistency.
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 
 // Note: useJobsViewSync is imported from jobs-view-context
+
+async function invalidateJobCalendarViewFamilies(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsAll() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventDetails() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsRanges() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.unscheduledLists() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.installerLists() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.kanbanRanges() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineRanges() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineStatsAll() }),
+  ]);
+}
+
+async function invalidateJobAssignmentViewFamilies(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.lists() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.active() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.activeProjectsAll() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.lists() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.kanbanSelectors() }),
+    invalidateJobCalendarViewFamilies(queryClient),
+  ]);
+}
+
+async function invalidateJobTaskViewFamilies(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.lists() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.kanban.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.myTasks.all }),
+  ]);
+}
 
 /**
  * Hook for handling job data mutations with cross-view synchronization
@@ -22,10 +54,8 @@ export function useJobDataMutationSync() {
     onJobDataChanged: () => {
       // Small delay to ensure server-side changes are processed
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
+        void invalidateJobAssignmentViewFamilies(queryClient);
+        void invalidateJobTaskViewFamilies(queryClient);
       }, 100);
     },
 
@@ -54,9 +84,7 @@ export function useRealtimeJobUpdates(pollInterval = 30000) {
   useQuery({
     queryKey: queryKeys.jobs.viewSync(pollInterval),
     queryFn: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
+      await invalidateJobAssignmentViewFamilies(queryClient);
       return true;
     },
     refetchInterval: pollInterval,
@@ -67,9 +95,7 @@ export function useRealtimeJobUpdates(pollInterval = 30000) {
   return {
     // Force immediate refresh
     refresh: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
+      void invalidateJobAssignmentViewFamilies(queryClient);
     },
   };
 }
