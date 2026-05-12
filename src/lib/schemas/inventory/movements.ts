@@ -198,7 +198,7 @@ export const stockTransferSchema = z.object({
   toLocationId: z.string().uuid(),
   quantity: quantitySchema,
   serialNumbers: z.array(z.string().min(1)).optional(),
-  reason: z.string().max(500).optional(),
+  reason: z.string().trim().min(1, 'Transfer reason is required').max(500),
   notes: z.string().max(500).optional(),
 });
 

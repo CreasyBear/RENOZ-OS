@@ -123,6 +123,7 @@ describe('useTransferInventory', () => {
         fromLocationId: 'location-1',
         toLocationId: 'location-2',
         quantity: 2,
+        reason: 'Move to dispatch shelf',
       })
     })
 
@@ -177,6 +178,7 @@ describe('useTransferInventory', () => {
         fromLocationId: 'location-1',
         toLocationId: 'location-2',
         quantity: 2,
+        reason: 'Move to dispatch shelf',
       })
     })
 
@@ -210,6 +212,7 @@ describe('useTransferInventory', () => {
         fromLocationId: 'location-1',
         toLocationId: 'location-2',
         quantity: 2,
+        reason: 'Move to dispatch shelf',
       })
     })
 

@@ -75,7 +75,20 @@ describe('inventory movement schema ownership', () => {
         fromLocationId: '22222222-2222-4222-8222-222222222222',
         toLocationId: '33333333-3333-4333-8333-333333333333',
         quantity: 1,
+        reason: 'Move to dispatch shelf',
       })
     ).toMatchObject({ quantity: 1 });
+  });
+
+  it('requires transfer reasons for warehouse movement evidence', () => {
+    expect(() =>
+      stockTransferSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        fromLocationId: '22222222-2222-4222-8222-222222222222',
+        toLocationId: '33333333-3333-4333-8333-333333333333',
+        quantity: 1,
+        reason: '   ',
+      })
+    ).toThrow('Transfer reason is required');
   });
 });

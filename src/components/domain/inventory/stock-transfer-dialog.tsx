@@ -63,7 +63,7 @@ export interface TransferFormData {
   toLocationId: string;
   quantity: number;
   serialNumbers?: string[];
-  reason?: string;
+  reason: string;
   notes?: string;
 }
 
@@ -263,8 +263,9 @@ export function StockTransferDialog({
         {(field) => (
           <TextField
             field={field}
-            label="Reason (Optional)"
+            label="Reason"
             placeholder="e.g., Reorganization, Picking prep"
+            required
             disabled={isLoading}
           />
         )}

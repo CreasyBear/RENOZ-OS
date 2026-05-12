@@ -606,12 +606,24 @@ export const recordMovement = createServerFn({ method: 'POST' })
           toLocationId: ['Provide destination location when recording transfer movements'],
         });
       }
+      const transferReason =
+        typeof data.metadata?.reason === 'string' && data.metadata.reason.trim().length > 0
+          ? data.metadata.reason.trim()
+          : typeof data.notes === 'string' && data.notes.trim().length > 0
+            ? data.notes.trim()
+            : null;
+      if (!transferReason) {
+        throw new ValidationError('Transfer movement requires a reason', {
+          reason: ['Provide a transfer reason when recording transfer movements'],
+        });
+      }
       return transferInventory({
         data: {
           productId: data.productId,
           fromLocationId: data.locationId,
           toLocationId,
           quantity: Math.abs(data.quantity),
+          reason: transferReason,
           notes: data.notes,
         },
       });
