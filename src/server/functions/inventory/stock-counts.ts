@@ -737,6 +737,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
 
       const adjustments: (typeof inventoryMovements.$inferSelect)[] = [];
       const affectedInventoryIds = new Set<string>();
+      const affectedLayerIds = new Set<string>();
       let valuationBefore = 0;
       let valuationAfter = 0;
       let cogsImpact = 0;
@@ -837,15 +838,16 @@ export const completeStockCount = createServerFn({ method: 'POST' })
               movementUnitCost =
                 Math.abs(variance) > 0 ? consumed.totalCost / Math.abs(variance) : 0;
               cogsImpact += Math.abs(consumed.totalCost);
-              layerDeltas.push(
-                ...consumed.layerDeltas.map((delta) => ({
+              for (const delta of consumed.layerDeltas) {
+                affectedLayerIds.add(delta.layerId);
+                layerDeltas.push({
                   inventoryId: delta.inventoryId,
                   layerId: delta.layerId,
                   quantityDelta: -delta.quantity,
                   costDelta: -(delta.quantity * delta.unitCost),
                   action: 'consume_fifo',
-                }))
-              );
+                });
+              }
             } else {
               const createdLayerId = await createReceiptLayersWithCostComponents(tx, {
                 organizationId: ctx.organizationId,
@@ -868,6 +870,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
                   },
                 ],
               });
+              affectedLayerIds.add(createdLayerId);
               layerDeltas.push({
                 inventoryId: inv.id,
                 layerId: createdLayerId,
@@ -1038,6 +1041,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         'Stock count completed successfully',
         {
           affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedLayerIds: Array.from(affectedLayerIds),
           financeMetadata: {
             valuationBefore,
             valuationAfter,
