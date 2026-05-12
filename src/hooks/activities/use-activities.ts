@@ -435,7 +435,7 @@ export function useCanLoadMore(infiniteQueryResult: ActivityFeedResult | EntityA
  *
  * // After creating a customer:
  * await createCustomer(data);
- * invalidateActivities.all(); // Refresh all activity queries
+ * invalidateActivities.all(); // Refresh all activity query families
  *
  * // After updating a specific entity:
  * invalidateActivities.entity("customer", customerId);
@@ -445,9 +445,16 @@ export function useInvalidateActivities() {
   const queryClient = useQueryClient();
 
   return {
-    /** Invalidate all activity queries */
+    /** Invalidate all activity query families */
     all: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.feeds() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.details() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.customers() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.opportunities() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.entities() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.users() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.statsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.leaderboards() });
     },
 
     /** Invalidate feed queries only */
@@ -466,11 +473,8 @@ export function useInvalidateActivities() {
 
     /** Invalidate stats and leaderboard */
     stats: () => {
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          query.queryKey[0] === 'activities' &&
-          (query.queryKey[1] === 'stats' || query.queryKey[1] === 'leaderboard'),
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.statsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.leaderboards() });
     },
   };
 }

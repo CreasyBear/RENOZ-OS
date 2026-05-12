@@ -1708,14 +1708,19 @@ export const queryKeys = {
     feeds: () => [...queryKeys.activities.all, 'feeds'] as const,
     feed: (filters?: Record<string, unknown>) =>
       [...queryKeys.activities.feeds(), filters ?? {}] as const,
-    detail: (id: string) => [...queryKeys.activities.all, 'detail', id] as const,
+    details: () => [...queryKeys.activities.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.activities.details(), id] as const,
+    customers: () => [...queryKeys.activities.all, 'customer'] as const,
     byCustomer: (customerId: string) =>
-      [...queryKeys.activities.all, 'customer', customerId] as const,
+      [...queryKeys.activities.customers(), customerId] as const,
+    opportunities: () => [...queryKeys.activities.all, 'opportunity'] as const,
     byOpportunity: (opportunityId: string) =>
-      [...queryKeys.activities.all, 'opportunity', opportunityId] as const,
+      [...queryKeys.activities.opportunities(), opportunityId] as const,
+    entities: () => [...queryKeys.activities.all, 'entity'] as const,
     entity: (entityType: string, entityId: string) =>
-      [...queryKeys.activities.all, 'entity', entityType, entityId] as const,
-    user: (userId: string) => [...queryKeys.activities.all, 'user', userId] as const,
+      [...queryKeys.activities.entities(), entityType, entityId] as const,
+    users: () => [...queryKeys.activities.all, 'user'] as const,
+    user: (userId: string) => [...queryKeys.activities.users(), userId] as const,
     statsAll: () => [...queryKeys.activities.all, 'stats'] as const,
     stats: (query?: Record<string, unknown>) =>
       [...queryKeys.activities.statsAll(), query ?? {}] as const,
