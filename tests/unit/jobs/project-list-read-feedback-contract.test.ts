@@ -40,6 +40,7 @@ describe('project list read feedback contract', () => {
   it('keeps the project list presenter behind the read helper', () => {
     const presenter = read('src/components/domain/jobs/projects/projects-list-presenter.tsx');
     const hooks = read('src/hooks/jobs/use-projects.ts');
+    const route = read('src/routes/_authenticated/projects/projects-page.tsx');
 
     expect(hooks).toContain("fallbackMessage: 'Projects are temporarily unavailable. Please refresh and try again.'");
     expect(presenter).toContain(
@@ -48,5 +49,14 @@ describe('project list read feedback contract', () => {
     expect(presenter).toContain('description={getProjectListReadErrorMessage(error)}');
     expect(presenter).not.toContain('description={error.message');
     expect(presenter).not.toContain('"An unexpected error occurred"');
+
+    expect(route).toContain(
+      "import { getProjectListReadErrorMessage } from '@/components/domain/jobs/projects/project-read-error-messages';"
+    );
+    expect(route).toContain(
+      'const projectListErrorMessage = error ? getProjectListReadErrorMessage(error) : null;'
+    );
+    expect(route).not.toContain('{error.message}');
+    expect(route).not.toContain('>{error.message}<');
   });
 });

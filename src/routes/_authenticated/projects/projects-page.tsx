@@ -24,6 +24,7 @@ import {
   ProjectsDashboard,
   ProjectCreateDialog,
 } from '@/components/domain/jobs/projects';
+import { getProjectListReadErrorMessage } from '@/components/domain/jobs/projects/project-read-error-messages';
 import { useConfirmation } from '@/hooks';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ export default function ProjectsPage() {
 
   // useAllProjects returns Project[] directly
   const projects = data ?? [];
+  const projectListErrorMessage = error ? getProjectListReadErrorMessage(error) : null;
 
   // Handlers
   const handleViewProject = useCallback(
@@ -103,7 +105,7 @@ export default function ProjectsPage() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Unable to load projects</AlertTitle>
             <AlertDescription>
-              <p className="mb-3">{error.message}</p>
+              <p className="mb-3">{projectListErrorMessage}</p>
               <Button variant="outline" size="sm" onClick={() => refetch()}>
                 Retry
               </Button>
@@ -128,7 +130,7 @@ export default function ProjectsPage() {
             <AlertTitle>Showing cached projects</AlertTitle>
             <AlertDescription>
               <div className="flex items-center gap-2">
-                <span>{error.message}</span>
+                <span>{projectListErrorMessage}</span>
                 <Button variant="link" size="sm" className="h-auto p-0" onClick={() => refetch()}>
                   Retry
                 </Button>
