@@ -218,6 +218,68 @@ describe("ProductInventoryTabContainer", () => {
     expect(screen.getByText("Adjustment open: no")).toBeInTheDocument();
   });
 
+  it("routes multi-location product adjustments to the inventory browser product filter", async () => {
+    mockUseProductInventory.mockReturnValue({
+      data: {
+        productId: "product-1",
+        sku: "BAT-1",
+        name: "Battery",
+        totalOnHand: 18,
+        totalAllocated: 0,
+        totalAvailable: 18,
+        totalValue: 1800,
+        locationCount: 2,
+        locations: [
+          {
+            locationId: "location-1",
+            locationCode: "WH-A",
+            locationName: "Warehouse A",
+            inventoryRowCount: 1,
+            quantityOnHand: 10,
+            quantityAllocated: 0,
+            quantityAvailable: 10,
+          },
+          {
+            locationId: "location-2",
+            locationCode: "WH-B",
+            locationName: "Warehouse B",
+            inventoryRowCount: 1,
+            quantityOnHand: 8,
+            quantityAllocated: 0,
+            quantityAvailable: 8,
+          },
+        ],
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+
+    const { ProductInventoryTabContainer } = await import(
+      "@/components/domain/products/tabs/inventory-tab-container"
+    );
+
+    render(
+      <ProductInventoryTabContainer
+        productId="product-1"
+        trackInventory={true}
+        isSerialized={false}
+        status="active"
+        isActive={true}
+        isPurchasable={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Adjust Stock" }));
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: "/inventory/browser",
+      search: {
+        productId: "product-1",
+      },
+    });
+    expect(screen.getByText("Adjustment open: no")).toBeInTheDocument();
+  });
+
   it("keeps single-row product-location adjustments on the product tab dialog", async () => {
     mockUseProductInventory.mockReturnValue({
       data: {

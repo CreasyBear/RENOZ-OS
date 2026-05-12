@@ -200,6 +200,8 @@ export function ProductInventoryTabView({
   const primaryLocation = summary?.locations[0];
   const primaryLocationRequiresRowSelection =
     (primaryLocation?.inventoryRowCount ?? 1) > 1;
+  const productAdjustmentRequiresBrowser =
+    (summary?.locations.length ?? 0) !== 1 || primaryLocationRequiresRowSelection;
   const actionPolicyMessage =
     !canReceiveStock && !canOrderStock
       ? "Receive Inventory and Order Stock are unavailable for this product state."
@@ -351,7 +353,7 @@ export function ProductInventoryTabView({
               size="sm"
               onClick={() => onOpenAdjustment(primaryLocation?.locationId)}
             >
-              {primaryLocationRequiresRowSelection ? "Adjust in Browser" : "Adjust Stock"}
+              {productAdjustmentRequiresBrowser ? "Adjust in Browser" : "Adjust Stock"}
             </Button>
             <Button variant="outline" size="sm" onClick={onOrderStock} disabled={!canOrderStock}>
               <Truck className="mr-2 h-4 w-4" />

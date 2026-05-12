@@ -50,6 +50,7 @@ describe('product stock adjustment policy contract', () => {
     expect(container).toContain(
       'constlocation=inventorySummary?.locations.find((item)=>item.locationId===locationId);'
     );
+    expect(container).toContain('if((inventorySummary?.locations.length??0)>1)');
     expect(container).toContain('if(location&&(location.inventoryRowCount??1)>1)');
     expect(container).toContain('to:"/inventory/browser"');
     expect(container).toContain('productId,locationId,');
@@ -58,7 +59,10 @@ describe('product stock adjustment policy contract', () => {
       'constprimaryLocationRequiresRowSelection=(primaryLocation?.inventoryRowCount??1)>1;'
     );
     expect(presenter).toContain(
-      '{primaryLocationRequiresRowSelection?"AdjustinBrowser":"AdjustStock"}'
+      'constproductAdjustmentRequiresBrowser=(summary?.locations.length??0)!==1||primaryLocationRequiresRowSelection;'
+    );
+    expect(presenter).toContain(
+      '{productAdjustmentRequiresBrowser?"AdjustinBrowser":"AdjustStock"}'
     );
     expect(presenter).toContain('onOpenAdjustment(primaryLocation?.locationId)');
   });
