@@ -20,7 +20,7 @@ import {
   DEFAULT_INVENTORY_FILTERS,
   type InventoryFiltersState,
 } from "@/components/domain/inventory/inventory-filter-config";
-import { useInventory } from "@/hooks/inventory";
+import { useBulkUpdateInventoryStatus, useInventory } from "@/hooks/inventory";
 import { useLocations } from "@/hooks/inventory/use-locations";
 import { useProducts } from "@/hooks/products";
 import type { InventoryItem } from "@/components/domain/inventory/view-modes";
@@ -138,6 +138,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     sortOrder: search.sortOrder,
     enabled: activeView === "inventory",
   });
+  const { mutateAsync: updateInventoryStatuses } = useBulkUpdateInventoryStatus();
 
   // Transform inventory data to InventoryItem format
   const inventoryItems: InventoryItem[] = useMemo(() => {
@@ -212,6 +213,16 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
     [navigate]
   );
 
+  const handleBulkStatusChange = useCallback(
+    (ids: string[], status: InventoryItem["status"], reason: string) =>
+      updateInventoryStatuses({
+        inventoryIds: ids,
+        status,
+        reason,
+      }),
+    [updateInventoryStatuses]
+  );
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -281,6 +292,7 @@ export default function InventoryBrowserPage({ search }: InventoryBrowserPagePro
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
                 onItemClick={handleItemClick}
+                onBulkStatusChange={handleBulkStatusChange}
                 onRefresh={() => refetch()}
               />
             </>

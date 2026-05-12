@@ -16,8 +16,10 @@ export {
   useAdjustInventory,
   useTransferInventory,
   useReceiveInventory,
+  useBulkUpdateInventoryStatus,
   useInventoryDashboard,
   useLocationUtilization,
+  type BulkUpdateInventoryStatusInput,
 } from './use-inventory';
 
 // Serial number management

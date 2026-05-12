@@ -102,15 +102,21 @@ describe('inventory stock mutation tenant-scope contract', () => {
     const source = compact(read('src/server/functions/inventory/status-updates.ts'));
     const statusBlock = sliceBetween(source, 'exportconstbulkUpdateStatus', '});});');
 
+    expect(source).toContain("constoperatorDispositionStatuses=['available','damaged','returned','quarantined',]asconstsatisfiesreadonlyOperatorDispositionStatus[];");
+    expect(statusBlock).toContain(
+      "if(!isOperatorDispositionStatus(data.status)){thrownewValidationError('Bulkstatuschangescannotsetworkflow-ownedstatuses',{status:['Useallocationorfulfillmentworkflowsforallocatedorsoldinventory'],code:['workflow_owned_inventory_status'],});}"
+    );
+    expect(statusBlock).toContain('consttargetStatus=data.status;');
     expect(statusBlock).toContain('consttargetItems=awaittx.select({id:inventory.id,quantityAllocated:inventory.quantityAllocated,})');
     expect(statusBlock).toContain(".from(inventory).where(and(eq(inventory.organizationId,ctx.organizationId),inArray(inventory.id,data.inventoryIds))).for('update')");
     expect(statusBlock).toContain('Number(item.quantityAllocated??0)>0');
-    expect(statusBlock).toContain("if(allocatedItems.length>0&&data.status!=='allocated')");
+    expect(statusBlock).toContain('if(allocatedItems.length>0)');
     expect(statusBlock).toContain(
       "thrownewValidationError('Cannotchangestatusforallocatedinventory',{inventoryIds:['Releaseallocationsbeforechanginginventorystatus'],code:['allocated_inventory_status_change'],});"
     );
     expect(statusBlock).toContain('consttargetItemIds=targetItems.map((item)=>item.id);');
     expect(statusBlock).toContain('inArray(inventory.id,targetItemIds)');
+    expect(statusBlock).not.toContain("data.status!=='allocated'");
     expect(statusBlock).not.toContain('inArray(inventory.id,data.inventoryIds)).returning()');
   });
 
@@ -118,12 +124,12 @@ describe('inventory stock mutation tenant-scope contract', () => {
     const source = compact(read('src/server/functions/inventory/status-updates.ts'));
     const statusBlock = sliceBetween(source, 'exportconstbulkUpdateStatus', '});});');
 
-    expect(source).toContain('functionmapInventoryStatusToSerializedStatus(status:InventoryStatus):SerializedStatus');
-    expect(source).toContain("if(status==='sold')return'shipped';");
+    expect(source).toContain('functionmapInventoryStatusToSerializedStatus(status:OperatorDispositionStatus):SerializedStatus');
+    expect(source).not.toContain("if(status==='sold')return'shipped';");
     expect(source).toContain("if(status==='damaged')return'scrapped';");
     expect(source).toContain("if(status==='returned'||status==='quarantined')returnstatus;");
     expect(source).toContain("import{addSerializedItemEvent,upsertSerializedItemForInventory,}from'@/server/functions/_shared/serialized-lineage';");
-    expect(statusBlock).toContain('constserializedStatus=mapInventoryStatusToSerializedStatus(data.status);');
+    expect(statusBlock).toContain('constserializedStatus=mapInventoryStatusToSerializedStatus(targetStatus);');
     expect(statusBlock).toContain('if(!item.serialNumber){continue;}');
     expect(statusBlock).toContain(
       'constserializedItemId=awaitupsertSerializedItemForInventory(tx,{organizationId:ctx.organizationId,productId:item.productId,serialNumber:item.serialNumber,inventoryId:item.id,status:serializedStatus,userId:ctx.user.id,});'

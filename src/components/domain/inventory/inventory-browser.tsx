@@ -22,11 +22,13 @@ import {
   RefreshCw,
   Trash2,
   ArrowLeftRight,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,6 +107,11 @@ interface InventoryBrowserProps {
   onTransfer?: (item: InventoryItem) => void;
   onBulkDelete?: (ids: string[]) => Promise<void>;
   onBulkTransfer?: (ids: string[], locationId: string) => Promise<void>;
+  onBulkStatusChange?: (
+    ids: string[],
+    status: InventoryItem["status"],
+    reason: string
+  ) => Promise<unknown>;
   onExport?: (ids: string[], columns: string[]) => Promise<void>;
   onRefresh?: () => void;
   className?: string;
@@ -126,6 +133,33 @@ const EXPORT_COLUMNS = [
   { id: "lotNumber", label: "Lot Number" },
   { id: "expiryDate", label: "Expiry Date" },
   { id: "receivedAt", label: "Received Date" },
+];
+
+const BULK_STATUS_OPTIONS: Array<{
+  value: InventoryItem["status"];
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "available",
+    label: "Available",
+    description: "Return released stock to normal sellable inventory.",
+  },
+  {
+    value: "quarantined",
+    label: "Quarantined",
+    description: "Hold stock pending inspection, supplier review, or support triage.",
+  },
+  {
+    value: "damaged",
+    label: "Damaged",
+    description: "Mark stock as unsellable because condition or handling evidence failed.",
+  },
+  {
+    value: "returned",
+    label: "Returned",
+    description: "Mark stock as returned after intake or support review.",
+  },
 ];
 
 // ============================================================================
@@ -150,6 +184,7 @@ export const InventoryBrowser = memo(function InventoryBrowser({
   onTransfer,
   onBulkDelete,
   onBulkTransfer,
+  onBulkStatusChange,
   onExport,
   onRefresh,
   className,
@@ -158,7 +193,11 @@ export const InventoryBrowser = memo(function InventoryBrowser({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [transferLocationId, setTransferLocationId] = useState("");
+  const [statusTarget, setStatusTarget] = useState<InventoryItem["status"] | "">("");
+  const [statusReason, setStatusReason] = useState("");
+  const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
   const [exportColumns, setExportColumns] = useState<string[]>([
     "productSku",
     "productName",
@@ -229,6 +268,36 @@ export const InventoryBrowser = memo(function InventoryBrowser({
     setTransferLocationId("");
     setShowTransferDialog(false);
   }, [onBulkTransfer, selectedIds, transferLocationId]);
+
+  const handleBulkStatusChange = useCallback(async () => {
+    if (!onBulkStatusChange || selectedIds.size === 0) return;
+
+    if (!statusTarget) {
+      toast.warning("Select a target status", {
+        description: "Choose the disposition that should apply to the selected inventory.",
+      });
+      return;
+    }
+
+    const reason = statusReason.trim();
+    if (!reason) {
+      toast.warning("Add a status change reason", {
+        description: "Inventory status changes need an audit reason.",
+      });
+      return;
+    }
+
+    setIsStatusSubmitting(true);
+    try {
+      await onBulkStatusChange(Array.from(selectedIds), statusTarget, reason);
+      setSelectedIds(new Set());
+      setStatusTarget("");
+      setStatusReason("");
+      setShowStatusDialog(false);
+    } finally {
+      setIsStatusSubmitting(false);
+    }
+  }, [onBulkStatusChange, selectedIds, statusReason, statusTarget]);
 
   const handleColumnToggle = useCallback((columnId: string) => {
     setExportColumns((prev) =>
@@ -304,7 +373,7 @@ export const InventoryBrowser = memo(function InventoryBrowser({
           <ViewModeToggle mode={viewMode} onChange={onViewModeChange} />
 
           {/* Bulk Actions */}
-          {selectedIds.size >= 2 && (
+          {selectedIds.size > 0 && (
             <div className="flex items-center gap-2 ml-4 pl-4 border-l">
               <Badge variant="secondary">
                 {selectedIds.size} selected
@@ -330,6 +399,17 @@ export const InventoryBrowser = memo(function InventoryBrowser({
                 >
                   <ArrowLeftRight className="h-4 w-4 mr-2" aria-hidden="true" />
                   Transfer
+                </Button>
+              )}
+
+              {onBulkStatusChange && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowStatusDialog(true)}
+                >
+                  <ShieldAlert className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Status
                 </Button>
               )}
 
@@ -509,6 +589,90 @@ export const InventoryBrowser = memo(function InventoryBrowser({
               disabled={!transferLocationId || selectedIds.size === 0}
             >
               Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Status Dialog */}
+      <Dialog
+        open={showStatusDialog}
+        onOpenChange={(open) => {
+          if (isStatusSubmitting) return;
+          setShowStatusDialog(open);
+          if (!open) {
+            setStatusTarget("");
+            setStatusReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Inventory Status</DialogTitle>
+            <DialogDescription>
+              Update the disposition for {selectedIds.size} selected item
+              {selectedIds.size !== 1 ? "s" : ""}. Allocation and sold states remain controlled by
+              fulfillment workflows.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Target Status</label>
+              <Select
+                value={statusTarget}
+                onValueChange={(value) => setStatusTarget(value as InventoryItem["status"])}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {BULK_STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {statusTarget && (
+                <p className="text-xs text-muted-foreground">
+                  {BULK_STATUS_OPTIONS.find((option) => option.value === statusTarget)?.description}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="bulk-inventory-status-reason">
+                Audit Reason
+              </label>
+              <Textarea
+                id="bulk-inventory-status-reason"
+                value={statusReason}
+                onChange={(event) => setStatusReason(event.target.value)}
+                placeholder="Why is this stock changing status?"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowStatusDialog(false)}
+              disabled={isStatusSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkStatusChange}
+              disabled={
+                !statusTarget ||
+                !statusReason.trim() ||
+                selectedIds.size === 0 ||
+                isStatusSubmitting
+              }
+            >
+              {isStatusSubmitting ? "Updating..." : "Update Status"}
             </Button>
           </DialogFooter>
         </DialogContent>

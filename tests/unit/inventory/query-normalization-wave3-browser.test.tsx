@@ -6,6 +6,11 @@ const mockNavigate = vi.fn();
 const mockUseInventory = vi.fn();
 const mockUseProducts = vi.fn();
 const mockUseLocations = vi.fn();
+const mockBulkUpdateInventoryStatus = vi.fn();
+let latestInventoryBrowserProps: {
+  items: unknown[];
+  onBulkStatusChange?: (ids: string[], status: string, reason: string) => Promise<unknown>;
+} | null = null;
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (config: unknown) => config,
@@ -48,9 +53,13 @@ vi.mock('@/components/ui/alert', () => ({
 }));
 
 vi.mock('@/components/domain/inventory/inventory-browser', () => ({
-  InventoryBrowser: ({ items }: { items: unknown[] }) => (
-    <div>Inventory Browser Stub: {items.length}</div>
-  ),
+  InventoryBrowser: (props: {
+    items: unknown[];
+    onBulkStatusChange?: (ids: string[], status: string, reason: string) => Promise<unknown>;
+  }) => {
+    latestInventoryBrowserProps = props;
+    return <div>Inventory Browser Stub: {props.items.length}</div>;
+  },
 }));
 
 vi.mock('@/components/domain/inventory/serialized-items/serialized-items-list-container', () => ({
@@ -63,6 +72,10 @@ vi.mock('@/components/skeletons/inventory', () => ({
 
 vi.mock('@/hooks/inventory', () => ({
   useInventory: (...args: unknown[]) => mockUseInventory(...args),
+  useBulkUpdateInventoryStatus: () => ({
+    mutateAsync: (...args: unknown[]) => mockBulkUpdateInventoryStatus(...args),
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/hooks/inventory/use-locations', () => ({
@@ -85,6 +98,7 @@ const defaultSearch = {
 describe('inventory browser query normalization wave 3', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    latestInventoryBrowserProps = null;
     mockUseProducts.mockReturnValue({ data: { products: [] } });
     mockUseLocations.mockReturnValue({ locations: [] });
     mockUseInventory.mockReturnValue({
@@ -157,5 +171,55 @@ describe('inventory browser query normalization wave 3', () => {
       screen.getByText('Inventory data is temporarily unavailable. Please refresh and try again.')
     ).toBeInTheDocument();
     expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+  });
+
+  it('wires inventory bulk status changes through the mutation hook', async () => {
+    mockBulkUpdateInventoryStatus.mockResolvedValue({ updatedCount: 1, items: [] });
+    mockUseInventory.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'inventory-1',
+            productId: 'product-1',
+            product: { name: 'Battery Unit', sku: 'BAT-001' },
+            locationId: 'location-1',
+            location: { name: 'Main Warehouse', locationCode: 'MAIN' },
+            quantityOnHand: 1,
+            quantityAllocated: 0,
+            quantityAvailable: 1,
+            unitCost: 100,
+            totalValue: 100,
+            status: 'available',
+            serialNumber: 'SN-001',
+            lotNumber: null,
+            expiryDate: null,
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const { default: InventoryBrowserPage } = await import(
+      '@/routes/_authenticated/inventory/inventory-browser-page'
+    );
+
+    render(<InventoryBrowserPage search={defaultSearch} />);
+
+    expect(latestInventoryBrowserProps?.onBulkStatusChange).toBeDefined();
+    await latestInventoryBrowserProps?.onBulkStatusChange?.(
+      ['inventory-1'],
+      'quarantined',
+      'Battery inspection hold'
+    );
+
+    expect(mockBulkUpdateInventoryStatus).toHaveBeenCalledWith({
+      inventoryIds: ['inventory-1'],
+      status: 'quarantined',
+      reason: 'Battery inspection hold',
+    });
   });
 });

@@ -33,10 +33,24 @@ const bulkUpdateStatusSchema = z.object({
 });
 
 type InventoryStatus = typeof inventory.$inferSelect.status;
-type SerializedStatus = 'available' | 'allocated' | 'shipped' | 'returned' | 'quarantined' | 'scrapped';
+type OperatorDispositionStatus = Extract<
+  InventoryStatus,
+  'available' | 'damaged' | 'returned' | 'quarantined'
+>;
+type SerializedStatus = 'available' | 'returned' | 'quarantined' | 'scrapped';
 
-function mapInventoryStatusToSerializedStatus(status: InventoryStatus): SerializedStatus {
-  if (status === 'sold') return 'shipped';
+const operatorDispositionStatuses = [
+  'available',
+  'damaged',
+  'returned',
+  'quarantined',
+] as const satisfies readonly OperatorDispositionStatus[];
+
+function isOperatorDispositionStatus(status: InventoryStatus): status is OperatorDispositionStatus {
+  return (operatorDispositionStatuses as readonly InventoryStatus[]).includes(status);
+}
+
+function mapInventoryStatusToSerializedStatus(status: OperatorDispositionStatus): SerializedStatus {
   if (status === 'damaged') return 'scrapped';
   if (status === 'returned' || status === 'quarantined') return status;
   return status;
@@ -49,6 +63,14 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
   .inputValidator(bulkUpdateStatusSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
+
+    if (!isOperatorDispositionStatus(data.status)) {
+      throw new ValidationError('Bulk status changes cannot set workflow-owned statuses', {
+        status: ['Use allocation or fulfillment workflows for allocated or sold inventory'],
+        code: ['workflow_owned_inventory_status'],
+      });
+    }
+    const targetStatus = data.status;
 
     return await db.transaction(async (tx) => {
       await tx.execute(
@@ -69,7 +91,7 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
         .for('update');
 
       const allocatedItems = targetItems.filter((item) => Number(item.quantityAllocated ?? 0) > 0);
-      if (allocatedItems.length > 0 && data.status !== 'allocated') {
+      if (allocatedItems.length > 0) {
         throw new ValidationError('Cannot change status for allocated inventory', {
           inventoryIds: ['Release allocations before changing inventory status'],
           code: ['allocated_inventory_status_change'],
@@ -88,7 +110,7 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
       const updated = await tx
         .update(inventory)
         .set({
-          status: data.status,
+          status: targetStatus,
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
@@ -114,13 +136,13 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
             newQuantity: item.quantityOnHand ?? 0,
             metadata: {
               reason: data.reason,
-              statusChange: data.status,
+              statusChange: targetStatus,
             },
             createdBy: ctx.user.id,
           }))
         );
 
-        const serializedStatus = mapInventoryStatusToSerializedStatus(data.status);
+        const serializedStatus = mapInventoryStatusToSerializedStatus(targetStatus);
         for (const item of updated) {
           if (!item.serialNumber) {
             continue;
@@ -142,7 +164,7 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
               eventType: 'status_changed',
               entityType: 'inventory',
               entityId: item.id,
-              notes: `Bulk status update to ${data.status}: ${data.reason}`,
+              notes: `Bulk status update to ${targetStatus}: ${data.reason}`,
               userId: ctx.user.id,
             });
           }
@@ -156,9 +178,9 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
             entityType: 'product',
             entityId: productId,
             action: 'updated',
-            description: `Bulk status update: ${updated.length} items set to ${data.status}`,
+            description: `Bulk status update: ${updated.length} items set to ${targetStatus}`,
             metadata: {
-              status: data.status,
+              status: targetStatus,
               reason: data.reason,
               itemCount: updated.length,
               inventoryIds: updated.map((item) => item.id),

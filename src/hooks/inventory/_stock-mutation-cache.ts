@@ -3,6 +3,7 @@ import { queryKeys } from '@/lib/query-keys';
 
 interface InventoryMutationItemIdentity {
   id?: string | null;
+  productId?: string | null;
   serialNumber?: string | null;
 }
 
@@ -10,6 +11,7 @@ export interface InventoryStockMutationResult {
   affectedInventoryIds?: string[] | null;
   affectedProductIds?: string[] | null;
   touchesSerializedInventory?: boolean | null;
+  items?: InventoryMutationItemIdentity[] | null;
   item?: InventoryMutationItemIdentity | null;
   sourceItem?: InventoryMutationItemIdentity | null;
   destinationItem?: InventoryMutationItemIdentity | null;
@@ -34,6 +36,7 @@ function hasText(value?: string | null): boolean {
 function collectAffectedInventoryIds(result?: InventoryStockMutationResult | null): string[] {
   return uniqueIds([
     ...(result?.affectedInventoryIds ?? []),
+    ...(result?.items ?? []).map((item) => item.id),
     result?.item?.id,
     result?.sourceItem?.id,
     result?.destinationItem?.id,
@@ -49,6 +52,7 @@ function collectAffectedProductIds({
     productId,
     ...(productIds ?? []),
     ...(result?.affectedProductIds ?? []),
+    ...(result?.items ?? []).map((item) => item.productId),
   ]);
 }
 
@@ -69,7 +73,7 @@ function mutationResultTouchesSerializedInventory(
 ): boolean {
   return [result?.item, result?.sourceItem, result?.destinationItem].some((item) =>
     hasText(item?.serialNumber)
-  );
+  ) || (result?.items ?? []).some((item) => hasText(item.serialNumber));
 }
 
 function invalidateAffectedInventoryDetails(
