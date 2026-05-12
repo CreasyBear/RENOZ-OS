@@ -20,7 +20,6 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { logger } from '@/lib/logger';
 
 // Financial hooks
 import {
@@ -296,23 +295,6 @@ export function BusinessOverviewContainer({ className }: BusinessOverviewContain
     customer: customerKpisQuery.isLoading || healthDistQuery.isLoading,
     operations: ordersQuery.isLoading || projectsQuery.isLoading || inventoryQuery.isLoading,
   };
-
-  // Log errors in development to help diagnose loading issues
-  if (import.meta.env.DEV) {
-    const errors = [
-      financialQuery.error && `Financial: ${financialQuery.error.message}`,
-      revenueQuery.error && `Revenue: ${revenueQuery.error.message}`,
-      arAgingQuery.error && `AR Aging: ${arAgingQuery.error.message}`,
-      pipelineQuery.error && `Pipeline: ${pipelineQuery.error.message}`,
-      forecastQuery.error && `Forecast: ${forecastQuery.error.message}`,
-      customerKpisQuery.error && `Customer KPIs: ${customerKpisQuery.error.message}`,
-      ordersQuery.error && `Orders: ${ordersQuery.error.message}`,
-    ].filter(Boolean);
-
-    if (errors.length > 0) {
-      logger.error('[BusinessOverview] Query errors', undefined, { errors });
-    }
-  }
 
   // -------------------------------------------------------------------------
   // HANDLERS

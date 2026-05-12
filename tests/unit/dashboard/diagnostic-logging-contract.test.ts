@@ -14,10 +14,16 @@ describe('dashboard diagnostic logging contract', () => {
     const overviewContainer = read(
       'src/components/domain/dashboard/overview/overview-container.tsx'
     );
+    const businessOverviewContainer = read(
+      'src/components/domain/dashboard/business-overview/business-overview-container.tsx'
+    );
 
     expect(metricsHook).not.toContain('console.debug');
     expect(metricsHook).not.toContain('raw-result');
     expect(overviewContainer).not.toContain('console.debug');
     expect(overviewContainer).not.toContain('query-state-json');
+    expect(businessOverviewContainer).not.toContain('logger.error');
+    expect(businessOverviewContainer).not.toContain('Query errors');
+    expect(businessOverviewContainer).not.toContain('error.message');
   });
 });
