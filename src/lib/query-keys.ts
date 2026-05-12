@@ -753,7 +753,8 @@ export const queryKeys = {
     details: () => [...queryKeys.jobs.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.jobs.details(), id] as const,
     active: () => [...queryKeys.jobs.all, 'active'] as const,
-    activeProjects: (limit?: number) => [...queryKeys.jobs.all, 'activeProjects', limit] as const,
+    activeProjectsAll: () => [...queryKeys.jobs.all, 'activeProjects'] as const,
+    activeProjects: (limit?: number) => [...queryKeys.jobs.activeProjectsAll(), limit] as const,
     viewSync: (interval?: number) => [...queryKeys.jobs.all, 'viewSync', interval] as const,
     materials: (jobId: string) => [...queryKeys.jobs.detail(jobId), 'materials'] as const,
   },
@@ -1766,10 +1767,12 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   jobCalendar: {
     all: ['jobCalendar'] as const,
+    eventsAll: () => [...queryKeys.jobCalendar.all, 'events'] as const,
     events: (filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'events', filters ?? {}] as const,
+      [...queryKeys.jobCalendar.eventsAll(), filters ?? {}] as const,
+    eventDetails: () => [...queryKeys.jobCalendar.all, 'event'] as const,
     eventDetail: (id: string) =>
-      [...queryKeys.jobCalendar.all, 'event', id] as const,
+      [...queryKeys.jobCalendar.eventDetails(), id] as const,
     availability: (userId: string, dateRange?: Record<string, unknown>) =>
       [...queryKeys.jobCalendar.all, 'availability', userId, dateRange ?? {}] as const,
     connected: () => [...queryKeys.jobCalendar.all, 'connected'] as const,
@@ -1782,18 +1785,24 @@ export const queryKeys = {
       calendars: () => [...queryKeys.jobCalendar.all, 'oauth', 'calendars'] as const,
       connection: () => [...queryKeys.jobCalendar.all, 'oauth', 'connection'] as const,
     },
+    eventsRanges: () => [...queryKeys.jobCalendar.all, 'eventsRange'] as const,
     eventsRange: (startDate: string, endDate: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'eventsRange', startDate, endDate, filters ?? {}] as const,
+      [...queryKeys.jobCalendar.eventsRanges(), startDate, endDate, filters ?? {}] as const,
+    unscheduledLists: () => [...queryKeys.jobCalendar.all, 'unscheduled'] as const,
     unscheduledList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'unscheduled', filters ?? {}] as const,
+      [...queryKeys.jobCalendar.unscheduledLists(), filters ?? {}] as const,
+    installerLists: () => [...queryKeys.jobCalendar.all, 'installers'] as const,
     installers: (filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'installers', filters ?? {}] as const,
+      [...queryKeys.jobCalendar.installerLists(), filters ?? {}] as const,
+    kanbanRanges: () => [...queryKeys.jobCalendar.all, 'kanban'] as const,
     kanbanRange: (startDate: string, endDate: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'kanban', startDate, endDate, filters ?? {}] as const,
+      [...queryKeys.jobCalendar.kanbanRanges(), startDate, endDate, filters ?? {}] as const,
+    timelineRanges: () => [...queryKeys.jobCalendar.all, 'timeline'] as const,
     timelineRange: (startDate: string, endDate: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.jobCalendar.all, 'timeline', startDate, endDate, filters ?? {}] as const,
+      [...queryKeys.jobCalendar.timelineRanges(), startDate, endDate, filters ?? {}] as const,
+    timelineStatsAll: () => [...queryKeys.jobCalendar.all, 'timelineStats'] as const,
     timelineStats: (startDate: string, endDate: string) =>
-      [...queryKeys.jobCalendar.all, 'timelineStats', startDate, endDate] as const,
+      [...queryKeys.jobCalendar.timelineStatsAll(), startDate, endDate] as const,
   },
 
   jobTasks: {
@@ -1875,8 +1884,9 @@ export const queryKeys = {
       [...queryKeys.jobAssignments.all, 'byJob', jobId] as const,
     byUser: (userId: string) =>
       [...queryKeys.jobAssignments.all, 'byUser', userId] as const,
+    kanbanSelectors: () => [...queryKeys.jobAssignments.all, 'kanbanSelector'] as const,
     kanbanSelector: (filters?: Record<string, unknown>) =>
-      [...queryKeys.jobAssignments.all, 'kanbanSelector', filters ?? {}] as const,
+      [...queryKeys.jobAssignments.kanbanSelectors(), filters ?? {}] as const,
   },
 
   // SPRINT-03: New Projects Domain

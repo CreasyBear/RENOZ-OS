@@ -8,7 +8,7 @@
  * @see src/server/functions/jobs/job-batch-operations.ts
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
   listJobAssignments,
@@ -140,6 +140,49 @@ export function useJob(jobId: string, enabled = true) {
 // JOB MUTATIONS
 // ============================================================================
 
+function invalidateJobCalendarAssignmentViews(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventDetails() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.unscheduledLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.installerLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.kanbanRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineStatsAll() });
+}
+
+function invalidateJobAssignmentCollectionViews(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.active() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.activeProjectsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.kanbanSelectors() });
+  invalidateJobCalendarAssignmentViews(queryClient);
+}
+
+function invalidateJobAssignmentDetails(queryClient: QueryClient, jobId?: string | null) {
+  if (!jobId) return;
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(jobId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.detail(jobId) });
+}
+
+function invalidateJobTaskAssignmentContext(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.kanban.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.myTasks.all });
+}
+
+function getBatchOperationJobIds(input: ProcessJobBatchInput): string[] {
+  return input.operations.flatMap((operation) => {
+    const data = operation.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return [];
+    }
+    const id = (data as { id?: unknown }).id;
+    return typeof id === 'string' ? [id] : [];
+  });
+}
+
 export interface CreateJobInput {
   title: string;
   description?: string;
@@ -186,10 +229,9 @@ export function useCreateJob() {
         },
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
+    onSuccess: (result) => {
+      invalidateJobAssignmentCollectionViews(queryClient);
+      invalidateJobAssignmentDetails(queryClient, result.job?.id);
     },
   });
 }
@@ -216,10 +258,8 @@ export function useUpdateJob() {
       });
     },
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(variables.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
+      invalidateJobAssignmentCollectionViews(queryClient);
+      invalidateJobAssignmentDetails(queryClient, variables.id);
     },
   });
 }
@@ -241,10 +281,9 @@ export function useDeleteJob() {
         data: { id: jobId, organizationId },
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
+    onSuccess: (_result, jobId) => {
+      invalidateJobAssignmentCollectionViews(queryClient);
+      invalidateJobAssignmentDetails(queryClient, jobId);
     },
   });
 }
@@ -263,11 +302,12 @@ export function useBatchJobOperations() {
 
   return useMutation({
     mutationFn: (input: ProcessJobBatchInput) => processBatchFn({ data: input }),
-    onSuccess: (_result: ProcessJobBatchResult) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobTasks.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
+    onSuccess: (_result: ProcessJobBatchResult, variables) => {
+      invalidateJobAssignmentCollectionViews(queryClient);
+      invalidateJobTaskAssignmentContext(queryClient);
+      getBatchOperationJobIds(variables).forEach((jobId) => {
+        invalidateJobAssignmentDetails(queryClient, jobId);
+      });
     },
   });
 }
