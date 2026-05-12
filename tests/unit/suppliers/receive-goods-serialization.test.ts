@@ -41,21 +41,37 @@ describe('receive goods serialization requirements', () => {
     ]);
   });
 
-  it('fails closed when any linked product serialization requirement is unavailable', () => {
-    expect(() =>
+  it('fails closed as a receive transition block when any linked product is unavailable', () => {
+    let caught: unknown;
+
+    try {
       buildProductSerializationRequirementMap(
         ['product-1', 'product-2'],
         [{ id: 'product-1', isSerialized: true }]
-      )
-    ).toThrow(
-      'Product serialization requirements are unavailable for one or more purchase-order lines. Refresh product data before receiving goods.'
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe(
+      'One or more purchase-order lines reference a product that is unavailable or archived. Refresh the purchase order before receiving goods.'
     );
+    expect((caught as { errors?: Record<string, string[]> }).errors?.code).toEqual([
+      'transition_blocked',
+    ]);
   });
 
-  it('keeps single and bulk PO receiving from defaulting missing product serialization to false', () => {
+  it('keeps single and bulk PO receiving active-product scoped before stock-in', () => {
     const receiveGoods = compact(read('src/server/functions/suppliers/receive-goods.ts'));
     const bulkReceiveGoods = compact(read('src/server/functions/suppliers/bulk-receive-goods.ts'));
 
+    expect(receiveGoods).toContain(
+      'from(products).where(and(eq(products.organizationId,ctx.organizationId),inArray(products.id,productIds),isNull(products.deletedAt)))'
+    );
+    expect(bulkReceiveGoods).toContain(
+      'from(products).where(and(inArray(products.id,productIds),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    );
     expect(receiveGoods).toContain(
       'productSerializationMap=buildProductSerializationRequirementMap(productIds,productRows)'
     );

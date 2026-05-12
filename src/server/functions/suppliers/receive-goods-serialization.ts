@@ -22,8 +22,8 @@ export function buildProductSerializationRequirementMap(
 
   if (missingProductIds.length > 0) {
     throw createSerializedMutationError(
-      'Product serialization requirements are unavailable for one or more purchase-order lines. Refresh product data before receiving goods.',
-      'invalid_serial_state'
+      'One or more purchase-order lines reference a product that is unavailable or archived. Refresh the purchase order before receiving goods.',
+      'transition_blocked'
     );
   }
 
