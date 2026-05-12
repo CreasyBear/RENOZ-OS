@@ -343,9 +343,11 @@ export function useAssignDefaultWarrantyPolicyToCategory() {
   return useMutation({
     mutationFn: (data: AssignDefaultWarrantyPolicyToCategoryInput) =>
       assignDefaultWarrantyPolicyToCategory({ data }),
-    onSuccess: () => {
-      // Invalidate category queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories.detail(variables.categoryId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories.tree() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.resolutions() });
       toast.success('Default warranty policy assigned to category');
     },
     onError: (error) => {
