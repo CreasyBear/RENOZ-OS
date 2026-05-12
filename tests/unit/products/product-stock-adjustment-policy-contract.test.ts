@@ -22,13 +22,21 @@ describe('product stock adjustment policy contract', () => {
 
     expect(detailView).toContain('status={product.status}');
     expect(detailView).toContain('isActive={product.isActive}');
+    expect(detailView).toContain('isPurchasable={product.isPurchasable}');
     expect(tab).toContain('status={status}');
     expect(tab).toContain('isActive={isActive}');
+    expect(tab).toContain('isPurchasable={isPurchasable}');
     expect(container).toContain('constcanIncreaseStock=status==="active"&&isActive&&trackInventory;');
+    expect(container).toContain('constcanReceiveStock=canIncreaseStock;');
+    expect(container).toContain('constcanOrderStock=status==="active"&&isActive&&isPurchasable;');
+    expect(container).toContain('canReceiveStock={canReceiveStock}');
+    expect(container).toContain('canOrderStock={canOrderStock}');
     expect(presenter).toContain('canIncreaseStock={canIncreaseStock}');
     expect(dialog).toContain('canIncreaseStock=true');
     expect(dialog).toContain('if(!canIncreaseStock&&adjustmentQty>0)');
     expect(dialog).toContain('disabled={!canIncreaseStock}');
     expect(dialog).toContain('blockedPositiveAdjustment');
+    expect(presenter).toContain('disabled={!canOrderStock}');
+    expect(presenter).toContain('disabled={!canReceiveStock}');
   });
 });

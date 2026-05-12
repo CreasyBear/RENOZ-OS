@@ -34,6 +34,7 @@ export interface ProductInventoryTabContainerProps {
   isSerialized: boolean;
   status?: string;
   isActive?: boolean;
+  isPurchasable?: boolean;
 }
 
 // ============================================================================
@@ -46,6 +47,7 @@ export function ProductInventoryTabContainer({
   isSerialized,
   status = "active",
   isActive = true,
+  isPurchasable = true,
 }: ProductInventoryTabContainerProps) {
   const navigate = useNavigate();
   const [showAdjustment, setShowAdjustment] = useState(false);
@@ -91,6 +93,8 @@ export function ProductInventoryTabContainer({
   const isLoading = inventoryLoading || statsLoading;
   const isLowStock = lowStockAlerts?.some((alert) => alert.productId === productId) ?? false;
   const canIncreaseStock = status === "active" && isActive && trackInventory;
+  const canReceiveStock = canIncreaseStock;
+  const canOrderStock = status === "active" && isActive && isPurchasable;
   const preferredSupplierId = preferredSupplierPrices?.items?.[0]?.supplierId;
   const inventoryUnavailableMessage =
     inventoryError instanceof Error && !inventorySummary
@@ -170,6 +174,8 @@ export function ProductInventoryTabContainer({
         trackInventory={trackInventory}
         isSerialized={isSerialized}
         canIncreaseStock={canIncreaseStock}
+        canReceiveStock={canReceiveStock}
+        canOrderStock={canOrderStock}
         inventorySummary={inventorySummary}
         stats={stats}
         lowStockAlerts={lowStockAlerts}

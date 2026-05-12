@@ -35,13 +35,19 @@ vi.mock("@/components/domain/products/tabs/inventory-tab-view", () => ({
     onOpenReceiveInventory,
     onOrderStock,
     canIncreaseStock,
+    canReceiveStock,
+    canOrderStock,
   }: {
     onOpenReceiveInventory: () => void;
     onOrderStock: () => void;
     canIncreaseStock: boolean;
+    canReceiveStock: boolean;
+    canOrderStock: boolean;
   }) => (
     <div>
       <div>Can increase stock: {canIncreaseStock ? "yes" : "no"}</div>
+      <div>Can receive stock: {canReceiveStock ? "yes" : "no"}</div>
+      <div>Can order stock: {canOrderStock ? "yes" : "no"}</div>
       <button onClick={onOpenReceiveInventory}>Receive Inventory</button>
       <button onClick={onOrderStock}>Order Stock</button>
     </div>
@@ -68,6 +74,7 @@ describe("ProductInventoryTabContainer", () => {
         isSerialized={false}
         status="active"
         isActive={true}
+        isPurchasable={true}
       />
     );
 
@@ -101,6 +108,7 @@ describe("ProductInventoryTabContainer", () => {
         isSerialized={false}
         status="active"
         isActive={true}
+        isPurchasable={true}
       />
     );
 
@@ -129,6 +137,7 @@ describe("ProductInventoryTabContainer", () => {
         isSerialized={false}
         status="active"
         isActive={true}
+        isPurchasable={true}
       />
     );
 
@@ -156,9 +165,32 @@ describe("ProductInventoryTabContainer", () => {
         isSerialized={false}
         status="inactive"
         isActive={false}
+        isPurchasable={true}
       />
     );
 
     expect(screen.getByText("Can increase stock: no")).toBeInTheDocument();
+    expect(screen.getByText("Can receive stock: no")).toBeInTheDocument();
+    expect(screen.getByText("Can order stock: no")).toBeInTheDocument();
+  });
+
+  it("marks ordering unavailable for non-purchasable product state", async () => {
+    const { ProductInventoryTabContainer } = await import(
+      "@/components/domain/products/tabs/inventory-tab-container"
+    );
+
+    render(
+      <ProductInventoryTabContainer
+        productId="product-1"
+        trackInventory={true}
+        isSerialized={false}
+        status="active"
+        isActive={true}
+        isPurchasable={false}
+      />
+    );
+
+    expect(screen.getByText("Can receive stock: yes")).toBeInTheDocument();
+    expect(screen.getByText("Can order stock: no")).toBeInTheDocument();
   });
 });

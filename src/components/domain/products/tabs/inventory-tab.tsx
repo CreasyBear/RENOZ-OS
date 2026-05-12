@@ -15,6 +15,7 @@ interface ProductInventoryTabProps {
   isSerialized: boolean;
   status?: string;
   isActive?: boolean;
+  isPurchasable?: boolean;
 }
 
 export function ProductInventoryTab({
@@ -23,6 +24,7 @@ export function ProductInventoryTab({
   isSerialized,
   status = "active",
   isActive = true,
+  isPurchasable = true,
 }: ProductInventoryTabProps) {
   return (
     <ProductInventoryTabContainer
@@ -31,6 +33,7 @@ export function ProductInventoryTab({
       isSerialized={isSerialized}
       status={status}
       isActive={isActive}
+      isPurchasable={isPurchasable}
     />
   );
 }

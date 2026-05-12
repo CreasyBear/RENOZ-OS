@@ -113,6 +113,8 @@ export interface ProductInventoryTabViewProps {
   trackInventory: boolean;
   isSerialized: boolean;
   canIncreaseStock: boolean;
+  canReceiveStock: boolean;
+  canOrderStock: boolean;
   inventorySummary: ProductInventorySummary | null | undefined;
   stats: InventoryStats | null | undefined;
   lowStockAlerts: LowStockAlert[] | null | undefined;
@@ -139,6 +141,8 @@ export function ProductInventoryTabView({
   trackInventory,
   isSerialized,
   canIncreaseStock,
+  canReceiveStock,
+  canOrderStock,
   inventorySummary,
   stats,
   isLowStock,
@@ -192,6 +196,14 @@ export function ProductInventoryTabView({
   const totalAllocated = summary?.totalAllocated ?? 0;
   const totalAvailable = summary?.totalAvailable ?? 0;
   const locationCount = summary?.locationCount ?? 0;
+  const actionPolicyMessage =
+    !canReceiveStock && !canOrderStock
+      ? "Receive Inventory and Order Stock are unavailable for this product state."
+      : !canReceiveStock
+        ? "Receive Inventory is unavailable for this product state."
+        : !canOrderStock
+          ? "Order Stock is unavailable for this product state."
+          : null;
 
   return (
     <div className="space-y-4">
@@ -294,16 +306,19 @@ export function ProductInventoryTabView({
           <CardContent className="pt-6">
           <EmptyState
             title="No stock records"
-            message="Record non-PO inbound stock for this product, or create a purchase order for supplier-backed replenishment."
-            primaryAction={{
+            message={
+              actionPolicyMessage ??
+              "Record non-PO inbound stock for this product, or create a purchase order for supplier-backed replenishment."
+            }
+            primaryAction={canReceiveStock ? {
                 label: "Receive Inventory",
                 onClick: onOpenReceiveInventory,
                 icon: Plus,
-              }}
-            secondaryAction={{
+              } : undefined}
+            secondaryAction={canOrderStock ? {
               label: "Order Stock",
               onClick: onOrderStock,
-            }}
+            } : undefined}
           />
         </CardContent>
       </Card>
@@ -322,8 +337,8 @@ export function ProductInventoryTabView({
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Receive Inventory for non-PO inbound stock, Order Stock for supplier replenishment,
-              and Adjust Stock for corrections.
+              {actionPolicyMessage ??
+                "Receive Inventory for non-PO inbound stock, Order Stock for supplier replenishment, and Adjust Stock for corrections."}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -334,11 +349,11 @@ export function ProductInventoryTabView({
             >
               Adjust Stock
             </Button>
-            <Button variant="outline" size="sm" onClick={onOrderStock}>
+            <Button variant="outline" size="sm" onClick={onOrderStock} disabled={!canOrderStock}>
               <Truck className="mr-2 h-4 w-4" />
               Order Stock
             </Button>
-            <Button size="sm" onClick={onOpenReceiveInventory}>
+            <Button size="sm" onClick={onOpenReceiveInventory} disabled={!canReceiveStock}>
               <Plus className="mr-2 h-4 w-4" />
               Receive Inventory
             </Button>
