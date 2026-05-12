@@ -2041,9 +2041,11 @@ export const queryKeys = {
     lists: () => [...queryKeys.locations.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) =>
       [...queryKeys.locations.lists(), filters ?? {}] as const,
-    detail: (id: string) => [...queryKeys.locations.all, 'detail', id] as const,
+    details: () => [...queryKeys.locations.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.locations.details(), id] as const,
     tree: () => [...queryKeys.locations.all, 'tree'] as const,
-    hierarchy: (rootId?: string) => [...queryKeys.locations.all, 'hierarchy', rootId] as const,
+    hierarchies: () => [...queryKeys.locations.all, 'hierarchy'] as const,
+    hierarchy: (rootId?: string) => [...queryKeys.locations.hierarchies(), rootId] as const,
     contents: (locationId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.locations.all, 'contents', locationId, filters ?? {}] as const,
     utilization: () => [...queryKeys.locations.all, 'utilization'] as const,

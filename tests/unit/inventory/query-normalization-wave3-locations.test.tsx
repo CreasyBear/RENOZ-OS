@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListLocations = vi.fn();
 const mockGetLocation = vi.fn();
@@ -46,6 +47,24 @@ function createWrapper(queryClient: QueryClient) {
   return Wrapper;
 }
 
+const sampleLocation = {
+  id: 'loc-1',
+  organizationId: 'org-1',
+  locationCode: 'MAIN',
+  name: 'Main Warehouse',
+  locationType: 'warehouse' as const,
+  parentId: null,
+  capacity: 100,
+  isActive: true,
+  isPickable: true,
+  isReceivable: true,
+  attributes: null,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  createdBy: null,
+  updatedBy: null,
+};
+
 describe('inventory locations query normalization wave 3', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,18 +76,7 @@ describe('inventory locations query normalization wave 3', () => {
       hasMore: false,
     });
     mockGetLocation.mockResolvedValue({
-      location: {
-        id: 'loc-1',
-        locationCode: 'MAIN',
-        name: 'Main Warehouse',
-        locationType: 'warehouse',
-        parentId: null,
-        capacity: 100,
-        isActive: true,
-        attributes: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      },
+      location: sampleLocation,
       contents: [],
       metrics: {
         itemCount: 0,
@@ -89,6 +97,12 @@ describe('inventory locations query normalization wave 3', () => {
         lowStockCount: 0,
       },
     });
+    mockCreateLocation.mockResolvedValue({ location: sampleLocation });
+    mockUpdateLocation.mockResolvedValue({ location: sampleLocation });
+    mockDeleteLocation.mockResolvedValue({ success: true });
+    mockCreateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
+    mockUpdateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
+    mockDeleteWarehouseLocation.mockResolvedValue({ success: true });
   });
 
   it('treats the location list as always-shaped and preserves empty success', async () => {
@@ -176,6 +190,106 @@ describe('inventory locations query normalization wave 3', () => {
     });
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to create location');
+  });
+
+  it('refreshes composable location mutation prefixes without location root invalidation', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useLocations } = await import('@/hooks/inventory/use-locations');
+
+    const { result } = renderHook(() => useLocations(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.createNewLocation({
+        code: 'MAIN',
+        name: 'Main Warehouse',
+        locationType: 'warehouse',
+      });
+      await result.current.updateExistingLocation('loc-1', { name: 'Main Warehouse' });
+      await result.current.deleteExistingLocation('loc-1');
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.tree(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.hierarchies(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.utilization(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.detail('loc-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.contents('loc-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.all,
+    });
+  });
+
+  it('refreshes focused warehouse location mutation prefixes without location root invalidation', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const {
+      useCreateWarehouseLocation,
+      useUpdateWarehouseLocation,
+      useDeleteWarehouseLocation,
+    } = await import('@/hooks/inventory/use-locations');
+
+    const create = renderHook(() => useCreateWarehouseLocation(), {
+      wrapper: createWrapper(queryClient),
+    });
+    const update = renderHook(() => useUpdateWarehouseLocation(), {
+      wrapper: createWrapper(queryClient),
+    });
+    const remove = renderHook(() => useDeleteWarehouseLocation(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await create.result.current.mutateAsync({
+        locationCode: 'MAIN',
+        name: 'Main Warehouse',
+        locationType: 'warehouse',
+        isActive: true,
+        isPickable: true,
+        isReceivable: true,
+      });
+      await update.result.current.mutateAsync({
+        id: 'loc-1',
+        data: { name: 'Main Warehouse' },
+      });
+      await remove.result.current.mutateAsync('loc-1');
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.tree(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.hierarchies(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.utilization(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.detail('loc-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.contents('loc-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.locations.all,
+    });
   });
 
   it('uses safe mutation fallback copy instead of raw warehouse-location errors', async () => {

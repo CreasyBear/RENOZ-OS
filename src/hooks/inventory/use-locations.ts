@@ -96,6 +96,21 @@ interface UseLocationsResult {
   setFilters: (filters: HookLocationFilters) => void;
 }
 
+function invalidateLocationMutationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  locationId?: string
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.locations.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.locations.tree() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.locations.hierarchies() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.locations.utilization() });
+
+  if (locationId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.locations.detail(locationId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.locations.contents(locationId) });
+  }
+}
+
 // ============================================================================
 // HOOK
 // ============================================================================
@@ -247,7 +262,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
         toast.success('Location created', {
           description: `${location.name} (${location.code})`,
         });
-        queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+        invalidateLocationMutationQueries(queryClient, location.id);
       }
     },
     onError: (error: unknown) => {
@@ -284,9 +299,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       });
       return result?.location ? mapUpdateResultFromApi(result.location) : null;
     },
-    onSuccess: () => {
+    onSuccess: (location, variables) => {
       toast.success('Location updated');
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+      invalidateLocationMutationQueries(queryClient, location?.id ?? variables.locationId);
     },
     onError: (error: unknown) => {
       toast.error(formatInventoryMutationError(error, 'Failed to update location'));
@@ -313,9 +328,9 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       });
       return locationId;
     },
-    onSuccess: () => {
+    onSuccess: (locationId) => {
       toast.success('Location deleted');
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+      invalidateLocationMutationQueries(queryClient, locationId);
     },
     onError: (error: unknown) => {
       toast.error(
@@ -658,9 +673,9 @@ export function useCreateWarehouseLocation() {
   return useMutation({
     mutationFn: (data: CreateWarehouseLocationInput) =>
       createWarehouseLocation({ data }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success('Location created');
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+      invalidateLocationMutationQueries(queryClient, result?.location?.id);
     },
     onError: (error: unknown) => {
       toast.error(formatInventoryMutationError(error, 'Failed to create location'));
@@ -677,10 +692,9 @@ export function useUpdateWarehouseLocation() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseLocationInput }) =>
       updateWarehouseLocation({ data: { id, data } }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
       toast.success('Location updated');
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.detail(variables.id) });
+      invalidateLocationMutationQueries(queryClient, result?.location?.id ?? variables.id);
     },
     onError: (error: unknown) => {
       toast.error(formatInventoryMutationError(error, 'Failed to update location'));
@@ -697,9 +711,9 @@ export function useDeleteWarehouseLocation() {
   return useMutation({
     mutationFn: (locationId: string) =>
       deleteWarehouseLocation({ data: { id: locationId } }),
-    onSuccess: () => {
+    onSuccess: (_result, locationId) => {
       toast.success('Location deleted');
-      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+      invalidateLocationMutationQueries(queryClient, locationId);
     },
     onError: (error: unknown) => {
       toast.error(formatInventoryMutationError(error, 'Failed to delete location'));
