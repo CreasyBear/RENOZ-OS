@@ -98,6 +98,22 @@ describe('inventory stock mutation tenant-scope contract', () => {
     expect(deallocateBlock).not.toContain("status:newAllocated>0?'allocated':'available'");
   });
 
+  it('blocks bulk status disposition changes while inventory is allocated', () => {
+    const source = compact(read('src/server/functions/inventory/status-updates.ts'));
+    const statusBlock = sliceBetween(source, 'exportconstbulkUpdateStatus', '});});');
+
+    expect(statusBlock).toContain('consttargetItems=awaittx.select({id:inventory.id,quantityAllocated:inventory.quantityAllocated,})');
+    expect(statusBlock).toContain(".from(inventory).where(and(eq(inventory.organizationId,ctx.organizationId),inArray(inventory.id,data.inventoryIds))).for('update')");
+    expect(statusBlock).toContain('Number(item.quantityAllocated??0)>0');
+    expect(statusBlock).toContain("if(allocatedItems.length>0&&data.status!=='allocated')");
+    expect(statusBlock).toContain(
+      "thrownewValidationError('Cannotchangestatusforallocatedinventory',{inventoryIds:['Releaseallocationsbeforechanginginventorystatus'],code:['allocated_inventory_status_change'],});"
+    );
+    expect(statusBlock).toContain('consttargetItemIds=targetItems.map((item)=>item.id);');
+    expect(statusBlock).toContain('inArray(inventory.id,targetItemIds)');
+    expect(statusBlock).not.toContain('inArray(inventory.id,data.inventoryIds)).returning()');
+  });
+
   it('keeps manual receive final inventory writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
 

@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { inventoryStatusSchema } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
+import { ValidationError } from '@/lib/server/errors';
 import {
   inventory,
   inventoryMovements,
@@ -39,6 +40,36 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+      const targetItems = await tx
+        .select({
+          id: inventory.id,
+          quantityAllocated: inventory.quantityAllocated,
+        })
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.organizationId, ctx.organizationId),
+            inArray(inventory.id, data.inventoryIds)
+          )
+        )
+        .for('update');
+
+      const allocatedItems = targetItems.filter((item) => Number(item.quantityAllocated ?? 0) > 0);
+      if (allocatedItems.length > 0 && data.status !== 'allocated') {
+        throw new ValidationError('Cannot change status for allocated inventory', {
+          inventoryIds: ['Release allocations before changing inventory status'],
+          code: ['allocated_inventory_status_change'],
+        });
+      }
+
+      const targetItemIds = targetItems.map((item) => item.id);
+      if (targetItemIds.length === 0) {
+        return {
+          updatedCount: 0,
+          items: [],
+        };
+      }
+
       // Update all items
       const updated = await tx
         .update(inventory)
@@ -50,7 +81,7 @@ export const bulkUpdateStatus = createServerFn({ method: 'POST' })
         .where(
           and(
             eq(inventory.organizationId, ctx.organizationId),
-            inArray(inventory.id, data.inventoryIds)
+            inArray(inventory.id, targetItemIds)
           )
         )
         .returning();
