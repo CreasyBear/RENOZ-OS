@@ -497,6 +497,7 @@ export const queryKeys = {
       [...queryKeys.customers.infiniteLists(), filters ?? {}] as const,
     details: () => [...queryKeys.customers.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.customers.details(), id] as const,
+    savedFilters: () => [...queryKeys.customers.all, 'saved-filters'] as const,
     tags: {
       all: () => [...queryKeys.customers.all, 'tags'] as const,
       list: () => [...queryKeys.customers.tags.all(), 'list'] as const,

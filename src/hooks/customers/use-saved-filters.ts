@@ -32,12 +32,6 @@ import type { CustomerFiltersState, SavedCustomerFilter } from '@/lib/schemas/cu
 export type { SavedCustomerFilter };
 
 // ============================================================================
-// QUERY KEY
-// ============================================================================
-
-const SAVED_FILTERS_QUERY_KEY = [...queryKeys.customers.all, 'saved-filters'] as const;
-
-// ============================================================================
 // HOOK
 // ============================================================================
 
@@ -50,7 +44,7 @@ export function useSavedCustomerFilters() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: SAVED_FILTERS_QUERY_KEY,
+    queryKey: queryKeys.customers.savedFilters(),
     queryFn: async (): Promise<SavedCustomerFilter[]> => {
       const wire = await getSavedCustomerFilters();
       return wire.map((w) => ({
@@ -66,7 +60,7 @@ export function useSavedCustomerFilters() {
       return await saveCustomerFilter({ data });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.savedFilters() });
       toast.success('Filter saved successfully');
     },
     onError: (error: unknown) => {
@@ -84,7 +78,7 @@ export function useSavedCustomerFilters() {
       return await updateSavedCustomerFilter({ data });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.savedFilters() });
       toast.success('Filter updated successfully');
     },
     onError: (error: unknown) => {
@@ -98,7 +92,7 @@ export function useSavedCustomerFilters() {
       return await deleteSavedCustomerFilter({ data: { id } });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SAVED_FILTERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.savedFilters() });
       toast.success('Filter deleted successfully');
     },
     onError: (error: unknown) => {
