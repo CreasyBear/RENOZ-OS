@@ -41,6 +41,19 @@ import {
 import type { GetProductResponse, ProductSearchResult } from '@/lib/schemas/products';
 import type { ProductSortField } from '@/lib/schemas/products';
 
+function invalidateProductCategoryMutationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  categoryId?: string
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.categories.tree() });
+  if (categoryId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.categories.detail(categoryId) });
+  }
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.products.searches() });
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -345,9 +358,9 @@ export function useCreateCategory() {
   return useMutation({
     mutationFn: (data: Parameters<typeof createCategory>[0]['data']) =>
       createCategory({ data }),
-    onSuccess: () => {
+    onSuccess: (category) => {
       toast.success('Category created');
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+      invalidateProductCategoryMutationQueries(queryClient, category.id);
     },
     onError: (error) => {
       toast.error(formatProductCoreMutationError(error, 'createCategory'));
@@ -364,9 +377,9 @@ export function useUpdateCategory() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Omit<Parameters<typeof updateCategory>[0]['data'], 'id'> }) =>
       updateCategory({ data: { id, ...data } }),
-    onSuccess: () => {
+    onSuccess: (category, variables) => {
       toast.success('Category updated');
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+      invalidateProductCategoryMutationQueries(queryClient, category.id ?? variables.id);
     },
     onError: (error) => {
       toast.error(formatProductCoreMutationError(error, 'updateCategory'));
@@ -382,9 +395,9 @@ export function useDeleteCategory() {
 
   return useMutation({
     mutationFn: (categoryId: string) => deleteCategory({ data: { id: categoryId } }),
-    onSuccess: () => {
+    onSuccess: (_result, categoryId) => {
       toast.success('Category deleted');
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+      invalidateProductCategoryMutationQueries(queryClient, categoryId);
     },
     onError: (error) => {
       toast.error(formatProductCoreMutationError(error, 'deleteCategory'));

@@ -1,13 +1,17 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListProducts = vi.fn();
 const mockGetProduct = vi.fn();
 const mockQuickSearchProducts = vi.fn();
 const mockListCategories = vi.fn();
 const mockGetCategoryTree = vi.fn();
+const mockCreateCategory = vi.fn();
+const mockUpdateCategory = vi.fn();
+const mockDeleteCategory = vi.fn();
 const mockSearchProducts = vi.fn();
 const mockGetSearchSuggestions = vi.fn();
 const mockGetSearchFacets = vi.fn();
@@ -34,9 +38,9 @@ vi.mock('@/server/functions/products', () => ({
   updateProduct: vi.fn(),
   deleteProduct: vi.fn(),
   duplicateProduct: vi.fn(),
-  createCategory: vi.fn(),
-  updateCategory: vi.fn(),
-  deleteCategory: vi.fn(),
+  createCategory: (...args: unknown[]) => mockCreateCategory(...args),
+  updateCategory: (...args: unknown[]) => mockUpdateCategory(...args),
+  deleteCategory: (...args: unknown[]) => mockDeleteCategory(...args),
   parseImportFile: vi.fn(),
   importProducts: vi.fn(),
 }));
@@ -130,6 +134,19 @@ describe('products query normalization wave 5b', () => {
     mockQuickSearchProducts.mockResolvedValue({ products: [], total: 0 });
     mockListCategories.mockResolvedValue([]);
     mockGetCategoryTree.mockResolvedValue([]);
+    mockCreateCategory.mockResolvedValue({
+      id: 'category-1',
+      name: 'Battery Systems',
+      description: null,
+      parentId: null,
+    });
+    mockUpdateCategory.mockResolvedValue({
+      id: 'category-1',
+      name: 'Battery Systems',
+      description: null,
+      parentId: null,
+    });
+    mockDeleteCategory.mockResolvedValue({ success: true });
     mockSearchProducts.mockResolvedValue({
       results: [],
       pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
@@ -231,6 +248,55 @@ describe('products query normalization wave 5b', () => {
     expect(images.result.current.data).toEqual([]);
     expect(primaryImage.result.current.data).toBeNull();
     expect(bundlesContaining.result.current.data).toEqual([]);
+  });
+
+  it('refreshes category and product catalog prefixes after category mutations without category root invalidation', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useCreateCategory, useUpdateCategory, useDeleteCategory } = await import(
+      '@/hooks/products/use-products'
+    );
+
+    const create = renderHook(() => useCreateCategory(), {
+      wrapper: createWrapper(queryClient),
+    });
+    const update = renderHook(() => useUpdateCategory(), {
+      wrapper: createWrapper(queryClient),
+    });
+    const remove = renderHook(() => useDeleteCategory(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await create.result.current.mutateAsync({ name: 'Battery Systems' });
+      await update.result.current.mutateAsync({
+        id: 'category-1',
+        data: { name: 'Battery Systems' },
+      });
+      await remove.result.current.mutateAsync('category-1');
+    });
+
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.categories.list(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.categories.tree(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.categories.detail('category-1'),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.searches(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.categories.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    });
   });
 
   it('preserves not-found semantics for product detail reads', async () => {
