@@ -50,6 +50,9 @@ describe('useBulkReceiveGoods', () => {
         message: 'Some purchase orders were not receipted. Review failed rows and retry.',
       },
       affectedIds: ['po-1'],
+      affectedInventoryIds: ['inventory-row-a'],
+      affectedProductIds: ['product-1'],
+      touchesSerializedInventory: true,
     })
 
     const queryClient = new QueryClient()
@@ -102,9 +105,27 @@ describe('useBulkReceiveGoods', () => {
     }
 
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.inventory.all,
+      queryKey: queryKeys.inventory.detail('inventory-row-a'),
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-row-a'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventoryStats('product-1'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.all,
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
     })
     expect(mockToastSuccess).toHaveBeenCalledWith('Processed 1 purchase order with 1 failure.')

@@ -38,4 +38,25 @@ describe('bulk receive goods row failure contract', () => {
     expect(source).toContain('formatBulkReceiveResultMessage(results)');
     expect(source).toContain('Skipped${skippedLabel}withnopendingitems.');
   });
+
+  it('preserves delegated receive-goods inventory and product identity', () => {
+    const source = compact('src/server/functions/suppliers/bulk-receive-goods.ts');
+
+    expect(source).toContain('constaffectedInventoryIds=newSet<string>();');
+    expect(source).toContain('constaffectedProductIds=newSet<string>();');
+    expect(source).toContain('lettouchesSerializedInventory=false;');
+    expect(source).toContain('constreceiveResult=awaitreceiveGoods({');
+    expect(source).toContain(
+      '(receiveResult.affectedInventoryIds??[]).forEach((id)=>affectedInventoryIds.add(id));'
+    );
+    expect(source).toContain(
+      '(receiveResult.affectedProductIds??[]).forEach((id)=>affectedProductIds.add(id));'
+    );
+    expect(source).toContain(
+      'touchesSerializedInventory=touchesSerializedInventory||Boolean(receiveResult.touchesSerializedInventory);'
+    );
+    expect(source).toContain('affectedInventoryIds:Array.from(affectedInventoryIds)');
+    expect(source).toContain('affectedProductIds:Array.from(affectedProductIds)');
+    expect(source).toContain('touchesSerializedInventory,');
+  });
 });

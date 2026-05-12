@@ -100,6 +100,9 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       skippedDetails: [] as BulkReceiveSkippedDetail[],
       errors: [] as BulkReceiveFailure[],
     };
+    const affectedInventoryIds = new Set<string>();
+    const affectedProductIds = new Set<string>();
+    let touchesSerializedInventory = false;
     const preparedReceipts: Array<{
       poId: string;
       items: Array<{
@@ -258,12 +261,16 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       if (preflightBlockedPOIds.has(preparedReceipt.poId)) continue;
 
       try {
-        await receiveGoods({
+        const receiveResult = await receiveGoods({
           data: {
             purchaseOrderId: preparedReceipt.poId,
             items: preparedReceipt.items,
           },
         });
+        (receiveResult.affectedInventoryIds ?? []).forEach((id) => affectedInventoryIds.add(id));
+        (receiveResult.affectedProductIds ?? []).forEach((id) => affectedProductIds.add(id));
+        touchesSerializedInventory =
+          touchesSerializedInventory || Boolean(receiveResult.touchesSerializedInventory);
 
         results.processed++;
       } catch (error) {
@@ -282,6 +289,9 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
       formatBulkReceiveResultMessage(results),
       {
         affectedIds: data.purchaseOrderIds,
+        affectedInventoryIds: Array.from(affectedInventoryIds),
+        affectedProductIds: Array.from(affectedProductIds),
+        touchesSerializedInventory,
         errorsById: Object.keys(errorsById).length > 0 ? errorsById : undefined,
         partialFailure:
           results.failed > 0

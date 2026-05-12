@@ -12,6 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { formatPurchaseOrderBulkReceiveMutationError } from '@/hooks/purchase-orders/_mutation-errors';
+import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
 import { bulkReceiveGoods } from '@/server/functions/suppliers/bulk-receive-goods';
 import { toastSuccess, toastError } from '@/hooks';
 
@@ -36,6 +37,9 @@ export interface BulkReceiveGoodsResult {
   errorsById?: Record<string, string>;
   partialFailure?: { code: string; message: string };
   affectedIds?: string[];
+  affectedInventoryIds?: string[];
+  affectedProductIds?: string[];
+  touchesSerializedInventory?: boolean;
 }
 
 // ============================================================================
@@ -95,8 +99,10 @@ export function useBulkReceiveGoods() {
       });
 
       // Invalidate stock side-effect surfaces touched by receipt creation.
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        result: data,
+        includeMovements: true,
+      });
 
       toastSuccess(data.message);
       if (data.partialFailure?.message) {
