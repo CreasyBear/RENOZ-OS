@@ -104,6 +104,13 @@ export const allocateInventory = createServerFn({ method: 'POST' })
             throw new NotFoundError('Inventory item not found', 'inventory');
           }
 
+          if (item.status !== 'available') {
+            throw new ValidationError('Inventory item is not available for allocation', {
+              status: ['Only available inventory can be allocated'],
+              code: ['inventory_not_allocatable'],
+            });
+          }
+
           const normalizedSerialNumber = item.serialNumber
             ? normalizeSerial(item.serialNumber)
             : null;

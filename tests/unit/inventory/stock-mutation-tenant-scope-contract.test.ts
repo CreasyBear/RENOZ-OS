@@ -67,6 +67,19 @@ describe('inventory stock mutation tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(inventory.id,data.inventoryId))');
   });
 
+  it('requires allocation writes to use allocatable inventory rows', () => {
+    const source = compact(read('src/server/functions/inventory/allocations.ts'));
+    const allocateBlock = sliceBetween(source, 'exportconstallocateInventory', 'exportconstdeallocateInventory');
+
+    expect(allocateBlock).toContain("if(item.status!=='available')");
+    expect(allocateBlock).toContain(
+      "thrownewValidationError('Inventoryitemisnotavailableforallocation',{status:['Onlyavailableinventorycanbeallocated'],code:['inventory_not_allocatable'],});"
+    );
+    expect(allocateBlock.indexOf("if(item.status!=='available')")).toBeLessThan(
+      allocateBlock.indexOf('if((item.quantityAvailable??0)<data.quantity)')
+    );
+  });
+
   it('keeps manual receive final inventory writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
 
