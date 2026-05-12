@@ -736,9 +736,8 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         action: string;
       }> = [];
 
-      if (data.applyAdjustments && varianceItems.length > 0) {
-        // OPTIMIZED: Fetch all inventory records in one query instead of N queries
-        const inventoryIds = varianceItems.map((item) => item.inventoryId);
+      if (data.applyAdjustments && items.length > 0) {
+        const inventoryIds = Array.from(new Set(items.map((item) => item.inventoryId)));
         const inventoryRecords = await tx
           .select()
           .from(inventory)
@@ -750,23 +749,28 @@ export const completeStockCount = createServerFn({ method: 'POST' })
           )
           .for('update');
 
-        // Create map for O(1) lookup
         const inventoryMap = new Map(inventoryRecords.map((inv) => [inv.id, inv]));
 
-        // Filter to only items with valid inventory records
-        const validVarianceItems = varianceItems.filter((item) => inventoryMap.has(item.inventoryId));
+        for (const item of items) {
+          const inv = inventoryMap.get(item.inventoryId);
+          if (!inv) {
+            throw new ConflictError(
+              'Inventory changed since count sheet was generated. Refresh and recount before completing.'
+            );
+          }
 
-        if (validVarianceItems.length > 0) {
-          for (const item of validVarianceItems) {
+          assertStockCountInventorySnapshotFresh({
+            currentQuantity: Number(inv.quantityOnHand ?? 0),
+            expectedQuantity: item.expectedQuantity,
+          });
+        }
+
+        if (varianceItems.length > 0) {
+          for (const item of varianceItems) {
             const inv = inventoryMap.get(item.inventoryId);
             if (!inv) continue;
 
             const previousQuantity = Number(inv.quantityOnHand ?? 0);
-            assertStockCountInventorySnapshotFresh({
-              currentQuantity: previousQuantity,
-              expectedQuantity: item.expectedQuantity,
-            });
-
             const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
             if (variance === 0) continue;
 
@@ -986,7 +990,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
                 eq(stockCountItems.stockCountId, data.id),
                 inArray(
                   stockCountItems.id,
-                  validVarianceItems.map((item) => item.id)
+                  varianceItems.map((item) => item.id)
                 )
               )
             );

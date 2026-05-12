@@ -60,10 +60,11 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
   });
 
-  it('locks count reconciliation rows and rejects stale count-sheet snapshots', () => {
+  it('locks all counted rows and rejects stale count-sheet snapshots before reconciliation', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 
     expect(source).toContain('functionassertStockCountInventorySnapshotFresh');
+    expect(source).toContain('constinventoryIds=Array.from(newSet(items.map((item)=>item.inventoryId)))');
     expect(source).toContain(
       "thrownewConflictError('Inventorychangedsincecountsheetwasgenerated.Refreshandrecountbeforecompleting.')"
     );
@@ -71,11 +72,12 @@ describe('inventory stock count tenant-scope contract', () => {
       "where(and(eq(inventory.organizationId,ctx.organizationId),inArray(inventory.id,inventoryIds))).for('update')"
     );
     expect(source).toContain(
-      'assertStockCountInventorySnapshotFresh({currentQuantity:previousQuantity,expectedQuantity:item.expectedQuantity,});'
+      'assertStockCountInventorySnapshotFresh({currentQuantity:Number(inv.quantityOnHand??0),expectedQuantity:item.expectedQuantity,});'
     );
     expect(source.indexOf('assertStockCountInventorySnapshotFresh({')).toBeLessThan(
       source.indexOf('constnewQuantity=previousQuantity+variance')
     );
+    expect(source).not.toContain('constinventoryIds=varianceItems.map((item)=>item.inventoryId)');
   });
 
   it('keeps stock count read product descriptors active and organization-bounded', () => {
