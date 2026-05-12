@@ -26,6 +26,7 @@ export interface ProductItem {
   costPrice: number | null;
   status: string;
   isActive: boolean;
+  isPurchasable: boolean;
   [key: string]: unknown;
 }
 

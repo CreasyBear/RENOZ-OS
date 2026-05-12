@@ -127,6 +127,7 @@ describe("PurchaseOrderCreatePage contextual launches", () => {
           costPrice: 12,
           status: "active",
           isActive: true,
+          isPurchasable: true,
         },
       },
       error: null,
@@ -161,6 +162,13 @@ describe("PurchaseOrderCreatePage contextual launches", () => {
     expect(screen.getByText("Order Stock for Widget")).toBeInTheDocument();
     expect(screen.getByText("Ordering stock for Widget")).toBeInTheDocument();
     expect(screen.getByText("PO Wizard")).toBeInTheDocument();
+    expect(mockUseProducts).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 100,
+      status: "active",
+      isActive: true,
+      isPurchasable: true,
+    });
     expect(lastWizardProps).toMatchObject({
       initialSupplierId: "supplier-2",
       initialStep: 2,
@@ -215,6 +223,7 @@ describe("PurchaseOrderCreatePage contextual launches", () => {
           costPrice: 0,
           status: "active",
           isActive: true,
+          isPurchasable: true,
         },
       },
       error: null,
@@ -247,7 +256,48 @@ describe("PurchaseOrderCreatePage contextual launches", () => {
         id: "product-1",
         costPrice: 0,
         basePrice: 20,
+        isPurchasable: true,
       }),
     ]);
+  });
+
+  it("blocks contextual PO seeding when the product is not purchasable", async () => {
+    mockUseProduct.mockReturnValue({
+      data: {
+        product: {
+          id: "product-1",
+          name: "Warranty Battery",
+          sku: "WB-1",
+          description: "Retired procurement item",
+          basePrice: 20,
+          costPrice: 12,
+          status: "active",
+          isActive: true,
+          isPurchasable: false,
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { default: PurchaseOrderCreatePage } = await import(
+      "@/routes/_authenticated/purchase-orders/-create-page"
+    );
+
+    render(
+      <PurchaseOrderCreatePage
+        search={{
+          productId: "product-1",
+          source: "product_detail",
+          returnToProductId: "product-1",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(/missing, inactive, or not purchasable/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText("PO Wizard")).not.toBeInTheDocument();
+    expect(lastWizardProps).toBeNull();
   });
 });

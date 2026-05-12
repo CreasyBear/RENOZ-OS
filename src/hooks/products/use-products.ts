@@ -53,6 +53,7 @@ export interface ProductFilters {
   status?: 'active' | 'draft' | 'discontinued' | 'archived';
   categoryId?: string;
   isActive?: boolean;
+  isPurchasable?: boolean;
   sortBy?: ProductSortField;
   sortOrder?: 'asc' | 'desc';
 }

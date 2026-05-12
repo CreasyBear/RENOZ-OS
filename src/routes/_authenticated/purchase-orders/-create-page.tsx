@@ -49,7 +49,9 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
   } = useProducts({
     page: 1,
     pageSize: 100,
+    status: "active",
     isActive: true,
+    isPurchasable: true,
   });
   const {
     data: selectedProductData,
@@ -158,6 +160,7 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
             costPrice: selectedProduct.costPrice != null ? Number(selectedProduct.costPrice) : null,
             status: selectedProduct.status,
             isActive: selectedProduct.isActive,
+            isPurchasable: selectedProduct.isPurchasable,
           }
         : null,
     [selectedProduct]
@@ -171,6 +174,7 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
     costPrice: product.costPrice != null ? Number(product.costPrice) : null,
     status: product.status,
     isActive: product.isActive,
+    isPurchasable: product.isPurchasable,
   }));
   const products: ProductItem[] = selectedProductItem && !productsFromList.some((product) => product.id === selectedProductItem.id)
     ? [selectedProductItem, ...productsFromList]
@@ -198,7 +202,10 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
   const hasInvalidContext =
     hasProductContext &&
     !isLoadingSelectedProduct &&
-    (!selectedProductItem || !selectedProductItem.isActive);
+    (!selectedProductItem ||
+      selectedProductItem.status !== "active" ||
+      !selectedProductItem.isActive ||
+      !selectedProductItem.isPurchasable);
   const hasDegradedProductContext = !!selectedProductError && !!selectedProductItem;
   const headerTitle = selectedProductItem && search.source === "product_detail"
     ? `Order Stock for ${selectedProductItem.name}`
@@ -253,8 +260,8 @@ export default function PurchaseOrderCreatePage({ search }: PurchaseOrderCreateP
             <TriangleAlert className="h-4 w-4" />
             <AlertTitle>Product context is no longer available</AlertTitle>
             <AlertDescription>
-              The product you launched this order flow from is missing or inactive, so we can’t
-              safely prefill the purchase order.
+              The product you launched this order flow from is missing, inactive, or not
+              purchasable, so we can’t safely prefill the purchase order.
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 {search.returnToProductId ? (
                   <Button variant="outline" onClick={handleCancel}>
