@@ -33,7 +33,7 @@ export function useTrackRecentItem() {
       return trackRecentItem({ data })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.recentItems.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.recentItems.lists() })
     },
   })
 }
