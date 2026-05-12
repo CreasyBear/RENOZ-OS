@@ -16,6 +16,10 @@ import {
   type OnboardingStep,
 } from '@/hooks/users';
 import { toast } from '@/hooks';
+import {
+  ONBOARDING_PROGRESS_CACHED_READ_FALLBACK_MESSAGE,
+  getOnboardingProgressReadErrorMessage,
+} from './onboarding-read-error-messages';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -55,6 +59,15 @@ export function OnboardingChecklist({
 
   const steps = data?.steps ?? [];
   const stats = data?.stats ?? null;
+  const onboardingErrorMessage = error
+    ? getOnboardingProgressReadErrorMessage(error)
+    : null;
+  const cachedOnboardingErrorMessage = error
+    ? getOnboardingProgressReadErrorMessage(
+        error,
+        ONBOARDING_PROGRESS_CACHED_READ_FALLBACK_MESSAGE
+      )
+    : null;
 
   // Handle step completion
   const handleComplete = async (stepKey: string) => {
@@ -98,7 +111,7 @@ export function OnboardingChecklist({
     return (
       <Alert>
         <AlertDescription>
-          {error.message || 'Onboarding progress is temporarily unavailable. Please refresh and try again.'}
+          {onboardingErrorMessage}
         </AlertDescription>
       </Alert>
     );
@@ -114,7 +127,7 @@ export function OnboardingChecklist({
       {error ? (
         <Alert>
           <AlertDescription>
-            {error.message || 'Onboarding progress is temporarily unavailable. Showing the most recent checklist.'}
+            {cachedOnboardingErrorMessage}
           </AlertDescription>
         </Alert>
       ) : null}

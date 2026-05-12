@@ -12,6 +12,10 @@ import { useEffect } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { PageLayout } from '@/components/layout';
 import { OnboardingChecklist } from '@/components/shared/onboarding-checklist';
+import {
+  ONBOARDING_PROGRESS_CACHED_READ_FALLBACK_MESSAGE,
+  getOnboardingProgressReadErrorMessage,
+} from '@/components/shared/onboarding-read-error-messages';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +33,13 @@ function OnboardingPage() {
 
   const stats = data?.stats ?? null;
   const isComplete = stats?.percentComplete === 100;
+  const onboardingErrorMessage = error ? getOnboardingProgressReadErrorMessage(error) : null;
+  const cachedOnboardingErrorMessage = error
+    ? getOnboardingProgressReadErrorMessage(
+        error,
+        ONBOARDING_PROGRESS_CACHED_READ_FALLBACK_MESSAGE
+      )
+    : null;
 
   useEffect(() => {
     if (!isLoading) trackOnboardingStarted();
@@ -57,7 +68,7 @@ function OnboardingPage() {
         <PageLayout.Content className="mx-auto max-w-2xl space-y-8 py-12">
           <Alert>
             <AlertDescription>
-              {error.message || 'Onboarding progress is temporarily unavailable. Please refresh and try again.'}
+              {onboardingErrorMessage}
             </AlertDescription>
           </Alert>
         </PageLayout.Content>
@@ -71,7 +82,7 @@ function OnboardingPage() {
         {error ? (
           <Alert>
             <AlertDescription>
-              {error.message || 'Onboarding progress is temporarily unavailable. Showing the most recent checklist.'}
+              {cachedOnboardingErrorMessage}
             </AlertDescription>
           </Alert>
         ) : null}
