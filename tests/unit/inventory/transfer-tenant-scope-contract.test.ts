@@ -85,6 +85,27 @@ describe('inventory transfer tenant-scope contract', () => {
     expect(source).not.toContain("status:'available'");
   });
 
+  it('requires row scope for non-serialized source selection', () => {
+    const transferServer = compact(read('src/server/functions/inventory/transfers.ts'));
+    const inventoryHookSource = read('src/hooks/inventory/use-inventory.ts');
+    const transferHook = compact(
+      inventoryHookSource
+        .split('export function useTransferInventory()')[1]
+        .split('/**\n * Receive new inventory stock')[0]
+    );
+
+    expect(transferServer).toContain("if(!product.isSerialized&&!data.inventoryId){");
+    expect(transferServer).toContain(
+      "thrownewValidationError('Non-serializedtransferrequiresasourceinventoryrow'"
+    );
+    expect(transferServer).toContain("code:['source_inventory_row_required']");
+    expect(transferHook).toContain('Transfersarerow-orserial-scoped');
+    expect(transferHook).toContain('Product/locationaggregatemathcan');
+    expect(transferHook).toContain('patchthewronglot,disposition,orserializedrow');
+    expect(transferHook).not.toContain('setQueriesData<InventoryListResult>');
+    expect(transferHook).not.toContain('setQueriesData<InventoryDetailResult>');
+  });
+
   it('persists transfer reason as movement context without container-side notes duplication', () => {
     const transferServer = read('src/server/functions/inventory/transfers.ts');
     const detailContainer = read(

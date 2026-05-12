@@ -48,4 +48,14 @@ describe('stock transfer reason contract', () => {
     expect(source).toContain("reason:['Provideatransferreasonwhenrecordingtransfermovements']")
     expect(source).toContain('reason:transferReason')
   })
+
+  it('requires and forwards transfer source row from generic movement recording', () => {
+    const source = compact(read('src/server/functions/products/product-inventory.ts'))
+
+    expect(source).toContain("thrownewValidationError('Transfermovementrequiresasourceinventoryrow'")
+    expect(source).toContain(
+      "inventoryId:['Selectthespecificstockrowwhenrecordingtransfermovements']"
+    )
+    expect(source).toContain('inventoryId:data.inventoryId')
+  })
 })

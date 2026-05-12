@@ -6,7 +6,7 @@
  * - Inventory item details
  * - Inventory movements history
  * - Stock adjustments with optimistic updates
- * - Stock transfers with optimistic updates
+ * - Stock transfers with refetch-first cache reconciliation
  * - Stock receiving with optimistic updates
  *
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
@@ -270,7 +270,7 @@ export function useTransferInventory() {
 
   return useMutation({
     mutationFn: (params: StockTransfer) => transferInventory({ data: params }),
-    onMutate: async (variables) => {
+    onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: queryKeys.inventory.lists() });
       await queryClient.cancelQueries({ queryKey: queryKeys.inventory.details() });
 
@@ -281,61 +281,9 @@ export function useTransferInventory() {
         queryKey: queryKeys.inventory.details(),
       });
 
-      // Row/serial-scoped transfers are not safely represented by aggregate
-      // product/location optimistic math. Let refetch reconcile exact rows.
-      if (variables.inventoryId || (variables.serialNumbers?.length ?? 0) > 0) {
-        return { previousLists, previousDetails };
-      }
-
-      queryClient.setQueriesData<InventoryListResult>(
-        { queryKey: queryKeys.inventory.lists() },
-        (old) => {
-          if (!old) return old;
-          const items = old.items.map((item) => {
-            if (item.productId !== variables.productId) return item;
-            if (item.locationId === variables.fromLocationId) {
-              const quantityOnHand = (item.quantityOnHand ?? 0) - variables.quantity;
-              const quantityAvailable = (item.quantityAvailable ?? 0) - variables.quantity;
-              const totalValue =
-                item.unitCost !== null && item.unitCost !== undefined
-                  ? quantityOnHand * Number(item.unitCost)
-                  : item.totalValue;
-              return { ...item, quantityOnHand, quantityAvailable, totalValue };
-            }
-            if (item.locationId === variables.toLocationId) {
-              const quantityOnHand = (item.quantityOnHand ?? 0) + variables.quantity;
-              const quantityAvailable = (item.quantityAvailable ?? 0) + variables.quantity;
-              const totalValue =
-                item.unitCost !== null && item.unitCost !== undefined
-                  ? quantityOnHand * Number(item.unitCost)
-                  : item.totalValue;
-              return { ...item, quantityOnHand, quantityAvailable, totalValue };
-            }
-            return item;
-          });
-          return { ...old, items };
-        }
-      );
-
-      queryClient.setQueriesData<InventoryDetailResult>(
-        { queryKey: queryKeys.inventory.details() },
-        (old) => {
-          if (!old?.item) return old;
-          if (old.item.productId !== variables.productId) return old;
-          if (old.item.locationId !== variables.fromLocationId) return old;
-          const quantityOnHand = (old.item.quantityOnHand ?? 0) - variables.quantity;
-          const quantityAvailable = (old.item.quantityAvailable ?? 0) - variables.quantity;
-          const totalValue =
-            old.item.unitCost !== null && old.item.unitCost !== undefined
-              ? quantityOnHand * Number(old.item.unitCost)
-              : old.item.totalValue;
-          return {
-            ...old,
-            item: { ...old.item, quantityOnHand, quantityAvailable, totalValue },
-          };
-        }
-      );
-
+      // Transfers are row- or serial-scoped. Product/location aggregate math can
+      // patch the wrong lot, disposition, or serialized row, so refetch exact
+      // server results instead of pretending the cache knows the source row.
       return { previousLists, previousDetails };
     },
     onError: (error, _variables, context) => {

@@ -599,6 +599,12 @@ export const recordMovement = createServerFn({ method: 'POST' })
     }
 
     if (data.movementType === 'transfer') {
+      if (!data.inventoryId) {
+        throw new ValidationError('Transfer movement requires a source inventory row', {
+          inventoryId: ['Select the specific stock row when recording transfer movements'],
+          code: ['source_inventory_row_required'],
+        });
+      }
       const toLocationId =
         typeof data.metadata?.toLocationId === 'string' ? data.metadata.toLocationId : null;
       if (!toLocationId) {
@@ -619,6 +625,7 @@ export const recordMovement = createServerFn({ method: 'POST' })
       }
       return transferInventory({
         data: {
+          inventoryId: data.inventoryId,
           productId: data.productId,
           fromLocationId: data.locationId,
           toLocationId,

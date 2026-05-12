@@ -134,7 +134,7 @@ describe('useTransferInventory', () => {
     ])
   })
 
-  it('preserves aggregate optimistic patches for unscoped transfers', async () => {
+  it('skips aggregate optimistic patches for serial-scoped transfers', async () => {
     mockTransferInventory.mockResolvedValue({
       sourceItem: { id: 'inventory-source' },
       destinationItem: { id: 'inventory-destination' },
@@ -177,15 +177,16 @@ describe('useTransferInventory', () => {
         productId: 'product-1',
         fromLocationId: 'location-1',
         toLocationId: 'location-2',
-        quantity: 2,
+        quantity: 1,
+        serialNumbers: ['SN-001'],
         reason: 'Move to dispatch shelf',
       })
     })
 
     const data = queryClient.getQueryData<ReturnType<typeof inventoryList>>(listKey)
     expect(data?.items).toMatchObject([
-      { id: 'inventory-source', quantityOnHand: 8, quantityAvailable: 8, totalValue: 80 },
-      { id: 'inventory-destination', quantityOnHand: 7, quantityAvailable: 7, totalValue: 70 },
+      { id: 'inventory-source', quantityOnHand: 10, quantityAvailable: 10, totalValue: 100 },
+      { id: 'inventory-destination', quantityOnHand: 5, quantityAvailable: 5, totalValue: 50 },
     ])
   })
 

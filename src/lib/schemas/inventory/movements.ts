@@ -39,6 +39,7 @@ export const movementMetadataSchema = z
 export type MovementMetadata = FlexibleJson | null;
 
 export const createMovementSchema = z.object({
+  inventoryId: z.string().uuid().optional(),
   productId: z.string().uuid('Product is required'),
   locationId: z.string().uuid('Location is required'),
   movementType: movementTypeSchema,
@@ -200,6 +201,16 @@ export const stockTransferSchema = z.object({
   serialNumbers: z.array(z.string().min(1)).optional(),
   reason: z.string().trim().min(1, 'Transfer reason is required').max(500),
   notes: z.string().max(500).optional(),
+}).superRefine((data, ctx) => {
+  if (data.inventoryId || (data.serialNumbers?.length ?? 0) > 0) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['inventoryId'],
+    message: 'Select a source inventory row or serial number',
+  });
 });
 
 export type StockTransfer = z.infer<typeof stockTransferSchema>;

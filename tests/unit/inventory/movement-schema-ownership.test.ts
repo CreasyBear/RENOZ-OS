@@ -71,6 +71,7 @@ describe('inventory movement schema ownership', () => {
     ).toMatchObject({ adjustmentQty: -1 });
     expect(
       stockTransferSchema.parse({
+        inventoryId: '44444444-4444-4444-8444-444444444444',
         productId: '11111111-1111-4111-8111-111111111111',
         fromLocationId: '22222222-2222-4222-8222-222222222222',
         toLocationId: '33333333-3333-4333-8333-333333333333',
@@ -90,5 +91,28 @@ describe('inventory movement schema ownership', () => {
         reason: '   ',
       })
     ).toThrow('Transfer reason is required');
+  });
+
+  it('requires transfer source scope to avoid ambiguous product-location movement', () => {
+    expect(() =>
+      stockTransferSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        fromLocationId: '22222222-2222-4222-8222-222222222222',
+        toLocationId: '33333333-3333-4333-8333-333333333333',
+        quantity: 1,
+        reason: 'Move to dispatch shelf',
+      })
+    ).toThrow('Select a source inventory row or serial number');
+
+    expect(
+      stockTransferSchema.parse({
+        productId: '11111111-1111-4111-8111-111111111111',
+        fromLocationId: '22222222-2222-4222-8222-222222222222',
+        toLocationId: '33333333-3333-4333-8333-333333333333',
+        quantity: 1,
+        serialNumbers: ['SN-001'],
+        reason: 'Move serialized unit to support shelf',
+      })
+    ).toMatchObject({ serialNumbers: ['SN-001'] });
   });
 });

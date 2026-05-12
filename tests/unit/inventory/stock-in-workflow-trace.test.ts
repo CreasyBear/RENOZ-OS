@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const receiveInventoryMock = vi.hoisted(() => vi.fn(async () => ({ id: 'receive-result' })));
+const transferInventoryMock = vi.hoisted(() => vi.fn(async () => ({ id: 'transfer-result' })));
 
 vi.mock('@tanstack/react-start', () => ({
   createServerFn: () => ({
@@ -21,7 +22,7 @@ vi.mock('@/server/functions/inventory/adjustments', () => ({
 }));
 
 vi.mock('@/server/functions/inventory/transfers', () => ({
-  transferInventory: vi.fn(),
+  transferInventory: transferInventoryMock,
 }));
 
 const root = process.cwd();
@@ -33,6 +34,7 @@ function read(path: string): string {
 describe('stock-in workflow trace', () => {
   beforeEach(() => {
     receiveInventoryMock.mockClear();
+    transferInventoryMock.mockClear();
   });
 
   it('does not document a product bulk receive endpoint that is not in code', () => {
@@ -138,5 +140,56 @@ describe('stock-in workflow trace', () => {
         notes: 'legacy receive movement',
       },
     });
+  });
+
+  it('routes generic transfer movements through row-scoped canonical transfer at runtime', async () => {
+    const { recordMovement } = await import('@/server/functions/products/product-inventory');
+
+    await recordMovement({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        locationId: 'location-1',
+        movementType: 'transfer',
+        quantity: -2,
+        metadata: {
+          toLocationId: 'location-2',
+          reason: 'Move to dispatch shelf',
+        },
+        notes: 'Move to dispatch shelf',
+      },
+    });
+
+    expect(transferInventoryMock).toHaveBeenCalledWith({
+      data: {
+        inventoryId: 'inventory-row-1',
+        productId: 'product-1',
+        fromLocationId: 'location-1',
+        toLocationId: 'location-2',
+        quantity: 2,
+        reason: 'Move to dispatch shelf',
+        notes: 'Move to dispatch shelf',
+      },
+    });
+  });
+
+  it('rejects generic transfer movements without a source inventory row', async () => {
+    const { recordMovement } = await import('@/server/functions/products/product-inventory');
+
+    await expect(
+      recordMovement({
+        data: {
+          productId: 'product-1',
+          locationId: 'location-1',
+          movementType: 'transfer',
+          quantity: -2,
+          metadata: {
+            toLocationId: 'location-2',
+            reason: 'Move to dispatch shelf',
+          },
+        },
+      })
+    ).rejects.toThrow('Transfer movement requires a source inventory row');
+    expect(transferInventoryMock).not.toHaveBeenCalled();
   });
 });

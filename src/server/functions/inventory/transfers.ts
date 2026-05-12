@@ -112,6 +112,12 @@ export const transferInventory = createServerFn({ method: 'POST' })
           serialNumbers: ['Remove serial numbers for non-serialized transfer'],
         });
       }
+      if (!product.isSerialized && !data.inventoryId) {
+        throw new ValidationError('Non-serialized transfer requires a source inventory row', {
+          inventoryId: ['Select the specific stock row to transfer'],
+          code: ['source_inventory_row_required'],
+        });
+      }
 
       const affectedInventoryIds = new Set<string>();
       const affectedLayerIds = new Set<string>();
