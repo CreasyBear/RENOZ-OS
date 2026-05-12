@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '@/lib/query-keys'
 
 const mockCreateCustomer = vi.fn()
+const mockUpdateCustomerBundle = vi.fn()
 const mockCreateContact = vi.fn()
 const mockUpdateContact = vi.fn()
 const mockDeleteContact = vi.fn()
@@ -22,6 +23,7 @@ vi.mock('@/server/functions/customers/customers', () => ({
   getCustomerById: vi.fn(),
   getCustomerTags: vi.fn(),
   createCustomer: (...args: unknown[]) => mockCreateCustomer(...args),
+  updateCustomerBundle: (...args: unknown[]) => mockUpdateCustomerBundle(...args),
   updateCustomer: vi.fn(),
   deleteCustomer: vi.fn(),
   bulkDeleteCustomers: vi.fn(),
@@ -223,6 +225,75 @@ describe('customer mutation hooks', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.customers.infiniteLists(),
+    })
+  })
+
+  it('refreshes customer bundle mutation surfaces without customer or contact root invalidation', async () => {
+    const customerId = '550e8400-e29b-41d4-a716-446655440000'
+    mockUpdateCustomerBundle.mockResolvedValue({ id: customerId, name: 'Acme Energy' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { Wrapper } = createWrapper(queryClient)
+
+    const { useUpdateCustomerBundle } = await import('@/hooks/customers/use-customers')
+    const { result } = renderHook(() => useUpdateCustomerBundle(), { wrapper: Wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: customerId,
+        customer: { name: 'Acme Energy' },
+        contacts: [
+          {
+            id: '660e8400-e29b-41d4-a716-446655440001',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            isPrimary: true,
+            decisionMaker: true,
+            influencer: false,
+            emailOptIn: true,
+            smsOptIn: false,
+          },
+          {
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            isPrimary: false,
+            decisionMaker: false,
+            influencer: true,
+            emailOptIn: true,
+            smsOptIn: false,
+          },
+        ],
+        addresses: [],
+      })
+    })
+
+    expect(mockUpdateCustomerBundle).toHaveBeenCalledWith({
+      data: expect.objectContaining({ id: customerId }),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.detail(customerId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.infiniteLists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.contacts.byCustomer(customerId),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.contacts.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.contacts.detail('660e8400-e29b-41d4-a716-446655440001'),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.customers.all,
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.contacts.all,
     })
   })
 })

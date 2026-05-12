@@ -80,6 +80,23 @@ function invalidateCustomerListQueries(queryClient: ReturnType<typeof useQueryCl
   queryClient.invalidateQueries({ queryKey: queryKeys.customers.infiniteLists() });
 }
 
+function invalidateCustomerBundleQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  customerId: string,
+  contacts: UpdateCustomerBundle['contacts'] | undefined
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(customerId) });
+  invalidateCustomerListQueries(queryClient);
+  queryClient.invalidateQueries({ queryKey: queryKeys.contacts.byCustomer(customerId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.contacts.lists() });
+
+  (contacts ?? []).forEach((contact) => {
+    if (contact.id) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.detail(contact.id) });
+    }
+  });
+}
+
 export function useCustomers(options: UseCustomersOptions = {}) {
   const { enabled = true, ...filters } = options;
   const listCustomersFn = useServerFn(getCustomers);
@@ -403,10 +420,7 @@ export function useUpdateCustomerBundle() {
     mutationFn: ({ id, ...data }: UpdateCustomerBundle & { id: string }) =>
       updateFn({ data: { id, ...data } }),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.detail(variables.id) });
-      invalidateCustomerListQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
+      invalidateCustomerBundleQueries(queryClient, variables.id, variables.contacts);
     },
   });
 }
