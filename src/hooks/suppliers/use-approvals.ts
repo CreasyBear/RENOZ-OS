@@ -11,7 +11,7 @@
  * @see src/server/functions/suppliers/approvals.ts
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { classifyReadFailureKind, normalizeReadQueryError } from '@/lib/read-path-policy';
 import {
@@ -37,6 +37,18 @@ import type {
   BulkApproveInput,
 } from '@/lib/schemas/approvals';
 import { formatApprovalBulkFailureReason } from './approval-mutation-errors';
+
+function invalidateApprovalDecisionQueries(
+  queryClient: QueryClient,
+  approvalIds: readonly string[] = []
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
+
+  approvalIds.forEach((approvalId) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.detail(approvalId) });
+  });
+}
 
 // ============================================================================
 // QUERY HOOKS
@@ -237,8 +249,8 @@ export function useBulkApprove() {
 
   return useMutation({
     mutationFn: (data: BulkApproveInput) => bulkApproveApprovals({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
+    onSuccess: (_, variables) => {
+      invalidateApprovalDecisionQueries(queryClient, variables.approvalIds);
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.pendingApprovals() });
     },
@@ -273,8 +285,11 @@ export function useBulkReject() {
 
       return results;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
+    onSuccess: (_, items) => {
+      invalidateApprovalDecisionQueries(
+        queryClient,
+        items.map((item) => item.approvalId)
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
     },
   });
@@ -370,8 +385,9 @@ export function useEvaluateApprovalRules() {
 
   return useMutation({
     mutationFn: (purchaseOrderId: string) => evaluateApprovalRules({ data: { purchaseOrderId } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
+    onSuccess: (_, purchaseOrderId) => {
+      invalidateApprovalDecisionQueries(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.history(purchaseOrderId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
     },
   });
