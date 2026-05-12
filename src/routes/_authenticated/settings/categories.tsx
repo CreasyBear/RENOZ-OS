@@ -6,7 +6,6 @@
  */
 import { useState, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { Plus, FolderTree, RefreshCw } from "lucide-react";
 import { RouteErrorFallback } from "@/components/layout";
 import { SettingsTreeSkeleton } from "@/components/skeletons/settings";
@@ -28,7 +27,6 @@ import {
   useUpdateCategory,
   useDeleteCategory,
 } from "@/hooks/products";
-import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_authenticated/settings/categories")({
   component: CategoriesSettingsPage,
@@ -39,8 +37,6 @@ export const Route = createFileRoute("/_authenticated/settings/categories")({
 });
 
 function CategoriesSettingsPage() {
-  const queryClient = useQueryClient();
-
   // Data fetching with hooks
   const { data: categoriesData, isLoading, refetch } = useCategoryTree();
   const categories = (categoriesData ?? []) as CategoryNode[];
@@ -63,9 +59,8 @@ function CategoriesSettingsPage() {
 
   // Refresh categories
   const refreshCategories = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
-    refetch();
-  }, [queryClient, refetch]);
+    void refetch();
+  }, [refetch]);
 
   // Handle create new category
   const handleCreateCategory = () => {
