@@ -67,6 +67,10 @@ const receiptReasonLabels: Record<(typeof manualReceiptReasonValues)[number], st
   other_exception: "Other Exception",
 };
 
+function canReceiveScannedProduct(product: ProductSearchResult["products"][number]): boolean {
+  return product.status === "active" && product.isActive === true && product.trackInventory === true;
+}
+
 export default function MobileReceivingPage() {
   const navigate = useNavigate();
   const isOnline = useOnlineStatus();
@@ -119,6 +123,13 @@ export default function MobileReceivingPage() {
   useEffect(() => {
     if (searchResult?.products?.length && barcodeSearch && !scannedItem) {
       const product = searchResult.products[0];
+      if (!canReceiveScannedProduct(product)) {
+        toast.error("Product is not available for mobile receiving", {
+          description: "Select an active inventory-tracked product.",
+        });
+        setBarcodeSearch("");
+        return;
+      }
       setScannedItem({
         barcode: barcodeSearch,
         productId: product.id,

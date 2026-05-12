@@ -216,6 +216,9 @@ describe('inventory receiving location read policy', () => {
                 name: 'Battery Unit',
                 sku: 'BAT-001',
                 isSerialized: false,
+                status: 'active',
+                isActive: true,
+                trackInventory: true,
                 basePrice: 10,
                 costPrice: 10,
               },
@@ -350,5 +353,49 @@ describe('inventory receiving location read policy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Locations' }));
     expect(mockFetchLocations).toHaveBeenCalled();
+  });
+
+  it('blocks mobile receiving scans for products that are not active inventory stock', async () => {
+    mockUseLocations.mockReturnValue({
+      locations: [{ id: 'loc-1', code: 'MAIN', name: 'Main Warehouse' }],
+      isLoading: false,
+      locationsError: null,
+      fetchLocations: mockFetchLocations,
+    });
+    mockUseProductSearch.mockImplementation((query: string) => ({
+      data: query
+        ? {
+            products: [
+              {
+                id: 'product-1',
+                name: 'Installation Service',
+                sku: 'SVC-001',
+                isSerialized: false,
+                status: 'inactive',
+                isActive: true,
+                trackInventory: false,
+                basePrice: 10,
+                costPrice: 10,
+              },
+            ],
+          }
+        : undefined,
+    }));
+
+    const { default: MobileReceivingPage } = await import(
+      '@/routes/_authenticated/mobile/-receiving-page'
+    );
+
+    render(<MobileReceivingPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Scan product' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Product is not available for mobile receiving',
+        { description: 'Select an active inventory-tracked product.' }
+      )
+    );
+
+    expect(screen.queryByText('Location')).not.toBeInTheDocument();
   });
 });
