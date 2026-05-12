@@ -139,6 +139,24 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(bulkBlock).not.toContain('const[count]=awaitdb.select()');
   });
 
+  it('locks the parent count before cancellation status writes', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const cancelBlock = sliceBetween(
+      source,
+      'exportconstcancelStockCount',
+      'exportconstgetCountVarianceAnalysis'
+    );
+
+    expect(cancelBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(cancelBlock).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(cancelBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      cancelBlock.indexOf('const[cancelledCount]=awaittx.update(stockCounts)')
+    );
+    expect(cancelBlock).not.toContain('const[count]=awaitdb.select()');
+  });
+
   it('keeps reconciliation inventory and serialized lineage writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 

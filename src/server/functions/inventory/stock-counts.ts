@@ -1057,35 +1057,41 @@ export const cancelStockCount = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    const [count] = await db
-      .select()
-      .from(stockCounts)
-      .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .limit(1);
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
+      );
 
-    if (!count) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
+      const [count] = await tx
+        .select()
+        .from(stockCounts)
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .for('update')
+        .limit(1);
 
-    if (count.status === 'completed') {
-      throw new ValidationError('Cannot cancel a completed stock count', {
-        status: ['Count is already completed'],
-      });
-    }
+      if (!count) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
+      }
 
-    // Update status to cancelled
-    const [cancelledCount] = await db
-      .update(stockCounts)
-      .set({
-        status: 'cancelled',
-        updatedAt: new Date(),
-        updatedBy: ctx.user.id,
-        version: sql`${stockCounts.version} + 1`,
-      })
-      .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .returning();
+      if (count.status === 'completed') {
+        throw new ValidationError('Cannot cancel a completed stock count', {
+          status: ['Count is already completed'],
+        });
+      }
 
-    return { count: cancelledCount, success: true };
+      const [cancelledCount] = await tx
+        .update(stockCounts)
+        .set({
+          status: 'cancelled',
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+          version: sql`${stockCounts.version} + 1`,
+        })
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .returning();
+
+      return { count: cancelledCount, success: true };
+    });
   });
 
 // ============================================================================
