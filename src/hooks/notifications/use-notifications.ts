@@ -66,7 +66,7 @@ export function useNotifications({
 
 /**
  * Mark a notification as read.
- * Invalidates notifications list and count on success.
+ * Invalidates notification list, unread, and count families on success.
  */
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
@@ -75,7 +75,9 @@ export function useMarkNotificationRead() {
     mutationFn: (id: string) =>
       markNotificationRead({ data: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unread() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.count() });
     },
     onError: (error: Error) => {
       toast.error(formatNotificationMutationError(error, 'markRead'));
