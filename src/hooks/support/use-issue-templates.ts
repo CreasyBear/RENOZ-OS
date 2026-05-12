@@ -19,7 +19,6 @@ import {
   incrementTemplateUsage,
   getPopularTemplates,
 } from '@/server/functions/support/issue-templates';
-import { deleteEscalationRule } from '@/server/functions/support/escalation';
 import type {
   ListIssueTemplatesInput,
   CreateIssueTemplateInput,
@@ -217,25 +216,6 @@ export function useIncrementTemplateUsage() {
     onSuccess: () => {
       // Invalidate popular templates since usage counts changed
       queryClient.invalidateQueries({ queryKey: queryKeys.support.issueTemplatesPopular() });
-    },
-  });
-}
-
-// ============================================================================
-// ESCALATION RULES MUTATIONS
-// ============================================================================
-
-/**
- * Delete an escalation rule.
- */
-export function useDeleteEscalationRule() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (ruleId: string) => deleteEscalationRule({ data: { ruleId } }),
-    onSuccess: () => {
-      // Invalidate both list and detail caches per STANDARDS.md
-      queryClient.invalidateQueries({ queryKey: queryKeys.support.all });
     },
   });
 }

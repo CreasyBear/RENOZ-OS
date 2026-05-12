@@ -1135,6 +1135,9 @@ export const queryKeys = {
     popularTemplates: (limit?: number) =>
       [...queryKeys.support.all, 'issueTemplates', 'popular', limit ?? 5] as const,
 
+    // Escalation Rules
+    escalationRules: () => [...queryKeys.support.all, 'escalationRules'] as const,
+
     // SLA Configurations
     slaConfigurations: () => [...queryKeys.support.all, 'sla', 'configurations'] as const,
     slaConfigurationsList: (filters?: SlaConfigurationFilters) =>
