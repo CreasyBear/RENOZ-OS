@@ -349,7 +349,10 @@ export const receiveGoods = createServerFn({ method: 'POST' })
       // 5. Create receipt line items + inventory updates
       // -----------------------------------------------------------------------
       const createdMovements: string[] = [];
+      const affectedInventoryIds = new Set<string>();
+      const affectedProductIds = new Set<string>();
       const productsToUpdate = new Set<string>();
+      let touchesSerializedInventory = false;
       const [defaultLocation] = await tx
         .select({ id: warehouseLocations.id })
         .from(warehouseLocations)
@@ -435,6 +438,7 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         const landedUnitCost = unitPriceInOrgCurrency + allocatedCostPerUnit;
 
         if (isSerialized) {
+          touchesSerializedInventory = true;
           for (const serialNumber of normalizedSerials) {
             const [existingInventory] = await tx
               .select()
@@ -528,6 +532,8 @@ export const receiveGoods = createServerFn({ method: 'POST' })
               throw new ValidationError('Inventory movement could not be recorded. Refresh and try again.');
             }
             createdMovements.push(movement.id);
+            affectedInventoryIds.add(inventoryId);
+            affectedProductIds.add(poItem.productId);
             await createReceiptLayersWithCostComponents(tx, {
               organizationId: ctx.organizationId,
               inventoryId,
@@ -664,6 +670,8 @@ export const receiveGoods = createServerFn({ method: 'POST' })
 
         // Get the location for this inventory record
         const invLocationId = existingInventory?.locationId ?? defaultLocationId;
+        affectedInventoryIds.add(inventoryId);
+        affectedProductIds.add(poItem.productId);
 
         // Create inventory movement
         const previousQty = existingInventory ? Number(existingInventory.quantityOnHand ?? 0) : 0;
@@ -799,6 +807,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
         `Received goods for ${po.poNumber ?? data.purchaseOrderId}.`,
         {
           affectedIds: [data.purchaseOrderId, receipt.id],
+          affectedInventoryIds: Array.from(affectedInventoryIds),
+          affectedProductIds: Array.from(affectedProductIds),
+          touchesSerializedInventory,
         }
       );
     });

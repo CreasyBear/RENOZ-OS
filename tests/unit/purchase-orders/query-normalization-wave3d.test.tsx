@@ -1,7 +1,8 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListPurchaseOrderReceipts = vi.fn();
 const mockReceiveGoods = vi.fn();
@@ -82,6 +83,73 @@ describe('purchase-order query normalization wave 3d', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ receipts: [] });
+  });
+
+  it('refreshes exact inventory and product surfaces after goods receipt', async () => {
+    mockReceiveGoods.mockResolvedValue({
+      receipt: { id: 'receipt-1' },
+      movementIds: ['movement-1'],
+      newPOStatus: 'partial_received',
+      affectedInventoryIds: ['inventory-row-a'],
+      affectedProductIds: ['product-1'],
+      touchesSerializedInventory: true,
+      success: true,
+      message: 'Received goods for PO-100.',
+    });
+
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useReceiveGoods } = await import('@/hooks/suppliers/use-goods-receipt');
+
+    const { result } = renderHook(() => useReceiveGoods(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        purchaseOrderId: 'po-1',
+        items: [
+          {
+            poItemId: 'po-item-1',
+            quantityReceived: 1,
+          },
+        ],
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.suppliers.purchaseOrderDetail('po-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.suppliers.purchaseOrdersList(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.suppliers.purchaseOrderReceipts('po-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.detail('inventory-row-a'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.costLayersDetail('inventory-row-a'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.movementsAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.serializedAll(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventory('product-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.inventoryStats('product-1'),
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.inventory.all,
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    });
   });
 
   it('normalizes purchase-order cost failures as always-shaped system errors', async () => {

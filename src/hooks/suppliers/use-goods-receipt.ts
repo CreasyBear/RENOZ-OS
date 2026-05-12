@@ -9,6 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
+import { invalidateInventoryStockMutationQueries } from '@/hooks/inventory/_stock-mutation-cache';
 import {
   receiveGoods,
   listPurchaseOrderReceipts,
@@ -51,7 +52,7 @@ export function useReceiveGoods() {
   return useMutation({
     mutationFn: (data: Parameters<typeof receiveGoods>[0]['data']) =>
       receiveGoods({ data }),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       // Invalidate PO detail (status may have changed)
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.purchaseOrderId),
@@ -64,10 +65,10 @@ export function useReceiveGoods() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderReceipts(variables.purchaseOrderId),
       });
-      // Invalidate inventory data (balances changed)
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
-      // Invalidate product data (costPrice may have changed)
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      invalidateInventoryStockMutationQueries(queryClient, {
+        result,
+        includeMovements: true,
+      });
     },
   });
 }

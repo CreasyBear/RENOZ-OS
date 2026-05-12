@@ -127,6 +127,20 @@ describe('receive goods tenant-scope contract', () => {
     );
   });
 
+  it('returns inventory and product identity from PO receive success', () => {
+    const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
+
+    expect(source).toContain('constaffectedInventoryIds=newSet<string>();');
+    expect(source).toContain('constaffectedProductIds=newSet<string>();');
+    expect(source).toContain('lettouchesSerializedInventory=false;');
+    expect(source).toContain('touchesSerializedInventory=true;');
+    expect(source).toContain('affectedInventoryIds.add(inventoryId);');
+    expect(source).toContain('affectedProductIds.add(poItem.productId);');
+    expect(source).toContain('affectedInventoryIds:Array.from(affectedInventoryIds)');
+    expect(source).toContain('affectedProductIds:Array.from(affectedProductIds)');
+    expect(source).toContain('touchesSerializedInventory,');
+  });
+
   it('keeps receipt history item reads and PO item joins organization-scoped', () => {
     const source = compact(read('src/server/functions/suppliers/receive-goods.ts'));
 

@@ -31,7 +31,9 @@ describe('goods receipt mutation feedback contract', () => {
     expect(receiveHook).toContain(
       'queryKeys.suppliers.purchaseOrderReceipts(variables.purchaseOrderId)'
     );
-    expect(receiveHook).toContain('queryKeys.inventory.all');
-    expect(receiveHook).toContain('queryKeys.products.all');
+    expect(receiveHook).toContain('invalidateInventoryStockMutationQueries(queryClient');
+    expect(receiveHook).toContain('includeMovements: true');
+    expect(receiveHook).not.toContain('queryKeys.inventory.all');
+    expect(receiveHook).not.toContain('queryKeys.products.all');
   });
 });
