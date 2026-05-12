@@ -317,9 +317,11 @@ export function useAssignWarrantyPolicyToProduct() {
   return useMutation({
     mutationFn: (data: AssignWarrantyPolicyToProductInput) =>
       assignWarrantyPolicyToProduct({ data }),
-    onSuccess: () => {
-      // Invalidate product queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(variables.productId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.searches() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.resolutions() });
       toast.success('Warranty policy assigned to product');
     },
     onError: (error) => {

@@ -1,13 +1,15 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 
 const mockListWarrantyPolicies = vi.fn();
 const mockGetWarrantyPoliciesWithSla = vi.fn();
 const mockGetWarrantyPolicy = vi.fn();
 const mockGetDefaultWarrantyPolicy = vi.fn();
 const mockResolveWarrantyPolicy = vi.fn();
+const mockAssignWarrantyPolicyToProduct = vi.fn();
 
 vi.mock('@/server/functions/warranty/policies/warranty-policies', () => ({
   listWarrantyPolicies: (...args: unknown[]) => mockListWarrantyPolicies(...args),
@@ -20,7 +22,7 @@ vi.mock('@/server/functions/warranty/policies/warranty-policies', () => ({
   deleteWarrantyPolicy: vi.fn(),
   setDefaultWarrantyPolicy: vi.fn(),
   seedDefaultWarrantyPolicies: vi.fn(),
-  assignWarrantyPolicyToProduct: vi.fn(),
+  assignWarrantyPolicyToProduct: (...args: unknown[]) => mockAssignWarrantyPolicyToProduct(...args),
   assignDefaultWarrantyPolicyToCategory: vi.fn(),
 }));
 
@@ -46,6 +48,10 @@ describe('warranty policy query normalization wave 3', () => {
     mockResolveWarrantyPolicy.mockResolvedValue({
       policy: null,
       source: null,
+    });
+    mockAssignWarrantyPolicyToProduct.mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      warrantyPolicyId: '22222222-2222-4222-8222-222222222222',
     });
   });
 
@@ -124,6 +130,46 @@ describe('warranty policy query normalization wave 3', () => {
     expect(result.current.data).toEqual({
       policy: null,
       source: null,
+    });
+  });
+
+  it('refreshes only affected product and warranty resolution caches after assigning a policy', async () => {
+    const productId = '11111111-1111-4111-8111-111111111111';
+    const policyId = '22222222-2222-4222-8222-222222222222';
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { useAssignWarrantyPolicyToProduct } = await import(
+      '@/hooks/warranty/policies/use-warranty-policies'
+    );
+
+    const { result } = renderHook(() => useAssignWarrantyPolicyToProduct(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ productId, policyId });
+    });
+
+    expect(mockAssignWarrantyPolicyToProduct).toHaveBeenCalledWith({
+      data: { productId, policyId },
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.detail(productId),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.lists(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.products.searches(),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.warrantyPolicies.resolutions(),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.products.stock(),
     });
   });
 });

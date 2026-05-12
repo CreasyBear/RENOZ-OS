@@ -1207,8 +1207,9 @@ export const queryKeys = {
     inventoryStats: (productId: string) =>
       [...queryKeys.products.all, 'inventoryStats', productId] as const,
     // Product search
+    searches: () => [...queryKeys.products.all, 'search'] as const,
     search: (query: string, options?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'search', query, options ?? {}] as const,
+      [...queryKeys.products.searches(), query, options ?? {}] as const,
     facets: () => [...queryKeys.products.all, 'facets'] as const,
     // Product attributes
     attributes: {
@@ -1393,8 +1394,9 @@ export const queryKeys = {
     defaults: () => [...queryKeys.warrantyPolicies.all, 'defaults'] as const,
     default: (type?: string) =>
       [...queryKeys.warrantyPolicies.defaults(), type ?? 'any'] as const,
-    resolve: (params?: { productId?: string; customerId?: string; type?: string }) =>
-      [...queryKeys.warrantyPolicies.all, 'resolve', params ?? {}] as const,
+    resolutions: () => [...queryKeys.warrantyPolicies.all, 'resolve'] as const,
+    resolve: (params?: { productId?: string; categoryId?: string; type?: string }) =>
+      [...queryKeys.warrantyPolicies.resolutions(), params ?? {}] as const,
   },
 
   warrantyAnalytics: {
