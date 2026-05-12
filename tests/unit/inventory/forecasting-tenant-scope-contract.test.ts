@@ -39,7 +39,7 @@ describe('inventory forecasting tenant-scope contract', () => {
     expect(source).toContain("thrownewNotFoundError('Oneormoreproductsnotfound','product')");
   });
 
-  it('keeps reorder recommendation joins organization-bounded', () => {
+  it('keeps reorder recommendation joins organization-bounded and purchasable-scoped', () => {
     const source = compact(read('src/server/functions/inventory/forecasting.ts'));
 
     expect(source).toContain(
@@ -49,7 +49,7 @@ describe('inventory forecasting tenant-scope contract', () => {
       'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,ctx.organizationId)))'
     );
     expect(source).toContain(
-      'where(and(eq(products.organizationId,ctx.organizationId),eq(products.isActive,true),isNull(products.deletedAt)))'
+      "where(and(eq(products.organizationId,ctx.organizationId),eq(products.status,'active'),eq(products.isActive,true),eq(products.isPurchasable,true),isNull(products.deletedAt)))"
     );
   });
 

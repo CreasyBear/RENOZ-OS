@@ -522,7 +522,9 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(products.organizationId, ctx.organizationId),
+          eq(products.status, 'active'),
           eq(products.isActive, true),
+          eq(products.isPurchasable, true),
           isNull(products.deletedAt)
         )
       )
