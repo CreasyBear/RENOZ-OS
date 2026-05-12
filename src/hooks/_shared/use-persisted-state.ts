@@ -98,7 +98,11 @@ export function useOfflineQueue<T extends { id?: string }>(key: string) {
           await syncFn(item);
           successCount++;
         } catch (error) {
-          console.error('Failed to sync item:', error);
+          logger.warn('Failed to sync persisted queue item', {
+            queueKey: key,
+            itemId: item.id,
+            error: String(error),
+          });
           failedItems.push(item);
         }
       }
@@ -108,7 +112,7 @@ export function useOfflineQueue<T extends { id?: string }>(key: string) {
 
       return { success: successCount, failed: failedItems.length };
     },
-    [queue, setQueue]
+    [key, queue, setQueue]
   );
 
   return {
