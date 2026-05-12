@@ -80,6 +80,24 @@ describe('inventory stock mutation tenant-scope contract', () => {
     );
   });
 
+  it('preserves inventory status semantics when releasing allocations', () => {
+    const source = compact(read('src/server/functions/inventory/allocations.ts'));
+    const deallocateBlock = sliceBetween(source, 'exportconstdeallocateInventory', '});});');
+
+    expect(source).toContain('functionresolveDeallocatedInventoryStatus(');
+    expect(source).toContain("if(currentStatus==='allocated'){returnnewAllocated>0?'allocated':'available';}");
+    expect(source).toContain('returncurrentStatus;');
+    expect(source).toContain('functionresolveDeallocatedSerializedStatus(');
+    expect(source).toContain("if(currentStatus==='quarantined'||currentStatus==='returned'){returncurrentStatus;}");
+    expect(source).toContain("if(currentStatus==='damaged'){return'scrapped';}");
+    expect(deallocateBlock).toContain('constnextStatus=resolveDeallocatedInventoryStatus(item.status,newAllocated);');
+    expect(deallocateBlock).toContain('status:nextStatus');
+    expect(deallocateBlock).toContain('constnextSerializedStatus=resolveDeallocatedSerializedStatus(item.status,newAllocated);');
+    expect(deallocateBlock).toContain('status:nextSerializedStatus');
+    expect(deallocateBlock).toContain("if(newAllocated===0&&nextSerializedStatus!=='available')");
+    expect(deallocateBlock).not.toContain("status:newAllocated>0?'allocated':'available'");
+  });
+
   it('keeps manual receive final inventory writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
 

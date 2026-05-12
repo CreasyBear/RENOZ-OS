@@ -19,6 +19,7 @@ import { inventoryLogger } from '@/lib/logger';
 import { inventory, inventoryMovements } from 'drizzle/schema';
 import {
   addSerializedItemEvent,
+  releaseSerializedItemAllocation,
   upsertSerializedItemForInventory,
 } from '@/server/functions/_shared/serialized-lineage';
 import {
@@ -70,6 +71,34 @@ const deallocateInventorySchema = z.object({
   referenceId: z.string().uuid().optional(),
   reason: z.string().optional(),
 });
+
+type InventoryStatus = typeof inventory.$inferSelect.status;
+
+function resolveDeallocatedInventoryStatus(
+  currentStatus: InventoryStatus,
+  newAllocated: number
+): InventoryStatus {
+  if (currentStatus === 'allocated') {
+    return newAllocated > 0 ? 'allocated' : 'available';
+  }
+  return currentStatus;
+}
+
+function resolveDeallocatedSerializedStatus(
+  currentStatus: InventoryStatus,
+  newAllocated: number
+): 'available' | 'allocated' | 'returned' | 'quarantined' | 'scrapped' {
+  if (newAllocated > 0) {
+    return 'allocated';
+  }
+  if (currentStatus === 'quarantined' || currentStatus === 'returned') {
+    return currentStatus;
+  }
+  if (currentStatus === 'damaged') {
+    return 'scrapped';
+  }
+  return 'available';
+}
 
 /**
  * Allocate inventory for an order or reservation.
@@ -264,13 +293,14 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
       // Use fresh data from locked row
       const newAllocated = (item.quantityAllocated ?? 0) - data.quantity;
       const newAvailable = (item.quantityOnHand ?? 0) - newAllocated;
+      const nextStatus = resolveDeallocatedInventoryStatus(item.status, newAllocated);
 
       // Update inventory
       const [updatedItem] = await tx
         .update(inventory)
         .set({
           quantityAllocated: newAllocated,
-          status: newAllocated > 0 ? 'allocated' : 'available',
+          status: nextStatus,
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
         })
@@ -303,15 +333,23 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
         .returning();
 
       if (normalizedSerialNumber) {
+        const nextSerializedStatus = resolveDeallocatedSerializedStatus(item.status, newAllocated);
         const serializedItemId = await upsertSerializedItemForInventory(tx, {
           organizationId: ctx.organizationId,
           productId: item.productId,
           serialNumber: normalizedSerialNumber,
           inventoryId: data.inventoryId,
-          status: newAllocated > 0 ? 'allocated' : 'available',
+          status: nextSerializedStatus,
           userId: ctx.user.id,
         });
         if (serializedItemId) {
+          if (newAllocated === 0 && nextSerializedStatus !== 'available') {
+            await releaseSerializedItemAllocation(tx, {
+              organizationId: ctx.organizationId,
+              serializedItemId,
+              userId: ctx.user.id,
+            });
+          }
           await addSerializedItemEvent(tx, {
             organizationId: ctx.organizationId,
             serializedItemId,
