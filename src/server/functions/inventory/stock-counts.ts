@@ -736,7 +736,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
         action: string;
       }> = [];
 
-      if (data.applyAdjustments && items.length > 0) {
+      if (items.length > 0) {
         const inventoryIds = Array.from(new Set(items.map((item) => item.inventoryId)));
         const inventoryRecords = await tx
           .select()
@@ -765,7 +765,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
           });
         }
 
-        if (varianceItems.length > 0) {
+        if (data.applyAdjustments && varianceItems.length > 0) {
           for (const item of varianceItems) {
             const inv = inventoryMap.get(item.inventoryId);
             if (!inv) continue;

@@ -65,6 +65,8 @@ describe('inventory stock count tenant-scope contract', () => {
 
     expect(source).toContain('functionassertStockCountInventorySnapshotFresh');
     expect(source).toContain('constinventoryIds=Array.from(newSet(items.map((item)=>item.inventoryId)))');
+    expect(source).toContain('if(items.length>0){');
+    expect(source).toContain('if(data.applyAdjustments&&varianceItems.length>0){');
     expect(source).toContain(
       "thrownewConflictError('Inventorychangedsincecountsheetwasgenerated.Refreshandrecountbeforecompleting.')"
     );
@@ -77,6 +79,7 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(source.indexOf('assertStockCountInventorySnapshotFresh({')).toBeLessThan(
       source.indexOf('constnewQuantity=previousQuantity+variance')
     );
+    expect(source).not.toContain('if(data.applyAdjustments&&items.length>0)');
     expect(source).not.toContain('constinventoryIds=varianceItems.map((item)=>item.inventoryId)');
   });
 
