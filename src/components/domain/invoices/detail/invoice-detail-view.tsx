@@ -57,6 +57,7 @@ import {
 } from '@/lib/constants/invoice-status';
 import type { InvoiceDetail } from '@/hooks/invoices/use-invoices';
 import type { InvoiceAlert } from '@/hooks/invoices/use-invoice-detail';
+import { getInvoicePaymentsReadErrorMessage } from '../invoice-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -750,7 +751,9 @@ export const InvoiceDetailView = memo(function InvoiceDetailView({
                       ) : paymentsError ? (
                         <Alert variant="destructive">
                           <AlertTitle>Could not load payment history</AlertTitle>
-                          <AlertDescription>{paymentsError.message}</AlertDescription>
+                          <AlertDescription>
+                            {getInvoicePaymentsReadErrorMessage(paymentsError)}
+                          </AlertDescription>
                         </Alert>
                       ) : payments.length > 0 ? (
                         <div className="space-y-3">

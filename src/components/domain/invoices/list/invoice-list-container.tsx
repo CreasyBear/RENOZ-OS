@@ -49,6 +49,7 @@ import {
   isValidInvoiceSortField,
   type SortDirection,
 } from './invoice-sorting';
+import { getInvoiceListReadErrorMessage } from '../invoice-read-error-messages';
 
 /**
  * Validate and normalize amount range
@@ -418,7 +419,7 @@ export function InvoiceListContainer({
         />
         <ErrorState
           title="Failed to load invoices"
-          message={invoicesError.message || "There was an error loading the invoice list. Please try again."}
+          message={getInvoiceListReadErrorMessage(invoicesError)}
         />
       </div>
     );
