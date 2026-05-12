@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -105,6 +105,20 @@ describe('communications domain remediation trace', () => {
     expect(recipients).toContain('customerId: contact.customerId');
     expect(processing).toContain('recipient.customerId ?? recipient.contactCustomerId');
     expect(schema).toContain('customerId: uuid("customer_id")');
+  });
+
+  it('keeps campaign hook ownership on the active campaign module', () => {
+    const index = read('src/hooks/communications/index.ts');
+    const activeHook = read('src/hooks/communications/use-campaigns.ts');
+
+    expect(index).toContain("export * from './use-campaigns';");
+    expect(index).not.toContain('use-email-campaigns');
+    expect(activeHook).toContain('export function useCreateCampaign()');
+    expect(activeHook).toContain('queryKeys.communications.campaigns()');
+    expect(activeHook).not.toContain('queryKeys.communications.all');
+    expect(existsSync(join(root, 'src/hooks/communications/use-email-campaigns.ts'))).toBe(
+      false
+    );
   });
 
   it('marks only the most specific communications nav item active', () => {

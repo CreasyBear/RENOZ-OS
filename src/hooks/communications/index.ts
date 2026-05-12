@@ -43,7 +43,7 @@
 // Customer communications timeline
 export * from './use-customer-communications';
 
-// Campaigns (full CRUD - replaces legacy use-email-campaigns)
+// Campaigns (full CRUD)
 export * from './use-campaigns';
 
 // Email templates
