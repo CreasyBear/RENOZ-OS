@@ -573,7 +573,7 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
 
-      await assertLinkedPurchaseOrderProductsActive(
+      await assertLinkedPurchaseOrderProductsPurchasable(
         tx,
         ctx.organizationId,
         itemsWithTotals.map((item) => item.productId)
@@ -1490,7 +1490,7 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
         throw new ValidationError('Can only add items to draft purchase orders');
       }
 
-      await assertLinkedPurchaseOrderProductsActive(tx, ctx.organizationId, [data.item.productId]);
+      await assertLinkedPurchaseOrderProductsPurchasable(tx, ctx.organizationId, [data.item.productId]);
 
       // Get the next line number with row lock to prevent duplicate line numbers
       const lastItem = await tx
@@ -1690,7 +1690,7 @@ function getLinkedPurchaseOrderProductIds(
   return Array.from(new Set(productIds.filter((id): id is string => Boolean(id))));
 }
 
-async function assertLinkedPurchaseOrderProductsActive(
+async function assertLinkedPurchaseOrderProductsPurchasable(
   executor: PoTotalsExecutor,
   organizationId: string,
   productIds: Array<string | null | undefined>
@@ -1705,13 +1705,16 @@ async function assertLinkedPurchaseOrderProductsActive(
       and(
         inArray(products.id, linkedProductIds),
         eq(products.organizationId, organizationId),
+        eq(products.status, 'active'),
+        eq(products.isActive, true),
+        eq(products.isPurchasable, true),
         isNull(products.deletedAt)
       )
     );
 
   if (productRows.length !== linkedProductIds.length) {
     throw new ValidationError(
-      'One or more purchase order items reference a product that is unavailable or archived. Refresh product data before saving the purchase order.'
+      'One or more purchase order items reference a product that is unavailable, inactive, or not purchasable. Refresh product data before saving the purchase order.'
     );
   }
 }

@@ -55,7 +55,7 @@ describe('purchase order create tenant-scope contract', () => {
     );
   });
 
-  it('rejects unavailable linked products before creating purchase orders', () => {
+  it('rejects unavailable or non-purchasable linked products before creating purchase orders', () => {
     const source = compact(read('src/server/functions/suppliers/purchase-orders.ts'));
     const block = exportedFunctionBlock(source, 'createPurchaseOrder');
 
@@ -64,15 +64,15 @@ describe('purchase order create tenant-scope contract', () => {
       'functiongetLinkedPurchaseOrderProductIds(productIds:Array<string|null|undefined>):string[]{returnArray.from(newSet(productIds.filter((id):idisstring=>Boolean(id))));}'
     );
     expect(source).toContain(
-      'from(products).where(and(inArray(products.id,linkedProductIds),eq(products.organizationId,organizationId),isNull(products.deletedAt)))'
+      "from(products).where(and(inArray(products.id,linkedProductIds),eq(products.organizationId,organizationId),eq(products.status,'active'),eq(products.isActive,true),eq(products.isPurchasable,true),isNull(products.deletedAt)))"
     );
     expect(source).toContain(
-      "if(productRows.length!==linkedProductIds.length){thrownewValidationError('Oneormorepurchaseorderitemsreferenceaproductthatisunavailableorarchived.Refreshproductdatabeforesavingthepurchaseorder.');}"
+      "if(productRows.length!==linkedProductIds.length){thrownewValidationError('Oneormorepurchaseorderitemsreferenceaproductthatisunavailable,inactive,ornotpurchasable.Refreshproductdatabeforesavingthepurchaseorder.');}"
     );
     expect(block).toContain(
-      'awaitassertLinkedPurchaseOrderProductsActive(tx,ctx.organizationId,itemsWithTotals.map((item)=>item.productId));'
+      'awaitassertLinkedPurchaseOrderProductsPurchasable(tx,ctx.organizationId,itemsWithTotals.map((item)=>item.productId));'
     );
-    expect(block.indexOf('awaitassertLinkedPurchaseOrderProductsActive')).toBeLessThan(
+    expect(block.indexOf('awaitassertLinkedPurchaseOrderProductsPurchasable')).toBeLessThan(
       block.indexOf('insert(purchaseOrders)')
     );
   });
