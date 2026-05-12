@@ -106,13 +106,20 @@ export const adjustInventory = createServerFn({ method: 'POST' })
 
       let [inventoryRecord] = matchingInventoryRows;
 
+      if (!inventoryRecord) {
+        throw new ValidationError('Adjustment requires an existing inventory row', {
+          inventoryId: ['Receive inventory before adjusting this stock row'],
+          code: ['adjustment_requires_existing_inventory'],
+        });
+      }
+
       // Use fresh data from locked row
-      const previousQuantity = inventoryRecord?.quantityOnHand ?? 0;
+      const previousQuantity = inventoryRecord.quantityOnHand;
       const newQuantity = previousQuantity + data.adjustmentQty;
-      const valuationBefore = Number(inventoryRecord?.totalValue ?? 0);
+      const valuationBefore = Number(inventoryRecord.totalValue ?? 0);
       const canCreateOrIncreaseStock =
         product.status === 'active' && product.isActive && product.trackInventory;
-      if (!canCreateOrIncreaseStock && (data.adjustmentQty > 0 || !inventoryRecord)) {
+      if (!canCreateOrIncreaseStock && data.adjustmentQty > 0) {
         throw new ValidationError('Product is not available for stock increases', {
           productId: ['Only active inventory-tracked products can create or increase stock'],
           code: ['product_not_adjustable_in'],
@@ -170,41 +177,27 @@ export const adjustInventory = createServerFn({ method: 'POST' })
           });
         }
       }
-      if (!inventoryRecord) {
-        // Create new inventory record
-        [inventoryRecord] = await tx
-          .insert(inventory)
-          .values({
-            organizationId: ctx.organizationId,
-            productId: data.productId,
-            locationId: data.locationId,
-            status: 'available',
-            quantityOnHand: newQuantity,
-            quantityAllocated: 0,
-            unitCost: 0,
-            totalValue: 0,
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          })
-          .returning();
-      } else {
-        // Update existing record
-        [inventoryRecord] = await tx
-          .update(inventory)
-          .set({
-            quantityOnHand: newQuantity,
-            totalValue: sql`${newQuantity} * COALESCE(${inventory.unitCost}, 0)`,
-            updatedAt: new Date(),
-            updatedBy: ctx.user.id,
-          })
-          .where(
-            and(
-              eq(inventory.id, inventoryRecord.id),
-              eq(inventory.organizationId, ctx.organizationId)
-            )
+
+      // Adjustments correct existing stock only; receiving owns stock creation.
+      const [updatedInventoryRecord] = await tx
+        .update(inventory)
+        .set({
+          quantityOnHand: newQuantity,
+          totalValue: sql`${newQuantity} * COALESCE(${inventory.unitCost}, 0)`,
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        })
+        .where(
+          and(
+            eq(inventory.id, inventoryRecord.id),
+            eq(inventory.organizationId, ctx.organizationId)
           )
-          .returning();
+        )
+        .returning();
+      if (!updatedInventoryRecord) {
+        throw new NotFoundError('Inventory row not found', 'inventory');
       }
+      inventoryRecord = updatedInventoryRecord;
 
       const adjustmentQuantity = Math.abs(data.adjustmentQty);
       let movementUnitCost = Number(inventoryRecord.unitCost ?? 0);

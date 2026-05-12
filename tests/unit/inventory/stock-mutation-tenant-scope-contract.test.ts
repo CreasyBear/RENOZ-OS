@@ -29,10 +29,13 @@ describe('inventory stock mutation tenant-scope contract', () => {
       'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for(\'update\')'
     );
     expect(source).toContain(
-      "if(!canCreateOrIncreaseStock&&(data.adjustmentQty>0||!inventoryRecord)){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
+      "if(!canCreateOrIncreaseStock&&data.adjustmentQty>0){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
     );
     expect(source).toContain(
       "if(!data.inventoryId&&matchingInventoryRows.length>1){thrownewValidationError('Adjustmentrequiresaspecificinventoryrow',{inventoryId:['Opentheinventorybrowserandadjustthespecificstockrow'],code:['ambiguous_adjustment_source'],});}"
+    );
+    expect(source).toContain(
+      "if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow',{inventoryId:['Receiveinventorybeforeadjustingthisstockrow'],code:['adjustment_requires_existing_inventory'],});}"
     );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(
@@ -72,6 +75,26 @@ describe('inventory stock mutation tenant-scope contract', () => {
     );
     expect(adjustBlock.indexOf('matchingInventoryRows.length>1')).toBeLessThan(
       adjustBlock.indexOf('.update(inventory)')
+    );
+  });
+
+  it('requires adjustment targets to be existing inventory rows', () => {
+    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
+    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+
+    expect(adjustBlock).toContain(
+      "if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow',{inventoryId:['Receiveinventorybeforeadjustingthisstockrow'],code:['adjustment_requires_existing_inventory'],});}"
+    );
+    expect(adjustBlock.indexOf('matchingInventoryRows.length>1')).toBeLessThan(
+      adjustBlock.indexOf("if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow'")
+    );
+    expect(
+      adjustBlock.indexOf("if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow'")
+    ).toBeLessThan(adjustBlock.indexOf('constpreviousQuantity=inventoryRecord.quantityOnHand;'));
+    expect(adjustBlock).toContain('const[updatedInventoryRecord]=awaittx.update(inventory)');
+    expect(adjustBlock).toContain('inventoryRecord=updatedInventoryRecord;');
+    expect(adjustBlock).not.toContain(
+      ".insert(inventory).values({organizationId:ctx.organizationId,productId:data.productId,locationId:data.locationId,status:'available'"
     );
   });
 
