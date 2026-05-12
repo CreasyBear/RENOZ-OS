@@ -57,6 +57,20 @@ function stockCountProductJoinCondition(organizationId: string) {
   );
 }
 
+function assertStockCountInventorySnapshotFresh({
+  currentQuantity,
+  expectedQuantity,
+}: {
+  currentQuantity: number;
+  expectedQuantity: number;
+}) {
+  if (currentQuantity !== expectedQuantity) {
+    throw new ConflictError(
+      'Inventory changed since count sheet was generated. Refresh and recount before completing.'
+    );
+  }
+}
+
 // ============================================================================
 // STOCK COUNT CRUD
 // ============================================================================
@@ -733,7 +747,8 @@ export const completeStockCount = createServerFn({ method: 'POST' })
               eq(inventory.organizationId, ctx.organizationId),
               inArray(inventory.id, inventoryIds)
             )
-          );
+          )
+          .for('update');
 
         // Create map for O(1) lookup
         const inventoryMap = new Map(inventoryRecords.map((inv) => [inv.id, inv]));
@@ -746,10 +761,15 @@ export const completeStockCount = createServerFn({ method: 'POST' })
             const inv = inventoryMap.get(item.inventoryId);
             if (!inv) continue;
 
+            const previousQuantity = Number(inv.quantityOnHand ?? 0);
+            assertStockCountInventorySnapshotFresh({
+              currentQuantity: previousQuantity,
+              expectedQuantity: item.expectedQuantity,
+            });
+
             const variance = (item.countedQuantity ?? 0) - item.expectedQuantity;
             if (variance === 0) continue;
 
-            const previousQuantity = Number(inv.quantityOnHand ?? 0);
             const newQuantity = previousQuantity + variance;
             const previousValue = Number(inv.totalValue ?? 0);
             valuationBefore += previousValue;
