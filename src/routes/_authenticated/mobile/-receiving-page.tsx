@@ -137,7 +137,7 @@ export default function MobileReceivingPage() {
         productSku: product.sku,
         isSerialized: !!product.isSerialized,
       });
-      setUnitCost(Number(product.basePrice ?? product.costPrice ?? 0));
+      setUnitCost(Number(product.costPrice ?? product.basePrice ?? 0));
       setQuantity(1);
       setSerialNumber("");
       setBarcodeSearch("");

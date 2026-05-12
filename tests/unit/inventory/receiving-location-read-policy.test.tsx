@@ -398,4 +398,42 @@ describe('inventory receiving location read policy', () => {
 
     expect(screen.queryByText('Location')).not.toBeInTheDocument();
   });
+
+  it('prefills mobile receiving unit cost from product cost price before sell price', async () => {
+    mockUseLocations.mockReturnValue({
+      locations: [{ id: 'loc-1', code: 'MAIN', name: 'Main Warehouse' }],
+      isLoading: false,
+      locationsError: null,
+      fetchLocations: mockFetchLocations,
+    });
+    mockUseProductSearch.mockImplementation((query: string) => ({
+      data: query
+        ? {
+            products: [
+              {
+                id: 'product-1',
+                name: 'Battery Unit',
+                sku: 'BAT-001',
+                isSerialized: false,
+                status: 'active',
+                isActive: true,
+                trackInventory: true,
+                basePrice: 100,
+                costPrice: 42,
+              },
+            ],
+          }
+        : undefined,
+    }));
+
+    const { default: MobileReceivingPage } = await import(
+      '@/routes/_authenticated/mobile/-receiving-page'
+    );
+
+    render(<MobileReceivingPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Scan product' }));
+
+    const unitCostInput = await screen.findByLabelText('Unit Cost ($)');
+    expect(unitCostInput).toHaveValue(42);
+  });
 });
