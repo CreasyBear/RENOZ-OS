@@ -43,6 +43,9 @@ interface Product {
   name: string;
   costPrice?: number | null;
   isSerialized?: boolean;
+  status?: string;
+  isActive?: boolean;
+  trackInventory?: boolean;
 }
 
 interface Location {
@@ -68,7 +71,13 @@ export default function ReceivingPage() {
     data: productsData,
     isLoading: isLoadingProducts,
     error: productsError,
-  } = useProducts({ search: productSearch, pageSize: 50 });
+  } = useProducts({
+    search: productSearch,
+    pageSize: 50,
+    status: "active",
+    isActive: true,
+    trackInventory: true,
+  });
   const {
     data: selectedProductData,
     error: selectedProductError,
@@ -99,6 +108,9 @@ export default function ReceivingPage() {
     name: p.name,
     costPrice: p.costPrice,
     isSerialized: p.isSerialized,
+    status: p.status,
+    isActive: p.isActive,
+    trackInventory: p.trackInventory,
   }));
 
   const selectedProduct = selectedProductData?.product
@@ -108,6 +120,9 @@ export default function ReceivingPage() {
         name: selectedProductData.product.name,
         costPrice: selectedProductData.product.costPrice,
         isSerialized: selectedProductData.product.isSerialized,
+        status: selectedProductData.product.status,
+        isActive: selectedProductData.product.isActive,
+        trackInventory: selectedProductData.product.trackInventory,
       }
     : null;
 
@@ -118,6 +133,12 @@ export default function ReceivingPage() {
   const hasContextFailure =
     hasProductContext && !isLoadingSelectedProduct && !selectedProduct;
   const hasDegradedProductContext = !!selectedProductError && !!selectedProduct;
+  const hasBlockedProductContext =
+    hasProductContext &&
+    !!selectedProduct &&
+    (selectedProduct.status !== "active" ||
+      selectedProduct.isActive !== true ||
+      selectedProduct.trackInventory !== true);
 
   const locations: Location[] = locationsData.map((l: HookWarehouseLocation) => ({
     id: l.id,
@@ -241,7 +262,25 @@ export default function ReceivingPage() {
           </Alert>
         ) : null}
 
-        {!hasContextFailure ? (
+        {hasBlockedProductContext ? (
+          <Alert className="mb-6">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Product is not available for manual receiving</AlertTitle>
+            <AlertDescription>
+              Select an active inventory-tracked product before recording non-PO inbound stock.
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {search.returnToProductId ? (
+                  <Button variant="outline" onClick={handleCancel}>
+                    Back to Product
+                  </Button>
+                ) : null}
+                <Button onClick={handleContinueGenericReceive}>Continue Without Product Context</Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {!hasContextFailure && !hasBlockedProductContext ? (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
           <TabsList className="mb-6">
             <TabsTrigger value="receive">

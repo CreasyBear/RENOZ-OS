@@ -100,6 +100,9 @@ export const listProducts = createServerFn({ method: 'GET' })
     if (filters.isPurchasable !== undefined) {
       conditions.push(eq(products.isPurchasable, filters.isPurchasable));
     }
+    if (filters.trackInventory !== undefined) {
+      conditions.push(eq(products.trackInventory, filters.trackInventory));
+    }
     if (filters.minPrice != null) {
       conditions.push(gte(products.basePrice, filters.minPrice));
     }
@@ -215,6 +218,7 @@ export const listProductsCursor = createServerFn({ method: 'GET' })
     if (filters.categoryId) conditions.push(eq(products.categoryId, filters.categoryId));
     if (filters.isActive !== undefined) conditions.push(eq(products.isActive, filters.isActive));
     if (filters.isPurchasable !== undefined) conditions.push(eq(products.isPurchasable, filters.isPurchasable));
+    if (filters.trackInventory !== undefined) conditions.push(eq(products.trackInventory, filters.trackInventory));
 
     if (cursor) {
       const cursorPosition = decodeCursor(cursor);

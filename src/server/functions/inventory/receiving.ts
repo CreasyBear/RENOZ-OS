@@ -47,9 +47,15 @@ export const receiveInventory = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
 
-    // Validate product exists (only need id for existence check)
+    // Validate product exists and can create live inventory.
     const [product] = await db
-      .select({ id: products.id, isSerialized: products.isSerialized })
+      .select({
+        id: products.id,
+        isSerialized: products.isSerialized,
+        status: products.status,
+        isActive: products.isActive,
+        trackInventory: products.trackInventory,
+      })
       .from(products)
       .where(
         and(
@@ -62,6 +68,12 @@ export const receiveInventory = createServerFn({ method: 'POST' })
 
     if (!product) {
       throw new NotFoundError('Product not found', 'product');
+    }
+    if (product.status !== 'active' || !product.isActive || !product.trackInventory) {
+      throw new ValidationError('Product is not available for manual receiving', {
+        productId: ['Select an active inventory-tracked product'],
+        code: ['product_not_receivable'],
+      });
     }
     const normalizedSerialNumber = data.serialNumber ? normalizeSerial(data.serialNumber) : undefined;
     const serializationIssues = getManualReceiveSerializationIssues({

@@ -44,7 +44,10 @@ describe('inventory stock mutation tenant-scope contract', () => {
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.receive})');
     expect(source).toContain(
-      'select({id:products.id,isSerialized:products.isSerialized}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    );
+    expect(source).toContain(
+      "if(product.status!=='active'||!product.isActive||!product.trackInventory){thrownewValidationError('Productisnotavailableformanualreceiving',{productId:['Selectanactiveinventory-trackedproduct'],code:['product_not_receivable'],});}"
     );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(

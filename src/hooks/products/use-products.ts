@@ -54,6 +54,7 @@ export interface ProductFilters {
   categoryId?: string;
   isActive?: boolean;
   isPurchasable?: boolean;
+  trackInventory?: boolean;
   sortBy?: ProductSortField;
   sortOrder?: 'asc' | 'desc';
 }

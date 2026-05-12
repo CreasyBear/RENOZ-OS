@@ -212,6 +212,7 @@ export const productFilterSchema = filterSchema.extend({
   isActive: z.coerce.boolean().optional(),
   isSellable: z.coerce.boolean().optional(),
   isPurchasable: z.coerce.boolean().optional(),
+  trackInventory: z.coerce.boolean().optional(),
   tags: z.array(z.string()).optional(),
   minPrice: currencySchema.optional(),
   maxPrice: currencySchema.optional(),

@@ -267,6 +267,52 @@ describe('inventory receiving location read policy', () => {
     expect(screen.queryByText(/row-level security policy/i)).not.toBeInTheDocument();
   });
 
+  it('blocks contextual receiving for products that are not active inventory stock', async () => {
+    mockUseSearch.mockReturnValue({
+      source: 'product_detail',
+      productId: 'product-1',
+      returnToProductId: 'product-1',
+    });
+    mockUseLocations.mockReturnValue({
+      locations: [{ id: 'loc-1', code: 'MAIN', name: 'Main Warehouse' }],
+      isLoading: false,
+      locationsError: null,
+      fetchLocations: mockFetchLocations,
+    });
+    mockUseProduct.mockReturnValue({
+      data: {
+        product: {
+          id: 'product-1',
+          sku: 'SVC-001',
+          name: 'Installation Service',
+          costPrice: 0,
+          isSerialized: false,
+          status: 'inactive',
+          isActive: false,
+          trackInventory: false,
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const { default: ReceivingPage } = await import(
+      '@/routes/_authenticated/inventory/receiving-page'
+    );
+
+    render(<ReceivingPage />);
+
+    expect(
+      screen.getByText('Product is not available for manual receiving')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Select an active inventory-tracked product before recording non-PO inbound stock.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Receiving Form Stub')).not.toBeInTheDocument();
+  });
+
   it('uses stable location unavailable copy instead of raw location read errors', async () => {
     const {
       getReceivingLocationsErrorMessage,
