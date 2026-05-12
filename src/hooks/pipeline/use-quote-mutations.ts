@@ -61,9 +61,15 @@ function invalidateDeletedQuoteCaches(queryClient: QueryClient, quoteId: string)
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
 }
 
-function invalidateGeneratedQuotePdfCaches(queryClient: QueryClient, quoteVersionId: string) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
-  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
+function invalidateGeneratedQuotePdfCaches(
+  queryClient: QueryClient,
+  quoteVersionId: string,
+  opportunityId: string
+) {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.documents.history('opportunity', opportunityId),
+  });
+  queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersion(quoteVersionId) });
 }
 
@@ -194,8 +200,12 @@ export function useGenerateQuotePdf() {
   return useMutation({
     mutationFn: ({ quoteVersionId }: GenerateQuotePdfInput) =>
       generateQuotePdf({ data: { id: quoteVersionId } }),
-    onSuccess: (_result, variables) => {
-      invalidateGeneratedQuotePdfCaches(queryClient, variables.quoteVersionId);
+    onSuccess: (result, variables) => {
+      invalidateGeneratedQuotePdfCaches(
+        queryClient,
+        variables.quoteVersionId,
+        result.opportunityId
+      );
     },
   });
 }

@@ -30,22 +30,23 @@ describe('pipeline quote mutation cache contract', () => {
     expect(count(source, 'invalidateQuoteExpiryCaches(queryClient)')).toBe(1);
     expect(count(source, 'invalidateQuoteExpirationCaches(queryClient, opportunityId)')).toBe(2);
     expect(count(source, 'invalidateDeletedQuoteCaches(queryClient, id)')).toBe(1);
-    expect(count(source, 'invalidateGeneratedQuotePdfCaches(queryClient, variables.quoteVersionId)')).toBe(1);
+    expect(count(source, 'invalidateGeneratedQuotePdfCaches(')).toBe(2);
+    expect(count(source, 'variables.quoteVersionId,')).toBe(1);
+    expect(count(source, 'result.opportunityId')).toBe(1);
     expect(count(source, 'invalidateSentQuoteCaches(queryClient, variables.opportunityId)')).toBe(1);
 
     expect(count(source, 'queryKeys.opportunities.lists()')).toBe(1);
     expect(count(source, 'queryKeys.opportunities.infiniteLists()')).toBe(1);
     expect(count(source, 'queryKeys.pipeline.quoteVersions(opportunityId)')).toBe(1);
-    expect(count(source, 'queryKeys.pipeline.opportunity(opportunityId)')).toBe(2);
+    expect(count(source, 'queryKeys.pipeline.opportunity(opportunityId)')).toBe(3);
     expect(count(source, 'queryKeys.pipeline.expiringQuotes(7)')).toBe(1);
     expect(count(source, 'queryKeys.pipeline.expiredQuotes()')).toBe(1);
     expect(count(source, 'queryKeys.quotes.lists()')).toBe(1);
     expect(count(source, 'queryKeys.quotes.detail(quoteId)')).toBe(1);
     expect(count(source, 'queryKeys.pipeline.metrics()')).toBe(1);
-    expect(count(source, 'queryKeys.documents.all')).toBe(1);
-    expect(count(source, 'queryKeys.pipeline.all')).toBe(1);
+    expect(count(source, "queryKeys.documents.history('opportunity', opportunityId)")).toBe(2);
+    expect(count(source, 'queryKeys.pipeline.all')).toBe(0);
     expect(count(source, 'queryKeys.pipeline.quoteVersion(quoteVersionId)')).toBe(1);
-    expect(count(source, "queryKeys.documents.history('opportunity', opportunityId)")).toBe(1);
     expect(count(source, 'queryKeys.activities.byOpportunity(opportunityId)')).toBe(1);
   });
 

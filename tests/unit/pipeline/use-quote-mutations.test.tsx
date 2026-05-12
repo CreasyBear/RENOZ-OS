@@ -96,6 +96,7 @@ describe('useQuoteMutations hardening', () => {
   it('refreshes quote and document state after generating a quote PDF', async () => {
     generateQuotePdfMock.mockResolvedValue({
       quoteVersionId: 'quote-1',
+      opportunityId: 'opp-1',
       pdfUrl: 'https://example.com/q.pdf',
       filename: 'quote.pdf',
       fileSize: 1024,
@@ -115,13 +116,19 @@ describe('useQuoteMutations hardening', () => {
     });
 
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.documents.all,
+      queryKey: queryKeys.documents.history('opportunity', 'opp-1'),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.pipeline.all,
+      queryKey: queryKeys.pipeline.opportunity('opp-1'),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.pipeline.quoteVersion('quote-1'),
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.documents.all,
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.pipeline.all,
     });
   });
 

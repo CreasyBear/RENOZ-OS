@@ -401,6 +401,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
 
     return {
       quoteVersionId: id,
+      opportunityId: opp.id,
       pdfUrl: signedUrl,
       filename,
       fileSize: buffer.length,

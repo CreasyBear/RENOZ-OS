@@ -418,6 +418,7 @@ export interface QuoteWorkflowStage {
 
 export interface GenerateQuotePdfResult {
   quoteVersionId: string;
+  opportunityId: string;
   pdfUrl?: string;
   filename: string;
   fileSize: number;

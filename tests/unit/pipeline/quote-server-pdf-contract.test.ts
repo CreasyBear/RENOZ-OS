@@ -59,7 +59,10 @@ describe('pipeline quote server PDF contract', () => {
     );
 
     expect(mutationHook).toContain("import { generateQuotePdf } from '@/server/functions/pipeline/quote-pdf'");
-    expect(mutationHook).toContain('queryKeys.documents.all');
+    expect(quotePdf).toContain('opportunityId: opp.id');
+    expect(mutationHook).toContain("queryKeys.documents.history('opportunity', opportunityId)");
+    expect(mutationHook).not.toContain('queryKeys.documents.all');
+    expect(mutationHook).not.toContain('queryKeys.pipeline.all');
     expect(mutationHook).toContain('queryKeys.pipeline.quoteVersion(quoteVersionId)');
   });
 });
