@@ -61,6 +61,30 @@ describe('inventory transfer tenant-scope contract', () => {
     expect(source).toContain('inventoryFinanceMutationSuccess');
   });
 
+  it('preserves source disposition when transfer creates destination inventory and lineage', () => {
+    const source = compact(read('src/server/functions/inventory/transfers.ts'));
+
+    expect(source).toContain(
+      "functionresolveTransferDestinationStatus(status:InventoryStatus):TransferDestinationStatus{if(status==='damaged'||status==='returned'||status==='quarantined'){returnstatus;}return'available';}"
+    );
+    expect(source).toContain(
+      "functionmapTransferDestinationStatusToSerializedStatus(status:TransferDestinationStatus):SerializedTransferStatus{if(status==='damaged')return'scrapped';if(status==='returned'||status==='quarantined')returnstatus;return'available';}"
+    );
+    expect(source).toContain(
+      'constdestinationStatus=resolveTransferDestinationStatus(row.status);'
+    );
+    expect(source).toContain('status:destinationStatus');
+    expect(source).toContain(
+      'constserializedStatus=mapTransferDestinationStatusToSerializedStatus(destinationStatus);'
+    );
+    expect(source).toContain('status:serializedStatus');
+    expect(source).toContain(
+      'constdestinationStatus=resolveTransferDestinationStatus(sourceInventory.status);'
+    );
+    expect(source).toContain('eq(inventory.status,destinationStatus)');
+    expect(source).not.toContain("status:'available'");
+  });
+
   it('persists transfer reason as movement context without container-side notes duplication', () => {
     const transferServer = read('src/server/functions/inventory/transfers.ts');
     const detailContainer = read(

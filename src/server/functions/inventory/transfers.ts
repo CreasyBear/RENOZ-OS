@@ -35,6 +35,28 @@ import {
   logActivityInTransaction,
 } from '@/server/functions/inventory/_activity';
 
+type InventoryStatus = typeof inventory.$inferSelect.status;
+type TransferDestinationStatus = Extract<
+  InventoryStatus,
+  'available' | 'damaged' | 'returned' | 'quarantined'
+>;
+type SerializedTransferStatus = 'available' | 'returned' | 'quarantined' | 'scrapped';
+
+function resolveTransferDestinationStatus(status: InventoryStatus): TransferDestinationStatus {
+  if (status === 'damaged' || status === 'returned' || status === 'quarantined') {
+    return status;
+  }
+  return 'available';
+}
+
+function mapTransferDestinationStatusToSerializedStatus(
+  status: TransferDestinationStatus
+): SerializedTransferStatus {
+  if (status === 'damaged') return 'scrapped';
+  if (status === 'returned' || status === 'quarantined') return status;
+  return 'available';
+}
+
 /**
  * Transfer inventory between locations.
  */
@@ -165,6 +187,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
             });
           }
 
+          const destinationStatus = resolveTransferDestinationStatus(row.status);
           const sourcePrevQty = Number(row.quantityOnHand ?? 0);
           const sourceNextQty = sourcePrevQty - 1;
           const sourcePrevValue = Number(row.totalValue ?? 0);
@@ -224,7 +247,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
                 organizationId: ctx.organizationId,
                 productId: data.productId,
                 locationId: data.toLocationId,
-                status: 'available',
+                status: destinationStatus,
                 quantityOnHand: 1,
                 quantityAllocated: 0,
                 unitCost: row.unitCost,
@@ -247,6 +270,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
               .update(inventory)
               .set({
                 quantityOnHand: destNextQty,
+                status: destinationStatus,
                 updatedAt: new Date(),
                 updatedBy: ctx.user.id,
               })
@@ -339,12 +363,14 @@ export const transferInventory = createServerFn({ method: 'POST' })
             createdBy: ctx.user.id,
           });
 
+          const serializedStatus =
+            mapTransferDestinationStatusToSerializedStatus(destinationStatus);
           const serializedItemId = await upsertSerializedItemForInventory(tx, {
             organizationId: ctx.organizationId,
             productId: data.productId,
             serialNumber,
             inventoryId: destRow.id,
-            status: 'available',
+            status: serializedStatus,
             userId: ctx.user.id,
           });
           if (serializedItemId) {
@@ -424,6 +450,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
       });
 
       // Find or create destination inventory WITH lock
+      const destinationStatus = resolveTransferDestinationStatus(sourceInventory.status);
       let [destInventory] = await tx
         .select()
         .from(inventory)
@@ -431,7 +458,8 @@ export const transferInventory = createServerFn({ method: 'POST' })
           and(
             eq(inventory.organizationId, ctx.organizationId),
             eq(inventory.productId, data.productId),
-            eq(inventory.locationId, data.toLocationId)
+            eq(inventory.locationId, data.toLocationId),
+            eq(inventory.status, destinationStatus)
           )
         )
         .for('update')
@@ -448,7 +476,7 @@ export const transferInventory = createServerFn({ method: 'POST' })
             organizationId: ctx.organizationId,
             productId: data.productId,
             locationId: data.toLocationId,
-            status: 'available',
+            status: destinationStatus,
             quantityOnHand: destNewQty,
             quantityAllocated: 0,
             unitCost: sourceInventory.unitCost,
