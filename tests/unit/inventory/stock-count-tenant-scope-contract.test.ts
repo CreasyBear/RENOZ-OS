@@ -12,6 +12,14 @@ function compact(source: string): string {
   return source.replace(/\s+/g, '');
 }
 
+function sliceBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
 describe('inventory stock count tenant-scope contract', () => {
   it('keeps stock count parent mutations organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
@@ -39,6 +47,24 @@ describe('inventory stock count tenant-scope contract', () => {
       source.indexOf('constitems=awaittx.select().from(stockCountItems)')
     );
     expect(source).not.toContain('constitems=awaitdb.select().from(stockCountItems)');
+  });
+
+  it('locks the parent count before generating the count sheet', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const startBlock = sliceBetween(
+      source,
+      'exportconststartStockCount',
+      'exportconstupdateStockCountItem'
+    );
+
+    expect(startBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(startBlock).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(startBlock.indexOf("for('update').limit(1)")).toBeLessThan(
+      startBlock.indexOf('constinventoryItems=awaittx.select')
+    );
+    expect(startBlock).not.toContain('const[count]=awaitdb.select()');
   });
 
   it('validates stock count location updates inside the organization boundary', () => {

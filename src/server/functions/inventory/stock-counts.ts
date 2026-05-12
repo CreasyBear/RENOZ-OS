@@ -388,26 +388,28 @@ export const startStockCount = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    const [count] = await db
-      .select()
-      .from(stockCounts)
-      .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .limit(1);
-
-    if (!count) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
-
-    if (count.status !== 'draft') {
-      throw new ValidationError(`Cannot start count in ${count.status} status`, {
-        status: ['Count must be in draft status to start'],
-      });
-    }
-
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [count] = await tx
+        .select()
+        .from(stockCounts)
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .for('update')
+        .limit(1);
+
+      if (!count) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
+      }
+
+      if (count.status !== 'draft') {
+        throw new ValidationError(`Cannot start count in ${count.status} status`, {
+          status: ['Count must be in draft status to start'],
+        });
+      }
+
       // Get inventory items to count
       const inventoryConditions = [eq(inventory.organizationId, ctx.organizationId)];
 
