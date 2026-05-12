@@ -119,9 +119,21 @@ export function ProductInventoryTabContainer({
   }, [refetchInventory]);
 
   const handleOpenAdjustment = useCallback((locationId?: string) => {
+    const location = inventorySummary?.locations.find((item) => item.locationId === locationId);
+    if (location && (location.inventoryRowCount ?? 1) > 1) {
+      navigate({
+        to: "/inventory/browser",
+        search: {
+          productId,
+          locationId,
+        },
+      });
+      return;
+    }
+
     setSelectedLocationId(locationId);
     setShowAdjustment(true);
-  }, []);
+  }, [inventorySummary?.locations, navigate, productId]);
 
   const handleOpenReceiveInventory = useCallback(() => {
     navigate({

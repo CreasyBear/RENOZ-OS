@@ -54,6 +54,7 @@ interface ProductInventorySummary {
     locationId: string;
     locationCode: string;
     locationName: string;
+    inventoryRowCount?: number;
     quantityOnHand: number;
     quantityAllocated: number;
     quantityAvailable: number;
@@ -196,6 +197,9 @@ export function ProductInventoryTabView({
   const totalAllocated = summary?.totalAllocated ?? 0;
   const totalAvailable = summary?.totalAvailable ?? 0;
   const locationCount = summary?.locationCount ?? 0;
+  const primaryLocation = summary?.locations[0];
+  const primaryLocationRequiresRowSelection =
+    (primaryLocation?.inventoryRowCount ?? 1) > 1;
   const actionPolicyMessage =
     !canReceiveStock && !canOrderStock
       ? "Receive Inventory and Order Stock are unavailable for this product state."
@@ -345,9 +349,9 @@ export function ProductInventoryTabView({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onOpenAdjustment(summary.locations[0]?.locationId)}
+              onClick={() => onOpenAdjustment(primaryLocation?.locationId)}
             >
-              Adjust Stock
+              {primaryLocationRequiresRowSelection ? "Adjust in Browser" : "Adjust Stock"}
             </Button>
             <Button variant="outline" size="sm" onClick={onOrderStock} disabled={!canOrderStock}>
               <Truck className="mr-2 h-4 w-4" />

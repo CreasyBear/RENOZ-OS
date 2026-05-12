@@ -62,6 +62,7 @@ export interface ProductInventorySummary {
     locationId: string;
     locationCode: string;
     locationName: string;
+    inventoryRowCount: number;
     quantityOnHand: number;
     quantityAllocated: number;
     quantityAvailable: number;
@@ -428,6 +429,7 @@ export const getProductInventory = createServerFn({ method: 'POST' })
           locationId: inventory.locationId,
           locationCode: locations.locationCode,
           locationName: locations.name,
+          inventoryRowCount: sql<number>`COUNT(${inventory.id})::int`,
           quantityOnHand: sum(inventory.quantityOnHand),
           quantityAllocated: sum(inventory.quantityAllocated),
           quantityAvailable: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.status} = 'available' THEN ${inventory.quantityAvailable} ELSE 0 END), 0)::numeric`,
@@ -463,6 +465,7 @@ export const getProductInventory = createServerFn({ method: 'POST' })
           locationId: inv.locationId,
           locationCode: inv.locationCode,
           locationName: inv.locationName,
+          inventoryRowCount: Number(inv.inventoryRowCount ?? 0),
           quantityOnHand: onHand,
           quantityAllocated: allocated,
           quantityAvailable: available,

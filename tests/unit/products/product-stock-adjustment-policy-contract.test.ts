@@ -39,4 +39,27 @@ describe('product stock adjustment policy contract', () => {
     expect(presenter).toContain('disabled={!canOrderStock}');
     expect(presenter).toContain('disabled={!canReceiveStock}');
   });
+
+  it('keeps product-level adjustments honest when a location has multiple stock rows', () => {
+    const server = compact(read('src/server/functions/products/product-inventory.ts'));
+    const container = compact(read('src/components/domain/products/tabs/inventory-tab-container.tsx'));
+    const presenter = compact(read('src/components/domain/products/tabs/inventory-tab-view.tsx'));
+
+    expect(server).toContain('inventoryRowCount:sql<number>`COUNT(${inventory.id})::int`');
+    expect(server).toContain('inventoryRowCount:Number(inv.inventoryRowCount??0)');
+    expect(container).toContain(
+      'constlocation=inventorySummary?.locations.find((item)=>item.locationId===locationId);'
+    );
+    expect(container).toContain('if(location&&(location.inventoryRowCount??1)>1)');
+    expect(container).toContain('to:"/inventory/browser"');
+    expect(container).toContain('productId,locationId,');
+    expect(presenter).toContain('constprimaryLocation=summary?.locations[0];');
+    expect(presenter).toContain(
+      'constprimaryLocationRequiresRowSelection=(primaryLocation?.inventoryRowCount??1)>1;'
+    );
+    expect(presenter).toContain(
+      '{primaryLocationRequiresRowSelection?"AdjustinBrowser":"AdjustStock"}'
+    );
+    expect(presenter).toContain('onOpenAdjustment(primaryLocation?.locationId)');
+  });
 });
