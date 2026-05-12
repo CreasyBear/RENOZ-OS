@@ -362,7 +362,7 @@ export function ScheduleCalendarContainer({ Layout }: ScheduleCalendarContainerP
 
   const handleCreateSuccess = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.schedule(dateFrom, dateTo) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.pastDue() });
   }, [queryClient, dateFrom, dateTo]);
 
   const rescheduleMutation = useRescheduleSiteVisit();

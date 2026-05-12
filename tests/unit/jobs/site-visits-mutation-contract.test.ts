@@ -111,7 +111,8 @@ describe('site visits mutation contract', () => {
       'data:{siteVisitId,...(projectId?{projectId}:{})}'
     );
     expect(hooks).toContain('invalidateSiteVisitMutationViews');
-    expect(hooks).toContain('queryKeys.siteVisits.all');
+    expect(hooks).toContain('queryKeys.siteVisits.schedules()');
+    expect(hooks).not.toContain('queryKey: queryKeys.siteVisits.all');
     expect(compactHooks).toContain(
       "constdata=typeofinput==='string'?{siteVisitId:input}:input"
     );

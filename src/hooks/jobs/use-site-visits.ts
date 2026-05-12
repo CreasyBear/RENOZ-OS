@@ -288,8 +288,11 @@ function invalidateSiteVisitMutationViews(
       queryKey: queryKeys.siteVisits.byInstaller(result.installerId),
     });
   }
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.byInstallers() });
   queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.schedules() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.pastDue() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.myVisits() });
 }
 
 /**
@@ -384,7 +387,6 @@ export function useCheckIn() {
     },
     onSuccess: (result) => {
       invalidateSiteVisitMutationViews(queryClient, result);
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.myVisits() });
     },
   });
 }
@@ -403,7 +405,6 @@ export function useCheckOut() {
     },
     onSuccess: (result) => {
       invalidateSiteVisitMutationViews(queryClient, result);
-      queryClient.invalidateQueries({ queryKey: queryKeys.siteVisits.myVisits() });
     },
   });
 }

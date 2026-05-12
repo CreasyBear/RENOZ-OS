@@ -1911,12 +1911,15 @@ export const queryKeys = {
       [...queryKeys.siteVisits.lists(), filters ?? {}] as const,
     details: () => [...queryKeys.siteVisits.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.siteVisits.details(), id] as const,
+    byProjects: () => [...queryKeys.siteVisits.all, 'byProject'] as const,
     byProject: (projectId: string) =>
-      [...queryKeys.siteVisits.all, 'byProject', projectId] as const,
+      [...queryKeys.siteVisits.byProjects(), projectId] as const,
+    byInstallers: () => [...queryKeys.siteVisits.all, 'byInstaller'] as const,
     byInstaller: (installerId: string) =>
-      [...queryKeys.siteVisits.all, 'byInstaller', installerId] as const,
+      [...queryKeys.siteVisits.byInstallers(), installerId] as const,
+    schedules: () => [...queryKeys.siteVisits.all, 'schedule'] as const,
     schedule: (dateFrom: string, dateTo: string, projectId?: string) =>
-      [...queryKeys.siteVisits.all, 'schedule', dateFrom, dateTo, projectId ?? 'all'] as const,
+      [...queryKeys.siteVisits.schedules(), dateFrom, dateTo, projectId ?? 'all'] as const,
     pastDue: () => [...queryKeys.siteVisits.all, 'pastDue'] as const,
     myVisits: () => [...queryKeys.siteVisits.all, 'myVisits'] as const,
   },
