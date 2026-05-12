@@ -42,21 +42,6 @@ export const transferInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockTransferSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.transfer });
-    const [product] = await db
-      .select({ id: products.id, isSerialized: products.isSerialized })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
 
     if (data.fromLocationId === data.toLocationId) {
       throw new ValidationError('Cannot transfer to the same location', {
@@ -65,29 +50,47 @@ export const transferInventory = createServerFn({ method: 'POST' })
     }
 
     const normalizedSerials = (data.serialNumbers ?? []).map((serial) => normalizeSerial(serial));
-    if (product.isSerialized) {
-      if (normalizedSerials.length === 0) {
-        throw new ValidationError('Serialized transfer requires serial numbers', {
-          serialNumbers: ['Select at least one serial number to transfer'],
-        });
-      }
-      if (normalizedSerials.length !== data.quantity) {
-        throw new ValidationError('Quantity must match serial count for serialized products', {
-          quantity: [
-            `Expected quantity ${normalizedSerials.length} to match selected serial numbers`,
-          ],
-        });
-      }
-    } else if (normalizedSerials.length > 0) {
-      throw new ValidationError('Serial numbers are only valid for serialized products', {
-        serialNumbers: ['Remove serial numbers for non-serialized transfer'],
-      });
-    }
 
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+      const [product] = await tx
+        .select({ id: products.id, isSerialized: products.isSerialized })
+        .from(products)
+        .where(
+          and(
+            eq(products.id, data.productId),
+            eq(products.organizationId, ctx.organizationId),
+            isNull(products.deletedAt)
+          )
+        )
+        .for('update')
+        .limit(1);
+
+      if (!product) {
+        throw new NotFoundError('Product not found', 'product');
+      }
+
+      if (product.isSerialized) {
+        if (normalizedSerials.length === 0) {
+          throw new ValidationError('Serialized transfer requires serial numbers', {
+            serialNumbers: ['Select at least one serial number to transfer'],
+          });
+        }
+        if (normalizedSerials.length !== data.quantity) {
+          throw new ValidationError('Quantity must match serial count for serialized products', {
+            quantity: [
+              `Expected quantity ${normalizedSerials.length} to match selected serial numbers`,
+            ],
+          });
+        }
+      } else if (normalizedSerials.length > 0) {
+        throw new ValidationError('Serial numbers are only valid for serialized products', {
+          serialNumbers: ['Remove serial numbers for non-serialized transfer'],
+        });
+      }
+
       const affectedInventoryIds = new Set<string>();
       const affectedLayerIds = new Set<string>();
       let valuationBefore = 0;

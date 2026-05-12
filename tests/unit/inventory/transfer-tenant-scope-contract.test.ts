@@ -8,6 +8,10 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
+function compact(source: string): string {
+  return source.replace(/\s+/g, '');
+}
+
 describe('inventory transfer tenant-scope contract', () => {
   it('keeps transfer authorization and transaction tenant-scoped', () => {
     const source = read('src/server/functions/inventory/transfers.ts');
@@ -33,6 +37,17 @@ describe('inventory transfer tenant-scope contract', () => {
     );
     expect(source).toContain('eq(inventory.id, sourceInventory.id)');
     expect(source).toContain('eq(inventory.id, destInventory.id)');
+  });
+
+  it('locks the transfer product serialization gate inside the transaction', () => {
+    const source = compact(read('src/server/functions/inventory/transfers.ts'));
+
+    expect(source).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(source).toContain(
+      "const[product]=awaittx.select({id:products.id,isSerialized:products.isSerialized}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1);"
+    );
+    expect(source).toContain("if(product.isSerialized){");
+    expect(source).not.toContain('const[product]=awaitdb.select');
   });
 
   it('preserves transfer finance and serialized-lineage continuity contracts', () => {
