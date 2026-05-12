@@ -65,9 +65,6 @@ export function useDashboardMetrics(options: UseDashboardMetricsOptions = {}) {
     queryFn: async () => {
       try {
         const result = await getDashboardMetricsFn({ data: filters });
-        if (import.meta.env.DEV) {
-          console.debug('[useDashboardMetrics] raw-result', result);
-        }
         const ensuredResult = requireReadResult(result, {
           message: 'Dashboard metrics returned no data',
           contractType: 'always-shaped',
@@ -124,9 +121,6 @@ export function useMetricsComparison({
         const result = await getMetricsComparisonFn({
           data: { dateFrom, dateTo, comparisonType },
         });
-        if (import.meta.env.DEV) {
-          console.debug('[useMetricsComparison] raw-result', result);
-        }
         return requireReadResult(result, {
           message: 'Metrics comparison returned no data',
           contractType: 'always-shaped',
@@ -191,9 +185,6 @@ export function useEnhancedComparison({
             includeInsights,
           },
         });
-        if (import.meta.env.DEV) {
-          console.debug('[useEnhancedComparison] raw-result', result);
-        }
         return requireReadResult(result, {
           message: 'Enhanced comparison returned no data',
           contractType: 'always-shaped',

@@ -13,7 +13,7 @@
  * @source ordersData from useOrders hook
  */
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { useNavigate } from '@tanstack/react-router';
@@ -312,71 +312,6 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
     projects: projectsQuery.isLoading,
     orders: recentOrdersQuery.isLoading,
   };
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    console.debug('[overview-container] query-state-json', JSON.stringify({
-      dashboardMetrics: {
-        status: dashboardMetricsQuery.status,
-        hasData: !!dashboardMetricsQuery.data,
-        error: dashboardMetricsQuery.error instanceof Error ? dashboardMetricsQuery.error.message : dashboardMetricsQuery.error,
-      },
-      targetProgress: {
-        status: targetProgressQuery.status,
-        hasData: !!targetProgressQuery.data,
-        error: targetProgressQuery.error instanceof Error ? targetProgressQuery.error.message : targetProgressQuery.error,
-        targetCount: targetProgressQuery.data?.targets?.length,
-      },
-      orderStats: {
-        status: orderStatsQuery.status,
-        hasData: !!orderStatsQuery.data,
-        error: orderStatsQuery.error instanceof Error ? orderStatsQuery.error.message : orderStatsQuery.error,
-      },
-      recentOrders: {
-        status: recentOrdersQuery.status,
-        hasData: !!recentOrdersQuery.data,
-        error: recentOrdersQuery.error instanceof Error ? recentOrdersQuery.error.message : recentOrdersQuery.error,
-        count: recentOrdersQuery.data?.orders?.length,
-      },
-      inventory: {
-        status: inventoryQuery.status,
-        hasData: !!inventoryQuery.data,
-        error: inventoryQuery.error instanceof Error ? inventoryQuery.error.message : inventoryQuery.error,
-      },
-      projects: {
-        status: projectsQuery.status,
-        hasData: !!projectsQuery.data,
-        error: projectsQuery.error instanceof Error ? projectsQuery.error.message : projectsQuery.error,
-      },
-      revenue: {
-        status: revenueQuery.status,
-        hasData: !!revenueQuery.data,
-        error: revenueQuery.error instanceof Error ? revenueQuery.error.message : revenueQuery.error,
-      },
-    }));
-  }, [
-    dashboardMetricsQuery.data,
-    dashboardMetricsQuery.error,
-    dashboardMetricsQuery.status,
-    inventoryQuery.data,
-    inventoryQuery.error,
-    inventoryQuery.status,
-    orderStatsQuery.data,
-    orderStatsQuery.error,
-    orderStatsQuery.status,
-    projectsQuery.data,
-    projectsQuery.error,
-    projectsQuery.status,
-    recentOrdersQuery.data,
-    recentOrdersQuery.error,
-    recentOrdersQuery.status,
-    revenueQuery.data,
-    revenueQuery.error,
-    revenueQuery.status,
-    targetProgressQuery.data,
-    targetProgressQuery.error,
-    targetProgressQuery.status,
-  ]);
 
   // -------------------------------------------------------------------------
   // RENDER
