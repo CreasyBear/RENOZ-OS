@@ -13,7 +13,6 @@
  * @see _Initiation/_prd/2-domains/suppliers/suppliers.prd.json (SUPP-APPROVAL-WORKFLOW)
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageLayout } from '@/components/layout';
 import {
@@ -21,7 +20,6 @@ import {
   type ApprovalItem,
   type ApprovalFilters,
 } from '@/components/domain/approvals/approval-dashboard';
-import { queryKeys } from '@/lib/query-keys';
 import {
   usePendingApprovals,
   useApproveItem,
@@ -57,7 +55,6 @@ const TAB_STATUS_MAP: Record<string, ApprovalStatus | undefined> = {
 export default function ApprovalsPage() {
   const navigate = Route.useNavigate();
   const search = Route.useSearch();
-  const queryClient = useQueryClient();
   const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(null);
   const activeTab = search.tab ?? APPROVAL_TABS_WITH_ALL.PENDING;
   const hasUnsupportedType = search.type === 'amendment';
@@ -94,7 +91,7 @@ export default function ApprovalsPage() {
   // DATA FETCHING
   // ============================================================================
 
-  const { data, isLoading, error } = usePendingApprovals({
+  const { data, isLoading, error, refetch } = usePendingApprovals({
     status: TAB_STATUS_MAP[activeTab],
     type: filters.type !== 'all' ? filters.type : undefined,
     search: filters.search || undefined,
@@ -184,8 +181,8 @@ export default function ApprovalsPage() {
   // ============================================================================
 
   const handleRefresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
-  }, [queryClient]);
+    void refetch();
+  }, [refetch]);
 
   const handleDecision = useCallback(
     async (
@@ -245,9 +242,8 @@ export default function ApprovalsPage() {
       }
 
       setSelectedItem(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
     },
-    [selectedItem, approveMutation, rejectMutation, escalateMutation, queryClient]
+    [selectedItem, approveMutation, rejectMutation, escalateMutation]
   );
 
   const handleBulkDecision = useCallback(
@@ -304,9 +300,8 @@ export default function ApprovalsPage() {
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
     },
-    [bulkApproveMutation, bulkRejectMutation, queryClient]
+    [bulkApproveMutation, bulkRejectMutation]
   );
 
   // ============================================================================

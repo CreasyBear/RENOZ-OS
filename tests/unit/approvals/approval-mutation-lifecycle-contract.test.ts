@@ -39,7 +39,12 @@ describe('approval mutation lifecycle contract', () => {
     expect(route).toContain('useBulkReject,');
     expect(route).toContain('const bulkRejectMutation = useBulkReject();');
     expect(route).toContain('bulkRejectMutation.mutateAsync(');
+    expect(route).toContain('const { data, isLoading, error, refetch } = usePendingApprovals');
+    expect(route).toContain('void refetch();');
     expect(route).toContain("comments: ['Bulk rejection comments are required.']");
+    expect(route).not.toContain('useQueryClient');
+    expect(route).not.toContain('queryKeys.approvals.all');
+    expect(route).not.toContain('invalidateQueries');
     expect(route).not.toContain("description: err instanceof Error ? err.message : 'An error occurred'");
     expect(route).not.toContain('catch (err)');
     expect(route).not.toContain('Bulk reject would need a different approach');
