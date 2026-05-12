@@ -1,5 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { queryKeys } from '@/lib/query-keys';
+
+const root = process.cwd();
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8');
+}
 
 describe('financial query key contract', () => {
   it('includes statement pagination and sent filters', () => {
@@ -81,5 +89,20 @@ describe('financial query key contract', () => {
     expect(firstPage.slice(0, root.length)).toEqual(root);
     expect(secondPage.slice(0, root.length)).toEqual(root);
     expect(firstPage).not.toEqual(secondPage);
+  });
+
+  it('keeps Xero payment event pages under the Xero payment event root', () => {
+    const rootKey = queryKeys.financial.xeroPaymentEvents();
+    const firstPage = queryKeys.financial.xeroPaymentEventsList({ page: 1, pageSize: 20 });
+    const secondPage = queryKeys.financial.xeroPaymentEventsList({ page: 2, pageSize: 20 });
+
+    expect(firstPage.slice(0, rootKey.length)).toEqual(rootKey);
+    expect(firstPage).toEqual([...rootKey, { page: 1, pageSize: 20 }]);
+    expect(firstPage).not.toEqual(secondPage);
+
+    const hook = read('src/hooks/financial/use-xero-sync.ts');
+
+    expect(hook).toContain('queryKeys.financial.xeroPaymentEventsList({ page, pageSize })');
+    expect(hook).not.toContain('[...queryKeys.financial.xeroPaymentEvents(), { page, pageSize }]');
   });
 });

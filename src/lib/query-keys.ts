@@ -1663,6 +1663,8 @@ export const queryKeys = {
       [...queryKeys.financial.xero(), 'integration'] as const,
     xeroPaymentEvents: () =>
       [...queryKeys.financial.xero(), 'payment-events'] as const,
+    xeroPaymentEventsList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.xeroPaymentEvents(), filters ?? {}] as const,
     xeroCustomerMapping: (customerId: string) =>
       [...queryKeys.financial.xero(), 'customer-mapping', customerId] as const,
     xeroContactSearch: (customerId: string, query: string) =>

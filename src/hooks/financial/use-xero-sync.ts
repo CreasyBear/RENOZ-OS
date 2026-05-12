@@ -121,7 +121,7 @@ export function useXeroPaymentEvents(options: UseXeroPaymentEventsOptions = {}) 
   const fn = useServerFn(listRecentXeroPaymentEvents);
 
   return useQuery({
-    queryKey: [...queryKeys.financial.xeroPaymentEvents(), { page, pageSize }],
+    queryKey: queryKeys.financial.xeroPaymentEventsList({ page, pageSize }),
     queryFn: async () => {
       try {
         const result = await fn({ data: { page, pageSize } });
