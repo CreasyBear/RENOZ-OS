@@ -41,9 +41,8 @@ describe('project documents read feedback contract', () => {
     const documentsTab = read('src/components/domain/jobs/projects/tabs/project-documents-tab.tsx');
     const hooks = read('src/hooks/documents/use-document-history.ts');
 
-    expect(hooks).toContain(
-      "fallbackMessage: 'Document history is temporarily unavailable. Please refresh and try again.'"
-    );
+    expect(hooks).toContain("import { DOCUMENT_HISTORY_READ_FALLBACK_MESSAGE } from './document-error-messages';");
+    expect(hooks).toContain('fallbackMessage: DOCUMENT_HISTORY_READ_FALLBACK_MESSAGE');
     expect(documentsTab).toContain(
       "import { getProjectDocumentsReadErrorMessage } from '../project-read-error-messages';"
     );

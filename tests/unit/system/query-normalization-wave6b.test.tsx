@@ -425,7 +425,7 @@ describe('system/operational query normalization wave 6b', () => {
     render(<DocumentHistoryList entityType="order" entityId="order-1" />);
 
     expect(
-      screen.getByText('Document history is temporarily unavailable. Please refresh and try again.')
+      screen.getByText('Document history is temporarily unavailable. Showing the most recent documents.')
     ).toBeInTheDocument();
     expect(screen.getByText('quote.pdf')).toBeInTheDocument();
 
