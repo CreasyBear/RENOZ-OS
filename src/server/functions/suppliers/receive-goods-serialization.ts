@@ -22,7 +22,7 @@ export function buildProductSerializationRequirementMap(
 
   if (missingProductIds.length > 0) {
     throw createSerializedMutationError(
-      'One or more purchase-order lines reference a product that is unavailable or archived. Refresh the purchase order before receiving goods.',
+      'One or more purchase-order lines reference a product that is unavailable, inactive, or not purchasable. Refresh the purchase order before receiving goods.',
       'transition_blocked'
     );
   }

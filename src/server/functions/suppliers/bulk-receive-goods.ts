@@ -162,6 +162,9 @@ export const bulkReceiveGoods = createServerFn({ method: 'POST' })
               and(
                 inArray(products.id, productIds),
                 eq(products.organizationId, ctx.organizationId),
+                eq(products.status, 'active'),
+                eq(products.isActive, true),
+                eq(products.isPurchasable, true),
                 isNull(products.deletedAt)
               )
             );

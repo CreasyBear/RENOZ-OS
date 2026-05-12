@@ -197,6 +197,9 @@ export const receiveGoods = createServerFn({ method: 'POST' })
             and(
               eq(products.organizationId, ctx.organizationId),
               inArray(products.id, productIds),
+              eq(products.status, 'active'),
+              eq(products.isActive, true),
+              eq(products.isPurchasable, true),
               isNull(products.deletedAt)
             )
           );
