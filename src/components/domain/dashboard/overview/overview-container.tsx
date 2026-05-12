@@ -34,6 +34,7 @@ import { getSummaryState } from '@/lib/metrics/summary-health';
 import {
   resolveReadResult,
 } from '@/lib/read-path-policy';
+import { queryKeys } from '@/lib/query-keys';
 
 // Presenter
 import { OverviewDashboard } from './overview-dashboard';
@@ -127,13 +128,10 @@ export function OverviewContainer({ className }: OverviewContainerProps) {
   }, []);
 
   const wonThisMonthQuery = useQuery({
-    queryKey: [
-      'dashboard',
-      'overview',
-      'wonThisMonth',
+    queryKey: queryKeys.dashboard.overviewWonThisMonth(
       currentMonthStartParam,
-      currentMonthEndParam,
-    ],
+      currentMonthEndParam
+    ),
     queryFn: () =>
       resolveReadResult(
         () =>

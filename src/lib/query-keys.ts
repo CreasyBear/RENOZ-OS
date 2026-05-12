@@ -999,6 +999,9 @@ export const queryKeys = {
     inventory: () => [...queryKeys.dashboard.all, 'inventory'] as const,
     alerts: () => [...queryKeys.dashboard.all, 'alerts'] as const,
     hotLeads: () => [...queryKeys.dashboard.all, 'hotLeads'] as const,
+    overview: () => [...queryKeys.dashboard.all, 'overview'] as const,
+    overviewWonThisMonth: (dateFrom: string, dateTo: string) =>
+      [...queryKeys.dashboard.overview(), 'wonThisMonth', dateFrom, dateTo] as const,
 
     // Recent items for popovers
     recentOutstanding: (limit: number) =>
