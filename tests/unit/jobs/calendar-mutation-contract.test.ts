@@ -37,6 +37,12 @@ describe('job calendar mutation contract', () => {
     const hook = read('src/hooks/jobs/use-job-scheduling.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
 
+    expect(hook).toContain('function invalidateCalendarSyncViews');
+    expect(hook).toContain('queryKeys.jobCalendar.eventsAll()');
+    expect(hook).toContain('queryKeys.jobCalendar.eventsRanges()');
+    expect(hook).toContain('queryKeys.jobCalendar.timelineStatsAll()');
+    expect(hook).toContain('queryKeys.jobCalendar.oauth.all()');
+    expect(hook).not.toContain('queryKey: queryKeys.jobCalendar.all');
     expect(hook).toContain("formatJobCalendarMutationError(error, 'sync')");
     expect(hook).toContain("formatJobCalendarMutationError(error, 'update')");
     expect(hook).toContain("formatJobCalendarMutationError(error, 'remove')");

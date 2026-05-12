@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/query-keys';
@@ -387,6 +387,18 @@ export function useRescheduleJob() {
 // OAUTH CALENDAR SYNC
 // ============================================================================
 
+function invalidateCalendarSyncViews(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventDetails() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.eventsRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.unscheduledLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.installerLists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.kanbanRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineRanges() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.timelineStatsAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.oauth.all() });
+}
+
 /**
  * Hook to get the current calendar OAuth connection for the organization.
  */
@@ -461,8 +473,7 @@ export function useSyncJobToCalendar() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.oauth.all() });
+      invalidateCalendarSyncViews(queryClient);
 
       toast.success('Job synced to calendar', {
         description: 'Event created in your connected calendar',
@@ -504,8 +515,7 @@ export function useUpdateJobCalendarEvent() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.oauth.all() });
+      invalidateCalendarSyncViews(queryClient);
 
       toast.success('Calendar event updated', {
         description: 'Job changes synced to your calendar',
@@ -537,8 +547,7 @@ export function useRemoveJobFromCalendar() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.oauth.all() });
+      invalidateCalendarSyncViews(queryClient);
 
       toast.success('Job removed from calendar', {
         description: 'Calendar event has been deleted',
