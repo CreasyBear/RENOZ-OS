@@ -20,6 +20,10 @@ const mockCreateOrderPayment = vi.fn()
 const mockUpdateOrderPayment = vi.fn()
 const mockDeleteOrderPayment = vi.fn()
 const mockCreateRefundPayment = vi.fn()
+const mockApproveAmendment = vi.fn()
+const mockRejectAmendment = vi.fn()
+const mockApplyAmendment = vi.fn()
+const mockCancelAmendment = vi.fn()
 
 vi.mock('@tanstack/react-start', () => ({
   useServerFn: (fn: unknown) => mockUseServerFn(fn),
@@ -58,6 +62,16 @@ vi.mock('@/server/functions/orders/order-payments', () => ({
   updateOrderPayment: (...args: unknown[]) => mockUpdateOrderPayment(...args),
   deleteOrderPayment: (...args: unknown[]) => mockDeleteOrderPayment(...args),
   createRefundPayment: (...args: unknown[]) => mockCreateRefundPayment(...args),
+}))
+
+vi.mock('@/server/functions/orders/order-amendments', () => ({
+  listAmendments: vi.fn(),
+  getAmendment: vi.fn(),
+  requestAmendment: vi.fn(),
+  approveAmendment: (...args: unknown[]) => mockApproveAmendment(...args),
+  rejectAmendment: (...args: unknown[]) => mockRejectAmendment(...args),
+  applyAmendment: (...args: unknown[]) => mockApplyAmendment(...args),
+  cancelAmendment: (...args: unknown[]) => mockCancelAmendment(...args),
 }))
 
 function createWrapper(queryClient: QueryClient) {
@@ -414,6 +428,124 @@ describe('order mutation invalidation', () => {
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: queryKeys.products.all,
+    })
+  })
+
+  it('amendment review actions refresh affected order amendment surfaces without order root invalidation', async () => {
+    mockApproveAmendment.mockResolvedValue({ id: 'amendment-1', orderId: 'order-1' })
+    mockRejectAmendment.mockResolvedValue({ id: 'amendment-2', orderId: 'order-1' })
+    mockCancelAmendment.mockResolvedValue({ id: 'amendment-3', orderId: 'order-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useApproveAmendment, useRejectAmendment, useCancelAmendment } = await import(
+      '@/hooks/orders/use-order-amendments'
+    )
+
+    const approve = renderHook(() => useApproveAmendment(), {
+      wrapper: createWrapper(queryClient),
+    })
+    const reject = renderHook(() => useRejectAmendment(), {
+      wrapper: createWrapper(queryClient),
+    })
+    const cancel = renderHook(() => useCancelAmendment(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await approve.result.current.mutateAsync({ amendmentId: 'amendment-1' })
+      await reject.result.current.mutateAsync({
+        amendmentId: 'amendment-2',
+        reason: 'Customer declined',
+      })
+      await cancel.result.current.mutateAsync({
+        amendmentId: 'amendment-3',
+        reason: 'Superseded',
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendments('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendmentDetail('amendment-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendmentDetail('amendment-2'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendmentDetail('amendment-3'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.withCustomer('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.infiniteLists(),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.all,
+    })
+  })
+
+  it('applying an amendment refreshes order side effects without order root invalidation', async () => {
+    mockApplyAmendment.mockResolvedValue({ id: 'amendment-4', orderId: 'order-1' })
+
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { useApplyAmendment } = await import('@/hooks/orders/use-order-amendments')
+
+    const { result } = renderHook(() => useApplyAmendment(), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        amendmentId: 'amendment-4',
+        forceApply: true,
+      })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendments('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.amendmentDetail('amendment-4'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.withCustomer('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.infiniteLists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.paymentSummary('order-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillment(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.fulfillmentSummary(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.fulfillment.lists(),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.fulfillment.kanban(),
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.all,
     })
   })
 

@@ -7,7 +7,7 @@
  * @see src/server/functions/orders/order-amendments.ts for server functions
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, Amendment } from '@/lib/schemas/orders';
@@ -22,9 +22,38 @@ import {
   cancelAmendment,
 } from '@/server/functions/orders/order-amendments';
 
-function invalidateOrderCollectionQueries(queryClient: ReturnType<typeof useQueryClient>) {
+function invalidateOrderCollectionQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.infiniteLists() });
+}
+
+function invalidateOrderDetailQueries(queryClient: QueryClient, orderId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
+}
+
+function invalidateOrderAmendmentQueries(
+  queryClient: QueryClient,
+  {
+    orderId,
+    amendmentId,
+  }: {
+    orderId: string;
+    amendmentId: string;
+  }
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(amendmentId) });
+  invalidateOrderDetailQueries(queryClient, orderId);
+  invalidateOrderCollectionQueries(queryClient);
+}
+
+function invalidateAppliedAmendmentSideEffects(queryClient: QueryClient, orderId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.paymentSummary(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillmentSummary() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.lists() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.fulfillment.kanban() });
 }
 
 // ============================================================================
@@ -157,9 +186,10 @@ export function useApproveAmendment() {
       approveFn({ data: input }),
     onSuccess: (result, variables) => {
       const amendment = result as Amendment;
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
+      invalidateOrderAmendmentQueries(queryClient, {
+        orderId: amendment.orderId,
+        amendmentId: variables.amendmentId,
+      });
     },
   });
 }
@@ -174,9 +204,12 @@ export function useRejectAmendment() {
 
   return useMutation({
     mutationFn: (input: { amendmentId: string; reason: string }) => rejectFn({ data: input }),
-    onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
+    onSuccess: (result, variables) => {
+      const amendment = result as Amendment;
+      invalidateOrderAmendmentQueries(queryClient, {
+        orderId: amendment.orderId,
+        amendmentId: variables.amendmentId,
+      });
     },
   });
 }
@@ -193,12 +226,11 @@ export function useApplyAmendment() {
     mutationFn: (input: { amendmentId: string; forceApply?: boolean }) => applyFn({ data: input }),
     onSuccess: (result, variables) => {
       const amendment = result as Amendment;
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      invalidateOrderCollectionQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(amendment.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(amendment.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
+      invalidateOrderAmendmentQueries(queryClient, {
+        orderId: amendment.orderId,
+        amendmentId: variables.amendmentId,
+      });
+      invalidateAppliedAmendmentSideEffects(queryClient, amendment.orderId);
     },
   });
 }
@@ -215,9 +247,10 @@ export function useCancelAmendment() {
     mutationFn: (input: { amendmentId: string; reason?: string }) => cancelFn({ data: input }),
     onSuccess: (result, variables) => {
       const amendment = result as Amendment;
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendments(amendment.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.amendmentDetail(variables.amendmentId) });
+      invalidateOrderAmendmentQueries(queryClient, {
+        orderId: amendment.orderId,
+        amendmentId: variables.amendmentId,
+      });
     },
   });
 }
