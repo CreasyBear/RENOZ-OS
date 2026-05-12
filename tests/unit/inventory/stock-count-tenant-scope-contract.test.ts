@@ -28,6 +28,19 @@ describe('inventory stock count tenant-scope contract', () => {
     expect(source).not.toContain('.where(eq(stockCounts.id,data.id))');
   });
 
+  it('locks the parent count and reads completion items inside the transaction', () => {
+    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+
+    expect(source).toContain(
+      "from(stockCounts).where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+    );
+    expect(source).toContain('constitems=awaittx.select().from(stockCountItems)');
+    expect(source.indexOf("for('update').limit(1)")).toBeLessThan(
+      source.indexOf('constitems=awaittx.select().from(stockCountItems)')
+    );
+    expect(source).not.toContain('constitems=awaitdb.select().from(stockCountItems)');
+  });
+
   it('validates stock count location updates inside the organization boundary', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
 

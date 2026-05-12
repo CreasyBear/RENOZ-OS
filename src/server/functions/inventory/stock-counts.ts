@@ -686,40 +686,40 @@ export const completeStockCount = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
-    const [count] = await db
-      .select()
-      .from(stockCounts)
-      .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
-      .limit(1);
-
-    if (!count) {
-      throw new NotFoundError('Stock count not found', 'stockCount');
-    }
-
-    if (count.status !== 'in_progress') {
-      throw new ValidationError(`Cannot complete count in ${count.status} status`, {
-        status: ['Count must be in progress'],
-      });
-    }
-
-    // Get all count items
-    const items = await db
-      .select()
-      .from(stockCountItems)
-      .where(eq(stockCountItems.stockCountId, data.id));
-
-    // Check if all items are counted
-    const uncountedItems = items.filter((i) => i.countedQuantity === null);
-    if (uncountedItems.length > 0) {
-      throw new ValidationError(`${uncountedItems.length} items have not been counted`, {
-        items: ['All items must be counted before completing'],
-      });
-    }
-
     return await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
       );
+
+      const [count] = await tx
+        .select()
+        .from(stockCounts)
+        .where(and(eq(stockCounts.id, data.id), eq(stockCounts.organizationId, ctx.organizationId)))
+        .for('update')
+        .limit(1);
+
+      if (!count) {
+        throw new NotFoundError('Stock count not found', 'stockCount');
+      }
+
+      if (count.status !== 'in_progress') {
+        throw new ValidationError(`Cannot complete count in ${count.status} status`, {
+          status: ['Count must be in progress'],
+        });
+      }
+
+      const items = await tx
+        .select()
+        .from(stockCountItems)
+        .where(eq(stockCountItems.stockCountId, data.id));
+
+      const uncountedItems = items.filter((i) => i.countedQuantity === null);
+      if (uncountedItems.length > 0) {
+        throw new ValidationError(`${uncountedItems.length} items have not been counted`, {
+          items: ['All items must be counted before completing'],
+        });
+      }
+
       // Find items with variance
       const varianceItems = items.filter((i) => i.countedQuantity !== i.expectedQuantity);
 
