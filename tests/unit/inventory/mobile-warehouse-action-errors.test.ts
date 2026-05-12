@@ -44,6 +44,13 @@ describe('mobile warehouse action feedback', () => {
     expect(
       formatMobileWarehouseActionError({ statusCode: 409, code: 'CONFLICT' }, 'submitCount')
     ).toBe('Warehouse task changed. Refresh and review before trying again.');
+
+    expect(
+      formatMobileWarehouseActionError(
+        new Error('duplicate key value violates unique constraint stock_counts_count_code_key'),
+        'startCount'
+      )
+    ).toBe('Unable to start count. Refresh and try again.');
   });
 
   it('classifies serialized pick sync blockers without route-level raw message parsing', () => {
@@ -81,6 +88,7 @@ describe('mobile warehouse action feedback', () => {
     const countingPage = read('src/routes/_authenticated/mobile/-counting-page.tsx');
 
     expect(pickingPage).toContain('formatMobileWarehouseActionError(error, "confirmPick")');
+    expect(countingPage).toContain('formatMobileWarehouseActionError(error, "startCount")');
     expect(pickingPage).toContain('isSerializedPickSyncFailure(err, item.serialNumbers)');
     expect(pickingPage).toContain('SERIALIZED_PICK_SYNC_DESKTOP_MESSAGE');
     expect(countingPage).toContain('formatMobileWarehouseActionError(error, "submitCount")');
@@ -92,5 +100,23 @@ describe('mobile warehouse action feedback', () => {
     expect(countingPage).not.toContain(
       'error instanceof Error ? error.message : "Failed to submit count"'
     );
+  });
+
+  it('keeps mobile counting bound to stock-count mutations instead of placeholder sync', () => {
+    const countingPage = read('src/routes/_authenticated/mobile/-counting-page.tsx');
+
+    expect(countingPage).toContain('useCreateStockCount');
+    expect(countingPage).toContain('useStartStockCount');
+    expect(countingPage).toContain('useUpdateStockCountItem');
+    expect(countingPage).toContain('useInventory');
+    expect(countingPage).toContain('pageSize: 1');
+    expect(countingPage).toContain('preflightInventoryError');
+    expect(countingPage).toContain('countId: countSession.stockCountId');
+    expect(countingPage).toContain('countItemId: currentItem.countItemId');
+    expect(countingPage).toContain('itemId: item.countItemId');
+    expect(countingPage).toContain('data: { countedQuantity: item.countedQty }');
+    expect(countingPage).toContain('setPendingLocationId(null)');
+    expect(countingPage).toContain('Legacy queue item missing count binding - cannot sync');
+    expect(countingPage).not.toContain('setTimeout(resolve, 100)');
   });
 });

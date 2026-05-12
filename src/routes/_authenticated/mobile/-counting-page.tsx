@@ -36,7 +36,13 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast, useOnlineStatus, useOfflineQueue } from "@/hooks";
 import { logger } from "@/lib/logger";
-import { useLocations, useInventory } from "@/hooks/inventory";
+import {
+  useCreateStockCount,
+  useInventory,
+  useLocations,
+  useStartStockCount,
+  useUpdateStockCountItem,
+} from "@/hooks/inventory";
 import {
   BarcodeScanner,
   QuantityInput,
@@ -46,6 +52,7 @@ import {
 import { formatMobileWarehouseActionError } from "./mobile-warehouse-action-errors";
 
 interface CountItem {
+  countItemId: string;
   inventoryId: string;
   productId: string;
   productName: string;
@@ -58,6 +65,7 @@ interface CountItem {
 
 interface CountSession {
   id: string;
+  stockCountId: string;
   locationId: string;
   locationCode: string;
   locationName: string;
@@ -69,6 +77,8 @@ interface CountSession {
 
 interface PendingCount {
   id?: string;
+  countId?: string;
+  countItemId?: string;
   inventoryId: string;
   countedQty: number;
   timestamp: Date;
@@ -148,19 +158,23 @@ const CountItemRow = memo(function CountItemRow({
 interface LocationButtonProps {
   location: { id: string; name: string; code: string };
   onSelect: (id: string) => void;
+  disabled?: boolean;
 }
 
 const LocationButton = memo(function LocationButton({
   location,
   onSelect,
+  disabled,
 }: LocationButtonProps) {
   return (
     <button
       onClick={() => onSelect(location.id)}
+      disabled={disabled}
       className={cn(
         "w-full flex items-center gap-3 p-4 rounded-lg transition-colors",
         "bg-background border hover:bg-muted",
-        "touch-action-manipulation"
+        "touch-action-manipulation",
+        disabled && "opacity-60 cursor-not-allowed"
       )}
     >
       <MapPin className="h-6 w-6 text-muted-foreground" />
@@ -176,14 +190,15 @@ const LocationButton = memo(function LocationButton({
 
 export default function MobileCountingPage() {
   const navigate = useNavigate();
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [countSession, setCountSession] = useState<CountSession | null>(null);
+  const [pendingLocationId, setPendingLocationId] = useState<string | null>(null);
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [countedQuantity, setCountedQuantity] = useState(0);
   const [isBlindCount, setIsBlindCount] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStartingSession, setIsStartingSession] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const {
@@ -197,12 +212,18 @@ export default function MobileCountingPage() {
   const { locations: locationsData, isLoading: isLocationsLoading, fetchLocations: refetchLocations } = useLocations({
     autoFetch: true,
   });
-
-  const { data: inventoryData, isLoading: isInventoryLoading } = useInventory({
-    locationId: selectedLocationId ?? undefined,
+  const createCountMutation = useCreateStockCount();
+  const startCountMutation = useStartStockCount();
+  const updateCountItemMutation = useUpdateStockCountItem();
+  const {
+    data: preflightInventoryData,
+    error: preflightInventoryError,
+    isLoading: isInventoryPreflightLoading,
+  } = useInventory({
+    locationId: pendingLocationId ?? undefined,
     page: 1,
-    pageSize: 100,
-    enabled: !!selectedLocationId && !countSession,
+    pageSize: 1,
+    enabled: !!pendingLocationId && !countSession,
   });
 
   const locations = (locationsData ?? []).map((l: { id: string; name: string; code?: string | null }) => ({
@@ -215,58 +236,107 @@ export default function MobileCountingPage() {
   const completedCount = countSession?.items.filter((i) => i.status !== "pending").length ?? 0;
   const progress = countSession ? (completedCount / countSession.items.length) * 100 : 0;
 
-  const handleStartSession = useCallback(
-    (locationId: string) => {
+  const startAuditableSession = useCallback(
+    async (locationId: string) => {
       const location = locations.find((l) => l.id === locationId);
       if (!location) return;
-      setSelectedLocationId(locationId);
+
+      try {
+        setIsStartingSession(true);
+        const countCode = `MOB-${Date.now().toString(36).toUpperCase()}`.slice(0, 20);
+        const created = await createCountMutation.mutateAsync({
+          countCode,
+          countType: "cycle",
+          locationId,
+          notes: `Mobile cycle count for ${location.code || location.name}`,
+          metadata: { source: "mobile_counting" },
+        });
+        const started = await startCountMutation.mutateAsync(created.count.id);
+        const items: CountItem[] = started.items
+          .map((item) => ({
+            countItemId: item.id,
+            inventoryId: item.inventoryId,
+            productId: item.inventory?.productId ?? "",
+            productName: item.product?.name ?? "Unknown",
+            productSku: item.product?.sku ?? "",
+            expectedQty: item.expectedQuantity ?? 0,
+            countedQty: null,
+            variance: null,
+            status: "pending" as const,
+          }))
+          .filter((item) => item.countItemId && item.inventoryId);
+
+        if (items.length === 0) {
+          toast.warning("No items at this location");
+          return;
+        }
+
+        setCountSession({
+          id: `count-${Date.now()}`,
+          stockCountId: created.count.id,
+          locationId,
+          locationCode: location.code,
+          locationName: location.name,
+          items,
+          status: "in_progress",
+          startedAt: new Date(),
+          completedAt: null,
+        });
+        setCurrentItemIndex(0);
+        setCountedQuantity(0);
+        setScannedBarcode(null);
+        setIsVerified(false);
+      } catch (error: unknown) {
+        logger.error("Failed to start mobile count", error);
+        toast.error(formatMobileWarehouseActionError(error, "startCount"));
+      } finally {
+        setIsStartingSession(false);
+      }
     },
-    [locations]
+    [createCountMutation, locations, startCountMutation]
   );
 
-  const handleCreateSession = useCallback(() => {
-    if (!selectedLocationId || !inventoryData?.items || countSession) return;
-    const location = locations.find((l) => l.id === selectedLocationId);
-    if (!location) return;
-    const items: CountItem[] = (inventoryData.items ?? []).map((item) => {
-      const product = item.product ?? undefined;
-      return {
-        inventoryId: item.id,
-        productId: item.productId,
-        productName: product?.name ?? "Unknown",
-        productSku: product?.sku ?? "",
-        expectedQty: item.quantityOnHand ?? 0,
-        countedQty: null,
-        variance: null,
-        status: "pending" as const,
-      };
-    });
-    if (items.length === 0) {
-      toast.warning("No items at this location");
-      setSelectedLocationId(null);
-      return;
-    }
-    setCountSession({
-      id: `count-${Date.now()}`,
-      locationId: selectedLocationId,
-      locationCode: location.code,
-      locationName: location.name,
-      items,
-      status: "in_progress",
-      startedAt: new Date(),
-      completedAt: null,
-    });
-    setCurrentItemIndex(0);
-    setCountedQuantity(0);
-    setScannedBarcode(null);
-    setIsVerified(false);
-  }, [selectedLocationId, inventoryData, countSession, locations]);
+  const handleStartSession = useCallback(
+    (locationId: string) => {
+      if (!isOnline) {
+        toast.error("Connect before starting a count", {
+          description: "Mobile counts create an auditable stock-count sheet before quantities are recorded.",
+        });
+        return;
+      }
+      setPendingLocationId(locationId);
+    },
+    [isOnline]
+  );
 
   useEffect(() => {
-    if (selectedLocationId && inventoryData?.items && !countSession && !isInventoryLoading) {
-      handleCreateSession();
+    if (!pendingLocationId || isInventoryPreflightLoading) return;
+
+    if (preflightInventoryError) {
+      setPendingLocationId(null);
+      toast.error(formatMobileWarehouseActionError(preflightInventoryError, "startCount"));
+      return;
     }
-  }, [selectedLocationId, inventoryData, countSession, isInventoryLoading, handleCreateSession]);
+
+    if (!preflightInventoryData) return;
+
+    const hasInventory = (preflightInventoryData.items ?? []).length > 0;
+    const locationId = pendingLocationId;
+    setPendingLocationId(null);
+
+    if (!hasInventory) {
+      toast.warning("No items at this location");
+      return;
+    }
+
+    void startAuditableSession(locationId);
+  }, [
+    isInventoryPreflightLoading,
+    pendingLocationId,
+    preflightInventoryData,
+    preflightInventoryError,
+    startAuditableSession,
+  ]);
 
   const handleScan = useCallback(
     (barcode: string) => {
@@ -298,6 +368,21 @@ export default function MobileCountingPage() {
     const variance = countedQuantity - currentItem.expectedQty;
     try {
       setIsSubmitting(true);
+      if (isOnline) {
+        await updateCountItemMutation.mutateAsync({
+          countId: countSession.stockCountId,
+          itemId: currentItem.countItemId,
+          data: { countedQuantity },
+        });
+      } else {
+        addToQueue({
+          countId: countSession.stockCountId,
+          countItemId: currentItem.countItemId,
+          inventoryId: currentItem.inventoryId,
+          countedQty: countedQuantity,
+          timestamp: new Date(),
+        });
+      }
       const newItems = [...countSession.items];
       newItems[currentItemIndex] = {
         ...currentItem,
@@ -312,13 +397,6 @@ export default function MobileCountingPage() {
         status: allCounted ? "completed" : "in_progress",
         completedAt: allCounted ? new Date() : null,
       });
-      if (!isOnline) {
-        addToQueue({
-          inventoryId: currentItem.inventoryId,
-          countedQty: countedQuantity,
-          timestamp: new Date(),
-        });
-      }
       if (variance !== 0) {
         toast.warning(`Variance: ${variance > 0 ? "+" : ""}${variance}`, {
           description: `Expected: ${currentItem.expectedQty}, Counted: ${countedQuantity}`,
@@ -342,7 +420,7 @@ export default function MobileCountingPage() {
           setScannedBarcode(null);
           setIsVerified(false);
         } else if (allCounted) {
-          toast.success("Count session complete!");
+          toast.success(isOnline ? "Counts saved for review" : "Counts queued for sync");
         }
       }
     } catch (error: unknown) {
@@ -351,29 +429,44 @@ export default function MobileCountingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [countSession, currentItem, currentItemIndex, countedQuantity, isVerified, isOnline, addToQueue]);
+  }, [
+    addToQueue,
+    countSession,
+    countedQuantity,
+    currentItem,
+    currentItemIndex,
+    isOnline,
+    isVerified,
+    updateCountItemMutation,
+  ]);
 
   const handleSync = useCallback(async () => {
-    const result = await syncQueue(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    const result = await syncQueue(async (item) => {
+      if (!item.countId || !item.countItemId) {
+        throw new Error("Legacy queue item missing count binding - cannot sync");
+      }
+      await updateCountItemMutation.mutateAsync({
+        countId: item.countId,
+        itemId: item.countItemId,
+        data: { countedQuantity: item.countedQty },
+      });
     });
     if (result.failed === 0) {
       toast.success(`Synced ${result.success} counts`);
     } else {
       toast.warning(`Synced ${result.success} counts, ${result.failed} failed`);
     }
-  }, [syncQueue]);
+  }, [syncQueue, updateCountItemMutation]);
 
   const handleNewSession = useCallback(() => {
     setCountSession(null);
-    setSelectedLocationId(null);
     setCurrentItemIndex(0);
     setCountedQuantity(0);
     setScannedBarcode(null);
     setIsVerified(false);
   }, []);
 
-  const isLoading = isLocationsLoading || (selectedLocationId && isInventoryLoading && !countSession);
+  const isLoading = isLocationsLoading || isInventoryPreflightLoading || isStartingSession;
 
   return (
     <div className="min-h-dvh bg-muted/30">
@@ -430,6 +523,7 @@ export default function MobileCountingPage() {
                         key={loc.id}
                         location={loc}
                         onSelect={handleStartSession}
+                        disabled={isStartingSession}
                       />
                     ))}
                   </div>
@@ -473,7 +567,7 @@ export default function MobileCountingPage() {
                 <CardContent className="pt-6 pb-6 text-center">
                   <Check className="h-12 w-12 text-green-600 mx-auto mb-3" />
                   <h2 className="text-xl font-bold text-green-800">
-                    Count Complete!
+                    Counts Saved
                   </h2>
                   <p className="text-green-700 mt-1">
                     {countSession.items.length} items counted
@@ -597,7 +691,7 @@ export default function MobileCountingPage() {
                   </h4>
                   {countSession.items.map((item, idx) => (
                     <CountItemRow
-                      key={item.inventoryId}
+                      key={item.countItemId}
                       item={item}
                       index={idx}
                       isActive={idx === currentItemIndex}

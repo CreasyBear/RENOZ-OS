@@ -3,13 +3,14 @@ import {
   isUnsafeMutationErrorMessage,
 } from '@/lib/mutation-error-feedback';
 
-export type MobileWarehouseAction = 'confirmPick' | 'submitCount';
+export type MobileWarehouseAction = 'confirmPick' | 'startCount' | 'submitCount';
 
 export const SERIALIZED_PICK_SYNC_DESKTOP_MESSAGE =
   'Serialized pick could not sync - open order on desktop to complete';
 
 const MOBILE_WAREHOUSE_ACTION_FALLBACKS: Record<MobileWarehouseAction, string> = {
   confirmPick: 'Unable to confirm pick. Refresh and try again.',
+  startCount: 'Unable to start count. Refresh and try again.',
   submitCount: 'Unable to submit count. Refresh and try again.',
 };
 
