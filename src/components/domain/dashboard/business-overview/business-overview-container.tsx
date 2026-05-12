@@ -21,8 +21,6 @@
 
 import { useCallback, useMemo } from 'react';
 import { logger } from '@/lib/logger';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/query-keys';
 
 // Financial hooks
 import {
@@ -77,8 +75,6 @@ export interface BusinessOverviewContainerProps {
 // ============================================================================
 
 export function BusinessOverviewContainer({ className }: BusinessOverviewContainerProps) {
-  const queryClient = useQueryClient();
-
   // -------------------------------------------------------------------------
   // FINANCIAL DATA
   // -------------------------------------------------------------------------
@@ -279,9 +275,20 @@ export function BusinessOverviewContainer({ className }: BusinessOverviewContain
 
   const isRefreshing =
     financialQuery.isRefetching ||
+    revenueQuery.isRefetching ||
+    arAgingQuery.isRefetching ||
+    recentOutstandingQuery.isRefetching ||
+    recentOverdueQuery.isRefetching ||
     pipelineQuery.isRefetching ||
+    forecastQuery.isRefetching ||
+    expiringQuotesQuery.isRefetching ||
+    recentOpportunitiesQuery.isRefetching ||
     customerKpisQuery.isRefetching ||
-    ordersQuery.isRefetching;
+    healthDistQuery.isRefetching ||
+    ordersQuery.isRefetching ||
+    projectsQuery.isRefetching ||
+    inventoryQuery.isRefetching ||
+    recentOrdersToShipQuery.isRefetching;
 
   const loadingStates = {
     financial: financialQuery.isLoading || revenueQuery.isLoading || arAgingQuery.isLoading,
@@ -311,14 +318,40 @@ export function BusinessOverviewContainer({ className }: BusinessOverviewContain
   // HANDLERS
   // -------------------------------------------------------------------------
   const handleRefresh = useCallback(() => {
-    // Invalidate all business overview related queries
-    queryClient.invalidateQueries({ queryKey: queryKeys.financial.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.customerAnalytics.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.activeProjects() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.dashboard() });
-  }, [queryClient]);
+    void Promise.all([
+      financialQuery.refetch(),
+      revenueQuery.refetch(),
+      arAgingQuery.refetch(),
+      recentOutstandingQuery.refetch(),
+      recentOverdueQuery.refetch(),
+      pipelineQuery.refetch(),
+      forecastQuery.refetch(),
+      expiringQuotesQuery.refetch(),
+      recentOpportunitiesQuery.refetch(),
+      customerKpisQuery.refetch(),
+      healthDistQuery.refetch(),
+      ordersQuery.refetch(),
+      projectsQuery.refetch(),
+      inventoryQuery.refetch(),
+      recentOrdersToShipQuery.refetch(),
+    ]);
+  }, [
+    financialQuery,
+    revenueQuery,
+    arAgingQuery,
+    recentOutstandingQuery,
+    recentOverdueQuery,
+    pipelineQuery,
+    forecastQuery,
+    expiringQuotesQuery,
+    recentOpportunitiesQuery,
+    customerKpisQuery,
+    healthDistQuery,
+    ordersQuery,
+    projectsQuery,
+    inventoryQuery,
+    recentOrdersToShipQuery,
+  ]);
 
   // -------------------------------------------------------------------------
   // RENDER
