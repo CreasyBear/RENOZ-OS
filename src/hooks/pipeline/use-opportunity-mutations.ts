@@ -44,6 +44,15 @@ function invalidatePipelineMetrics(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.metrics() });
 }
 
+function invalidatePipelineOpportunityDetails(
+  queryClient: QueryClient,
+  opportunityIds: readonly string[]
+) {
+  opportunityIds.forEach((opportunityId) => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.opportunity(opportunityId) });
+  });
+}
+
 // ============================================================================
 // CREATE MUTATION
 // ============================================================================
@@ -268,12 +277,11 @@ export function useBulkUpdateOpportunityStage() {
           competitorName: input.competitorName,
         },
       }),
-    onSuccess: () => {
+    onSuccess: (_, { opportunityIds }) => {
       // Invalidate all opportunity lists and metrics
       invalidateOpportunityListQueries(queryClient);
       invalidatePipelineMetrics(queryClient);
-      // Invalidate all opportunity details (they may have been updated)
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.all });
+      invalidatePipelineOpportunityDetails(queryClient, opportunityIds);
     },
   });
 }
