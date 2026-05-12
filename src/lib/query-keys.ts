@@ -1202,10 +1202,12 @@ export const queryKeys = {
     jobMaterials: (jobId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.products.all, 'jobMaterials', jobId, filters ?? {}] as const,
     // Product inventory queries
+    inventories: () => [...queryKeys.products.all, 'inventory'] as const,
     inventory: (productId: string) =>
-      [...queryKeys.products.all, 'inventory', productId] as const,
+      [...queryKeys.products.inventories(), productId] as const,
+    inventoryStatsAll: () => [...queryKeys.products.all, 'inventoryStats'] as const,
     inventoryStats: (productId: string) =>
-      [...queryKeys.products.all, 'inventoryStats', productId] as const,
+      [...queryKeys.products.inventoryStatsAll(), productId] as const,
     // Product search
     searches: () => [...queryKeys.products.all, 'search'] as const,
     search: (query: string, options?: Record<string, unknown>) =>
@@ -1274,17 +1276,19 @@ export const queryKeys = {
       saved: () => [...queryKeys.products.advancedSearch.all, 'saved'] as const,
     },
     // Product stock/inventory extended
+    stockLevelsAll: () => [...queryKeys.products.all, 'stockLevels'] as const,
     stockLevels: (productId: string) =>
-      [...queryKeys.products.all, 'stockLevels', productId] as const,
+      [...queryKeys.products.stockLevelsAll(), productId] as const,
     stockAlertsAll: () => [...queryKeys.products.all, 'stockAlerts'] as const,
     stockAlerts: (filters?: ProductStockAlertFilters) =>
       [...queryKeys.products.stockAlertsAll(), filters ?? {}] as const,
+    movementsAll: () => [...queryKeys.products.all, 'movements'] as const,
     movementsForProduct: (productId: string) =>
-      [...queryKeys.products.all, 'movements', productId] as const,
+      [...queryKeys.products.movementsAll(), productId] as const,
     movements: (productId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.products.movementsForProduct(productId), filters ?? {}] as const,
     movementsAggregatedForProduct: (productId: string) =>
-      [...queryKeys.products.all, 'movements', 'aggregated', productId] as const,
+      [...queryKeys.products.movementsAll(), 'aggregated', productId] as const,
     movementsAggregated: (productId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.products.movementsAggregatedForProduct(productId), filters ?? {}] as const,
     locations: () => [...queryKeys.products.all, 'locations'] as const,

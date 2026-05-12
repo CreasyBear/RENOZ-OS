@@ -103,7 +103,15 @@ function invalidateProductInventoryQueries(
 
   if (affectedProductIds.length === 0) {
     if (!hasKnownAffectedProductIdentity(options.result)) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.details() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.searches() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stock() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.inventories() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.inventoryStatsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stockLevelsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stockAlertsAll() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.movementsAll() });
     }
     return;
   }
