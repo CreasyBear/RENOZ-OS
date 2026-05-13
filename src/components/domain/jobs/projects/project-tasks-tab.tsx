@@ -34,7 +34,6 @@ import {
   useProjectTasks,
   useDeleteProjectTask,
   useWorkstreams,
-  useReorderTasks,
   useSiteVisitsByProject,
 } from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
@@ -46,6 +45,7 @@ import {
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
 import { useProjectTaskQuickAdd } from './project-task-quick-add';
+import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
 import { useProjectTaskRouteState } from './project-task-route-state';
 import { useProjectTaskStatusMutation } from './project-task-status-mutation';
@@ -95,7 +95,6 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   const { data: workstreamsData } = useWorkstreams(projectId);
   const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
   const deleteTask = useDeleteProjectTask(projectId);
-  const reorderTasks = useReorderTasks();
   const { getUser, currentUserId } = useUserLookup();
   const { filters, sortBy, updateFilters, updateSort } = useProjectTaskRouteState(projectId);
 
@@ -168,6 +167,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     tasks,
     onCompleteProjectClick,
   });
+  const { handleReorderTasks } = useProjectTaskReorderMutation({ tasks });
 
   const handleDeleteTask = useCallback(
     (task: TaskWithWorkstream) => {
@@ -226,26 +226,6 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       });
     },
     [deleteTask, refetch]
-  );
-
-  // Handle task reordering within a workstream
-  const handleReorderTasks = useCallback(
-    async (_workstreamName: string, taskIds: string[]) => {
-      // Find the first task to get the job assignment id.
-      const firstTask = tasks.find(t => t.id === taskIds[0]);
-      if (!firstTask?.jobId) return;
-
-      try {
-        await reorderTasks.mutateAsync({
-          jobId: firstTask.jobId,
-          taskIds,
-        });
-        toast.success('Task order updated');
-      } catch (error) {
-        toast.error(formatProjectTaskMutationError(error, 'reorder'));
-      }
-    },
-    [reorderTasks, tasks]
   );
 
   // Check if any filters are active (moved before early returns for proper scoping)
@@ -372,7 +352,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
               onToggleTask={handleToggleTask}
               onEditTask={setEditingTask}
               onDeleteTask={handleDeleteTask}
-              onReorderTasks={(taskIds) => handleReorderTasks(workstreamName, taskIds)}
+              onReorderTasks={handleReorderTasks}
             />
           ))}
         </div>

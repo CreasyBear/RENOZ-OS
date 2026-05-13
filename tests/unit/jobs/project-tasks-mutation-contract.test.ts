@@ -46,12 +46,14 @@ describe('project tasks mutation contract', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
     const quickAdd = read('src/components/domain/jobs/projects/project-task-quick-add.ts');
     const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
+    const reorderMutation = read('src/components/domain/jobs/projects/project-task-reorder-mutation.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
     const hooks = read('src/hooks/jobs/use-job-tasks.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/jobs/job-tasks.ts');
     const schema = read('src/lib/schemas/jobs/job-tasks.ts');
     const compactTab = compact(tab);
+    const compactReorderMutation = compact(reorderMutation);
     const compactDialogs = compact(dialogs);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
@@ -62,15 +64,16 @@ describe('project tasks mutation contract', () => {
     expect(statusMutation).toContain("formatProjectTaskMutationError(error, 'status')");
     expect(tab).not.toContain("formatProjectTaskMutationError(error, 'status')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'delete')");
-    expect(tab).toContain("formatProjectTaskMutationError(error, 'reorder')");
+    expect(reorderMutation).toContain("formatProjectTaskMutationError(error, 'reorder')");
+    expect(tab).not.toContain("formatProjectTaskMutationError(error, 'reorder')");
     expect(tab).not.toContain("toastError('Failed to create task. Please try again.')");
     expect(tab).not.toContain("toast.error('Failed to update task')");
     expect(tab).not.toContain("toast.error('Failed to delete task')");
     expect(tab).not.toContain("toast.error('Failed to reorder tasks')");
     expect(compactTab).toContain('constjobId=task.jobId;');
-    expect(compactTab).toContain('jobId:firstTask.jobId');
+    expect(compactReorderMutation).toContain('jobId,');
     expect(compactTab).not.toContain("constjobId=task.siteVisitId||'';");
-    expect(compactTab).not.toContain('jobId:firstTask.siteVisitId');
+    expect(compactReorderMutation).not.toContain('jobId:firstTask.siteVisitId');
 
     expect(dialogs).toContain("formatProjectTaskMutationError(error, 'create')");
     expect(dialogs).toContain("formatProjectTaskMutationError(error, 'update')");
