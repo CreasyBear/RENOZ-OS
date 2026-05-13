@@ -24,7 +24,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Link, useSearch, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
 import { toastError } from '@/hooks';
@@ -51,6 +51,7 @@ import {
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
+import { useProjectTaskRouteState } from './project-task-route-state';
 import {
   ProjectTasksCachedWarning,
   ProjectTasksEmptyState,
@@ -71,12 +72,8 @@ import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Types
 import type {
-  JobTaskStatus,
-  JobTaskPriority,
   ProjectTaskResponse,
   TaskWithWorkstream,
-  TaskFilters,
-  TaskSortOption,
 } from '@/lib/schemas/jobs';
 
 // Dialogs
@@ -107,7 +104,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   const createTask = useCreateTask();
   const reorderTasks = useReorderTasks();
   const { getUser, currentUserId } = useUserLookup();
-  const navigate = useNavigate();
+  const { filters, sortBy, updateFilters, updateSort } = useProjectTaskRouteState(projectId);
 
   const siteVisits = useMemo(
     () => siteVisitsData?.items ?? [],
@@ -139,60 +136,8 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     [createTask, defaultSiteVisitId, projectId, queryClient]
   );
 
-  // Read filters from URL search params
-  const search = useSearch({ from: '/_authenticated/projects/$projectId' });
-
-  // Parse URL filters into component state
-  const urlFilters: TaskFilters = useMemo(() => ({
-    status: (search.taskStatus?.split(',').filter(Boolean) || []).filter((s): s is JobTaskStatus =>
-      s === 'pending' || s === 'in_progress' || s === 'completed' || s === 'blocked'
-    ),
-    priority: (search.taskPriority?.split(',').filter(Boolean) || []).filter((p): p is JobTaskPriority =>
-      p === 'urgent' || p === 'high' || p === 'normal' || p === 'low'
-    ),
-    assignee: search.taskAssignee || 'all',
-  }), [search.taskStatus, search.taskPriority, search.taskAssignee]);
-
-  const urlSortBy: TaskSortOption = search.taskSort || 'dueDate';
-
   const [editingTask, setEditingTask] = useState<TaskWithWorkstream | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-
-  // Sync URL params to local state on mount
-  const [filters, setFilters] = useState<TaskFilters>(urlFilters);
-  const [sortBy, setSortBy] = useState<TaskSortOption>(urlSortBy);
-
-  // Sync local state to URL when filters change
-  const updateFilters = useCallback((newFilters: TaskFilters) => {
-    setFilters(newFilters);
-    navigate({
-      to: '/projects/$projectId',
-      params: { projectId },
-      search: {
-        tab: search.tab,
-        taskStatus: newFilters.status.length > 0 ? newFilters.status.join(',') : undefined,
-        taskPriority: newFilters.priority.length > 0 ? newFilters.priority.join(',') : undefined,
-        taskAssignee: newFilters.assignee !== 'all' ? newFilters.assignee : undefined,
-        taskSort: search.taskSort,
-      },
-    });
-  }, [navigate, projectId, search.tab, search.taskSort]);
-
-  // Sync local state to URL when sort changes
-  const updateSort = useCallback((newSort: TaskSortOption) => {
-    setSortBy(newSort);
-    navigate({
-      to: '/projects/$projectId',
-      params: { projectId },
-      search: {
-        tab: search.tab,
-        taskStatus: search.taskStatus,
-        taskPriority: search.taskPriority,
-        taskAssignee: search.taskAssignee,
-        taskSort: newSort !== 'dueDate' ? newSort : undefined,
-      },
-    });
-  }, [navigate, projectId, search.tab, search.taskStatus, search.taskPriority, search.taskAssignee]);
 
   // Undo deletion pattern - track tasks pending deletion
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
