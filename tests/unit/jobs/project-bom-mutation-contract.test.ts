@@ -47,6 +47,7 @@ describe('project BOM mutation contract', () => {
     const bulkStatusDialog = read(
       'src/components/domain/jobs/projects/project-bom-bulk-status-dialog.tsx'
     );
+    const editItemDialog = read('src/components/domain/jobs/projects/project-bom-edit-item-dialog.tsx');
     const dialog = read('src/components/domain/jobs/projects/bom-dialogs.tsx');
     const hooks = read('src/hooks/jobs/use-project-bom.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
@@ -57,7 +58,7 @@ describe('project BOM mutation contract', () => {
 
     expect(tab).toContain("formatProjectBomMutationError(error, 'create')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'addItem')");
-    expect(tab).toContain("formatProjectBomMutationError(error, 'updateItem')");
+    expect(editItemDialog).toContain("formatProjectBomMutationError(error, 'updateItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItems')");
     expect(bulkStatusDialog).toContain("formatProjectBomMutationError(error, 'updateStatus')");

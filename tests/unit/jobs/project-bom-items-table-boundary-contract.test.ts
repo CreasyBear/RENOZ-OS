@@ -15,12 +15,12 @@ describe('project BOM items table boundary contract', () => {
     const statusConfig = read('src/components/domain/jobs/projects/project-bom-status-config.ts');
 
     expect(tab).toContain("import { ProjectBomItemsTable } from './project-bom-items-table';");
-    expect(tab).toContain("import { PROJECT_BOM_ITEM_STATUS_CONFIG } from './project-bom-status-config';");
     expect(tab).toContain('<ProjectBomItemsTable');
     expect(tab).not.toContain('function BomItemsTable');
     expect(tab).not.toContain('DropdownMenu');
     expect(tab).not.toContain('MoreHorizontal');
     expect(tab).not.toContain('CheckboxCell');
+    expect(tab).not.toContain('PROJECT_BOM_ITEM_STATUS_CONFIG');
 
     expect(table).toContain('export interface ProjectBomItemsTableProps');
     expect(table).toContain('export interface ProjectBomItemsTableSelection');

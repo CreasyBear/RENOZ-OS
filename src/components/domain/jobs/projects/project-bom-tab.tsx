@@ -12,17 +12,15 @@
  * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useState, useEffect, useCallback, startTransition } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Package,
   Plus,
   Search,
   Trash2,
-  Edit3,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
@@ -38,13 +36,6 @@ import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/lib/toast';
 import { useOrgFormat } from '@/hooks/use-org-format';
@@ -55,7 +46,6 @@ import {
   useProjectBom,
   useCreateProjectBom,
   useAddBomItem,
-  useUpdateBomItem,
   useRemoveBomItem,
   useRemoveBomItems,
   useUpdateBomItemsStatus,
@@ -68,18 +58,14 @@ import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 import { ProjectBomBulkStatusDialog } from './project-bom-bulk-status-dialog';
+import { ProjectBomEditItemDialog } from './project-bom-edit-item-dialog';
 import { ProjectBomEmptyState } from './project-bom-empty-state';
 import { ProjectBomHeaderActions } from './project-bom-header-actions';
 import { ProjectBomItemsTable } from './project-bom-items-table';
 import { ProjectBomSummaryCards } from './project-bom-summary-cards';
-import { PROJECT_BOM_ITEM_STATUS_CONFIG } from './project-bom-status-config';
 
 // Types
-import {
-  bomItemStatusSchema,
-  type BomItemStatus,
-  type BomItemWithProduct,
-} from '@/lib/schemas/jobs';
+import type { BomItemWithProduct } from '@/lib/schemas/jobs';
 import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
@@ -333,172 +319,6 @@ function AddBomItemDialog({
 }
 
 // ============================================================================
-// EDIT ITEM DIALOG
-// ============================================================================
-
-function EditBomItemDialog({
-  open,
-  onOpenChange,
-  projectId,
-  item,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  item: BomItemWithProduct | null;
-  onSuccess?: () => void;
-}) {
-  const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
-  const [quantity, setQuantity] = useState(1);
-  const [unitCost, setUnitCost] = useState<number | undefined>();
-  const [status, setStatus] = useState<BomItemStatus>('planned');
-  const [notes, setNotes] = useState('');
-
-  const updateItem = useUpdateBomItem(projectId);
-
-  // Reset form when item changes
-  useEffect(() => {
-    if (item) {
-      startTransition(() => {
-        setQuantity(Number(item.quantityEstimated) || 1);
-        setUnitCost(item.unitCostEstimated ? Number(item.unitCostEstimated) : undefined);
-        setStatus(item.status);
-        setNotes(item.notes || '');
-      });
-    }
-  }, [item]);
-
-  const handleSubmit = async () => {
-    if (!item) return;
-
-    try {
-      await updateItem.mutateAsync({
-        data: {
-          itemId: item.id,
-          quantity,
-          unitCost,
-          status,
-          notes: notes || undefined,
-        }
-      });
-
-      toast.success('Item updated');
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error) {
-      toast.error(formatProjectBomMutationError(error, 'updateItem'));
-    }
-  };
-
-  if (!item) return null;
-
-  const totalCost = unitCost ? quantity * unitCost : 0;
-  const productName = item.product?.name || 'Unknown Product';
-
-  return (
-    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(updateItem.isPending, onOpenChange)}>
-      <DialogContent
-        className="max-w-lg"
-        onEscapeKeyDown={createPendingDialogInteractionGuards(updateItem.isPending).onEscapeKeyDown}
-        onInteractOutside={createPendingDialogInteractionGuards(updateItem.isPending).onInteractOutside}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Edit3 className="h-5 w-5" />
-            Edit Material
-          </DialogTitle>
-          <DialogDescription>{productName}</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          {/* Status */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Status</label>
-            <Select
-              value={status}
-              onValueChange={(v) => {
-                const parsed = bomItemStatusSchema.safeParse(v);
-                if (parsed.success) setStatus(parsed.data);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PROJECT_BOM_ITEM_STATUS_CONFIG).map(([value, config]) => (
-                  <SelectItem key={value} value={value}>
-                    <div className="flex items-center gap-2">
-                      <config.icon className={cn('h-4 w-4', config.color)} />
-                      {config.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {PROJECT_BOM_ITEM_STATUS_CONFIG[status].description}
-            </p>
-          </div>
-
-          {/* Quantity & Cost */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Quantity</label>
-              <Input
-                type="number"
-                min={1}
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Unit Cost</label>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={unitCost || ''}
-                onChange={(e) => setUnitCost(e.target.value ? parseFloat(e.target.value) : undefined)}
-              />
-            </div>
-          </div>
-
-          {/* Total */}
-          {totalCost > 0 && (
-            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <span className="text-sm text-muted-foreground">Total</span>
-              <span className="font-semibold">{formatCurrencyDisplay(totalCost)}</span>
-            </div>
-          )}
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Notes</label>
-            <Input
-              placeholder="Specifications, vendor info, etc."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={updateItem.isPending}>
-            {updateItem.isPending ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -741,7 +561,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
         bomId={bom.id}
       />
 
-      <EditBomItemDialog
+      <ProjectBomEditItemDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         projectId={projectId}
