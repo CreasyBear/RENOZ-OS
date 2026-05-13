@@ -14,38 +14,19 @@
 
 import { useState, useCallback } from 'react';
 import {
-  Package,
-  Plus,
-  Search,
   Trash2,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  createPendingDialogInteractionGuards,
-  createPendingDialogOpenChangeHandler,
-} from '@/components/ui/dialog-pending-guards';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/lib/toast';
-import { useOrgFormat } from '@/hooks/use-org-format';
 import { useConfirmation } from '@/hooks';
 // Hooks
 import {
   formatProjectBomMutationError,
   useProjectBom,
   useCreateProjectBom,
-  useAddBomItem,
   useRemoveBomItem,
   useRemoveBomItems,
   useUpdateBomItemsStatus,
@@ -53,9 +34,8 @@ import {
   useImportBomFromOrder,
 } from '@/hooks/jobs';
 import { useTableSelection, BulkActionsBar } from '@/components/shared/data-table';
-import { useDebounce } from '@/hooks/_shared';
-import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
+import { BomAddItemDialog } from './bom-dialogs';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 import { ProjectBomBulkStatusDialog } from './project-bom-bulk-status-dialog';
 import { ProjectBomEditItemDialog } from './project-bom-edit-item-dialog';
@@ -66,7 +46,6 @@ import { ProjectBomSummaryCards } from './project-bom-summary-cards';
 
 // Types
 import type { BomItemWithProduct } from '@/lib/schemas/jobs';
-import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
 // TYPES
@@ -76,246 +55,6 @@ interface ProjectBomTabProps {
   projectId: string;
   /** When set, enables "Import from Order" button */
   orderId?: string | null;
-}
-
-// ============================================================================
-// ADD ITEM DIALOG
-// ============================================================================
-
-function AddBomItemDialog({
-  open,
-  onOpenChange,
-  projectId,
-  bomId,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  bomId: string;
-  onSuccess?: () => void;
-}) {
-  const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
-  const [searchQuery, setSearchQuery] = useState('');
-  // Use looser type to handle DB type variations (e.g., dimensions can be null in DB but not in schema)
-  const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [unitCost, setUnitCost] = useState<number | undefined>();
-  const [notes, setNotes] = useState('');
-
-  const debouncedQuery = useDebounce(searchQuery, 300);
-  const { data: searchResults, isFetching: isSearching } = useProductSearch(
-    debouncedQuery,
-    { limit: 20 },
-    debouncedQuery.length >= 2
-  );
-
-  const addItem = useAddBomItem(projectId);
-  const products = searchResults?.products || [];
-
-  const handleSelectProduct = (product: ProductSearchItem) => {
-    setSelectedProduct(product);
-    setUnitCost(product.basePrice || undefined);
-    setSearchQuery('');
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedProduct) return;
-
-    try {
-      await addItem.mutateAsync({
-        data: {
-          bomId,
-          productId: selectedProduct.id,
-          quantity,
-          unitCost,
-          notes: notes || undefined,
-        }
-      });
-
-      toast.success(`${selectedProduct.name} added to BOM`);
-      onOpenChange(false);
-      resetForm();
-      onSuccess?.();
-    } catch (error) {
-      toast.error(formatProjectBomMutationError(error, 'addItem'));
-    }
-  };
-
-  const resetForm = () => {
-    setSelectedProduct(null);
-    setQuantity(1);
-    setUnitCost(undefined);
-    setNotes('');
-    setSearchQuery('');
-  };
-
-  const totalCost = selectedProduct && unitCost
-    ? quantity * unitCost
-    : 0;
-
-  return (
-    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(addItem.isPending, onOpenChange)}>
-      <DialogContent
-        className="max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-        onEscapeKeyDown={createPendingDialogInteractionGuards(addItem.isPending).onEscapeKeyDown}
-        onInteractOutside={createPendingDialogInteractionGuards(addItem.isPending).onInteractOutside}
-      >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" />
-            Add Material to BOM
-          </DialogTitle>
-          <DialogDescription>
-            Search products and add to your bill of materials
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-hidden flex flex-col gap-4 py-4">
-          {/* Product Search */}
-          {!selectedProduct ? (
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search products by name or SKU..."
-                  className="pl-9"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              {isSearching && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                  Searching...
-                </div>
-              )}
-
-              {products.length > 0 && (
-                <ScrollArea className="h-64 border rounded-md">
-                  <div className="p-2 space-y-1">
-                    {products.map((product) => (
-                      <button
-                        key={product.id}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-muted rounded-md text-left transition-colors"
-                        onClick={() => handleSelectProduct(product)}
-                      >
-                        <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
-                          <Package className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            SKU: {product.sku || 'N/A'}
-                          </p>
-                        </div>
-                        {product.basePrice && (
-                          <span className="text-sm font-medium">
-                            {formatCurrencyDisplay(product.basePrice)}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-
-              {debouncedQuery.length >= 2 && !isSearching && products.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="mx-auto h-10 w-10 mb-2 opacity-50" />
-                  <p>No products found</p>
-                  <p className="text-sm">Try a different search term</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Selected Product */}
-              <div className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30">
-                <div className="h-12 w-12 rounded bg-primary/10 flex items-center justify-center">
-                  <Package className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium">{selectedProduct.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    SKU: {selectedProduct.sku || 'N/A'}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedProduct(null)}
-                >
-                  Change
-                </Button>
-              </div>
-
-              {/* Quantity & Cost */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Quantity *</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Unit Cost</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    placeholder="0.00"
-                    value={unitCost || ''}
-                    onChange={(e) => setUnitCost(e.target.value ? parseFloat(e.target.value) : undefined)}
-                  />
-                </div>
-              </div>
-
-              {/* Total Cost Preview */}
-              {totalCost > 0 && (
-                <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
-                  <span className="text-sm text-muted-foreground">Total Line Cost</span>
-                  <span className="text-lg font-semibold">{formatCurrencyDisplay(totalCost)}</span>
-                </div>
-              )}
-
-              {/* Notes */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Notes</label>
-                <Input
-                  placeholder="Specifications, vendor info, etc."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!selectedProduct || addItem.isPending}
-          >
-            {addItem.isPending
-              ? 'Adding...'
-              : `Add Item${totalCost > 0 ? ` (${formatCurrencyDisplay(totalCost)})` : ''}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 // ============================================================================
@@ -554,7 +293,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       )}
 
       {/* Dialogs */}
-      <AddBomItemDialog
+      <BomAddItemDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         projectId={projectId}

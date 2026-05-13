@@ -53,11 +53,11 @@ describe('project BOM mutation contract', () => {
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/project-bom.ts');
     const compactTab = compact(tab);
+    const compactDialog = compact(dialog);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
 
     expect(tab).toContain("formatProjectBomMutationError(error, 'create')");
-    expect(tab).toContain("formatProjectBomMutationError(error, 'addItem')");
     expect(editItemDialog).toContain("formatProjectBomMutationError(error, 'updateItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItems')");
@@ -70,6 +70,7 @@ describe('project BOM mutation contract', () => {
     expect(compactTab).not.toContain("toast.error('Failedtoupdatestatus')");
 
     expect(dialog).toContain("formatProjectBomMutationError(error, 'addItem')");
+    expect(compactDialog).not.toContain("toast.error('Failedtoadditem')");
     expect(dialog).not.toContain("err instanceof Error ? err.message : 'Failed to add item'");
 
     expect(jobsIndex).toContain('formatProjectBomMutationError');

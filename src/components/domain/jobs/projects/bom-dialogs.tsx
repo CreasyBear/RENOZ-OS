@@ -25,7 +25,8 @@ import {
 import { formatProjectBomMutationError, useAddBomItem } from '@/hooks/jobs';
 import { useProductSearch } from '@/hooks/products';
 import { useDebounce } from '@/hooks/_shared';
-import { toast } from 'sonner';
+import { useOrgFormat } from '@/hooks/use-org-format';
+import { toast } from '@/lib/toast';
 import type { ProductSearchItem } from '@/lib/schemas/products';
 
 // ============================================================================
@@ -51,8 +52,6 @@ export interface BomAddItemDialogProps {
   onSuccess?: () => void;
 }
 
-
-
 export function BomAddItemDialog({
   open,
   onOpenChange,
@@ -61,6 +60,9 @@ export function BomAddItemDialog({
   onSuccess,
 }: BomAddItemDialogProps) {
   const addBomItem = useAddBomItem(projectId);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchItem | null>(null);
@@ -96,7 +98,7 @@ export function BomAddItemDialog({
           }
         });
 
-        toast.success('Item added to BOM');
+        toast.success(`${selectedProduct?.name ?? 'Item'} added to BOM`);
         onOpenChange(false);
         form.reset();
         setSelectedProduct(null);
@@ -133,10 +135,10 @@ export function BomAddItemDialog({
       title={
         <span className="flex items-center gap-2">
           <Plus className="h-5 w-5" />
-          Add BOM Item
+          Add Material to BOM
         </span>
       }
-      description="Search and add products to the bill of materials"
+      description="Search products and add to your bill of materials"
       form={form}
       submitLabel="Add Item"
       submitError={submitError}
@@ -208,7 +210,7 @@ export function BomAddItemDialog({
                           </div>
                           {product.basePrice && (
                             <span className="text-sm font-medium">
-                              ${product.basePrice.toFixed(2)}
+                              {formatCurrencyDisplay(product.basePrice)}
                             </span>
                           )}
                         </button>
