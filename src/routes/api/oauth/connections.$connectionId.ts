@@ -6,7 +6,6 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
-import { deleteOAuthConnection } from '@/server/functions/oauth/connections';
 
 export async function DELETE({
   params,
@@ -15,6 +14,7 @@ export async function DELETE({
 }) {
   const ctx = await withAuth();
 
+  const { deleteOAuthConnection } = await import('@/server/functions/oauth/connections');
   const result = await deleteOAuthConnection(db, {
     connectionId: params.connectionId,
     organizationId: ctx.organizationId,

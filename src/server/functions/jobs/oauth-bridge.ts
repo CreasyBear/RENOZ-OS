@@ -10,8 +10,7 @@ import { z } from 'zod';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { oauthConnections } from 'drizzle/schema/oauth';
-import { decryptOAuthToken } from '@/lib/oauth/token-encryption';
-import { CalendarSyncEngine, type CalendarEventInput } from '@/lib/oauth/calendar-sync';
+import type { CalendarEventInput } from '@/lib/oauth/calendar-sync';
 import { withAuth } from '@/lib/server/protected';
 
 // ============================================================================
@@ -163,11 +162,13 @@ export const syncJobToCalendar = createServerFn({ method: 'POST' })
     }
 
     const conn = connection[0];
+    const { decryptOAuthToken } = await import('@/lib/oauth/token-encryption');
     const accessToken = decryptOAuthToken(conn.accessToken, ctx.organizationId);
     const refreshToken = conn.refreshToken
       ? decryptOAuthToken(conn.refreshToken, ctx.organizationId)
       : undefined;
 
+    const { CalendarSyncEngine } = await import('@/lib/oauth/calendar-sync');
     const engine = new CalendarSyncEngine(db);
     
     // Build start/end times
@@ -232,6 +233,7 @@ export const updateJobCalendarEvent = createServerFn({ method: 'POST' })
     }
 
     const conn = connection[0];
+    const { decryptOAuthToken } = await import('@/lib/oauth/token-encryption');
     const accessToken = decryptOAuthToken(conn.accessToken, ctx.organizationId);
     const refreshToken = conn.refreshToken
       ? decryptOAuthToken(conn.refreshToken, ctx.organizationId)
@@ -261,6 +263,7 @@ export const updateJobCalendarEvent = createServerFn({ method: 'POST' })
       };
     }
 
+    const { CalendarSyncEngine } = await import('@/lib/oauth/calendar-sync');
     const engine = new CalendarSyncEngine(db);
     await engine.updateEvent(
       conn.provider === 'google_workspace' ? 'google_workspace' : 'microsoft_365',
@@ -301,11 +304,13 @@ export const removeJobFromCalendar = createServerFn({ method: 'POST' })
     }
 
     const conn = connection[0];
+    const { decryptOAuthToken } = await import('@/lib/oauth/token-encryption');
     const accessToken = decryptOAuthToken(conn.accessToken, ctx.organizationId);
     const refreshToken = conn.refreshToken
       ? decryptOAuthToken(conn.refreshToken, ctx.organizationId)
       : undefined;
 
+    const { CalendarSyncEngine } = await import('@/lib/oauth/calendar-sync');
     const engine = new CalendarSyncEngine(db);
     await engine.deleteEvent(
       conn.provider === 'google_workspace' ? 'google_workspace' : 'microsoft_365',

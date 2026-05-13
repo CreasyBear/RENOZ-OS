@@ -18,12 +18,7 @@ import {
   type XeroSyncResult,
 } from '@/lib/schemas';
 import type { XeroSyncIssue } from '@/lib/schemas/settings/xero-sync';
-import {
-  findInvoiceByReference,
-  getXeroErrorMessage,
-  getXeroSyncReadiness,
-  syncInvoiceWithXero,
-} from '../xero-adapter';
+import type { XeroSyncReadiness } from '../xero-adapter';
 import {
   formatXeroInvoiceSyncMutationError,
   formatXeroSyncIssueMessage,
@@ -94,7 +89,7 @@ function extractRetryAfterSeconds(
 }
 
 export function normalizeXeroSyncIssue(params: {
-  readiness: Awaited<ReturnType<typeof getXeroSyncReadiness>>;
+  readiness: XeroSyncReadiness;
   xeroSyncError?: string | null;
   customerXeroContactId?: string | null;
   xeroInvoiceId?: string | null;
@@ -377,7 +372,8 @@ export async function syncInvoiceToXeroCommand(
   data: z.infer<typeof syncInvoiceToXeroSchema>,
 ): Promise<XeroSyncResult> {
   const { orderId, force } = data;
-  const readiness = await getXeroSyncReadiness(ctx.organizationId);
+  const xeroAdapter = await import('../xero-adapter');
+  const readiness = await xeroAdapter.getXeroSyncReadiness(ctx.organizationId);
 
   type WorkflowStages = NonNullable<XeroSyncResult['stages']>;
   type XeroSyncResultPayload = Omit<XeroSyncResult, 'orderId' | 'stages'> & {
@@ -703,7 +699,7 @@ export async function syncInvoiceToXeroCommand(
     );
 
   try {
-    const existingInvoice = await findInvoiceByReference(
+    const existingInvoice = await xeroAdapter.findInvoiceByReference(
       ctx.organizationId,
       order.orderNumber,
     );
@@ -772,7 +768,7 @@ export async function syncInvoiceToXeroCommand(
     );
 
     // Send to Xero
-    const { invoiceId, invoiceUrl } = await syncInvoiceWithXero(
+    const { invoiceId, invoiceUrl } = await xeroAdapter.syncInvoiceWithXero(
       ctx.organizationId,
       payload,
     );
@@ -818,7 +814,7 @@ export async function syncInvoiceToXeroCommand(
       },
     });
   } catch (error) {
-    const errorMessage = getXeroErrorMessage(error);
+    const errorMessage = xeroAdapter.getXeroErrorMessage(error);
     const responseMessage = formatXeroInvoiceSyncMutationError(errorMessage);
 
     // Update order with error — orgId for defense-in-depth

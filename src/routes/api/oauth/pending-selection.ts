@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
-import {
-  completePendingXeroTenantSelection,
-  getPendingXeroTenantSelection,
-} from '@/lib/oauth/flow';
 import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 
 const querySchema = z.object({
@@ -31,6 +27,7 @@ export async function GET({ request }: { request: Request }) {
       });
     }
 
+    const { getPendingXeroTenantSelection } = await import('@/lib/oauth/flow');
     const result = await getPendingXeroTenantSelection({
       db,
       stateId: parseResult.data.stateId,
@@ -68,6 +65,7 @@ export async function POST({ request }: { request: Request }) {
       });
     }
 
+    const { completePendingXeroTenantSelection } = await import('@/lib/oauth/flow');
     const result = await completePendingXeroTenantSelection({
       db,
       stateId: parseResult.data.stateId,

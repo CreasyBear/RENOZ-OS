@@ -5,13 +5,7 @@ import { customers, oauthConnections, xeroPaymentEvents } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import {
-  createXeroContact,
-  getXeroContactById,
-  getXeroSyncReadiness,
-  searchXeroContacts,
-  type XeroContactSummary,
-} from './xero-adapter';
+import type { XeroContactSummary } from './xero-adapter';
 import type {
   SearchXeroContactResult,
   XeroCustomerMappingStatus,
@@ -44,6 +38,7 @@ const listXeroPaymentEventsSchema = z.object({
 export const getXeroIntegrationStatus = createServerFn({ method: 'GET' })
   .handler(async (): Promise<XeroIntegrationStatus> => {
     const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
+    const { getXeroSyncReadiness } = await import('./xero-adapter');
     const readiness = await getXeroSyncReadiness(ctx.organizationId);
 
     const [connection] = await db
@@ -101,6 +96,7 @@ export const getCustomerXeroMappingStatus = createServerFn({ method: 'GET' })
     }
 
     try {
+      const { getXeroContactById } = await import('./xero-adapter');
       const mappedContact = await getXeroContactById(ctx.organizationId, customer.xeroContactId);
       return {
         customerId: customer.id,
@@ -129,6 +125,7 @@ export const searchCustomerXeroContacts = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
     await assertCustomerAccess(ctx.organizationId, data.customerId);
+    const { searchXeroContacts } = await import('./xero-adapter');
     const contacts = await searchXeroContacts(ctx.organizationId, data.query);
     return rankContactMatches(contacts, data.query);
   });
@@ -144,6 +141,7 @@ export const createCustomerXeroContact = createServerFn({ method: 'POST' })
       throw new ValidationError('Customer name is required before creating a Xero contact');
     }
 
+    const { createXeroContact } = await import('./xero-adapter');
     const createdContact = await createXeroContact(ctx.organizationId, {
       name: customer.name,
       email: customer.email ?? null,
@@ -171,6 +169,7 @@ export const linkCustomerXeroContact = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
     await assertCustomerAccess(ctx.organizationId, data.customerId);
+    const { getXeroContactById } = await import('./xero-adapter');
     const contact = await getXeroContactById(ctx.organizationId, data.xeroContactId);
 
     if (!contact) {

@@ -7,10 +7,10 @@
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
-import { bulkHealthCheck } from '@/server/functions/oauth/health';
 
 export async function GET() {
   const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
+  const { bulkHealthCheck } = await import('@/server/functions/oauth/health');
   const result = await bulkHealthCheck(db, { organizationId: ctx.organizationId });
 
   if (!result.success) {

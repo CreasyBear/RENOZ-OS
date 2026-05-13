@@ -5,7 +5,6 @@
  */
 
 import { db } from '@/lib/db';
-import { handleOAuthCallback } from '@/lib/oauth/flow';
 import { toOAuthConnectionErrorCode } from '@/lib/oauth/oauth-error-messages';
 
 export async function GET({ request }: { request: Request }) {
@@ -15,6 +14,7 @@ export async function GET({ request }: { request: Request }) {
   const error = url.searchParams.get('error') || undefined;
   const errorDescription = url.searchParams.get('error_description') || undefined;
 
+  const { handleOAuthCallback } = await import('@/lib/oauth/flow');
   const result = await handleOAuthCallback({
     code,
     state,

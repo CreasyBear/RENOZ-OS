@@ -17,7 +17,6 @@ import {
   type ListInvoicesBySyncStatusResponse,
 } from '@/lib/schemas';
 import { safeNumber } from '@/lib/numeric';
-import { getXeroSyncReadiness } from '../xero-adapter';
 import { normalizeXeroSyncIssue } from './xero-invoice-sync-command';
 import { formatXeroSyncReadError } from './xero-sync-feedback';
 import type { z } from 'zod';
@@ -26,6 +25,7 @@ export async function readInvoiceXeroStatus(
   ctx: SessionContext,
   data: z.infer<typeof getInvoiceXeroStatusSchema>,
 ): Promise<InvoiceXeroStatus> {
+  const { getXeroSyncReadiness } = await import('../xero-adapter');
   const readiness = await getXeroSyncReadiness(ctx.organizationId);
 
   const [order] = await db
@@ -84,6 +84,7 @@ export async function readInvoicesBySyncStatus(
   ctx: SessionContext,
   data: z.infer<typeof listInvoicesBySyncStatusSchema>,
 ): Promise<ListInvoicesBySyncStatusResponse> {
+  const { getXeroSyncReadiness } = await import('../xero-adapter');
   const readiness = await getXeroSyncReadiness(ctx.organizationId);
   const { status, errorsOnly, issue, customerId, orderId, page, pageSize } = data;
   const offset = (page - 1) * pageSize;

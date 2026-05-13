@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
-import { initiateOAuthFlow } from '@/lib/oauth/flow';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS, RateLimitError } from '@/lib/server/rate-limit';
 import { OAUTH_PROVIDERS, OAUTH_SERVICE_TYPES } from '@/lib/oauth/constants';
 import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
@@ -40,6 +39,7 @@ export async function POST({ request }: { request: globalThis.Request }) {
     const origin = new URL(request.url).origin;
     const redirectUrl = parsed.data.redirectUrl || `${origin}/integrations/oauth`;
 
+    const { initiateOAuthFlow } = await import('@/lib/oauth/flow');
     const flow = await initiateOAuthFlow({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,

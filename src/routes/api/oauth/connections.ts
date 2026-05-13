@@ -7,7 +7,6 @@
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
-import { listOAuthConnections } from '@/server/functions/oauth/connections';
 import {
   OAuthProviderSchema,
   OAuthServiceTypeSchema,
@@ -27,6 +26,7 @@ export async function GET({ request }: { request: Request }) {
   const serviceTypeResult = OAuthServiceTypeSchema.optional().safeParse(serviceTypeParam);
   const serviceType = serviceTypeResult.success ? serviceTypeResult.data : undefined;
 
+  const { listOAuthConnections } = await import('@/server/functions/oauth/connections');
   const result = await listOAuthConnections(db, {
     organizationId: ctx.organizationId,
     provider,

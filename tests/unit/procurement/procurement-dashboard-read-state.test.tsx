@@ -35,6 +35,8 @@ vi.mock('@tanstack/react-router', () => ({
     useNavigate: () => vi.fn(),
     useSearch: () => ({ range: 'month' }),
   }),
+  useNavigate: () => vi.fn(),
+  useSearch: () => ({ range: 'month' }),
 }));
 
 vi.mock('lucide-react', () => {
@@ -277,7 +279,7 @@ describe('procurement dashboard read state', () => {
 
   it('does not surface raw full-page procurement dashboard errors', async () => {
     const { ProcurementDashboardPage } = await import(
-      '@/routes/_authenticated/procurement/dashboard'
+      '@/routes/_authenticated/procurement/-dashboard-page'
     );
 
     render(<ProcurementDashboardPage />);

@@ -9,9 +9,6 @@ import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { oauthConnections } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { syncCalendar } from '@/server/functions/oauth/calendar-sync';
-import { syncEmails } from '@/server/functions/oauth/email-sync';
-import { syncContacts } from '@/server/functions/oauth/contacts-sync';
 
 async function handleSync({
   params,
@@ -46,29 +43,32 @@ async function handleSync({
     });
   }
 
-  let result:
-    | Awaited<ReturnType<typeof syncCalendar>>
-    | Awaited<ReturnType<typeof syncEmails>>
-    | Awaited<ReturnType<typeof syncContacts>>;
+  let result: unknown;
 
   switch (connection.serviceType) {
-    case 'calendar':
+    case 'calendar': {
+      const { syncCalendar } = await import('@/server/functions/oauth/calendar-sync');
       result = await syncCalendar(db, { connectionId: connection.id, fullSync });
       break;
-    case 'email':
+    }
+    case 'email': {
+      const { syncEmails } = await import('@/server/functions/oauth/email-sync');
       result = await syncEmails(db, {
         connectionId: connection.id,
         organizationId: ctx.organizationId,
         fullSync,
       });
       break;
-    case 'contacts':
+    }
+    case 'contacts': {
+      const { syncContacts } = await import('@/server/functions/oauth/contacts-sync');
       result = await syncContacts(db, {
         connectionId: connection.id,
         organizationId: ctx.organizationId,
         fullSync,
       });
       break;
+    }
     default:
       return new Response(JSON.stringify({ error: 'Unsupported service type' }), {
         status: 400,

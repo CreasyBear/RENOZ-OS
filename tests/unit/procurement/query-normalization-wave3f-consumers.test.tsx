@@ -22,6 +22,7 @@ vi.mock('@tanstack/react-router', () => ({
     }),
   }),
   useSearch: () => ({
+    range: 'month',
     dateFrom: '2026-03-20',
     dateTo: '2026-04-20',
     tab: 'overview',
@@ -243,7 +244,9 @@ describe('procurement consumer normalization wave 3f', () => {
   });
 
   it('keeps the procurement dashboard visible when a widget fails but usable data remains', async () => {
-    const { ProcurementDashboardPage } = await import('@/routes/_authenticated/procurement/dashboard');
+    const { ProcurementDashboardPage } = await import(
+      '@/routes/_authenticated/procurement/-dashboard-page'
+    );
 
     render(<ProcurementDashboardPage />);
 

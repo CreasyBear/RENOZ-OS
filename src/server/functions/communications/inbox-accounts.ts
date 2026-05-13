@@ -14,8 +14,6 @@ import { eq, and } from "drizzle-orm";
 import { withAuth } from "@/lib/server/protected";
 import { db } from "@/lib/db";
 import { oauthConnections } from "drizzle/schema/oauth";
-import { initiateOAuthFlow, handleOAuthCallback } from "@/lib/oauth/flow";
-import { deleteOAuthConnection } from "@/server/functions/oauth/connections";
 import { NotFoundError, ServerError } from "@/lib/server/errors";
 import { LIMITS } from "@/lib/constants";
 import { getAppUrl } from "@/lib/email/config";
@@ -98,6 +96,7 @@ export const connectInboxEmailAccount = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const redirectUrl = data.redirectUrl || `${getAppUrl()}/communications/settings/inbox-accounts/callback`;
+    const { initiateOAuthFlow } = await import("@/lib/oauth/flow");
 
     const flowUrls = await initiateOAuthFlow({
       organizationId: ctx.organizationId,
@@ -125,6 +124,8 @@ export const handleInboxEmailAccountCallback = createServerFn({ method: "POST" }
   .inputValidator(oauthCallbackSchema)
   .handler(async ({ data }) => {
     await withAuth();
+    const { handleOAuthCallback } = await import("@/lib/oauth/flow");
+
     const result = await handleOAuthCallback({
       code: data.code,
       state: data.state,
@@ -197,6 +198,7 @@ export const deleteInboxEmailAccount = createServerFn({ method: "POST" })
   .inputValidator(deleteInboxEmailAccountSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const { deleteOAuthConnection } = await import("@/server/functions/oauth/connections");
     const result = await deleteOAuthConnection(db, {
       connectionId: data.connectionId,
       organizationId: ctx.organizationId,

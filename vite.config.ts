@@ -125,6 +125,27 @@ export const ReadableStream = globalThis.ReadableStream;
     'node:stream/web': `
 export const ReadableStream = globalThis.ReadableStream;
 `,
+    // Node.js crypto is server-only. Browser paths must never encrypt/decrypt OAuth tokens.
+    'node:crypto': `
+function throwServerOnly() { throw new Error('[node:crypto] Server-only module'); }
+const crypto = {
+  createHash: () => throwServerOnly(),
+  createHmac: () => throwServerOnly(),
+  createCipheriv: () => throwServerOnly(),
+  createDecipheriv: () => throwServerOnly(),
+  randomBytes: () => throwServerOnly(),
+  randomUUID: () => throwServerOnly(),
+  timingSafeEqual: () => throwServerOnly(),
+};
+export const createHash = crypto.createHash;
+export const createHmac = crypto.createHmac;
+export const createCipheriv = crypto.createCipheriv;
+export const createDecipheriv = crypto.createDecipheriv;
+export const randomBytes = crypto.randomBytes;
+export const randomUUID = crypto.randomUUID;
+export const timingSafeEqual = crypto.timingSafeEqual;
+export default crypto;
+`,
     // AsyncLocalStorage stub for browser
     'node:async_hooks': `
 export class AsyncLocalStorage {

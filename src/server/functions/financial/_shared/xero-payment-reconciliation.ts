@@ -5,7 +5,6 @@ import { ServerError, ValidationError } from '@/lib/server/errors';
 import { safeNumber } from '@/lib/numeric';
 import { updateOrderPaymentStatus } from '@/server/functions/orders/order-payments';
 import { xeroWebhookEventSchema } from '@/lib/schemas/settings/xero-sync';
-import { getXeroErrorMessage, getXeroPaymentById } from '../xero-adapter';
 import { formatXeroPaymentWebhookError } from './xero-sync-feedback';
 
 /** Maximum single payment amount in AUD (10 million) */
@@ -365,8 +364,9 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
     }
   }
 
+  const xeroAdapter = await import('../xero-adapter');
   try {
-    const payment = await getXeroPaymentById(organization.organizationId, paymentId)
+    const payment = await xeroAdapter.getXeroPaymentById(organization.organizationId, paymentId)
     if (!payment) {
       return {
         success: false,
@@ -385,7 +385,7 @@ export async function applyXeroPaymentWebhookEvent(rawEvent: unknown) {
       reference: payment.reference,
     })
   } catch (error) {
-    const errorMessage = getXeroErrorMessage(error)
+    const errorMessage = xeroAdapter.getXeroErrorMessage(error)
     const retryable =
       !(
         error instanceof ValidationError ||

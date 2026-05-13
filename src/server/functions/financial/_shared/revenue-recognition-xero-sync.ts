@@ -15,12 +15,6 @@ import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import type { SessionContext } from '@/lib/server/protected';
 import { syncRecognitionToXeroSchema } from '@/lib/schemas';
 import { safeNumber } from '@/lib/numeric';
-import {
-  findManualJournalByReference,
-  getXeroErrorMessage,
-  getXeroSyncReadiness,
-  syncManualJournalWithXero,
-} from '../xero-adapter';
 import { formatRevenueRecognitionXeroSyncError } from './xero-sync-feedback';
 import type { z } from 'zod';
 
@@ -111,7 +105,8 @@ export async function syncRevenueRecognitionToXero(
     );
   }
 
-  const readiness = await getXeroSyncReadiness(ctx.organizationId);
+  const xeroAdapter = await import('../xero-adapter');
+  const readiness = await xeroAdapter.getXeroSyncReadiness(ctx.organizationId);
   if (!readiness.available) {
     const errorMessage = readiness.message ?? 'Xero integration unavailable';
     return {
@@ -185,7 +180,7 @@ export async function syncRevenueRecognitionToXero(
     const recognizedAmount = safeNumber(recognition.recognizedAmount);
     const lineDescription = `${milestoneLabel} revenue recognition for ${customerLabel}`;
 
-    const existingManualJournal = await findManualJournalByReference(
+    const existingManualJournal = await xeroAdapter.findManualJournalByReference(
       ctx.organizationId,
       reference,
     );
@@ -213,7 +208,7 @@ export async function syncRevenueRecognitionToXero(
       };
     }
 
-    const { manualJournalId } = await syncManualJournalWithXero(
+    const { manualJournalId } = await xeroAdapter.syncManualJournalWithXero(
       ctx.organizationId,
       {
         narration: `${reference} ${lineDescription}`.slice(0, 4000),
@@ -261,7 +256,7 @@ export async function syncRevenueRecognitionToXero(
       integrationAvailable: true,
     };
   } catch (error) {
-    const errorMessage = getXeroErrorMessage(error);
+    const errorMessage = xeroAdapter.getXeroErrorMessage(error);
     const newAttempts = recognition.xeroSyncAttempts + 1;
     const newState =
       newAttempts >= MAX_SYNC_RETRIES ? 'manual_override' : 'sync_failed';
