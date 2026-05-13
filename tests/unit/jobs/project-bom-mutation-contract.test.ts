@@ -44,6 +44,9 @@ describe('project BOM mutation contract', () => {
 
   it('keeps project BOM item mutations project-scoped, cache-safe, and operator-safe', () => {
     const tab = read('src/components/domain/jobs/projects/project-bom-tab.tsx');
+    const bulkStatusDialog = read(
+      'src/components/domain/jobs/projects/project-bom-bulk-status-dialog.tsx'
+    );
     const dialog = read('src/components/domain/jobs/projects/bom-dialogs.tsx');
     const hooks = read('src/hooks/jobs/use-project-bom.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
@@ -57,7 +60,7 @@ describe('project BOM mutation contract', () => {
     expect(tab).toContain("formatProjectBomMutationError(error, 'updateItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItem')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'removeItems')");
-    expect(tab).toContain("formatProjectBomMutationError(error, 'updateStatus')");
+    expect(bulkStatusDialog).toContain("formatProjectBomMutationError(error, 'updateStatus')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'importCsv')");
     expect(tab).toContain("formatProjectBomMutationError(error, 'importOrder')");
     expect(compactTab).not.toContain("toast.error('Failedtoadditem')");

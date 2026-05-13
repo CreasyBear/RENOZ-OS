@@ -21,7 +21,6 @@ import {
   Edit3,
   AlertCircle,
   RefreshCw,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -47,7 +46,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Label } from '@/components/ui/label';
 import { toast } from '@/lib/toast';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { useConfirmation } from '@/hooks';
@@ -69,6 +67,7 @@ import { useDebounce } from '@/hooks/_shared';
 import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
+import { ProjectBomBulkStatusDialog } from './project-bom-bulk-status-dialog';
 import { ProjectBomEmptyState } from './project-bom-empty-state';
 import { ProjectBomHeaderActions } from './project-bom-header-actions';
 import { ProjectBomItemsTable } from './project-bom-items-table';
@@ -749,7 +748,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
         item={editingItem}
       />
 
-      <BulkStatusDialog
+      <ProjectBomBulkStatusDialog
         open={bulkStatusDialogOpen}
         onOpenChange={setBulkStatusDialogOpen}
         items={selectedItems}
@@ -757,91 +756,5 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
         onUpdateStatus={updateItemsStatus}
       />
     </div>
-  );
-}
-
-// ============================================================================
-// BULK STATUS DIALOG
-// ============================================================================
-
-function BulkStatusDialog({
-  open,
-  onOpenChange,
-  items,
-  onComplete,
-  onUpdateStatus,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  items: BomItemWithProduct[];
-  onComplete: () => void;
-  onUpdateStatus: ReturnType<typeof useUpdateBomItemsStatus>;
-}) {
-  const [newStatus, setNewStatus] = useState<BomItemStatus>('planned');
-
-  const handleConfirm = async () => {
-    try {
-      await onUpdateStatus.mutateAsync({
-        data: { itemIds: items.map((i) => i.id), status: newStatus },
-      });
-      toast.success(`Updated ${items.length} item${items.length > 1 ? 's' : ''} to ${PROJECT_BOM_ITEM_STATUS_CONFIG[newStatus].label}`);
-      onComplete();
-    } catch (error) {
-      toast.error(formatProjectBomMutationError(error, 'updateStatus'));
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={createPendingDialogOpenChangeHandler(onUpdateStatus.isPending, onOpenChange)}>
-      <DialogContent
-        onEscapeKeyDown={createPendingDialogInteractionGuards(onUpdateStatus.isPending).onEscapeKeyDown}
-        onInteractOutside={createPendingDialogInteractionGuards(onUpdateStatus.isPending).onInteractOutside}
-      >
-        <DialogHeader>
-          <DialogTitle>Update Status</DialogTitle>
-          <DialogDescription>
-            Change the status of {items.length} selected item{items.length > 1 ? 's' : ''}.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label>New Status</Label>
-            <Select
-              value={newStatus}
-              onValueChange={(v) => {
-                const parsed = bomItemStatusSchema.safeParse(v);
-                if (parsed.success) setNewStatus(parsed.data);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PROJECT_BOM_ITEM_STATUS_CONFIG).map(([value, config]) => (
-                  <SelectItem key={value} value={value}>
-                    <div className="flex items-center gap-2">
-                      <config.icon className={cn('h-4 w-4', config.color)} />
-                      {config.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={onUpdateStatus.isPending}
-          >
-            {onUpdateStatus.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Update {items.length} items
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
