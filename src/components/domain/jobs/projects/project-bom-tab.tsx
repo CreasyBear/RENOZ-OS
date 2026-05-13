@@ -12,7 +12,7 @@
  * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useState, useMemo, useEffect, useRef, useCallback, startTransition } from 'react';
+import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Package,
@@ -21,13 +21,11 @@ import {
   Trash2,
   Edit3,
   MoreHorizontal,
-  DollarSign,
   Boxes,
   CheckCircle2,
   Circle,
   Truck,
   AlertCircle,
-  TrendingUp,
   Link as LinkIcon,
   Upload,
   RefreshCw,
@@ -39,7 +37,6 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -74,7 +71,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import {
@@ -105,11 +101,11 @@ import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 import { ProjectBomEmptyState } from './project-bom-empty-state';
+import { ProjectBomSummaryCards } from './project-bom-summary-cards';
 
 // Types
 import {
   bomItemStatusSchema,
-  type ProjectBom,
   type BomItemStatus,
   type BomItemWithProduct,
 } from '@/lib/schemas/jobs';
@@ -171,15 +167,6 @@ const ITEM_STATUS_CONFIG: Record<BomItemStatus, {
     bg: 'bg-green-100',
     description: 'Installed on site',
   },
-};
-
-const BOM_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  draft: { label: 'Draft', color: 'text-gray-600', bg: 'bg-gray-100' },
-  approved: { label: 'Approved', color: 'text-blue-600', bg: 'bg-blue-100' },
-  ordered: { label: 'Ordered', color: 'text-purple-600', bg: 'bg-purple-100' },
-  partial: { label: 'Partial', color: 'text-amber-600', bg: 'bg-amber-100' },
-  complete: { label: 'Complete', color: 'text-green-600', bg: 'bg-green-100' },
-  cancelled: { label: 'Cancelled', color: 'text-red-600', bg: 'bg-red-100' },
 };
 
 // ============================================================================
@@ -587,122 +574,6 @@ function EditBomItemDialog({
     </Dialog>
   );
 }
-
-// ============================================================================
-// BOM SUMMARY CARDS
-// ============================================================================
-
-function BomSummaryCards({
-  items,
-  bom
-}: {
-  items: BomItemWithProduct[];
-  bom: ProjectBom;
-}) {
-  const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
-  const stats = useMemo(() => {
-    const totalItems = items.length;
-    const totalEstimatedCost = items.reduce((sum, item) => {
-      const qty = Number(item.quantityEstimated) || 0;
-      const cost = Number(item.unitCostEstimated) || 0;
-      return sum + (qty * cost);
-    }, 0);
-
-    const byStatus = items.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = (acc[item.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const installedCount = byStatus['installed'] || 0;
-    const progress = totalItems > 0 ? (installedCount / totalItems) * 100 : 0;
-
-    return {
-      totalItems,
-      totalEstimatedCost,
-      byStatus,
-      progress,
-      installedCount,
-    };
-  }, [items]);
-
-  const bomStatus = BOM_STATUS_CONFIG[bom.status] || BOM_STATUS_CONFIG.draft;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      {/* BOM Status */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <div className={cn('p-2 rounded-lg', bomStatus.bg)}>
-              <Package className={cn('h-4 w-4', bomStatus.color)} />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">BOM Status</p>
-              <p className={cn('font-semibold', bomStatus.color)}>{bomStatus.label}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Total Items */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <Boxes className="h-4 w-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Items</p>
-              <p className="font-semibold">{stats.totalItems}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Estimated Cost */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-green-100">
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Estimated Cost</p>
-              <p className="font-semibold">{formatCurrencyDisplay(stats.totalEstimatedCost)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Progress */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-purple-100">
-                <TrendingUp className="h-4 w-4 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Progress</p>
-                <p className="font-semibold">{Math.round(stats.progress)}%</p>
-              </div>
-            </div>
-          </div>
-          <Progress value={stats.progress} className="h-1.5" />
-          <p className="text-xs text-muted-foreground mt-1">
-            {stats.installedCount} of {stats.totalItems} installed
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ============================================================================
-// BOM ITEMS TABLE
-// ============================================================================
 
 function BomItemsTable({
   items,
@@ -1127,7 +998,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       </BulkActionsBar>
 
       {/* Summary Cards */}
-      <BomSummaryCards items={items} bom={bom} />
+      <ProjectBomSummaryCards items={items} bom={bom} />
 
       {/* Items Table */}
       <BomItemsTable
