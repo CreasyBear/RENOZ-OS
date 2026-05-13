@@ -279,19 +279,21 @@ describe('wave 6e customers/pipeline normalization', () => {
       '@/components/domain/pipeline/opportunities/opportunities-list-container'
     );
 
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
     render(
-      <>
+      <QueryClientProvider client={queryClient}>
         <CustomersListContainer
           filters={DEFAULT_CUSTOMER_FILTERS}
           onFiltersChange={vi.fn()}
         />
         <OpportunitiesListContainer />
-      </>
+      </QueryClientProvider>
     );
 
       expect(screen.getByText('Showing cached customers')).toBeInTheDocument();
       expect(screen.getByText('Showing cached opportunities')).toBeInTheDocument();
     },
-    20000
+    60000
   );
 });

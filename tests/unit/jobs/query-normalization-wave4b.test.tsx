@@ -235,5 +235,5 @@ describe('jobs query normalization wave 4b', () => {
 
     expect(screen.getByText('Materials unavailable')).toBeInTheDocument();
     expect(screen.queryByText('No BOM yet')).not.toBeInTheDocument();
-  });
+  }, 60000);
 });

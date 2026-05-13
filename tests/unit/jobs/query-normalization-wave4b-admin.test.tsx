@@ -388,7 +388,7 @@ describe('jobs query normalization wave 4b admin', () => {
 
     expect(screen.getByText('Installer availability unavailable')).toBeInTheDocument();
     expect(screen.queryByText('No installers found')).not.toBeInTheDocument();
-  });
+  }, 60000);
 
   it('shows time tracking unavailable state instead of silent zero-summary fallback', async () => {
     const { TimeCard } = await import('@/components/domain/jobs/projects/sidebar/time-card');

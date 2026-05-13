@@ -95,7 +95,7 @@ describe('project files mutation contract', () => {
     expect(compactServer).not.toContain('description:null');
 
     expect(uploadServer).toContain('withAuth({ permission: PERMISSIONS.job.create })');
-    expect(uploadServer).toContain('verifyProjectExists(params.projectId, ctx.organizationId)');
+    expect(uploadServer).toContain('verifyProjectExists(data.projectId, ctx.organizationId)');
     expect(uploadServer).toContain('buildProjectFileStoragePath({');
     expect(uploadServer).toContain('discardUploadedProjectFile');
     expect(uploadServer).toContain('isProjectFileStoragePathForProject({');

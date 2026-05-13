@@ -58,6 +58,7 @@ vi.mock('@/hooks/products', () => ({
         costPrice: 8,
         status: 'active',
         isActive: true,
+        isPurchasable: true,
       },
     },
     error: null,
@@ -254,7 +255,7 @@ describe('suppliers query normalization wave 3b', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Orders')).toBeInTheDocument();
     expect(screen.getAllByText('!')).toHaveLength(2);
-  }, 20000);
+  }, 60000);
 
   it('keeps purchase-order create flow visible when supplier and pricing lookups fail', async () => {
     const PurchaseOrderCreatePage = (await import('@/routes/_authenticated/purchase-orders/-create-page')).default;

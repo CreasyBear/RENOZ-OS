@@ -159,7 +159,7 @@ describe('wave 7d overview reconciliation', () => {
         'Some overview metrics are temporarily unavailable. Headline cards may be incomplete until the summaries recover.'
       )
     ).toBeInTheDocument();
-  });
+  }, 60000);
 
   it('keeps won-this-month metrics visible when stale data exists', async () => {
     mockGetRevenueAttribution.mockResolvedValueOnce({

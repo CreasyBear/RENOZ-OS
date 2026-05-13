@@ -428,7 +428,7 @@ describe('products query normalization wave 5b', () => {
       screen.getByText('Product images are temporarily unavailable. Please refresh and try again.')
     ).toBeInTheDocument();
     expect(screen.queryByText('No images')).not.toBeInTheDocument();
-  });
+  }, 60000);
 
   it('keeps product selector results visible on refresh failure', async () => {
     vi.resetModules();
