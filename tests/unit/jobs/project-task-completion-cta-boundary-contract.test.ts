@@ -16,12 +16,13 @@ describe('project task completion CTA boundary contract', () => {
   it('keeps the all-tasks-complete CTA behind a focused presenter', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
     const cta = read('src/components/domain/jobs/projects/project-task-completion-cta.tsx');
+    const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
     const compactTab = compact(tab);
     const compactCta = compact(cta);
 
     expect(tab).toContain("import { ProjectTaskCompletionCta } from './project-task-completion-cta';");
     expect(tab).toContain('<ProjectTaskCompletionCta onCompleteProjectClick={onCompleteProjectClick} />');
-    expect(tab).toContain("toast.success('All tasks complete!'");
+    expect(statusMutation).toContain("toast.success('All tasks complete!'");
     expect(compactTab).not.toContain('Alltaskscomplete</p>');
     expect(tab).not.toContain('Ready to complete this project?');
     expect(compactTab).not.toContain('Completeproject</Button>');

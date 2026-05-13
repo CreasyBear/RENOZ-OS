@@ -45,6 +45,7 @@ describe('project tasks mutation contract', () => {
   it('keeps project task mutations job-scoped, cache-safe, and operator-safe', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
     const quickAdd = read('src/components/domain/jobs/projects/project-task-quick-add.ts');
+    const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
     const hooks = read('src/hooks/jobs/use-job-tasks.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
@@ -58,7 +59,8 @@ describe('project tasks mutation contract', () => {
 
     expect(quickAdd).toContain("formatProjectTaskMutationError(error, 'create')");
     expect(tab).not.toContain("formatProjectTaskMutationError(error, 'create')");
-    expect(tab).toContain("formatProjectTaskMutationError(error, 'status')");
+    expect(statusMutation).toContain("formatProjectTaskMutationError(error, 'status')");
+    expect(tab).not.toContain("formatProjectTaskMutationError(error, 'status')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'delete')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'reorder')");
     expect(tab).not.toContain("toastError('Failed to create task. Please try again.')");

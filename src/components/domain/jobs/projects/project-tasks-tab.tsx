@@ -32,15 +32,12 @@ import { toast } from '@/lib/toast';
 import {
   formatProjectTaskMutationError,
   useProjectTasks,
-  useUpdateProjectTaskStatus,
   useDeleteProjectTask,
   useWorkstreams,
   useReorderTasks,
   useSiteVisitsByProject,
 } from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/query-keys';
 import { DEFAULT_TASK_FILTERS } from './project-task-config';
 import { ProjectTaskCompletionCta } from './project-task-completion-cta';
 import {
@@ -51,6 +48,7 @@ import {
 import { useProjectTaskQuickAdd } from './project-task-quick-add';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
 import { useProjectTaskRouteState } from './project-task-route-state';
+import { useProjectTaskStatusMutation } from './project-task-status-mutation';
 import {
   ProjectTasksCachedWarning,
   ProjectTasksEmptyState,
@@ -71,7 +69,6 @@ import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Types
 import type {
-  ProjectTaskResponse,
   TaskWithWorkstream,
 } from '@/lib/schemas/jobs';
 
@@ -94,11 +91,9 @@ interface ProjectTasksTabProps {
 // ============================================================================
 
 export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTasksTabProps) {
-  const queryClient = useQueryClient();
   const { data: tasksData, error, isLoading, refetch } = useProjectTasks({ projectId });
   const { data: workstreamsData } = useWorkstreams(projectId);
   const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
-  const updateStatus = useUpdateProjectTaskStatus(projectId);
   const deleteTask = useDeleteProjectTask(projectId);
   const reorderTasks = useReorderTasks();
   const { getUser, currentUserId } = useUserLookup();
@@ -168,52 +163,11 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     return groupProjectTasksByWorkstream({ tasks, workstreams });
   }, [tasks, workstreams]);
 
-  const handleToggleTask = async (task: TaskWithWorkstream) => {
-    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-
-    // Optimistically update project tasks cache
-    const projectTasksKey = queryKeys.projectTasks.byProject(projectId);
-    const previousProjectTasks = queryClient.getQueryData<{ tasks: ProjectTaskResponse[] }>(projectTasksKey);
-    if (previousProjectTasks) {
-      queryClient.setQueryData(projectTasksKey, {
-        tasks: previousProjectTasks.tasks.map(t =>
-          t.id === task.id ? { ...t, status: newStatus } : t
-        ),
-      });
-    }
-
-    try {
-      await updateStatus.mutateAsync({
-        taskId: task.id,
-        jobId: task.jobId,
-        status: newStatus,
-      });
-      if (newStatus === 'completed') {
-        // Check if all tasks are now complete (this task + all others)
-        const allComplete =
-          tasks.length > 0 &&
-          tasks.every(t => (t.id === task.id ? true : t.status === 'completed'));
-        if (allComplete && onCompleteProjectClick) {
-          toast.success('All tasks complete!', {
-            action: {
-              label: 'Complete project',
-              onClick: onCompleteProjectClick,
-            },
-          });
-        } else {
-          toast.success('Task completed');
-        }
-      } else {
-        toast.success('Task reopened');
-      }
-    } catch (error) {
-      // Rollback on error
-      if (previousProjectTasks) {
-        queryClient.setQueryData(projectTasksKey, previousProjectTasks);
-      }
-      toast.error(formatProjectTaskMutationError(error, 'status'));
-    }
-  };
+  const { handleToggleTask } = useProjectTaskStatusMutation({
+    projectId,
+    tasks,
+    onCompleteProjectClick,
+  });
 
   const handleDeleteTask = useCallback(
     (task: TaskWithWorkstream) => {
