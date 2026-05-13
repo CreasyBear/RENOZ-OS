@@ -23,16 +23,16 @@ import { format, isPast, isToday, isTomorrow, addDays, formatDistanceToNow as fo
 import {
   CheckSquare,
   Plus,
-  Clock,
   Calendar,
   AlertCircle,
   MoreHorizontal,
   Trash2,
   Edit3,
   CheckCircle2,
-  Circle,
   Timer,
   GripVertical,
+  Filter,
+  ExternalLink,
 } from 'lucide-react';
 import {
   DndContext,
@@ -56,7 +56,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
-import type { SemanticColor } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -65,16 +64,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Link, useSearch, useNavigate } from '@tanstack/react-router';
-import { Filter, ArrowUpDown, X, ExternalLink } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -100,6 +91,17 @@ import { useUserLookup } from '@/hooks/users';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { getProjectTasksReadErrorMessage } from './project-read-error-messages';
+import {
+  DEFAULT_TASK_FILTERS,
+  getTaskPriority,
+  PROJECT_TASK_PRIORITY_CONFIG,
+  PROJECT_TASK_STATUS_CONFIG,
+} from './project-task-config';
+import {
+  ProjectTaskActiveFilterChips,
+  ProjectTaskFilterPopover,
+  ProjectTaskSortDropdown,
+} from './project-task-filter-controls';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
 
 // Types
@@ -111,7 +113,6 @@ import type {
   TaskFilters,
   TaskSortOption,
 } from '@/lib/schemas/jobs';
-import { typedRecordEntries } from '@/lib/schemas/jobs/job-tasks';
 
 // Dialogs
 import { TaskCreateDialog, TaskEditDialog } from './task-dialogs';
@@ -126,82 +127,6 @@ interface ProjectTasksTabProps {
   /** When provided, show "All tasks complete" CTA and open completion dialog on click */
   onCompleteProjectClick?: () => void;
 }
-
-const DEFAULT_FILTERS: TaskFilters = {
-  status: [],
-  priority: [],
-  assignee: 'all',
-};
-
-// Helper function to safely get priority with default
-function getTaskPriority(priority: string | null | undefined): JobTaskPriority {
-  if (priority === 'urgent' || priority === 'high' || priority === 'normal' || priority === 'low') {
-    return priority;
-  }
-  return 'normal';
-}
-
-// ============================================================================
-// CONFIG
-// ============================================================================
-
-const PRIORITY_CONFIG: Record<JobTaskPriority, { label: string; color: string; bg: string; icon: React.ElementType; variant: SemanticColor }> = {
-  urgent: {
-    label: 'Urgent',
-    color: 'text-red-600',
-    bg: 'bg-red-100',
-    icon: AlertCircle,
-    variant: 'error',
-  },
-  high: {
-    label: 'High',
-    color: 'text-orange-600',
-    bg: 'bg-orange-100',
-    icon: AlertCircle,
-    variant: 'warning',
-  },
-  normal: {
-    label: 'Normal',
-    color: 'text-blue-600',
-    bg: 'bg-blue-100',
-    icon: Clock,
-    variant: 'info',
-  },
-  low: {
-    label: 'Low',
-    color: 'text-green-600',
-    bg: 'bg-green-100',
-    icon: Clock,
-    variant: 'success',
-  },
-};
-
-const STATUS_CONFIG: Record<JobTaskStatus, { label: string; color: string; icon: React.ElementType; variant: SemanticColor }> = {
-  pending: {
-    label: 'To Do',
-    color: 'text-gray-500',
-    icon: Circle,
-    variant: 'neutral',
-  },
-  in_progress: {
-    label: 'In Progress',
-    color: 'text-blue-500',
-    icon: Clock,
-    variant: 'progress',
-  },
-  completed: {
-    label: 'Done',
-    color: 'text-green-500',
-    icon: CheckCircle2,
-    variant: 'success',
-  },
-  blocked: {
-    label: 'Blocked',
-    color: 'text-red-500',
-    icon: AlertCircle,
-    variant: 'error',
-  },
-};
 
 // ============================================================================
 // HELPERS
@@ -301,8 +226,8 @@ interface TaskCardContentProps {
 }
 
 function TaskCardContent({ task, projectId, onToggle, onEdit, onDelete }: TaskCardContentProps) {
-  const priority = PRIORITY_CONFIG[task.priority || 'normal'];
-  const status = STATUS_CONFIG[task.status];
+  const priority = PROJECT_TASK_PRIORITY_CONFIG[task.priority || 'normal'];
+  const status = PROJECT_TASK_STATUS_CONFIG[task.status];
   const dueInfo = formatDueDate(task.dueDate);
   const isCompleted = task.status === 'completed';
   const PriorityIcon = priority.icon;
@@ -590,239 +515,6 @@ function WorkstreamGroup({
         </SortableContext>
       </DndContext>
     </Card>
-  );
-}
-
-// ============================================================================
-// FILTER POPOVER
-// ============================================================================
-
-function TaskFilterPopover({
-  filters,
-  onFiltersChange,
-  taskCounts,
-}: {
-  filters: TaskFilters;
-  onFiltersChange: (filters: TaskFilters) => void;
-  taskCounts: { byStatus: Record<JobTaskStatus, number>; byPriority: Record<JobTaskPriority, number> };
-}) {
-  const hasFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignee !== 'all';
-
-  const toggleStatus = (status: JobTaskStatus) => {
-    const newStatuses = filters.status.includes(status)
-      ? filters.status.filter(s => s !== status)
-      : [...filters.status, status];
-    onFiltersChange({ ...filters, status: newStatuses });
-  };
-
-  const togglePriority = (priority: JobTaskPriority) => {
-    const newPriorities = filters.priority.includes(priority)
-      ? filters.priority.filter(p => p !== priority)
-      : [...filters.priority, priority];
-    onFiltersChange({ ...filters, priority: newPriorities });
-  };
-
-  const clearFilters = () => onFiltersChange(DEFAULT_FILTERS);
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn(hasFilters && 'border-primary')}>
-          <Filter className="h-4 w-4 mr-2" />
-          Filter
-          {hasFilters && (
-            <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
-              {filters.status.length + filters.priority.length + (filters.assignee !== 'all' ? 1 : 0)}
-            </Badge>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80" align="start">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium">Filter Tasks</h4>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear all
-              </Button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <p className="text-sm font-medium mb-2">Status</p>
-            <div className="flex flex-wrap gap-2">
-              {typedRecordEntries(STATUS_CONFIG).map(([key, config]) => {
-                const Icon = config.icon;
-                const isSelected = filters.status.includes(key);
-                const count = taskCounts.byStatus[key] || 0;
-                return (
-                  <Button
-                    key={key}
-                    variant={isSelected ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => toggleStatus(key)}
-                  >
-                    <Icon className="h-3 w-3 mr-1" />
-                    {config.label}
-                    <span className="ml-1 text-muted-foreground">({count})</span>
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Priority Filter */}
-          <div>
-            <p className="text-sm font-medium mb-2">Priority</p>
-            <div className="flex flex-wrap gap-2">
-              {typedRecordEntries(PRIORITY_CONFIG).map(([key, config]) => {
-                const Icon = config.icon;
-                const isSelected = filters.priority.includes(key);
-                const count = taskCounts.byPriority[key] || 0;
-                return (
-                  <Button
-                    key={key}
-                    variant={isSelected ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn('h-7 text-xs', isSelected && config.bg)}
-                    onClick={() => togglePriority(key)}
-                  >
-                    <Icon className="h-3 w-3 mr-1" />
-                    {config.label}
-                    <span className="ml-1 text-muted-foreground">({count})</span>
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Assignee Filter */}
-          <div>
-            <p className="text-sm font-medium mb-2">Assignee</p>
-            <div className="flex gap-2">
-              {(['all', 'me', 'unassigned'] as const).map((option) => (
-                <Button
-                  key={option}
-                  variant={filters.assignee === option ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => onFiltersChange({ ...filters, assignee: option })}
-                >
-                  {option === 'all' ? 'All' : option === 'me' ? 'Assigned to me' : 'Unassigned'}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ============================================================================
-// SORT DROPDOWN
-// ============================================================================
-
-function TaskSortDropdown({
-  sortBy,
-  onSortChange,
-}: {
-  sortBy: TaskSortOption;
-  onSortChange: (sort: TaskSortOption) => void;
-}) {
-  const sortOptions: { id: TaskSortOption; label: string }[] = [
-    { id: 'dueDate', label: 'Due Date' },
-    { id: 'priority', label: 'Priority' },
-    { id: 'created', label: 'Created' },
-    { id: 'title', label: 'Title (A-Z)' },
-  ];
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <ArrowUpDown className="h-4 w-4 mr-2" />
-          Sort
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-        {sortOptions.map((option) => (
-          <DropdownMenuCheckboxItem
-            key={option.id}
-            checked={sortBy === option.id}
-            onCheckedChange={() => onSortChange(option.id)}
-          >
-            {option.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-// ============================================================================
-// ACTIVE FILTER CHIPS
-// ============================================================================
-
-function ActiveFilterChips({
-  filters,
-  onFiltersChange,
-}: {
-  filters: TaskFilters;
-  onFiltersChange: (filters: TaskFilters) => void;
-}) {
-  const chips: { key: string; label: string; onRemove: () => void }[] = [];
-
-  filters.status.forEach(status => {
-    chips.push({
-      key: `status-${status}`,
-      label: STATUS_CONFIG[status].label,
-      onRemove: () => onFiltersChange({
-        ...filters,
-        status: filters.status.filter(s => s !== status),
-      }),
-    });
-  });
-
-  filters.priority.forEach(priority => {
-    chips.push({
-      key: `priority-${priority}`,
-      label: PRIORITY_CONFIG[priority].label,
-      onRemove: () => onFiltersChange({
-        ...filters,
-        priority: filters.priority.filter(p => p !== priority),
-      }),
-    });
-  });
-
-  if (filters.assignee !== 'all') {
-    chips.push({
-      key: 'assignee',
-      label: filters.assignee === 'me' ? 'Assigned to me' : 'Unassigned',
-      onRemove: () => onFiltersChange({ ...filters, assignee: 'all' }),
-    });
-  }
-
-  if (chips.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2" role="list" aria-label="Active filters">
-      {chips.map((chip) => (
-        <Badge key={chip.key} variant="secondary" className="gap-1" role="listitem">
-          {chip.label}
-          <button
-            onClick={chip.onRemove}
-            aria-label={`Remove ${chip.label} filter`}
-            className="ml-1 p-1 -m-1 hover:text-destructive focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded-sm"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ))}
-    </div>
   );
 }
 
@@ -1333,12 +1025,12 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <TaskFilterPopover
+          <ProjectTaskFilterPopover
             filters={filters}
             onFiltersChange={updateFilters}
             taskCounts={taskCounts}
           />
-          <TaskSortDropdown sortBy={sortBy} onSortChange={updateSort} />
+          <ProjectTaskSortDropdown sortBy={sortBy} onSortChange={updateSort} />
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Task
@@ -1347,7 +1039,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       </div>
 
       {/* Active Filter Chips */}
-      <ActiveFilterChips filters={filters} onFiltersChange={updateFilters} />
+      <ProjectTaskActiveFilterChips filters={filters} onFiltersChange={updateFilters} />
 
       {/* Summary */}
       <ProjectTaskSummaryCards tasks={allTasks} />
@@ -1385,7 +1077,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
           <p className="text-sm text-muted-foreground mb-4">
             Try adjusting your filter criteria to see more tasks.
           </p>
-          <Button variant="outline" size="sm" onClick={() => updateFilters(DEFAULT_FILTERS)}>
+          <Button variant="outline" size="sm" onClick={() => updateFilters(DEFAULT_TASK_FILTERS)}>
             Clear all filters
           </Button>
         </Card>
