@@ -35,9 +35,11 @@ describe('inventory alert permission contract', () => {
   it('keeps alert detail product and location reads organization-scoped', () => {
     const source = read('src/server/functions/inventory/alerts.ts');
 
-    expect(source).toContain('eq(products.organizationId, ctx.organizationId)');
+    expect(source).toContain('function alertProductWhereCondition(productId: string, organizationId: string)');
     expect(source).toContain('eq(warehouseLocations.organizationId, ctx.organizationId)');
     expect(source).toContain('eq(products.organizationId, organizationId)');
     expect(source).toContain('eq(warehouseLocations.organizationId, organizationId)');
+    expect(source).toContain('alertProductWhereCondition(alert.productId, ctx.organizationId)');
+    expect(source).toContain('alertProductWhereCondition(alert.productId, organizationId)');
   });
 });
