@@ -39,15 +39,21 @@ describe('project tasks read feedback contract', () => {
 
   it('keeps every project tasks warning behind the read helper', () => {
     const tasksTab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const states = read('src/components/domain/jobs/projects/project-task-states.tsx');
     const hooks = read('src/hooks/jobs/use-project-tasks.ts');
 
     expect(hooks).toContain(
       "'Project tasks are temporarily unavailable. Please refresh and try again.'"
     );
-    expect(tasksTab).toContain(
+    expect(tasksTab).toContain("from './project-task-states';");
+    expect(tasksTab).not.toContain(
       "import { getProjectTasksReadErrorMessage } from './project-read-error-messages';"
     );
-    expect(tasksTab.match(/\{getProjectTasksReadErrorMessage\(error\)\}/g)).toHaveLength(3);
+    expect(states).toContain(
+      "import { getProjectTasksReadErrorMessage } from './project-read-error-messages';"
+    );
+    expect(states.match(/\{getProjectTasksReadErrorMessage\(error\)\}/g)).toHaveLength(2);
     expect(tasksTab).not.toContain('<span>{error.message}</span>');
+    expect(states).not.toContain('<span>{error.message}</span>');
   });
 });

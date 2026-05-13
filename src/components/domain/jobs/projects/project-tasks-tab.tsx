@@ -20,15 +20,11 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
-  CheckSquare,
   Plus,
-  AlertCircle,
   CheckCircle2,
-  Filter,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Link, useSearch, useNavigate } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -49,7 +45,6 @@ import {
 import { useUserLookup } from '@/hooks/users';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { getProjectTasksReadErrorMessage } from './project-read-error-messages';
 import {
   DEFAULT_TASK_FILTERS,
   getTaskPriority,
@@ -60,6 +55,13 @@ import {
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
+import {
+  ProjectTasksCachedWarning,
+  ProjectTasksEmptyState,
+  ProjectTasksFilteredEmptyState,
+  ProjectTasksLoadingState,
+  ProjectTasksUnavailableState,
+} from './project-task-states';
 import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Types
@@ -84,29 +86,6 @@ interface ProjectTasksTabProps {
   projectId: string;
   /** When provided, show "All tasks complete" CTA and open completion dialog on click */
   onCompleteProjectClick?: () => void;
-}
-
-// ============================================================================
-// EMPTY STATE
-// ============================================================================
-
-function EmptyTasksState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <Card className="p-12 text-center">
-      <div className="p-4 bg-muted rounded-full w-fit mx-auto mb-4">
-        <CheckSquare className="h-8 w-8 text-muted-foreground" />
-      </div>
-      <h3 className="text-lg font-medium mb-2">No tasks yet</h3>
-      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        Add tasks to track work across your project. Tasks can be assigned to team members
-        and linked to workstreams.
-      </p>
-      <Button onClick={onAdd}>
-        <Plus className="mr-2 h-4 w-4" />
-        Add First Task
-      </Button>
-    </Card>
-  );
 }
 
 // ============================================================================
@@ -485,32 +464,15 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   const hasActiveFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignee !== 'all';
 
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-          ))}
-        </div>
-        <div className="h-64 bg-muted rounded-lg animate-pulse" />
-      </div>
-    );
+    return <ProjectTasksLoadingState />;
   }
 
   if (error && tasksData === undefined) {
     return (
-      <div className="space-y-4">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Tasks unavailable</AlertTitle>
-          <AlertDescription className="flex items-center gap-2">
-            <span>{getProjectTasksReadErrorMessage(error)}</span>
-            <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <ProjectTasksUnavailableState
+        error={error}
+        onRetry={() => refetch()}
+      />
     );
   }
 
@@ -518,16 +480,10 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     return (
       <div className="space-y-4">
         {error ? (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Showing cached tasks</AlertTitle>
-            <AlertDescription className="flex items-center gap-2">
-              <span>{getProjectTasksReadErrorMessage(error)}</span>
-              <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
-                Retry
-              </Button>
-            </AlertDescription>
-          </Alert>
+          <ProjectTasksCachedWarning
+            error={error}
+            onRetry={() => refetch()}
+          />
         ) : null}
         <div className="flex justify-between items-center">
           <div>
@@ -545,7 +501,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             isLoading={createTask.isPending}
           />
         </div>
-        <EmptyTasksState onAdd={() => setCreateDialogOpen(true)} />
+        <ProjectTasksEmptyState onAdd={() => setCreateDialogOpen(true)} />
         <TaskCreateDialog
           key={createDialogOpen ? 'open' : 'closed'}
           open={createDialogOpen}
@@ -561,16 +517,10 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     <TooltipProvider>
     <div className="space-y-6">
       {error ? (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Showing cached tasks</AlertTitle>
-          <AlertDescription className="flex items-center gap-2">
-            <span>{getProjectTasksReadErrorMessage(error)}</span>
-            <Button variant="link" className="h-auto p-0" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <ProjectTasksCachedWarning
+          error={error}
+          onRetry={() => refetch()}
+        />
       ) : null}
       {/* Quick Add */}
       <div className="max-w-md">
@@ -639,16 +589,9 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
 
       {/* Grouped Tasks or Filtered Empty State */}
       {groupedTasks.length === 0 && hasActiveFilters ? (
-        <Card className="p-8 text-center">
-          <Filter className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-          <h3 className="font-medium mb-1">No tasks match your filters</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Try adjusting your filter criteria to see more tasks.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => updateFilters(DEFAULT_TASK_FILTERS)}>
-            Clear all filters
-          </Button>
-        </Card>
+        <ProjectTasksFilteredEmptyState
+          onClearFilters={() => updateFilters(DEFAULT_TASK_FILTERS)}
+        />
       ) : (
         <div className="space-y-4">
           {groupedTasks.map(([workstreamName, workstreamTasks]) => (
