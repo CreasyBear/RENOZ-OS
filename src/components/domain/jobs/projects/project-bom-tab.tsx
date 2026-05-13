@@ -13,20 +13,13 @@
  */
 
 import { useState, useEffect, useCallback, startTransition } from 'react';
-import { Link } from '@tanstack/react-router';
 import {
   Package,
   Plus,
   Search,
   Trash2,
   Edit3,
-  MoreHorizontal,
-  Boxes,
-  CheckCircle2,
-  Circle,
-  Truck,
   AlertCircle,
-  Link as LinkIcon,
   RefreshCw,
   Loader2,
 } from 'lucide-react';
@@ -34,15 +27,6 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -55,13 +39,6 @@ import {
   createPendingDialogInteractionGuards,
   createPendingDialogOpenChangeHandler,
 } from '@/components/ui/dialog-pending-guards';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -87,14 +64,16 @@ import {
   useImportBomFromCsv,
   useImportBomFromOrder,
 } from '@/hooks/jobs';
-import { useTableSelection, BulkActionsBar, CheckboxCell } from '@/components/shared/data-table';
+import { useTableSelection, BulkActionsBar } from '@/components/shared/data-table';
 import { useDebounce } from '@/hooks/_shared';
 import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 import { ProjectBomEmptyState } from './project-bom-empty-state';
 import { ProjectBomHeaderActions } from './project-bom-header-actions';
+import { ProjectBomItemsTable } from './project-bom-items-table';
 import { ProjectBomSummaryCards } from './project-bom-summary-cards';
+import { PROJECT_BOM_ITEM_STATUS_CONFIG } from './project-bom-status-config';
 
 // Types
 import {
@@ -113,54 +92,6 @@ interface ProjectBomTabProps {
   /** When set, enables "Import from Order" button */
   orderId?: string | null;
 }
-
-// ============================================================================
-// STATUS CONFIG
-// ============================================================================
-
-const ITEM_STATUS_CONFIG: Record<BomItemStatus, {
-  label: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-  description: string;
-}> = {
-  planned: {
-    label: 'Planned',
-    icon: Circle,
-    color: 'text-gray-600',
-    bg: 'bg-gray-100',
-    description: 'Item estimated but not yet ordered',
-  },
-  ordered: {
-    label: 'Ordered',
-    icon: Truck,
-    color: 'text-blue-600',
-    bg: 'bg-blue-100',
-    description: 'Purchase order placed',
-  },
-  received: {
-    label: 'Received',
-    icon: Boxes,
-    color: 'text-purple-600',
-    bg: 'bg-purple-100',
-    description: 'Item in warehouse/yard',
-  },
-  allocated: {
-    label: 'Allocated',
-    icon: LinkIcon,
-    color: 'text-amber-600',
-    bg: 'bg-amber-100',
-    description: 'Reserved for this project',
-  },
-  installed: {
-    label: 'Installed',
-    icon: CheckCircle2,
-    color: 'text-green-600',
-    bg: 'bg-green-100',
-    description: 'Installed on site',
-  },
-};
 
 // ============================================================================
 // ADD ITEM DIALOG
@@ -498,7 +429,7 @@ function EditBomItemDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ITEM_STATUS_CONFIG).map(([value, config]) => (
+                {Object.entries(PROJECT_BOM_ITEM_STATUS_CONFIG).map(([value, config]) => (
                   <SelectItem key={value} value={value}>
                     <div className="flex items-center gap-2">
                       <config.icon className={cn('h-4 w-4', config.color)} />
@@ -509,7 +440,7 @@ function EditBomItemDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {ITEM_STATUS_CONFIG[status].description}
+              {PROJECT_BOM_ITEM_STATUS_CONFIG[status].description}
             </p>
           </div>
 
@@ -565,179 +496,6 @@ function EditBomItemDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function BomItemsTable({
-  items,
-  onEdit,
-  onDelete,
-  selection,
-}: {
-  items: BomItemWithProduct[];
-  onEdit: (item: BomItemWithProduct) => void;
-  onDelete: (item: BomItemWithProduct) => void;
-  selection?: {
-    isSelected: (id: string) => boolean;
-    handleSelect: (id: string, checked: boolean) => void;
-    handleSelectAll: (checked: boolean) => void;
-    handleShiftClickRange: (startIdx: number, endIdx: number) => void;
-    setLastClickedIndex: (index: number | null) => void;
-    lastClickedIndex: number | null;
-    isAllSelected: boolean;
-    isPartiallySelected: boolean;
-  };
-}) {
-  const { formatCurrency } = useOrgFormat();
-  const formatCurrencyDisplay = (value: number) =>
-    formatCurrency(value, { cents: false, showCents: true });
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-12 border rounded-lg bg-muted/30">
-        <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-4 text-lg font-medium">No materials yet</h3>
-        <p className="text-muted-foreground mt-1">
-          Add products to estimate materials for this project
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {selection && (
-              <TableHead className="w-[50px]">
-                <CheckboxCell
-                  checked={selection.isAllSelected}
-                  onChange={(checked) => selection.handleSelectAll(checked)}
-                  indeterminate={selection.isPartiallySelected}
-                  ariaLabel={selection.isAllSelected ? 'Deselect all' : 'Select all'}
-                />
-              </TableHead>
-            )}
-            <TableHead>Product</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Unit Cost</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item, rowIndex) => {
-            const product = item.product;
-            const statusConfig = ITEM_STATUS_CONFIG[item.status];
-            const qty = Number(item.quantityEstimated) || 0;
-            const unitCost = Number(item.unitCostEstimated) || 0;
-            const total = qty * unitCost;
-            const StatusIcon = statusConfig.icon;
-
-            const handleRowClick = (e: React.MouseEvent) => {
-              if (!selection) return;
-              if (e.shiftKey && selection.lastClickedIndex !== null) {
-                selection.handleShiftClickRange(selection.lastClickedIndex, rowIndex);
-              } else {
-                selection.handleSelect(item.id, !selection.isSelected(item.id));
-              }
-              selection.setLastClickedIndex(rowIndex);
-            };
-
-            return (
-              <TableRow
-                key={item.id}
-                className={cn('group', selection?.isSelected(item.id) && 'bg-muted/50')}
-                onClick={selection ? handleRowClick : undefined}
-              >
-                {selection && (
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <CheckboxCell
-                      checked={selection.isSelected(item.id)}
-                      onChange={(checked) => {
-                        selection.handleSelect(item.id, checked);
-                        selection.setLastClickedIndex(rowIndex);
-                      }}
-                      onShiftClick={() => {
-                        if (selection.lastClickedIndex !== null) {
-                          selection.handleShiftClickRange(selection.lastClickedIndex, rowIndex);
-                        }
-                        selection.setLastClickedIndex(rowIndex);
-                      }}
-                      ariaLabel={`Select ${product?.name || 'item'}`}
-                    />
-                  </TableCell>
-                )}
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
-                      <Package className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      {product?.id ? (
-                        <Link
-                          to="/products/$productId"
-                          params={{ productId: product.id }}
-                          className="font-medium hover:underline"
-                        >
-                          {product.name || 'Unknown Product'}
-                        </Link>
-                      ) : (
-                        <p className="font-medium">{product?.name || 'Unknown Product'}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        SKU: {product?.sku || 'N/A'}
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className={cn(statusConfig.bg, statusConfig.color, 'border-0')}>
-                    <StatusIcon className="h-3 w-3 mr-1" />
-                    {statusConfig.label}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono">{qty}</TableCell>
-                <TableCell className="text-right font-mono">
-                  {unitCost > 0 ? formatCurrencyDisplay(unitCost) : '-'}
-                </TableCell>
-                <TableCell className="text-right font-semibold">
-                  {total > 0 ? formatCurrencyDisplay(total) : '-'}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(item)}>
-                        <Edit3 className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => onDelete(item)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Remove
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
   );
 }
 
@@ -949,7 +707,7 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
       <ProjectBomSummaryCards items={items} bom={bom} />
 
       {/* Items Table */}
-      <BomItemsTable
+      <ProjectBomItemsTable
         items={items}
         onEdit={handleEditItem}
         onDelete={handleDeleteItem}
@@ -1026,7 +784,7 @@ function BulkStatusDialog({
       await onUpdateStatus.mutateAsync({
         data: { itemIds: items.map((i) => i.id), status: newStatus },
       });
-      toast.success(`Updated ${items.length} item${items.length > 1 ? 's' : ''} to ${ITEM_STATUS_CONFIG[newStatus].label}`);
+      toast.success(`Updated ${items.length} item${items.length > 1 ? 's' : ''} to ${PROJECT_BOM_ITEM_STATUS_CONFIG[newStatus].label}`);
       onComplete();
     } catch (error) {
       toast.error(formatProjectBomMutationError(error, 'updateStatus'));
@@ -1059,7 +817,7 @@ function BulkStatusDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(ITEM_STATUS_CONFIG).map(([value, config]) => (
+                {Object.entries(PROJECT_BOM_ITEM_STATUS_CONFIG).map(([value, config]) => (
                   <SelectItem key={value} value={value}>
                     <div className="flex items-center gap-2">
                       <config.icon className={cn('h-4 w-4', config.color)} />
