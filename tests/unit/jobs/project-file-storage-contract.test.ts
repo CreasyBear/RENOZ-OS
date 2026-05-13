@@ -77,25 +77,42 @@ describe('project file storage contract', () => {
   it('keeps project file uploads server-owned and project scoped', () => {
     const uploadServer = read('src/server/functions/files/upload-project-file.ts');
     const dialog = read('src/components/domain/jobs/projects/file-dialogs.tsx');
+    const noteDialogs = read('src/components/domain/jobs/projects/note-dialogs.tsx');
 
+    expect(uploadServer).toContain("createServerFn({ method: 'POST' })");
+    expect(uploadServer).toContain('.inputValidator(uploadProjectFileInputSchema)');
+    expect(uploadServer).not.toContain("from 'node:crypto'");
+    expect(uploadServer).not.toContain('fileBody: File;');
     expect(uploadServer).toContain('withAuth({ permission: PERMISSIONS.job.create })');
-    expect(uploadServer).toContain('verifyProjectExists(params.projectId, ctx.organizationId)');
+    expect(uploadServer).toContain('verifyProjectExists(data.projectId, ctx.organizationId)');
     expect(uploadServer).toContain('buildProjectFileStoragePath({');
     expect(uploadServer).toContain('organizationId: ctx.organizationId');
-    expect(uploadServer).toContain('projectId: params.projectId');
+    expect(uploadServer).toContain('projectId: data.projectId');
     expect(uploadServer).toContain('uploadFile({');
     expect(uploadServer).toContain('bucket: PROJECT_FILE_STORAGE_BUCKET');
+    expect(uploadServer).toContain('decodeProjectFileBase64Content(data.base64Content, data.sizeBytes)');
     expect(uploadServer).toContain('discardUploadedProjectFile');
+    expect(uploadServer).toContain('.inputValidator(discardUploadedProjectFileInputSchema)');
     expect(uploadServer).toContain('isProjectFileStoragePathForProject({');
     expect(uploadServer).toContain("logger.warn('Rejected project file upload rollback");
 
-    expect(uploadServer).toContain('filename: string;');
+    expect(uploadServer).toContain('filename: z.string().min(1).max(255)');
     expect(uploadServer).toContain('path: storagePath');
     expect(dialog).not.toContain('const storagePath = `projects/${projectId}/');
+    expect(dialog).toContain('const base64Content = await readFileAsBase64Content(selectedFile);');
+    expect(dialog).toContain('uploadProjectFile({');
+    expect(dialog).toContain('data: {');
+    expect(dialog).toContain('base64Content,');
+    expect(dialog).toContain('sizeBytes: selectedFile.size');
     expect(dialog).toContain('discardUploadedProjectFile({');
-    expect(dialog).toContain('projectId,');
     expect(dialog).toContain('filename: selectedFile.name');
     expect(dialog).toContain('storage://${uploadResult.bucket}/${uploadResult.path}');
+    expect(noteDialogs).toContain(
+      'const base64Content = await readFileAsBase64Content(recordedAudio.file);'
+    );
+    expect(noteDialogs).toContain('sizeBytes: recordedAudio.file.size');
+    expect(noteDialogs).toContain('discardUploadedProjectFile({');
+    expect(noteDialogs).not.toContain('fileBody: recordedAudio.file');
   });
 
   it('removes backing storage objects when project file records are deleted', () => {

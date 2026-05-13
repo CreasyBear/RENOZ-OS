@@ -74,12 +74,37 @@ function makeRecordedAudioFile(chunks: Blob[], projectId: string): File {
   });
 }
 
+function readFileAsBase64Content(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const [, base64Content = ''] = result.split(',');
+
+      if (!base64Content) {
+        reject(new Error('Unable to read project audio file.'));
+        return;
+      }
+
+      resolve(base64Content);
+    };
+
+    reader.onerror = () => reject(new Error('Unable to read project audio file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadRecordedAudio(projectId: string, recordedAudio: RecordedAudio) {
+  const base64Content = await readFileAsBase64Content(recordedAudio.file);
   const uploadResult = await uploadProjectFile({
-    projectId,
-    filename: recordedAudio.file.name,
-    fileBody: recordedAudio.file,
-    contentType: recordedAudio.file.type || 'audio/webm',
+    data: {
+      projectId,
+      filename: recordedAudio.file.name,
+      base64Content,
+      contentType: recordedAudio.file.type || 'audio/webm',
+      sizeBytes: recordedAudio.file.size,
+    },
   });
   const fileUrl = uploadResult.publicUrl || `storage://${uploadResult.bucket}/${uploadResult.path}`;
   const audioData: AudioNoteData = {
@@ -154,9 +179,11 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       } catch (error) {
         if (uploadResult) {
           await discardUploadedProjectFile({
-            projectId,
-            path: uploadResult.path,
-            bucket: uploadResult.bucket,
+            data: {
+              projectId,
+              path: uploadResult.path,
+              bucket: uploadResult.bucket,
+            },
           });
         }
         const msg = formatProjectNoteMutationError(error, 'create');
@@ -410,9 +437,11 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
       } catch (error) {
         if (uploadResult) {
           await discardUploadedProjectFile({
-            projectId: note.projectId,
-            path: uploadResult.path,
-            bucket: uploadResult.bucket,
+            data: {
+              projectId: note.projectId,
+              path: uploadResult.path,
+              bucket: uploadResult.bucket,
+            },
           });
         }
         const msg = formatProjectNoteMutationError(error, 'update');

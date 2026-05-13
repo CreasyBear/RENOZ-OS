@@ -9,7 +9,8 @@
  *
  * @see src/components/domain/jobs/projects/file-dialogs.tsx
  */
-import { randomUUID } from 'node:crypto';
+import { createServerFn } from '@tanstack/react-start';
+import { z } from 'zod';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   buildProjectFileStoragePath,
@@ -17,76 +18,113 @@ import {
   PROJECT_FILE_STORAGE_BUCKET,
 } from '@/lib/jobs/project-file-storage';
 import { withAuth } from '@/lib/server/protected';
+import { ValidationError } from '@/lib/server/errors';
 import { deleteFile, uploadFile } from '@/lib/storage';
 import { logger } from '@/lib/logger';
 import { verifyProjectExists } from '@/server/functions/_shared/entity-verification';
 import type { UploadFileResult } from '@/lib/storage';
 
-export async function uploadProjectFile(params: {
-  projectId: string;
-  filename: string;
-  fileBody: File;
-  contentType: string;
-}): Promise<UploadFileResult> {
+const MAX_PROJECT_FILE_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+
+const uploadProjectFileInputSchema = z.object({
+  projectId: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  base64Content: z.string().min(1),
+  contentType: z.string().min(1).max(255),
+  sizeBytes: z.number().int().positive().max(MAX_PROJECT_FILE_UPLOAD_SIZE_BYTES),
+});
+
+const discardUploadedProjectFileInputSchema = z.object({
+  projectId: z.string().min(1),
+  path: z.string().min(1),
+  bucket: z.string().min(1),
+});
+
+function createStorageObjectId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function decodeProjectFileBase64Content(
+  base64Content: string,
+  expectedSizeBytes: number
+): ArrayBuffer {
+  const buffer = Buffer.from(base64Content, 'base64');
+
+  if (buffer.byteLength !== expectedSizeBytes) {
+    throw new ValidationError('Uploaded file could not be read. Please choose the file again.', {
+      file: ['Uploaded file could not be read.'],
+    });
+  }
+
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+export const uploadProjectFile = createServerFn({ method: 'POST' })
+  .inputValidator(uploadProjectFileInputSchema)
+  .handler(async ({ data }): Promise<UploadFileResult> => {
   const ctx = await withAuth({ permission: PERMISSIONS.job.create });
-  await verifyProjectExists(params.projectId, ctx.organizationId);
+  await verifyProjectExists(data.projectId, ctx.organizationId);
 
   const storagePath = buildProjectFileStoragePath({
     organizationId: ctx.organizationId,
-    projectId: params.projectId,
-    objectId: randomUUID(),
-    filename: params.filename,
+    projectId: data.projectId,
+    objectId: createStorageObjectId(),
+    filename: data.filename,
   });
+
+  const fileBody = decodeProjectFileBase64Content(data.base64Content, data.sizeBytes);
 
   return uploadFile({
     path: storagePath,
-    fileBody: params.fileBody,
-    contentType: params.contentType,
+    fileBody,
+    contentType: data.contentType,
     bucket: PROJECT_FILE_STORAGE_BUCKET,
     metadata: {
       organizationId: ctx.organizationId,
-      projectId: params.projectId,
-      originalFilename: params.filename,
+      projectId: data.projectId,
+      originalFilename: data.filename,
     },
     upsert: false,
   });
-}
+});
 
-export async function discardUploadedProjectFile(params: {
-  projectId: string;
-  path: string;
-  bucket: string;
-}): Promise<{ success: boolean }> {
+export const discardUploadedProjectFile = createServerFn({ method: 'POST' })
+  .inputValidator(discardUploadedProjectFileInputSchema)
+  .handler(async ({ data }): Promise<{ success: boolean }> => {
   try {
     const ctx = await withAuth({ permission: PERMISSIONS.job.create });
-    await verifyProjectExists(params.projectId, ctx.organizationId);
+    await verifyProjectExists(data.projectId, ctx.organizationId);
 
     const ownsPath =
-      params.bucket === PROJECT_FILE_STORAGE_BUCKET &&
+      data.bucket === PROJECT_FILE_STORAGE_BUCKET &&
       isProjectFileStoragePathForProject({
-        storagePath: params.path,
+        storagePath: data.path,
         organizationId: ctx.organizationId,
-        projectId: params.projectId,
+        projectId: data.projectId,
       });
 
     if (!ownsPath) {
       logger.warn('Rejected project file upload rollback for unowned storage path', {
-        projectId: params.projectId,
-        bucket: params.bucket,
+        projectId: data.projectId,
+        bucket: data.bucket,
       });
       return { success: false };
     }
 
     await deleteFile({
-      path: params.path,
+      path: data.path,
       bucket: PROJECT_FILE_STORAGE_BUCKET,
     });
 
     return { success: true };
   } catch (error) {
     logger.error('Failed to discard uploaded project file', error, {
-      projectId: params.projectId,
+      projectId: data.projectId,
     });
     return { success: false };
   }
-}
+});

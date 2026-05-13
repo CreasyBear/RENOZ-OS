@@ -67,6 +67,27 @@ const fileTypeOptions = [
   { value: 'other', label: 'Other' },
 ];
 
+function readFileAsBase64Content(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const [, base64Content = ''] = result.split(',');
+
+      if (!base64Content) {
+        reject(new Error('Unable to read project file.'));
+        return;
+      }
+
+      resolve(base64Content);
+    };
+
+    reader.onerror = () => reject(new Error('Unable to read project file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 // ============================================================================
 // UPLOAD DIALOG
 // ============================================================================
@@ -118,11 +139,16 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
           });
         }, 100);
 
+        const base64Content = await readFileAsBase64Content(selectedFile);
+
         uploadResult = await uploadProjectFile({
-          projectId,
-          filename: selectedFile.name,
-          fileBody: selectedFile,
-          contentType: selectedFile.type || 'application/octet-stream',
+          data: {
+            projectId,
+            filename: selectedFile.name,
+            base64Content,
+            contentType: selectedFile.type || 'application/octet-stream',
+            sizeBytes: selectedFile.size,
+          },
         });
 
         clearInterval(progressInterval);
@@ -155,9 +181,11 @@ export function FileUploadDialog({ open, onOpenChange, projectId, onSuccess }: F
       } catch (error) {
         if (uploadResult) {
           await discardUploadedProjectFile({
-            projectId,
-            path: uploadResult.path,
-            bucket: uploadResult.bucket,
+            data: {
+              projectId,
+              path: uploadResult.path,
+              bucket: uploadResult.bucket,
+            },
           });
         }
         const message = formatProjectFileMutationError(error, 'upload');
