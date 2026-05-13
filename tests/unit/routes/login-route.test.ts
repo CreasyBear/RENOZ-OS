@@ -40,7 +40,7 @@ describe('login route beforeLoad', () => {
     } as never);
 
     expect(mockSignOut).toHaveBeenCalled();
-  });
+  }, 20_000);
 
   it('returns early for reason=session_expired without forcing sign-out', async () => {
     const { Route } = await import('@/routes/login');

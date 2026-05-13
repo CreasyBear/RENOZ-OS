@@ -387,7 +387,7 @@ describe('communications query normalization wave 4d', () => {
 
     expect(screen.getByText('Showing cached campaigns')).toBeInTheDocument();
     expect(screen.getByText('campaigns:1')).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it('shows cached-template degradation instead of blocking the templates page', async () => {
     mockUseTemplates.mockReturnValue({

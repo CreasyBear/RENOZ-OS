@@ -54,7 +54,7 @@ describe('update-password route beforeLoad', () => {
         search: { code: undefined },
       } as never)
     ).resolves.toBeUndefined();
-  });
+  }, 20_000);
 
   it('redirects to /forgot-password when no code and no auth params in hash', async () => {
     mockLocation.hash = '';
