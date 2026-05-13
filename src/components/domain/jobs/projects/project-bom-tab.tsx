@@ -12,7 +12,7 @@
  * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
+import { useState, useEffect, useCallback, startTransition } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Package,
@@ -27,10 +27,8 @@ import {
   Truck,
   AlertCircle,
   Link as LinkIcon,
-  Upload,
   RefreshCw,
   Loader2,
-  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -73,12 +71,6 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { useConfirmation } from '@/hooks';
@@ -101,6 +93,7 @@ import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
 import { ProjectBomEmptyState } from './project-bom-empty-state';
+import { ProjectBomHeaderActions } from './project-bom-header-actions';
 import { ProjectBomSummaryCards } from './project-bom-summary-cards';
 
 // Types
@@ -760,7 +753,6 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
   const updateItemsStatus = useUpdateBomItemsStatus(projectId);
   const importCsv = useImportBomFromCsv(projectId);
   const importFromOrder = useImportBomFromOrder(projectId);
-  const csvInputRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirmation();
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -921,60 +913,16 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
   return (
     <div className="space-y-6">
       {bomWarning}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-medium">Bill of Materials</h3>
-            <Badge variant="outline">{bom.bomNumber}</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {items.length} items • Track materials from estimate to installation
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={csvInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleCsvImport}
-          />
-          <Button
-            variant="outline"
-            onClick={() => csvInputRef.current?.click()}
-            disabled={importCsv.isPending}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {importCsv.isPending ? 'Importing...' : 'Import CSV'}
-          </Button>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    variant="outline"
-                    onClick={handleImportFromOrder}
-                    disabled={!orderId || importFromOrder.isPending}
-                  >
-                    <ShoppingCart className="mr-2 h-4 w-4" />
-                    {importFromOrder.isPending ? 'Importing...' : 'Import from Order'}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {orderId
-                  ? 'Import line items from the linked order'
-                  : 'Link an order to this project first'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Material
-          </Button>
-        </div>
-      </div>
+      <ProjectBomHeaderActions
+        bomNumber={bom.bomNumber}
+        itemCount={items.length}
+        orderId={orderId}
+        isImportingCsv={importCsv.isPending}
+        isImportingFromOrder={importFromOrder.isPending}
+        onCsvImport={handleCsvImport}
+        onImportFromOrder={() => void handleImportFromOrder()}
+        onAddMaterial={() => setAddDialogOpen(true)}
+      />
 
       {/* Bulk Actions Bar */}
       <BulkActionsBar selectedCount={selectedItems.length} onClear={clearSelection}>
