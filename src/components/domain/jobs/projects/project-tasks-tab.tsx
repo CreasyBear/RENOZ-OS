@@ -27,7 +27,6 @@ import { Button } from '@/components/ui/button';
 import { Link } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
-import { toastError } from '@/hooks';
 
 // Hooks
 import {
@@ -35,7 +34,6 @@ import {
   useProjectTasks,
   useUpdateProjectTaskStatus,
   useDeleteProjectTask,
-  useCreateTask,
   useWorkstreams,
   useReorderTasks,
   useSiteVisitsByProject,
@@ -50,6 +48,7 @@ import {
   ProjectTaskFilterPopover,
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
+import { useProjectTaskQuickAdd } from './project-task-quick-add';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
 import { useProjectTaskRouteState } from './project-task-route-state';
 import {
@@ -101,7 +100,6 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
   const updateStatus = useUpdateProjectTaskStatus(projectId);
   const deleteTask = useDeleteProjectTask(projectId);
-  const createTask = useCreateTask();
   const reorderTasks = useReorderTasks();
   const { getUser, currentUserId } = useUserLookup();
   const { filters, sortBy, updateFilters, updateSort } = useProjectTaskRouteState(projectId);
@@ -110,31 +108,10 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     () => siteVisitsData?.items ?? [],
     [siteVisitsData?.items]
   );
-  const defaultSiteVisitId = siteVisits.length === 1 ? siteVisits[0].id : siteVisits[0]?.id;
-
-  const handleQuickAdd = useCallback(
-    async (data: { title: string; description?: string }) => {
-      if (!defaultSiteVisitId) {
-        toastError('Add a site visit first to create tasks quickly, or use "Add Task" for full options.');
-        return;
-      }
-      try {
-        await createTask.mutateAsync({
-          siteVisitId: defaultSiteVisitId,
-          title: data.title,
-          description: data.description,
-          status: 'pending',
-          priority: 'normal',
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.projectTasks.byProject(projectId),
-        });
-      } catch (error) {
-        toastError(formatProjectTaskMutationError(error, 'create'));
-      }
-    },
-    [createTask, defaultSiteVisitId, projectId, queryClient]
-  );
+  const { handleQuickAdd, isQuickAddPending } = useProjectTaskQuickAdd({
+    projectId,
+    siteVisits,
+  });
 
   const [editingTask, setEditingTask] = useState<TaskWithWorkstream | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -356,7 +333,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             onAdd={handleQuickAdd}
             placeholder="Add a task..."
             showDescription={false}
-            isLoading={createTask.isPending}
+            isLoading={isQuickAddPending}
           />
         </div>
         <ProjectTasksEmptyState onAdd={() => setCreateDialogOpen(true)} />
@@ -386,7 +363,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
           onAdd={handleQuickAdd}
           placeholder="Add a task..."
           showDescription={false}
-          isLoading={createTask.isPending}
+          isLoading={isQuickAddPending}
         />
       </div>
 

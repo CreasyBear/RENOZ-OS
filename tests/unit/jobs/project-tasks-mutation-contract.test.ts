@@ -44,6 +44,7 @@ describe('project tasks mutation contract', () => {
 
   it('keeps project task mutations job-scoped, cache-safe, and operator-safe', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const quickAdd = read('src/components/domain/jobs/projects/project-task-quick-add.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
     const hooks = read('src/hooks/jobs/use-job-tasks.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
@@ -55,7 +56,8 @@ describe('project tasks mutation contract', () => {
     const compactServer = compact(server);
     const compactSchema = compact(schema);
 
-    expect(tab).toContain("formatProjectTaskMutationError(error, 'create')");
+    expect(quickAdd).toContain("formatProjectTaskMutationError(error, 'create')");
+    expect(tab).not.toContain("formatProjectTaskMutationError(error, 'create')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'status')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'delete')");
     expect(tab).toContain("formatProjectTaskMutationError(error, 'reorder')");
