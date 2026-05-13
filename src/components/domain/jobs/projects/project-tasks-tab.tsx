@@ -21,11 +21,9 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Plus,
-  CheckCircle2,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Link, useSearch, useNavigate } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
@@ -49,6 +47,7 @@ import {
   DEFAULT_TASK_FILTERS,
   getTaskPriority,
 } from './project-task-config';
+import { ProjectTaskCompletionCta } from './project-task-completion-cta';
 import {
   ProjectTaskActiveFilterChips,
   ProjectTaskFilterPopover,
@@ -566,25 +565,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       {allTasks.length > 0 &&
         allTasks.every(t => t.status === 'completed') &&
         onCompleteProjectClick && (
-          <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30">
-            <CardContent className="p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-500" />
-                <div>
-                  <p className="font-medium text-green-900 dark:text-green-100">
-                    All tasks complete
-                  </p>
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    Ready to complete this project?
-                  </p>
-                </div>
-              </div>
-              <Button onClick={onCompleteProjectClick} size="sm">
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Complete project
-              </Button>
-            </CardContent>
-          </Card>
+          <ProjectTaskCompletionCta onCompleteProjectClick={onCompleteProjectClick} />
         )}
 
       {/* Grouped Tasks or Filtered Empty State */}
