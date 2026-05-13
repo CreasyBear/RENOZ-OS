@@ -43,10 +43,7 @@ import {
 import { useUserLookup } from '@/hooks/users';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import {
-  DEFAULT_TASK_FILTERS,
-  getTaskPriority,
-} from './project-task-config';
+import { DEFAULT_TASK_FILTERS } from './project-task-config';
 import { ProjectTaskCompletionCta } from './project-task-completion-cta';
 import {
   ProjectTaskActiveFilterChips,
@@ -61,6 +58,15 @@ import {
   ProjectTasksLoadingState,
   ProjectTasksUnavailableState,
 } from './project-task-states';
+import {
+  areAllProjectTasksComplete,
+  buildProjectTaskViewModels,
+  filterProjectTasks,
+  getProjectTaskCounts,
+  groupProjectTasksByWorkstream,
+  hasProjectTaskActiveFilters,
+  sortProjectTasks,
+} from './project-task-view-model';
 import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Types
@@ -207,130 +213,37 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     [workstreamsData?.data]
   );
 
-  // Transform tasks
+  // Build task view model
   const allTasks = useMemo(() => {
-    const rawTasks = tasksData || [];
-    return rawTasks.map((task): TaskWithWorkstream => {
-      const workstream = workstreams.find(w => w.id === task.workstreamId);
-      const assignee = task.assigneeId ? getUser(task.assigneeId) : null;
-      const visit = task.siteVisitId ? siteVisits.find(v => v.id === task.siteVisitId) : undefined;
-      return {
-        ...task,
-        workstreamName: workstream?.name,
-        assigneeName: assignee?.name ?? undefined,
-        siteVisitNumber: visit?.visitNumber,
-      };
+    return buildProjectTaskViewModels({
+      tasks: tasksData || [],
+      workstreams,
+      siteVisits,
+      getUser,
     });
   }, [tasksData, workstreams, siteVisits, getUser]);
 
   // Calculate counts for filter UI
-  const taskCounts = useMemo(() => {
-    const byStatus: Record<JobTaskStatus, number> = { pending: 0, in_progress: 0, completed: 0, blocked: 0 };
-    const byPriority: Record<JobTaskPriority, number> = { urgent: 0, high: 0, normal: 0, low: 0 };
-
-    allTasks.forEach(task => {
-      byStatus[task.status] = (byStatus[task.status] || 0) + 1;
-      const priority = getTaskPriority(task.priority);
-      byPriority[priority] = (byPriority[priority] || 0) + 1;
-    });
-
-    return { byStatus, byPriority };
-  }, [allTasks]);
+  const taskCounts = useMemo(() => getProjectTaskCounts(allTasks), [allTasks]);
 
   // Apply filters (including pending deletion exclusion)
   const filteredTasks = useMemo(() => {
-    return allTasks.filter(task => {
-      // Exclude tasks pending deletion
-      if (pendingDeletions.has(task.id)) {
-        return false;
-      }
-      // Status filter
-      if (filters.status.length > 0 && !filters.status.includes(task.status)) {
-        return false;
-      }
-      // Priority filter
-      const taskPriority = getTaskPriority(task.priority);
-      if (filters.priority.length > 0 && !filters.priority.includes(taskPriority)) {
-        return false;
-      }
-      // Assignee filter
-      if (filters.assignee === 'me' && task.assigneeId !== currentUserId) {
-        return false;
-      }
-      if (filters.assignee === 'unassigned' && task.assigneeId) {
-        return false;
-      }
-      return true;
+    return filterProjectTasks({
+      tasks: allTasks,
+      filters,
+      currentUserId,
+      pendingDeletions,
     });
   }, [allTasks, filters, currentUserId, pendingDeletions]);
 
   // Apply sorting
   const tasks = useMemo(() => {
-    const sorted = [...filteredTasks];
-
-    switch (sortBy) {
-      case 'dueDate':
-        sorted.sort((a, b) => {
-          if (!a.dueDate && !b.dueDate) return 0;
-          if (!a.dueDate) return 1;
-          if (!b.dueDate) return -1;
-          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-        });
-        break;
-      case 'priority': {
-        const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-        sorted.sort((a, b) => {
-          const aPri = priorityOrder[getTaskPriority(a.priority)];
-          const bPri = priorityOrder[getTaskPriority(b.priority)];
-          return aPri - bPri;
-        });
-        break;
-      }
-      case 'created': {
-        sorted.sort((a, b) => {
-          const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return bDate - aDate; // Newest first
-        });
-        break;
-      }
-      case 'title':
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-    }
-
-    return sorted;
+    return sortProjectTasks(filteredTasks, sortBy);
   }, [filteredTasks, sortBy]);
 
   // Group by workstream
   const groupedTasks = useMemo(() => {
-    const groups = new Map<string, TaskWithWorkstream[]>();
-
-    // Initialize with all workstreams (even empty ones)
-    workstreams.forEach(ws => {
-      groups.set(ws.name, []);
-    });
-
-    // Add "Unassigned" group
-    groups.set('Unassigned', []);
-
-    // Distribute tasks
-    tasks.forEach(task => {
-      const groupName = task.workstreamName || 'Unassigned';
-      const existing = groups.get(groupName) || [];
-      existing.push(task);
-      groups.set(groupName, existing);
-    });
-
-    // Filter out empty groups and sort
-    return Array.from(groups.entries())
-      .filter(([_, tasks]) => tasks.length > 0)
-      .sort(([a], [b]) => {
-        // "Unassigned" always last
-        if (a === 'Unassigned') return 1;
-        if (b === 'Unassigned') return -1;
-        return a.localeCompare(b);
-      });
+    return groupProjectTasksByWorkstream({ tasks, workstreams });
   }, [tasks, workstreams]);
 
   const handleToggleTask = async (task: TaskWithWorkstream) => {
@@ -460,7 +373,8 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   );
 
   // Check if any filters are active (moved before early returns for proper scoping)
-  const hasActiveFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignee !== 'all';
+  const hasActiveFilters = hasProjectTaskActiveFilters(filters);
+  const allTasksComplete = areAllProjectTasksComplete(allTasks);
 
   if (isLoading) {
     return <ProjectTasksLoadingState />;
@@ -562,11 +476,9 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       <ProjectTaskSummaryCards tasks={allTasks} />
 
       {/* All tasks complete CTA (Phase 5: Forward momentum) */}
-      {allTasks.length > 0 &&
-        allTasks.every(t => t.status === 'completed') &&
-        onCompleteProjectClick && (
-          <ProjectTaskCompletionCta onCompleteProjectClick={onCompleteProjectClick} />
-        )}
+      {allTasksComplete && onCompleteProjectClick && (
+        <ProjectTaskCompletionCta onCompleteProjectClick={onCompleteProjectClick} />
+      )}
 
       {/* Grouped Tasks or Filtered Empty State */}
       {groupedTasks.length === 0 && hasActiveFilters ? (
