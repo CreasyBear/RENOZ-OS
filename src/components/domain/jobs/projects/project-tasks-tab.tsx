@@ -19,60 +19,19 @@
  */
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { format, isPast, isToday, isTomorrow, addDays, formatDistanceToNow as formatDistanceToNowDateFns } from 'date-fns';
 import {
   CheckSquare,
   Plus,
-  Calendar,
   AlertCircle,
-  MoreHorizontal,
-  Trash2,
-  Edit3,
   CheckCircle2,
-  Timer,
-  GripVertical,
   Filter,
   ExternalLink,
 } from 'lucide-react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Link, useSearch, useNavigate } from '@tanstack/react-router';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Progress } from '@/components/ui/progress';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
 import { toastError } from '@/hooks';
 
@@ -94,8 +53,6 @@ import { getProjectTasksReadErrorMessage } from './project-read-error-messages';
 import {
   DEFAULT_TASK_FILTERS,
   getTaskPriority,
-  PROJECT_TASK_PRIORITY_CONFIG,
-  PROJECT_TASK_STATUS_CONFIG,
 } from './project-task-config';
 import {
   ProjectTaskActiveFilterChips,
@@ -103,6 +60,7 @@ import {
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
+import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Types
 import type {
@@ -126,396 +84,6 @@ interface ProjectTasksTabProps {
   projectId: string;
   /** When provided, show "All tasks complete" CTA and open completion dialog on click */
   onCompleteProjectClick?: () => void;
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function formatDueDate(date: Date | string | null | undefined): { text: string; isOverdue: boolean; isSoon: boolean } {
-  if (!date) return { text: 'No due date', isOverdue: false, isSoon: false };
-
-  const dueDate = date instanceof Date ? date : new Date(date);
-  const today = new Date();
-
-  if (isToday(dueDate)) return { text: 'Due today', isOverdue: false, isSoon: true };
-  if (isTomorrow(dueDate)) return { text: 'Due tomorrow', isOverdue: false, isSoon: true };
-  if (isPast(dueDate) && !isToday(dueDate)) return { text: `Overdue by ${formatDistanceToNowDateFns(dueDate)}`, isOverdue: true, isSoon: false };
-
-  // Within 3 days
-  if (dueDate <= addDays(today, 3)) return { text: format(dueDate, 'MMM d'), isOverdue: false, isSoon: true };
-
-  return { text: format(dueDate, 'MMM d, yyyy'), isOverdue: false, isSoon: false };
-}
-
-
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
-// ============================================================================
-// SORTABLE TASK CARD
-// ============================================================================
-
-interface SortableTaskCardProps {
-  task: TaskWithWorkstream;
-  projectId: string;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-function SortableTaskCard({ task, projectId, onToggle, onEdit, onDelete }: SortableTaskCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'group flex items-start gap-3 p-4 rounded-xl border bg-card hover:shadow-sm transition-all',
-        isDragging && 'opacity-50 shadow-lg ring-2 ring-primary',
-        task.status === 'completed' && 'opacity-70 bg-muted/30'
-      )}
-    >
-      {/* Drag Handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        className="pt-1 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Drag to reorder"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-
-      <TaskCardContent
-        task={task}
-        projectId={projectId}
-        onToggle={onToggle}
-        onEdit={onEdit}
-        onDelete={onDelete}
-      />
-    </div>
-  );
-}
-
-// ============================================================================
-// TASK CARD CONTENT
-// ============================================================================
-
-interface TaskCardContentProps {
-  task: TaskWithWorkstream;
-  projectId: string;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-function TaskCardContent({ task, projectId, onToggle, onEdit, onDelete }: TaskCardContentProps) {
-  const priority = PROJECT_TASK_PRIORITY_CONFIG[task.priority || 'normal'];
-  const status = PROJECT_TASK_STATUS_CONFIG[task.status];
-  const dueInfo = formatDueDate(task.dueDate);
-  const isCompleted = task.status === 'completed';
-  const PriorityIcon = priority.icon;
-  const StatusIcon = status.icon;
-
-  return (
-    <>
-      {/* Checkbox */}
-      <div className="pt-0.5">
-        <Checkbox
-          checked={isCompleted}
-          onCheckedChange={onToggle}
-          className={cn(
-            'h-5 w-5 rounded-full border-2',
-            isCompleted
-              ? 'border-green-500 bg-green-500 text-white'
-              : 'border-gray-300 hover:border-gray-400'
-          )}
-        />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        {/* Title Row */}
-        <div className="flex items-start gap-2">
-          <h4 className={cn(
-            'font-medium text-foreground',
-            isCompleted && 'line-through text-muted-foreground'
-          )}>
-            {task.title}
-          </h4>
-
-          {/* Priority Badge */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge
-                variant="secondary"
-                className={cn('shrink-0 px-1.5 py-0.5', priority.bg, priority.color)}
-              >
-                <PriorityIcon className="h-3 w-3" />
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{priority.label} Priority</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Description */}
-        {task.description && (
-          <p className={cn(
-            'text-sm text-muted-foreground mt-1 line-clamp-2',
-            isCompleted && 'line-through'
-          )}>
-            {task.description}
-          </p>
-        )}
-
-        {/* Meta Row */}
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          {/* Status */}
-          <div className={cn('flex items-center gap-1 text-xs', status.color)}>
-            <StatusIcon className="h-3.5 w-3.5" />
-            <span>{status.label}</span>
-          </div>
-
-          {/* Due Date */}
-          {task.dueDate && (
-            <div className={cn(
-              'flex items-center gap-1 text-xs',
-              dueInfo.isOverdue ? 'text-red-500 font-medium' :
-              dueInfo.isSoon ? 'text-amber-600' : 'text-muted-foreground'
-            )}>
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{dueInfo.text}</span>
-              {dueInfo.isOverdue && <AlertCircle className="h-3.5 w-3.5" />}
-            </div>
-          )}
-
-          {/* Estimated Hours */}
-          {task.estimatedHours && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Timer className="h-3.5 w-3.5" />
-              <span>{task.estimatedHours}h</span>
-            </div>
-          )}
-
-          {/* Assignee */}
-          {task.assigneeId && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1.5">
-                  <Avatar className="h-5 w-5">
-                    <AvatarImage src={task.assigneeAvatar} />
-                    <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                      {getInitials(task.assigneeName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  {task.assigneeName && (
-                    <span className="text-xs text-muted-foreground hidden sm:inline">
-                      {task.assigneeName.split(' ')[0]}
-                    </span>
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Assigned to {task.assigneeName || 'Unknown'}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-
-          {/* Site Visit Link */}
-          {task.siteVisitId && task.siteVisitNumber && (
-            <Link
-              to="/projects/$projectId/visits/$visitId"
-              params={{ projectId, visitId: task.siteVisitId }}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="h-3 w-3" />
-              Visit {task.siteVisitNumber}
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Actions - always visible on touch, hover-reveal on desktop */}
-      <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Task actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>
-              <Edit3 className="h-4 w-4 mr-2" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={onDelete}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </>
-  );
-}
-
-
-
-// ============================================================================
-// WORKSTREAM GROUP
-// ============================================================================
-
-function WorkstreamGroup({
-  name,
-  tasks,
-  projectId,
-  onToggleTask,
-  onEditTask,
-  onDeleteTask,
-  onReorderTasks,
-}: {
-  name: string;
-  tasks: TaskWithWorkstream[];
-  projectId: string;
-  onToggleTask: (task: TaskWithWorkstream) => void;
-  onEditTask: (task: TaskWithWorkstream) => void;
-  onDeleteTask: (task: TaskWithWorkstream) => void;
-  onReorderTasks: (taskIds: string[]) => void;
-}) {
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter(t => t.status === 'completed').length;
-    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-    const blocked = tasks.filter(t => t.status === 'blocked').length;
-    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    // Total estimated hours
-    const totalHours = tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
-
-    return { total, completed, inProgress, blocked, progress, totalHours };
-  }, [tasks]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // 8px movement before drag starts
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      const oldIndex = tasks.findIndex(t => t.id === active.id);
-      const newIndex = tasks.findIndex(t => t.id === over.id);
-
-      const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
-      onReorderTasks(reorderedTasks.map(t => t.id));
-    }
-  };
-
-  if (tasks.length === 0) return null;
-
-  return (
-    <Card className="overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b bg-muted/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-background border">
-              <CheckSquare className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div>
-              <h3 className="font-semibold">{name}</h3>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                <span>{stats.completed}/{stats.total} done</span>
-                {stats.totalHours > 0 && (
-                  <>
-                    <span>•</span>
-                    <span>{stats.totalHours}h estimated</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Mini status breakdown */}
-            <div className="hidden sm:flex items-center gap-2 text-xs">
-              {stats.inProgress > 0 && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                  {stats.inProgress} active
-                </Badge>
-              )}
-              {stats.blocked > 0 && (
-                <Badge variant="secondary" className="bg-red-100 text-red-700">
-                  {stats.blocked} blocked
-                </Badge>
-              )}
-            </div>
-
-            {/* Progress */}
-            <div className="flex items-center gap-2 w-24">
-              <Progress value={stats.progress} className="h-1.5" />
-              <span className="text-xs font-medium w-8 text-right">{stats.progress}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tasks with DnD */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={tasks.map(t => t.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <CardContent className="p-4 space-y-3">
-            {tasks.map(task => (
-              <SortableTaskCard
-                key={task.id}
-                task={task}
-                projectId={projectId}
-                onToggle={() => onToggleTask(task)}
-                onEdit={() => onEditTask(task)}
-                onDelete={() => onDeleteTask(task)}
-              />
-            ))}
-          </CardContent>
-        </SortableContext>
-      </DndContext>
-    </Card>
-  );
 }
 
 // ============================================================================
@@ -1084,17 +652,17 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
       ) : (
         <div className="space-y-4">
           {groupedTasks.map(([workstreamName, workstreamTasks]) => (
-          <WorkstreamGroup
-            key={workstreamName}
-            name={workstreamName}
-            tasks={workstreamTasks}
-            projectId={projectId}
-            onToggleTask={handleToggleTask}
-            onEditTask={setEditingTask}
-            onDeleteTask={handleDeleteTask}
-            onReorderTasks={(taskIds) => handleReorderTasks(workstreamName, taskIds)}
-          />
-        ))}
+            <ProjectTaskWorkstreamGroup
+              key={workstreamName}
+              name={workstreamName}
+              tasks={workstreamTasks}
+              projectId={projectId}
+              onToggleTask={handleToggleTask}
+              onEditTask={setEditingTask}
+              onDeleteTask={handleDeleteTask}
+              onReorderTasks={(taskIds) => handleReorderTasks(workstreamName, taskIds)}
+            />
+          ))}
         </div>
       )}
 
