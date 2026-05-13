@@ -11,12 +11,12 @@ import { useCallback, useState } from 'react';
 import {
   ProjectOverviewTab,
   ProjectWorkstreamsTab,
-  ProjectVisitsTab,
   ProjectTasksTab,
   ProjectBomTab,
   ProjectNotesTab,
   ProjectFilesTab,
 } from '../project-detail-tabs';
+import { ProjectVisitsTab } from '../project-visits-tab';
 import { ProjectDocumentsTab } from '../tabs';
 import type { ProjectDetailData } from '@/hooks/jobs';
 import { transformProjectForTabs } from '@/lib/schemas/jobs/project-detail';

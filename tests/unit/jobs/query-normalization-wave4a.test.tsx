@@ -449,7 +449,7 @@ describe('jobs query normalization wave 4a', () => {
   });
 
   it('keeps cached site visits visible when a visit read degrades', async () => {
-    const { ProjectVisitsTab } = await import('@/components/domain/jobs/projects/project-detail-tabs');
+    const { ProjectVisitsTab } = await import('@/components/domain/jobs/projects/project-visits-tab');
     render(
       <ProjectVisitsTab
         project={{ id: 'project-1' } as never}
@@ -474,7 +474,7 @@ describe('jobs query normalization wave 4a', () => {
   }, 60000);
 
   it('shows a blocking unavailable state for visits without data', async () => {
-    const { ProjectVisitsTab } = await import('@/components/domain/jobs/projects/project-detail-tabs');
+    const { ProjectVisitsTab } = await import('@/components/domain/jobs/projects/project-visits-tab');
     render(
       <ProjectVisitsTab
         project={{ id: 'project-1' } as never}

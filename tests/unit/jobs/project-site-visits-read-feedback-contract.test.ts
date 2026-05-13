@@ -38,17 +38,17 @@ describe('project site visits read feedback contract', () => {
   });
 
   it('keeps the project site visits warning behind the read helper', () => {
-    const detailTabs = read('src/components/domain/jobs/projects/project-detail-tabs.tsx');
+    const visitsTab = read('src/components/domain/jobs/projects/project-visits-tab.tsx');
     const hooks = read('src/hooks/jobs/use-site-visits.ts');
 
     expect(hooks).toContain(
       "fallbackMessage: 'Project site visits are temporarily unavailable. Please refresh and try again.'"
     );
-    expect(detailTabs).toContain(
+    expect(visitsTab).toContain(
       "import { getProjectSiteVisitsReadErrorMessage } from './project-read-error-messages';"
     );
-    expect(detailTabs).toContain('{getProjectSiteVisitsReadErrorMessage(error)}');
-    expect(detailTabs).not.toContain(
+    expect(visitsTab).toContain('{getProjectSiteVisitsReadErrorMessage(error)}');
+    expect(visitsTab).not.toContain(
       "error.message || 'Project site visits are temporarily unavailable"
     );
   });

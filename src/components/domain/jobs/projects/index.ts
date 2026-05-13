@@ -95,12 +95,12 @@ export type { ProjectDetailData, ProjectMember } from '@/lib/schemas/jobs/projec
 export {
   ProjectOverviewTab,
   ProjectWorkstreamsTab,
-  ProjectVisitsTab,
   ProjectTasksTab,
   ProjectBomTab,
   ProjectNotesTab,
   ProjectFilesTab,
 } from './project-detail-tabs';
+export { ProjectVisitsTab } from './project-visits-tab';
 export type { ProjectTabData } from './project-detail-tabs';
 
 // --- Timeline & Overview Components ---
