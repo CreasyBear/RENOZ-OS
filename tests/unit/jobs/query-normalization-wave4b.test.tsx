@@ -229,11 +229,24 @@ describe('jobs query normalization wave 4b', () => {
   });
 
   it('shows an unavailable state for bom instead of fake no-bom copy', async () => {
-    const { ProjectBomTab } = await import('@/components/domain/jobs/projects/project-bom-tab');
+    const { ProjectBomEmptyState } = await import('@/components/domain/jobs/projects/project-bom-empty-state');
 
-    render(<ProjectBomTab projectId="project-1" orderId={null} />);
+    render(
+      <ProjectBomEmptyState
+        error={new Error('Project materials are temporarily unavailable. Please refresh and try again.')}
+        hasReadData={false}
+        orderId={null}
+        isCreatingBom={false}
+        isImportingCsv={false}
+        isImportingFromOrder={false}
+        onRetry={vi.fn()}
+        onCreateBom={vi.fn()}
+        onCsvImport={vi.fn()}
+        onImportFromOrder={vi.fn()}
+      />
+    );
 
     expect(screen.getByText('Materials unavailable')).toBeInTheDocument();
     expect(screen.queryByText('No BOM yet')).not.toBeInTheDocument();
-  }, 60000);
+  });
 });

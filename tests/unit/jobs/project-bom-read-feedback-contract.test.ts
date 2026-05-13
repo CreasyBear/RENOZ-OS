@@ -38,16 +38,16 @@ describe('project BOM read feedback contract', () => {
   });
 
   it('keeps the project BOM warning behind the read helper', () => {
-    const bomTab = read('src/components/domain/jobs/projects/project-bom-tab.tsx');
+    const bomEmptyState = read('src/components/domain/jobs/projects/project-bom-empty-state.tsx');
     const hooks = read('src/hooks/jobs/use-project-bom.ts');
 
     expect(hooks).toContain(
       "'Project materials are temporarily unavailable. Please refresh and try again.'"
     );
-    expect(bomTab).toContain(
+    expect(bomEmptyState).toContain(
       "import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';"
     );
-    expect(bomTab).toContain('{getProjectMaterialsReadErrorMessage(error)}');
-    expect(bomTab).not.toContain("error.message || 'Project materials are temporarily unavailable");
+    expect(bomEmptyState).toContain('{getProjectMaterialsReadErrorMessage(error)}');
+    expect(bomEmptyState).not.toContain("error.message || 'Project materials are temporarily unavailable");
   });
 });

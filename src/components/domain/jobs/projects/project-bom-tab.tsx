@@ -27,7 +27,6 @@ import {
   Circle,
   Truck,
   AlertCircle,
-  Calculator,
   TrendingUp,
   Link as LinkIcon,
   Upload,
@@ -105,6 +104,7 @@ import { useDebounce } from '@/hooks/_shared';
 import { useProductSearch } from '@/hooks/products';
 import { BomTabSkeleton } from './bom-tab-skeleton';
 import { getProjectMaterialsReadErrorMessage } from './project-read-error-messages';
+import { ProjectBomEmptyState } from './project-bom-empty-state';
 
 // Types
 import {
@@ -1028,75 +1028,20 @@ export function ProjectBomTab({ projectId, orderId }: ProjectBomTabProps) {
     return <BomTabSkeleton />;
   }
 
-  // No BOM yet - create prompt
   if (!bom) {
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-medium">Bill of Materials</h3>
-            <p className="text-sm text-muted-foreground">
-              Track materials, costs, and installation progress
-            </p>
-          </div>
-        </div>
-        {bomWarning}
-
-        {bomData === undefined && error ? null : (
-        <Card className="p-12 text-center">
-          <div className="p-4 bg-muted rounded-full w-fit mx-auto mb-4">
-            <Calculator className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-medium mb-2">No BOM yet</h3>
-          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            Create a Bill of Materials to estimate costs, track materials through procurement,
-            and monitor installation progress. Or import from CSV (sku,quantity[,unitCost]).
-          </p>
-          <div className="flex items-center justify-center gap-2">
-            <input
-              ref={csvInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleCsvImport}
-            />
-            <Button
-              variant="outline"
-              onClick={() => csvInputRef.current?.click()}
-              disabled={importCsv.isPending}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              {importCsv.isPending ? 'Importing...' : 'Import CSV'}
-            </Button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button
-                      variant="outline"
-                      onClick={handleImportFromOrder}
-                      disabled={!orderId || importFromOrder.isPending}
-                    >
-                      <ShoppingCart className="mr-2 h-4 w-4" />
-                      {importFromOrder.isPending ? 'Importing...' : 'Import from Order'}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {orderId
-                    ? 'Import line items from the linked order'
-                    : 'Link an order to this project first'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Button onClick={handleCreateBom} disabled={createBom.isPending}>
-              <Plus className="mr-2 h-4 w-4" />
-              {createBom.isPending ? 'Creating...' : 'Create BOM'}
-            </Button>
-          </div>
-        </Card>
-        )}
-      </div>
+      <ProjectBomEmptyState
+        error={error}
+        hasReadData={bomData !== undefined}
+        orderId={orderId}
+        isCreatingBom={createBom.isPending}
+        isImportingCsv={importCsv.isPending}
+        isImportingFromOrder={importFromOrder.isPending}
+        onRetry={() => void refetch()}
+        onCreateBom={() => void handleCreateBom()}
+        onCsvImport={handleCsvImport}
+        onImportFromOrder={() => void handleImportFromOrder()}
+      />
     );
   }
 
