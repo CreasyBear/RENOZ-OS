@@ -6,15 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   FormDialog,
-  FormField,
   TextareaField,
   TextField,
 } from '@/components/shared/forms';
@@ -42,6 +34,7 @@ import {
   ProjectTaskPriorityField,
 } from './project-task-dialog-fields';
 import { ProjectTaskCreateScopeFields } from './project-task-create-scope-fields';
+import { ProjectTaskCreateTemplateField } from './project-task-create-template-field';
 import { SiteVisitCreateDialog } from './site-visit-create-dialog';
 import { WorkstreamCreateDialog } from './workstream-dialogs';
 
@@ -213,33 +206,13 @@ export function TaskCreateDialog({
         className="max-w-lg max-h-[90vh] overflow-y-auto"
         resetOnClose={false}
       >
-        {taskTemplateOptions.length > 0 && (
-          <FormField label="From template (optional)" name="taskTemplate">
-            <Select
-              value="none"
-              onValueChange={(value) => {
-                if (value === 'none') return;
-                const option = taskTemplateOptions.find(taskOption => taskOption.value === value);
-                if (option) {
-                  form.setFieldValue('title', option.title);
-                  form.setFieldValue('description', option.description ?? '');
-                }
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pre-fill from template" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Start from scratch</SelectItem>
-                {taskTemplateOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-        )}
+        <ProjectTaskCreateTemplateField
+          templateOptions={taskTemplateOptions}
+          onApplyTemplate={(option) => {
+            form.setFieldValue('title', option.title);
+            form.setFieldValue('description', option.description ?? '');
+          }}
+        />
 
         <form.Field name="title">
           {(field) => (
