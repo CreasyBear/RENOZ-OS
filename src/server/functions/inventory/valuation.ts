@@ -9,11 +9,11 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, gt, isNull } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { inventory, inventoryCostLayers, products } from 'drizzle/schema';
+import { inventory, inventoryCostLayers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
@@ -41,6 +41,7 @@ import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
 import { readInventoryValuation } from './inventory-valuation-read';
 import { readProductCostLayers } from './product-cost-layers-read';
+import { updateWeightedAverageProductCost } from './product-weighted-average-cost';
 
 // ============================================================================
 // COST LAYERS
@@ -253,67 +254,8 @@ export const updateProductWeightedAverageCost = createServerFn({ method: 'POST' 
   .inputValidator(z.object({ productId: z.string().uuid() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
-
-    const [product] = await db
-      .select({ id: products.id })
-      .from(products)
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      )
-      .limit(1);
-
-    if (!product) {
-      throw new NotFoundError('Product not found', 'product');
-    }
-
-    // Get all active cost layers for this product
-    const layers = await db
-      .select({
-        quantityRemaining: inventoryCostLayers.quantityRemaining,
-        unitCost: inventoryCostLayers.unitCost,
-      })
-      .from(inventoryCostLayers)
-      .innerJoin(
-        inventory,
-        and(
-          eq(inventoryCostLayers.inventoryId, inventory.id),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      )
-      .where(
-        and(
-          eq(inventoryCostLayers.organizationId, ctx.organizationId),
-          eq(inventory.productId, data.productId),
-          eq(inventory.organizationId, ctx.organizationId),
-          gt(inventoryCostLayers.quantityRemaining, 0)
-        )
-      );
-
-    if (layers.length === 0) {
-      return { productId: data.productId, costPrice: null, updated: false };
-    }
-
-    const totalRemaining = layers.reduce((sum, l) => sum + l.quantityRemaining, 0);
-    const totalValue = layers.reduce(
-      (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
-      0
-    );
-    const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
-
-    await db
-      .update(products)
-      .set({ costPrice: weightedAvgCost })
-      .where(
-        and(
-          eq(products.id, data.productId),
-          eq(products.organizationId, ctx.organizationId),
-          isNull(products.deletedAt)
-        )
-      );
-
-    return { productId: data.productId, costPrice: weightedAvgCost, updated: true };
+    return updateWeightedAverageProductCost({
+      organizationId: ctx.organizationId,
+      productId: data.productId,
+    });
   });

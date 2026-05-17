@@ -123,23 +123,44 @@ describe('inventory valuation tenant-scope contract', () => {
     const productCostLayerSource = compact(
       read('src/server/functions/inventory/product-cost-layers-read.ts')
     );
+    const productCostUpdateSource = compact(
+      read('src/server/functions/inventory/product-weighted-average-cost.ts')
+    );
 
     expect(source).toContain("import{readProductCostLayers}from'./product-cost-layers-read'");
     expect(source).toContain(
       'returnreadProductCostLayers({organizationId:ctx.organizationId,productId:data.productId,})'
     );
+    expect(source).toContain(
+      "import{updateWeightedAverageProductCost}from'./product-weighted-average-cost'"
+    );
+    expect(source).toContain(
+      'returnupdateWeightedAverageProductCost({organizationId:ctx.organizationId,productId:data.productId,})'
+    );
     expect(source).not.toContain('lastPurchaseCost');
+    expect(source).not.toContain('weightedAvgCost');
     expect(productCostLayerSource).toContain(
       'eq(inventoryCostLayers.organizationId,organizationId),eq(inventory.productId,productId),eq(inventory.organizationId,organizationId)'
     );
-    expect(source).toContain(
-      'select({id:products.id}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    expect(productCostUpdateSource).toContain(
+      'select({id:products.id}).from(products).where(and(eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)))'
     );
-    expect(source).toContain("thrownewNotFoundError('Productnotfound','product')");
-    expect(source).toContain(
-      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'
+    expect(productCostUpdateSource).toContain("thrownewNotFoundError('Productnotfound','product')");
+    expect(productCostUpdateSource).toContain(
+      'eq(inventoryCostLayers.organizationId,organizationId),eq(inventory.productId,productId),eq(inventory.organizationId,organizationId),gt(inventoryCostLayers.quantityRemaining,0)'
     );
-    expect(source).not.toContain('update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,data.productId))');
+    expect(productCostUpdateSource).toContain(
+      'update(products).set({costPrice:weightedAvgCost}).where(and(eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)))'
+    );
+    expect(productCostUpdateSource).toContain(
+      'return{productId,costPrice:null,updated:false}'
+    );
+    expect(productCostUpdateSource).toContain(
+      'return{productId,costPrice:weightedAvgCost,updated:true}'
+    );
+    expect(productCostUpdateSource).not.toContain(
+      'update(products).set({costPrice:weightedAvgCost}).where(eq(products.id,productId))'
+    );
   });
 
   it('keeps manual cost-layer writes transactional and value-cache coherent', () => {
