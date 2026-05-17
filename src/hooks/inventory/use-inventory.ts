@@ -6,7 +6,7 @@
  * - Inventory item details
  * - Inventory movements history
  * - Stock adjustments with optimistic updates
- * - Stock transfers with refetch-first cache reconciliation
+ * - Stock transfers are exported from a dedicated transfer hook
  * - Stock receiving is exported from a dedicated receive hook
  *
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
@@ -29,17 +29,16 @@ import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
 import { listMovements } from '@/server/functions/inventory/movements';
 import { getAvailableSerials } from '@/server/functions/inventory/serial-availability';
-import { transferInventory } from '@/server/functions/inventory/transfers';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,
   Inventory,
   MovementListQuery,
   StockAdjustment,
-  StockTransfer,
 } from '@/lib/schemas/inventory';
 
 export { useReceiveInventory } from './use-receive-inventory';
+export { useTransferInventory } from './use-transfer-inventory';
 
 // ============================================================================
 // LIST HOOKS
@@ -222,58 +221,6 @@ export function useAdjustInventory() {
   });
 }
 
-/**
- * Transfer inventory between locations
- */
-export function useTransferInventory() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (params: StockTransfer) => transferInventory({ data: params }),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.inventory.lists() });
-      await queryClient.cancelQueries({ queryKey: queryKeys.inventory.details() });
-
-      const previousLists = queryClient.getQueriesData<InventoryListResult>({
-        queryKey: queryKeys.inventory.lists(),
-      });
-      const previousDetails = queryClient.getQueriesData<InventoryDetailResult>({
-        queryKey: queryKeys.inventory.details(),
-      });
-
-      // Transfers are row- or serial-scoped. Product/location aggregate math can
-      // patch the wrong lot, disposition, or serialized row, so refetch exact
-      // server results instead of pretending the cache knows the source row.
-      return { previousLists, previousDetails };
-    },
-    onError: (error, _variables, context) => {
-      if (!context) return;
-      context.previousLists.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-      context.previousDetails.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-      toast.error(formatInventoryMutationError(error, 'Failed to transfer inventory'));
-    },
-    onSuccess: (data, variables) => {
-      toast.success('Inventory transferred successfully');
-
-      invalidateInventoryStockMutationQueries(queryClient, {
-        productId: variables.productId,
-        result: data,
-        touchesSerializedInventory: (variables.serialNumbers?.length ?? 0) > 0,
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
-    },
-  });
-}
-
-/**
- * Receive new inventory stock
- */
 /**
  * Fetch inventory movements with filtering (general query, not tied to specific inventory item)
  */

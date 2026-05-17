@@ -87,12 +87,7 @@ describe('inventory transfer tenant-scope contract', () => {
 
   it('requires row scope for non-serialized source selection', () => {
     const transferServer = compact(read('src/server/functions/inventory/transfers.ts'));
-    const inventoryHookSource = read('src/hooks/inventory/use-inventory.ts');
-    const transferHook = compact(
-      inventoryHookSource
-        .split('export function useTransferInventory()')[1]
-        .split('/**\n * Receive new inventory stock')[0]
-    );
+    const transferHook = compact(read('src/hooks/inventory/use-transfer-inventory.ts'));
 
     expect(transferServer).toContain("if(!product.isSerialized&&!data.inventoryId){");
     expect(transferServer).toContain(

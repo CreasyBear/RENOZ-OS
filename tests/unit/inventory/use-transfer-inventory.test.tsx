@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
@@ -73,6 +75,12 @@ function inventoryList(items: Array<Record<string, unknown>>) {
   }
 }
 
+const root = process.cwd()
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8')
+}
+
 describe('useTransferInventory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -111,7 +119,7 @@ describe('useTransferInventory', () => {
       ])
     )
 
-    const { useTransferInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useTransferInventory } = await import('@/hooks/inventory/use-transfer-inventory')
     const { result } = renderHook(() => useTransferInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -167,7 +175,7 @@ describe('useTransferInventory', () => {
       ])
     )
 
-    const { useTransferInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useTransferInventory } = await import('@/hooks/inventory/use-transfer-inventory')
     const { result } = renderHook(() => useTransferInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -202,7 +210,7 @@ describe('useTransferInventory', () => {
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { useTransferInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useTransferInventory } = await import('@/hooks/inventory/use-transfer-inventory')
     const { result } = renderHook(() => useTransferInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -253,5 +261,20 @@ describe('useTransferInventory', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
     })
+  })
+
+  it('keeps transfer mutation orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = read('src/hooks/inventory/use-inventory.ts')
+    const transferHook = read('src/hooks/inventory/use-transfer-inventory.ts')
+    const inventoryIndex = read('src/hooks/inventory/index.ts')
+
+    expect(inventoryHook).toContain("export { useTransferInventory } from './use-transfer-inventory'")
+    expect(inventoryHook).not.toContain('transferInventory({ data: params })')
+    expect(inventoryHook).not.toContain('touchesSerializedInventory: (variables.serialNumbers?.length ?? 0) > 0')
+    expect(transferHook).toContain('transferInventory({ data: params })')
+    expect(transferHook).toContain('Transfers are row- or serial-scoped')
+    expect(transferHook).toContain('invalidateInventoryStockMutationQueries(queryClient')
+    expect(transferHook).toContain('touchesSerializedInventory: (variables.serialNumbers?.length ?? 0) > 0')
+    expect(inventoryIndex).toContain("export { useTransferInventory } from './use-transfer-inventory'")
   })
 })

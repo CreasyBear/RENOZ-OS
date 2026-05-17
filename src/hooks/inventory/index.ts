@@ -14,7 +14,6 @@ export {
   useMovements,
   useMovementsDashboard,
   useAdjustInventory,
-  useTransferInventory,
   useBulkUpdateInventoryStatus,
   useInventoryDashboard,
   useLocationUtilization,
@@ -23,6 +22,9 @@ export {
 
 // Manual receive mutation/cache contract
 export { useReceiveInventory } from './use-receive-inventory';
+
+// Transfer mutation/cache contract
+export { useTransferInventory } from './use-transfer-inventory';
 
 // Serial number management
 export {
