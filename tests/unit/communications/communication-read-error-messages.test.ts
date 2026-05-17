@@ -62,7 +62,7 @@ describe('communication read error messages', () => {
       'src/routes/_authenticated/communications/campaigns/analytics-page.tsx'
     );
     const campaignDetails = read(
-      'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
+      'src/components/domain/communications/campaigns/campaign-detail-unavailable-state.tsx'
     );
     const campaignPreview = read(
       'src/components/domain/communications/campaigns/campaign-preview-panel.tsx'

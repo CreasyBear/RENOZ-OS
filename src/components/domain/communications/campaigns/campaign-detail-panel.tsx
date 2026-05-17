@@ -20,12 +20,7 @@ import {
   useResumeCampaign,
   useTestSendCampaign,
 } from "@/hooks/communications/use-campaigns";
-import {
-  AlertTriangle,
-  ArrowLeft,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -46,10 +41,7 @@ import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-sec
 import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
 import { CampaignDetailSkeleton } from "./campaign-detail-skeleton";
 import { CampaignDetailTestSendDialog } from "./campaign-detail-test-send-dialog";
-import {
-  COMMUNICATION_READ_MESSAGES,
-  formatCommunicationReadError,
-} from "@/lib/communications/read-error-messages";
+import { CampaignDetailUnavailableState } from "./campaign-detail-unavailable-state";
 
 // ============================================================================
 // TYPES
@@ -201,27 +193,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
 
   // Error state
   if (campaignError || !campaign) {
-    return (
-      <EmptyStateContainer variant="page">
-        <EmptyState
-          icon={AlertTriangle}
-          title="Campaign not found"
-          message={formatCommunicationReadError(
-            campaignError,
-            COMMUNICATION_READ_MESSAGES.campaignDetails
-          )}
-          primaryAction={
-            onBack
-              ? {
-                  label: "Back to campaigns",
-                  onClick: onBack,
-                  icon: ArrowLeft,
-                }
-              : undefined
-          }
-        />
-      </EmptyStateContainer>
-    );
+    return <CampaignDetailUnavailableState error={campaignError} onBack={onBack} />;
   }
 
   return (
