@@ -23,7 +23,7 @@ export { CommunicationsErrorBoundary } from './communications-error-boundary';
 export { CampaignStatusDot, type CampaignStatus } from './campaigns/campaign-status-badge';
 export type { CampaignStatusBadgeProps } from './campaigns/campaign-status-badge';
 export { CampaignsListSkeleton, type CampaignsListProps, type CampaignListItem } from './campaigns/campaigns-list';
-export { CampaignDetailSkeleton } from './campaigns/campaign-detail-panel';
+export { CampaignDetailSkeleton } from './campaigns/campaign-detail-skeleton';
 export type { CampaignDetailPanelProps } from '@/lib/schemas/communications';
 export type { RecipientCriteria, RecipientFilterBuilderProps } from './campaigns/recipient-filter-builder';
 export type { CampaignPreviewPanelProps } from './campaigns/campaign-preview-panel';
