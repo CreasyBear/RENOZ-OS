@@ -27,7 +27,6 @@ import {
   usePopulateCampaignRecipients,
   useSendCampaign,
 } from "@/hooks/communications/use-campaigns";
-import { formatCommunicationCampaignMutationError } from "@/hooks/communications";
 import { useTemplates } from "@/hooks/communications/use-templates";
 import { RecipientFilterBuilder } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
@@ -35,11 +34,14 @@ import {
   CAMPAIGN_TEMPLATE_OPTIONS,
   createCampaignWizardFormData,
   createEmptyCampaignWizardFormData,
-  getCampaignWizardScheduledAt,
   hasInvalidCampaignWizardTemplate,
   validateCampaignWizardStep,
   type CampaignWizardFormData,
 } from "./campaign-wizard-model";
+import {
+  submitCampaignWizard,
+  type CampaignWizardFeedback,
+} from "./campaign-wizard-submit";
 import { DateTimePicker } from "../date-time-picker";
 import { TimezoneSelect } from "../timezone-select";
 import { Button } from "@/components/ui/button";
@@ -89,7 +91,6 @@ import { SignatureSelector } from "../signatures/signature-selector";
 import type {
   CampaignWizardProps,
   WizardStep,
-  Campaign,
 } from "@/lib/schemas/communications";
 
 // ============================================================================
@@ -102,6 +103,15 @@ const STEPS: { id: WizardStep; label: string; icon: typeof FileText }[] = [
   { id: "recipients", label: "Recipients", icon: Users },
   { id: "preview", label: "Preview", icon: Eye },
 ];
+
+function showCampaignWizardFeedback(feedback: CampaignWizardFeedback[]) {
+  for (const item of feedback) {
+    const options = item.description ? { description: item.description } : undefined;
+    if (item.type === "success") toast.success(item.title, options);
+    if (item.type === "warning") toast.warning(item.title, options);
+    if (item.type === "error") toast.error(item.title, options);
+  }
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -224,110 +234,30 @@ function CampaignWizardContent({
     setSubmitError(null);
 
     try {
-      if (hasInvalidTemplate) {
-        throw new Error("The selected saved template is no longer available. Choose another template or detach it before saving.");
-      }
-
-      const scheduledAt = getCampaignWizardScheduledAt(formData);
-
-      let campaign: Campaign;
-
-      if (isEditMode && initialCampaign) {
-        // Update existing campaign
-        campaign = await updateCampaignMutation.mutateAsync({
-          id: initialCampaign.id,
-          name: formData.name,
-          description: formData.description || undefined,
-          templateType: formData.templateType as "newsletter",
-          templateData: formData.templateData,
-          recipientCriteria: formData.recipientCriteria,
-          scheduledAt,
-        });
-
-        // For edits, only repopulate recipients if criteria changed
-        // (This is a simplification - in production you might want to compare criteria)
-        try {
-          const populateResult = await populateRecipientsMutation.mutateAsync({
-            campaignId: campaign.id,
-          });
-          
-          if (populateResult.recipientCount === 0) {
-            toast.warning('No recipients found', {
-              description: 'Recipient criteria updated but no recipients match. Campaign saved.',
-            });
-          }
-        } catch (error) {
-          // Recipient population failure is non-critical for edits
-          toast.warning('Campaign updated but failed to refresh recipients', {
-            description: formatCommunicationCampaignMutationError(error, "populate"),
-          });
-        }
-
-        toast.success('Campaign updated successfully');
-        onSuccess?.(campaign.id);
-        onOpenChange(false);
-        return;
-      }
-
-      // Create new campaign
-      campaign = await createCampaignMutation.mutateAsync({
-        name: formData.name,
-        description: formData.description || undefined,
-        templateType: formData.templateType as "newsletter",
-        templateData: formData.templateData,
-        recipientCriteria: formData.recipientCriteria,
-        scheduledAt,
+      const result = await submitCampaignWizard({
+        formData,
+        hasInvalidTemplate,
+        initialCampaign,
+        mutations: {
+          createCampaign: (input) => createCampaignMutation.mutateAsync(input),
+          updateCampaign: (input) => updateCampaignMutation.mutateAsync(input),
+          populateRecipients: (input) =>
+            populateRecipientsMutation.mutateAsync(input),
+          sendCampaign: (input) => sendCampaignMutation.mutateAsync(input),
+        },
       });
 
-      // Populate recipients
-      let populateResult;
-      try {
-        populateResult = await populateRecipientsMutation.mutateAsync({
-          campaignId: campaign.id,
-        });
-      } catch (error) {
-        toast.error('Failed to populate recipients', {
-          description: formatCommunicationCampaignMutationError(error, "populate"),
-        });
-        setIsSubmitting(false);
+      if (result.status === "submitError") {
+        setSubmitError(result.message);
         return;
       }
 
-      // Validate recipients were populated
-      if (populateResult.recipientCount === 0) {
-        toast.error('No recipients found', {
-          description: 'Please adjust your recipient filters and try again.',
-        });
-        setIsSubmitting(false);
-        return;
-      }
+      showCampaignWizardFeedback(result.feedback);
 
-      // If not scheduled, trigger send immediately
-      if (!scheduledAt) {
-        try {
-          await sendCampaignMutation.mutateAsync({ id: campaign.id });
-          toast.success('Campaign created and sent successfully');
-        } catch (error) {
-          // Campaign created but send failed - still show success but warn user
-          toast.warning('Campaign created but failed to start sending', {
-            description: `${formatCommunicationCampaignMutationError(error, "send")} You can send it manually from the campaign detail page.`,
-          });
-          setIsSubmitting(false);
-          return;
-        }
+      if (result.status === "success") {
+        onSuccess?.(result.campaignId);
+        onOpenChange(false);
       }
-
-      // Call success callback
-      toast.success('Campaign created successfully');
-      onSuccess?.(campaign.id);
-      onOpenChange(false);
-    } catch (error) {
-      setSubmitError(
-        formatCommunicationCampaignMutationError(
-          error,
-          isEditMode ? "update" : "create"
-        )
-      );
     } finally {
       setIsSubmitting(false);
     }

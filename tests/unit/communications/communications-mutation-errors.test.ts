@@ -208,6 +208,9 @@ describe('communications mutation error formatting', () => {
     const wizard = read(
       'src/components/domain/communications/campaigns/campaign-wizard.tsx'
     );
+    const wizardSubmit = read(
+      'src/components/domain/communications/campaigns/campaign-wizard-submit.ts'
+    );
 
     expect(route).toContain('formatCommunicationCampaignMutationError(error, "cancel")');
     expect(route).toContain('formatCommunicationCampaignMutationError(error, "delete")');
@@ -227,9 +230,10 @@ describe('communications mutation error formatting', () => {
     expect(detailPanel).toContain('formatCommunicationCampaignMutationError(error, "testSend")');
     expect(detailPanel).not.toContain('getUserFriendlyMessage(normalizeError(error))');
 
-    expect(wizard).toContain('formatCommunicationCampaignMutationError(error, "populate")');
-    expect(wizard).toContain('formatCommunicationCampaignMutationError(error, "send")');
-    expect(wizard).toContain('isEditMode ? "update" : "create"');
+    expect(wizard).toContain('submitCampaignWizard({');
+    expect(wizardSubmit).toContain('formatCommunicationCampaignMutationError(error, "populate")');
+    expect(wizardSubmit).toContain('formatCommunicationCampaignMutationError(error, "send")');
+    expect(wizardSubmit).toContain('isEditMode ? "update" : "create"');
     expect(wizard).not.toContain('getUserFriendlyMessage(error as Error)');
   });
 
