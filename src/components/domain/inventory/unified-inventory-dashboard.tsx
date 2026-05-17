@@ -25,13 +25,11 @@ import { useState, useCallback, memo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   RefreshCw,
-  Package,
   AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
-import { DataTableEmpty } from '@/components/shared/data-table';
 import {
   useWMSDashboard,
   useInventoryDashboard,
@@ -51,6 +49,7 @@ import {
   InventoryDashboardAlertsSection,
   type DashboardAlert,
 } from './inventory-dashboard-alerts-section';
+import { InventoryDashboardEmptyState } from './inventory-dashboard-empty-state';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
 import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-recent-movements-panel';
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
@@ -285,19 +284,9 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           Empty State (for new users)
       ───────────────────────────────────────────────────────────────────── */}
       {!isLoading && totals.totalUnits === 0 && (
-        <DataTableEmpty
-          variant="empty"
-          icon={Package}
-          title="Welcome to Inventory Management"
-          description="Get started by receiving your first inventory shipment or setting up your warehouse locations."
-          action={{
-            label: "Receive Inventory",
-            onClick: () => navigate({ to: '/inventory/receiving' }),
-          }}
-          secondaryAction={{
-            label: "Set Up Locations",
-            onClick: () => navigate({ to: '/inventory/locations' }),
-          }}
+        <InventoryDashboardEmptyState
+          onReceiveInventory={() => navigate({ to: '/inventory/receiving' })}
+          onSetUpLocations={() => navigate({ to: '/inventory/locations' })}
         />
       )}
 
