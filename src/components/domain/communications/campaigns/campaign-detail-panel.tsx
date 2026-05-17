@@ -20,13 +20,10 @@ import {
   useResumeCampaign,
   useTestSendCampaign,
 } from "@/hooks/communications/use-campaigns";
-import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
   ArrowLeft,
-  Calendar,
   Send,
-  CheckCircle2,
   BarChart3,
   History,
   Pause,
@@ -45,7 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
-import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
+import { EntityHeader } from "@/components/shared/detail-view";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -59,6 +56,7 @@ import {
 } from "./campaign-detail-actions";
 import { CampaignDetailAlertsSection } from "./campaign-detail-alerts-section";
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
+import { CampaignDetailMetaSection } from "./campaign-detail-meta-section";
 import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
 import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
@@ -285,50 +283,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     return result;
   }, [campaign, campaignDetailActionMutations]);
 
-  // Build campaign meta fields for DetailGrid
-  const campaignMetaFields = useMemo(() => {
-    if (!campaign) return [];
-    const fields: DetailGridField[] = [];
-    
-    if (campaign.scheduledAt) {
-      fields.push({
-        label: "Scheduled",
-        value: (
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {format(new Date(campaign.scheduledAt), "PPp")}
-          </div>
-        ),
-      });
-    }
-    
-    if (campaign.startedAt) {
-      fields.push({
-        label: "Started",
-        value: (
-          <div className="flex items-center gap-1">
-            <Send className="h-3 w-3" />
-            {formatDistanceToNow(new Date(campaign.startedAt), { addSuffix: true })}
-          </div>
-        ),
-      });
-    }
-    
-    if (campaign.completedAt) {
-      fields.push({
-        label: "Completed",
-        value: (
-          <div className="flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            {formatDistanceToNow(new Date(campaign.completedAt), { addSuffix: true })}
-          </div>
-        ),
-      });
-    }
-    
-    return fields;
-  }, [campaign]);
-
   // Loading state
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;
@@ -458,11 +412,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       />
 
       {/* Zone 5: Campaign Information */}
-      {campaignMetaFields.length > 0 && (
-        <DetailSection id="meta" title="Campaign Information" defaultOpen={true}>
-          <DetailGrid fields={campaignMetaFields} />
-        </DetailSection>
-      )}
+      <CampaignDetailMetaSection campaign={campaign} />
 
       {/* Zone 5: Recipients List */}
       <CampaignDetailRecipientsSection
