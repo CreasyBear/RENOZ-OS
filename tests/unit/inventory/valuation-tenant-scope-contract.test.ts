@@ -99,7 +99,27 @@ describe('inventory valuation tenant-scope contract', () => {
 
   it('keeps manual cost-layer writes transactional and value-cache coherent', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const costLayerReadSource = compact(
+      read('src/server/functions/inventory/inventory-cost-layers-read.ts')
+    );
 
+    expect(source).toContain(
+      "import{listInventoryCostLayers,readInventoryCostLayers,}from'./inventory-cost-layers-read'"
+    );
+    expect(source).toContain(
+      'returnlistInventoryCostLayers({organizationId:ctx.organizationId,page,pageSize,inventoryId:filters.inventoryId,hasRemaining:filters.hasRemaining,})'
+    );
+    expect(source).toContain(
+      'returnreadInventoryCostLayers({organizationId:ctx.organizationId,inventoryId:data.inventoryId,})'
+    );
+    expect(source).not.toContain('functiontoInventoryCostLayerRow');
+    expect(costLayerReadSource).toContain('eq(inventoryCostLayers.organizationId,organizationId)');
+    expect(costLayerReadSource).toContain(
+      'eq(inventoryCostLayerCapitalizations.organizationId,organizationId)'
+    );
+    expect(costLayerReadSource).toContain(
+      'where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,organizationId)))'
+    );
     expect(source).toContain(
       "import{recomputeInventoryValueFromLayers}from'@/server/functions/_shared/inventory-finance'"
     );

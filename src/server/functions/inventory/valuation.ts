@@ -9,7 +9,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gt, inArray, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, asc, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
@@ -20,7 +20,6 @@ import {
   categories,
   warehouseLocations as locations,
 } from 'drizzle/schema';
-import { inventoryCostLayerCapitalizations } from 'drizzle/schema/inventory/inventory';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -38,12 +37,13 @@ import {
   type COGSResult,
   type InventoryFinanceIntegritySummary,
   type InventoryFinanceReconcileResult,
-  type InventoryCostLayerRow,
-  type InventoryCostLayerCostComponent,
 } from '@/lib/schemas/inventory';
-import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/inventory-finance';
 import { getFinanceIntegritySummary } from './finance-integrity-summary';
+import {
+  listInventoryCostLayers,
+  readInventoryCostLayers,
+} from './inventory-cost-layers-read';
 import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
 import { readProductCostLayers } from './product-cost-layers-read';
@@ -74,68 +74,6 @@ function parseDecimal(value: string | number): number {
   return typeof value === 'string' ? Number(value) : value;
 }
 
-function toInventoryCostLayerRow(
-  layer: typeof inventoryCostLayers.$inferSelect,
-  costComponents: InventoryCostLayerCostComponent[]
-): InventoryCostLayerRow {
-  const expiryDate = layer.expiryDate
-    ? typeof layer.expiryDate === 'string'
-      ? new Date(layer.expiryDate)
-      : layer.expiryDate
-    : null;
-  return {
-    id: layer.id,
-    receivedAt: layer.receivedAt,
-    quantityReceived: layer.quantityReceived,
-    quantityRemaining: layer.quantityRemaining,
-    unitCost: layer.unitCost,
-    referenceType: layer.referenceType,
-    referenceId: layer.referenceId,
-    expiryDate,
-    costComponents,
-  };
-}
-
-async function attachCostLayerCapitalizations(
-  organizationId: string,
-  layers: Array<typeof inventoryCostLayers.$inferSelect>
-): Promise<InventoryCostLayerRow[]> {
-  if (layers.length === 0) return [];
-  const layerIds = layers.map((layer) => layer.id);
-  const components = await db
-    .select()
-    .from(inventoryCostLayerCapitalizations)
-    .where(
-      and(
-        eq(inventoryCostLayerCapitalizations.organizationId, organizationId),
-        inArray(inventoryCostLayerCapitalizations.inventoryCostLayerId, layerIds)
-      )
-    );
-  const byLayerId = new Map<string, typeof components>();
-  for (const component of components) {
-    const existing = byLayerId.get(component.inventoryCostLayerId) ?? [];
-    existing.push(component);
-    byLayerId.set(component.inventoryCostLayerId, existing);
-  }
-
-  return layers.map((layer) => {
-    const rawComponents = byLayerId.get(layer.id) ?? [];
-    const costComponents: InventoryCostLayerCostComponent[] = rawComponents.map((c) => ({
-      id: c.id,
-      componentType:
-        c.componentType === 'allocated_additional_cost' ? 'allocated_additional_cost' : 'base_unit_cost',
-      costType: c.costType,
-      quantityBasis: c.quantityBasis,
-      amountTotal: Number(c.amountTotal),
-      amountPerUnit: Number(c.amountPerUnit),
-      currency: c.currency,
-      exchangeRate: c.exchangeRate == null ? null : Number(c.exchangeRate),
-      metadata: (c.metadata ?? null) as FlexibleJson | null,
-    }));
-    return toInventoryCostLayerRow(layer, costComponents);
-  });
-}
-
 // ============================================================================
 // COST LAYERS
 // ============================================================================
@@ -155,41 +93,13 @@ export const listCostLayers = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page, pageSize, ...filters } = data;
-    const limit = pageSize;
-
-    const conditions = [eq(inventoryCostLayers.organizationId, ctx.organizationId)];
-
-    if (filters.inventoryId) {
-      conditions.push(eq(inventoryCostLayers.inventoryId, filters.inventoryId));
-    }
-    if (filters.hasRemaining) {
-      conditions.push(gt(inventoryCostLayers.quantityRemaining, 0));
-    }
-
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(inventoryCostLayers)
-      .where(and(...conditions));
-
-    const total = countResult?.count ?? 0;
-
-    const offset = (page - 1) * limit;
-    const layers = await db
-      .select()
-      .from(inventoryCostLayers)
-      .where(and(...conditions))
-      .orderBy(asc(inventoryCostLayers.receivedAt))
-      .limit(limit)
-      .offset(offset);
-    const layersWithComponents = await attachCostLayerCapitalizations(ctx.organizationId, layers);
-
-    return {
-      layers: layersWithComponents,
-      total,
+    return listInventoryCostLayers({
+      organizationId: ctx.organizationId,
       page,
-      limit,
-      hasMore: offset + layersWithComponents.length < total,
-    };
+      pageSize,
+      inventoryId: filters.inventoryId,
+      hasRemaining: filters.hasRemaining,
+    });
   });
 
 /**
@@ -199,55 +109,10 @@ export const getInventoryCostLayers = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ inventoryId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-
-    // Verify inventory exists and belongs to org
-    const [inv] = await db
-      .select()
-      .from(inventory)
-      .where(
-        and(eq(inventory.id, data.inventoryId), eq(inventory.organizationId, ctx.organizationId))
-      )
-      .limit(1);
-
-    if (!inv) {
-      throw new NotFoundError('Inventory item not found', 'inventory');
-    }
-
-    // OPTIMIZED: Add organizationId filter for security and to use index
-    const layers = await db
-      .select()
-      .from(inventoryCostLayers)
-      .where(
-        and(
-          eq(inventoryCostLayers.organizationId, ctx.organizationId),
-          eq(inventoryCostLayers.inventoryId, data.inventoryId)
-        )
-      )
-      .orderBy(asc(inventoryCostLayers.receivedAt));
-    const layersWithComponents = await attachCostLayerCapitalizations(ctx.organizationId, layers);
-
-    // Calculate summary
-    const activeLayers = layersWithComponents.filter((l) => l.quantityRemaining > 0);
-    const totalRemaining = activeLayers.reduce((sum, l) => sum + l.quantityRemaining, 0);
-    const totalValue = activeLayers.reduce(
-      (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
-      0
-    );
-    const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
-
-    return {
-      layers: layersWithComponents,
-      summary: {
-        totalLayers: layersWithComponents.length,
-        activeLayers: activeLayers.length,
-        depletedLayers: layersWithComponents.length - activeLayers.length,
-        totalRemaining,
-        totalValue,
-        weightedAverageCost: weightedAvgCost,
-        oldestLayerDate: layersWithComponents[0]?.receivedAt ?? null,
-        newestLayerDate: layersWithComponents[layersWithComponents.length - 1]?.receivedAt ?? null,
-      },
-    };
+    return readInventoryCostLayers({
+      organizationId: ctx.organizationId,
+      inventoryId: data.inventoryId,
+    });
   });
 
 /**
