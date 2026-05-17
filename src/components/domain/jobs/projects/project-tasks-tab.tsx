@@ -18,7 +18,7 @@
  * SPRINT-03: Enhanced task tab maximizing schema potential
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   Plus,
   ExternalLink,
@@ -42,6 +42,7 @@ import {
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
 import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';
+import { useProjectTaskDialogState } from './project-task-dialog-state';
 import { useProjectTaskQuickAdd } from './project-task-quick-add';
 import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
@@ -64,11 +65,6 @@ import {
   sortProjectTasks,
 } from './project-task-view-model';
 import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
-
-// Types
-import type {
-  TaskWithWorkstream,
-} from '@/lib/schemas/jobs';
 
 // Dialogs
 import { TaskCreateDialog, TaskEditDialog } from './task-dialogs';
@@ -104,8 +100,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     siteVisits,
   });
 
-  const [editingTask, setEditingTask] = useState<TaskWithWorkstream | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const taskDialogs = useProjectTaskDialogState();
   const { pendingDeletions, handleDeleteTask } = useProjectTaskDeleteMutation({
     projectId,
     onDeleted: refetch,
@@ -199,11 +194,11 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             isLoading={isQuickAddPending}
           />
         </div>
-        <ProjectTasksEmptyState onAdd={() => setCreateDialogOpen(true)} />
+        <ProjectTasksEmptyState onAdd={taskDialogs.openCreateDialog} />
         <TaskCreateDialog
-          key={createDialogOpen ? 'open' : 'closed'}
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
+          key={taskDialogs.createDialogKey}
+          open={taskDialogs.isCreateDialogOpen}
+          onOpenChange={taskDialogs.setCreateDialogOpen}
           projectId={projectId}
           onSuccess={() => refetch()}
         />
@@ -247,7 +242,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
             taskCounts={taskCounts}
           />
           <ProjectTaskSortDropdown sortBy={sortBy} onSortChange={updateSort} />
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button onClick={taskDialogs.openCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
             Add Task
           </Button>
@@ -279,7 +274,7 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
               tasks={workstreamTasks}
               projectId={projectId}
               onToggleTask={handleToggleTask}
-              onEditTask={setEditingTask}
+              onEditTask={taskDialogs.openEditTask}
               onDeleteTask={handleDeleteTask}
               onReorderTasks={handleReorderTasks}
             />
@@ -301,19 +296,19 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
 
       {/* Create Dialog */}
       <TaskCreateDialog
-        key={createDialogOpen ? 'open' : 'closed'}
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
+        key={taskDialogs.createDialogKey}
+        open={taskDialogs.isCreateDialogOpen}
+        onOpenChange={taskDialogs.setCreateDialogOpen}
         projectId={projectId}
         onSuccess={() => refetch()}
       />
 
       {/* Edit Dialog */}
       <TaskEditDialog
-        open={!!editingTask}
-        onOpenChange={(open) => !open && setEditingTask(null)}
+        open={taskDialogs.isEditDialogOpen}
+        onOpenChange={taskDialogs.handleEditDialogOpenChange}
         projectId={projectId}
-        task={editingTask}
+        task={taskDialogs.editingTask}
         onSuccess={() => refetch()}
       />
     </div>
