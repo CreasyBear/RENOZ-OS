@@ -7,6 +7,8 @@
 import type { OAuthDatabase } from '@/lib/oauth/db-types';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
 import type { OAuthProvider, OAuthServiceType } from '@/lib/oauth/constants';
+import { logger } from '@/lib/logger';
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 
 export interface InitiateOAuthFlowRequest {
   organizationId: string;
@@ -80,11 +82,11 @@ export async function initiateOAuth(
       state: flowResult.state,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('[oauth] initiateOAuth failed', error as Error, {});
 
     return {
       success: false,
-      error: `Failed to initiate OAuth flow: ${errorMessage}`,
+      error: formatOAuthConnectionError(error, 'initiate'),
     };
   }
 }

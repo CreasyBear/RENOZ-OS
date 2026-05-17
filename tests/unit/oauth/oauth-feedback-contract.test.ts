@@ -63,6 +63,8 @@ describe('oauth integration feedback', () => {
     const initiateRoute = read('src/routes/api/oauth/initiate.ts');
     const pendingRoute = read('src/routes/api/oauth/pending-selection.ts');
     const dashboardRoute = read('src/routes/api/oauth/dashboard.ts');
+    const callbackServerFunction = read('src/server/functions/oauth/handle-oauth-callback.ts');
+    const initiateServerFunction = read('src/server/functions/oauth/initiate-oauth.ts');
     const sidebar = read('src/components/layout/sidebar.tsx');
     const manager = read('src/components/integrations/oauth/oauth-connection-manager.tsx');
     const dashboard = read('src/components/integrations/oauth/oauth-status-dashboard.tsx');
@@ -89,6 +91,11 @@ describe('oauth integration feedback', () => {
     expect(dashboardRoute).toContain('details: formatOAuthActivityDetails(log.metadata)');
     expect(dashboardRoute).not.toContain('description: log.errorMessage');
     expect(dashboardRoute).not.toContain('details: log.metadata');
+
+    expect(callbackServerFunction).toContain("formatOAuthConnectionError(error, 'callback')");
+    expect(callbackServerFunction).not.toContain('Internal server error: ${errorMessage}');
+    expect(initiateServerFunction).toContain("formatOAuthConnectionError(error, 'initiate')");
+    expect(initiateServerFunction).not.toContain('Failed to initiate OAuth flow: ${errorMessage}');
 
     expect(sidebar).toContain("formatOAuthConnectionError(errorParam, 'callback')");
     expect(sidebar).not.toContain('authErrorMessage(toAuthErrorCode(errorParam))');

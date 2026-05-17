@@ -1105,9 +1105,9 @@ What is messy:
 
 #### P2
 
-- **Route-level error responses are not consistently sanitized**
-  - Files: `src/routes/api/oauth/initiate.ts`, `src/server/functions/oauth/handle-oauth-callback.ts`
-  - Some routes still return raw error text back to the client. `oauth/initiate` returns `details: parsed.error` for invalid input and raw `errorMessage` on 500 responses; `handle-oauth-callback` embeds `Internal server error: ${errorMessage}` into the result payload. AI debug RLS failures now use stable client copy with server-side logging.
+- **Closed 2026-05-17: OAuth setup and callback wrappers no longer return raw exception text**
+  - Files: `src/routes/api/oauth/initiate.ts`, `src/server/functions/oauth/handle-oauth-callback.ts`, `src/server/functions/oauth/initiate-oauth.ts`
+  - Revalidated and remediated in Operations Maintainer Sprint 89. The direct initiate API route was already formatter-owned; the remaining compatibility server-function wrappers now log caught exceptions server-side and return OAuth formatter copy instead of embedding provider, redirect, token, database, or stack details in caller-visible strings. AI debug RLS failures also use stable client copy with server-side logging.
 
 - **User-facing surfaces still often expose raw technical error strings**
   - Files: `src/routes/_authenticated/support/support-page.tsx`, `src/routes/_authenticated/support/dashboard.tsx`, `src/components/domain/warranty/containers/warranty-detail-container.tsx`, `src/components/domain/customers/components/xero-contact-manager.tsx`, `src/components/domain/jobs/projects/task-dialogs.tsx`

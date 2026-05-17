@@ -5,6 +5,8 @@
  */
 
 import type { OAuthDatabase } from '@/lib/oauth/db-types';
+import { logger } from '@/lib/logger';
+import { formatOAuthConnectionError } from '@/lib/oauth/oauth-error-messages';
 import {
   handleOAuthCallback as handleOAuthCallbackLib,
   type OAuthCallbackResult,
@@ -44,12 +46,12 @@ export async function handleOAuthCallback(
 
     return result;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('[oauth] handleOAuthCallback failed', error as Error, {});
 
     return {
       success: false,
       error: 'server_error',
-      errorDescription: `Internal server error: ${errorMessage}`,
+      errorDescription: formatOAuthConnectionError(error, 'callback'),
     };
   }
 }
