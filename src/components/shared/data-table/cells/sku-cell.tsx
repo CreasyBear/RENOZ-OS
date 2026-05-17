@@ -1,7 +1,8 @@
-import { memo, useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
+import { AlertCircle, Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { logger } from "@/lib/logger";
 
 export interface SkuCellProps {
   /** SKU value */
@@ -14,13 +15,34 @@ export interface SkuCellProps {
   className?: string;
 }
 
+type CopyStatus = "idle" | "copied" | "failed";
+
 export const SkuCell = memo(function SkuCell({
   value,
   copyable = false,
   fallback = "—",
   className,
 }: SkuCellProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const resetCopyStatusAfterDelay = () => {
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+    }
+    resetTimeoutRef.current = setTimeout(() => {
+      setCopyStatus("idle");
+      resetTimeoutRef.current = null;
+    }, 2000);
+  };
 
   if (!value) {
     return (
@@ -35,10 +57,16 @@ export const SkuCell = memo(function SkuCell({
 
     try {
       await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyStatus("copied");
+      resetCopyStatusAfterDelay();
     } catch (err) {
-      console.error("Failed to copy:", err);
+      logger.warn("Failed to copy SKU to clipboard", {
+        component: "SkuCell",
+        valueLength: value.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      setCopyStatus("failed");
+      resetCopyStatusAfterDelay();
     }
   };
 
@@ -50,6 +78,13 @@ export const SkuCell = memo(function SkuCell({
     );
   }
 
+  const copyLabel =
+    copyStatus === "copied"
+      ? "SKU copied"
+      : copyStatus === "failed"
+        ? "Copy failed"
+        : "Copy SKU";
+
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <span className="font-mono text-sm">{value}</span>
@@ -57,14 +92,17 @@ export const SkuCell = memo(function SkuCell({
         variant="ghost"
         size="sm"
         className="h-6 w-6 p-0 hover:bg-muted"
+        aria-label={copyLabel}
         onClick={(e) => {
           e.stopPropagation();
-          handleCopy();
+          void handleCopy();
         }}
-        title="Copy SKU"
+        title={copyLabel}
       >
-        {copied ? (
+        {copyStatus === "copied" ? (
           <Check className="h-3 w-3 text-emerald-600" />
+        ) : copyStatus === "failed" ? (
+          <AlertCircle className="h-3 w-3 text-destructive" />
         ) : (
           <Copy className="h-3 w-3 text-muted-foreground" />
         )}
