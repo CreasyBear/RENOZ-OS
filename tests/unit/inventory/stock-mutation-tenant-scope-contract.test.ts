@@ -183,28 +183,37 @@ describe('inventory stock mutation tenant-scope contract', () => {
 
   it('keeps manual receive final inventory writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/receiving.ts'));
+    const receiveHelperSource = compact(
+      read('src/server/functions/inventory/manual-receive-inventory.ts')
+    );
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.receive})');
     expect(source).toContain(
-      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for(\'update\')'
+      "import{receiveManualInventory}from'./manual-receive-inventory'"
     );
     expect(source).toContain(
+      'returnreceiveManualInventory({organizationId:ctx.organizationId,userId:ctx.user.id,data,})'
+    );
+    expect(receiveHelperSource).toContain(
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).for(\'update\')'
+    );
+    expect(receiveHelperSource).toContain(
       "if(product.status!=='active'||!product.isActive||!product.trackInventory){thrownewValidationError('Productisnotavailableformanualreceiving',{productId:['Selectanactiveinventory-trackedproduct'],code:['product_not_receivable'],});}"
     );
-    expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
-    expect(source).toContain(
-      'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'
+    expect(receiveHelperSource).toContain("sql`SELECTset_config('app.organization_id',${organizationId},false)`");
+    expect(receiveHelperSource).toContain(
+      'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,organizationId)))'
     );
-    expect(source).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
+    expect(receiveHelperSource).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
   });
 
   it('locks manual receive product availability before stock-in writes', () => {
-    const source = compact(read('src/server/functions/inventory/receiving.ts'));
-    const receiveBlock = sliceBetween(source, 'exportconstreceiveInventory', '});});');
+    const source = compact(read('src/server/functions/inventory/manual-receive-inventory.ts'));
+    const receiveBlock = source;
 
     expect(receiveBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
     expect(receiveBlock).toContain(
-      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1)"
+      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).for('update').limit(1)"
     );
     expect(receiveBlock.indexOf("for('update').limit(1)")).toBeLessThan(
       receiveBlock.indexOf('let[inventoryRecord]=awaittx')
@@ -216,17 +225,17 @@ describe('inventory stock mutation tenant-scope contract', () => {
   });
 
   it('keeps manual receive cost-layer response reads organization-scoped', () => {
-    const source = compact(read('src/server/functions/inventory/receiving.ts'));
+    const source = compact(read('src/server/functions/inventory/manual-receive-inventory.ts'));
 
     expect(source).toContain(
-      'where(and(eq(inventoryCostLayers.id,costLayerId),eq(inventoryCostLayers.organizationId,ctx.organizationId)))'
+      'where(and(eq(inventoryCostLayers.id,costLayerId),eq(inventoryCostLayers.organizationId,organizationId)))'
     );
     expect(source).not.toContain('.where(eq(inventoryCostLayers.id,costLayerId))');
   });
 
   it('preserves inventory finance and serialized-lineage continuity references', () => {
     const adjustmentSource = read('src/server/functions/inventory/adjustments.ts');
-    const receivingSource = read('src/server/functions/inventory/receiving.ts');
+    const receivingSource = read('src/server/functions/inventory/manual-receive-inventory.ts');
     const allocationSource = read('src/server/functions/inventory/allocations.ts');
 
     expect(adjustmentSource).toContain('consumeLayersFIFO');

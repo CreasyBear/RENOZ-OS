@@ -34,7 +34,7 @@ describe('inventory cost-layer reference contract', () => {
     const valuationSchema = read('src/lib/schemas/inventory/valuation.ts');
     const enumSchema = read('drizzle/schema/_shared/enums.ts');
     const migration = read('drizzle/migrations/0039_cost_layer_manual_receive_reference.sql');
-    const receivingSource = read('src/server/functions/inventory/receiving.ts');
+    const receivingSource = read('src/server/functions/inventory/manual-receive-inventory.ts');
     const financeHelper = compact(read('src/server/functions/_shared/inventory-finance.ts'));
 
     expect(valuationSchema).toContain("'manual_receive'");

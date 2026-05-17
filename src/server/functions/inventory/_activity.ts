@@ -1,10 +1,16 @@
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { inventoryLogger } from '@/lib/logger';
-import { withAuth } from '@/lib/server/protected';
 import { activities } from 'drizzle/schema';
 
 export type InventoryDbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export interface InventoryActivityContext {
+  organizationId: string;
+  user: {
+    id: string;
+  };
+}
 
 /**
  * Safely check if an activity with the given movementId already exists.
@@ -36,7 +42,7 @@ export async function checkActivityExists(
  */
 export async function logActivityInTransaction(
   tx: InventoryDbTransaction,
-  ctx: Awaited<ReturnType<typeof withAuth>>,
+  ctx: InventoryActivityContext,
   params: {
     entityType: 'product' | 'inventory';
     entityId: string;

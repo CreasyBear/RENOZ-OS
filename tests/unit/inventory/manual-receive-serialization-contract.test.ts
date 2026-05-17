@@ -52,7 +52,7 @@ describe('manual receive serialization contract', () => {
 
   it('keeps the receiving form and server on the shared serialization helper', () => {
     const form = read('src/components/domain/inventory/receiving/receiving-form.tsx');
-    const server = read('src/server/functions/inventory/receiving.ts');
+    const server = read('src/server/functions/inventory/manual-receive-inventory.ts');
 
     expect(form).toContain('getManualReceiveSerializationIssues');
     expect(server).toContain('getManualReceiveSerializationIssues');
