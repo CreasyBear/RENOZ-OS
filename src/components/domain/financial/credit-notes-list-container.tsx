@@ -43,6 +43,7 @@ import {
   resolveCreditNoteSortState,
   type SortDirection,
 } from './credit-note-sorting';
+import { getCreditNoteListReadErrorMessage } from './credit-note-read-error-messages';
 
 const DISPLAY_PAGE_SIZE = 20;
 
@@ -326,7 +327,7 @@ export function CreditNotesListContainer({
         <CreditNotesListPresenter
           creditNotes={creditNotes}
           isLoading={isLoading}
-          error={error instanceof Error ? error : error ? new Error('Unknown error') : null}
+          readErrorMessage={error ? getCreditNoteListReadErrorMessage(error) : null}
           onRetry={() => refetchCreditNotes()}
           filters={filters}
           onFiltersChange={handleFiltersChange}

@@ -28,16 +28,13 @@ import type { CreditNoteTableItem } from './credit-note-columns';
 import { DEFAULT_CREDIT_NOTE_FILTERS } from './credit-note-filter-config';
 import type { CreditNoteFiltersState } from './credit-note-filter-config';
 
-const CREDIT_NOTES_READ_ERROR_MESSAGE =
-  'Credit notes are temporarily unavailable. Please refresh and try again.';
-
 export interface CreditNotesListPresenterProps {
   /** Credit notes to display */
   creditNotes: CreditNoteTableItem[];
   /** Loading state */
   isLoading: boolean;
-  /** Error state */
-  error: Error | null;
+  /** Operator-safe read error message */
+  readErrorMessage: string | null;
   /** Retry handler */
   onRetry?: () => void;
   /** Current filters */
@@ -106,7 +103,7 @@ export interface CreditNotesListPresenterProps {
 export const CreditNotesListPresenter = memo(function CreditNotesListPresenter({
   creditNotes,
   isLoading,
-  error,
+  readErrorMessage,
   onRetry,
   filters,
   onClearFilters,
@@ -168,12 +165,12 @@ export const CreditNotesListPresenter = memo(function CreditNotesListPresenter({
   }, [filters]);
 
   // Error state
-  if (error) {
+  if (readErrorMessage) {
     return (
       <DataTableEmpty
         variant="error"
         title="Failed to load credit notes"
-        description={CREDIT_NOTES_READ_ERROR_MESSAGE}
+        description={readErrorMessage}
         action={onRetry ? { label: 'Try again', onClick: onRetry } : undefined}
         className={className}
       />

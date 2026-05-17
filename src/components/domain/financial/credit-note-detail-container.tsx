@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { CreditNoteDetailView } from './credit-note-detail-view';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getCreditNoteDetailReadErrorMessage } from './credit-note-read-error-messages';
 
 // ============================================================================
 // TYPES
@@ -162,8 +163,12 @@ export function CreditNoteDetailContainer({
   if (error || !creditNote) {
     const errorContent = (
       <ErrorState
-        title="Credit note not found"
-        message="The credit note you're looking for doesn't exist or has been deleted."
+        title="Unable to load credit note"
+        message={
+          error
+            ? getCreditNoteDetailReadErrorMessage(error)
+            : 'The requested credit note could not be found.'
+        }
         onRetry={() => refetch()}
         retryLabel="Try Again"
       />

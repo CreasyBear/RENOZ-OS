@@ -1124,8 +1124,12 @@ What is messy:
   - Files: `src/components/shared/query-state.tsx`, `src/components/shared/query-state-feedback.ts`, `src/components/shared/error-state.tsx`
   - Revalidated and remediated in Reliability Maintainer Sprint 46. Shared `QueryState` now preserves normalized `ReadQueryError` messages while mapping raw auth/not-found/rate-limit states to stable copy and failing closed for raw validation/system/unknown technical failures. The shared `ErrorState` example no longer teaches `message={error.message}`.
 
+- **Closed 2026-05-17: credit-note list/detail read failures use finance-owned feedback**
+  - Files: `src/components/domain/financial/credit-note-read-error-messages.ts`, `src/components/domain/financial/credit-notes-list-container.tsx`, `src/components/domain/financial/credit-notes-list-presenter.tsx`, `src/components/domain/financial/credit-note-detail-container.tsx`
+  - Revalidated and remediated in Reliability Maintainer Sprint 47. Credit-note list and detail read failures now cross the container/presenter boundary as formatter-owned copy, preserving normalized read-path messages while removing raw error-object handoff and `Unknown error` wrapping from the list path.
+
 - **User-facing surfaces still often expose raw technical error strings**
-  - Current examples: `src/routes/_authenticated/admin/users/import-page.tsx` and `src/components/domain/financial/credit-notes-list-container.tsx`. Direct `ErrorState` callers outside `QueryState` still need local review when they pass raw error strings. The shared bulk-import wizard still logs bounded caught-exception messages for diagnostics, but its operator-facing feedback was normalized in Sprint 43.
+  - Current example: `src/routes/_authenticated/admin/users/import-page.tsx`. Direct `ErrorState` callers outside `QueryState` still need local review when they pass raw error strings. The shared bulk-import wizard still logs bounded caught-exception messages for diagnostics, but its operator-facing feedback was normalized in Sprint 43.
   - A recurring pattern in UI containers and dialogs is direct rendering of thrown messages or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
 
 - **The repo has a strong centralized resilience helper, but adoption is incomplete**
