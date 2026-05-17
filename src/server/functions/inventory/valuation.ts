@@ -45,6 +45,7 @@ import {
 } from '@/lib/schemas/inventory';
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/inventory-finance';
+import { readInventoryFinanceIntegrityAggregate } from '@/server/functions/financial/_shared/inventory-finance-integrity-read';
 
 // ============================================================================
 // TYPES
@@ -140,93 +141,10 @@ async function getFinanceIntegritySummary(
 ): Promise<InventoryFinanceIntegritySummary> {
   const valueDriftTolerance = options?.valueDriftTolerance ?? 0.01;
   const topDriftLimit = options?.topDriftLimit ?? 25;
-
-  const aggregateResult = await db.execute<{
-    stock_without_active_layers: number;
-    inventory_value_mismatch_count: number;
-    total_absolute_value_drift: number;
-    negative_or_overconsumed_layers: number;
-    duplicate_active_serialized_allocations: number;
-    shipment_link_status_mismatch: number;
-  }>(
-    sql`
-      WITH layer_totals AS (
-        SELECT
-          icl.inventory_id,
-          COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining ELSE 0 END), 0)::numeric AS active_qty,
-          COALESCE(SUM(CASE WHEN icl.quantity_remaining > 0 THEN icl.quantity_remaining * icl.unit_cost ELSE 0 END), 0)::numeric AS active_value
-        FROM inventory_cost_layers icl
-        WHERE icl.organization_id = ${organizationId}
-        GROUP BY icl.inventory_id
-      ),
-      inv AS (
-        SELECT
-          i.id,
-          COALESCE(i.quantity_on_hand, 0)::numeric AS quantity_on_hand,
-          COALESCE(i.total_value, 0)::numeric AS inventory_value,
-          COALESCE(lt.active_qty, 0)::numeric AS active_qty,
-          COALESCE(lt.active_value, 0)::numeric AS active_value
-        FROM inventory i
-        LEFT JOIN layer_totals lt ON lt.inventory_id = i.id
-        WHERE i.organization_id = ${organizationId}
-      ),
-      serialized_dupes AS (
-        SELECT COUNT(*)::int AS cnt
-        FROM (
-          SELECT serialized_item_id
-          FROM order_line_serial_allocations
-          WHERE organization_id = ${organizationId}
-            AND is_active = true
-            AND released_at IS NULL
-          GROUP BY serialized_item_id
-          HAVING COUNT(*) > 1
-        ) t
-      ),
-      shipment_mismatch AS (
-        SELECT COUNT(*)::int AS cnt
-        FROM shipment_item_serials sis
-        INNER JOIN serialized_items si ON si.id = sis.serialized_item_id
-        WHERE sis.organization_id = ${organizationId}
-          AND si.organization_id = ${organizationId}
-          AND si.status NOT IN ('shipped', 'returned')
-          AND NOT EXISTS (
-            SELECT 1
-            FROM serialized_item_events sie
-            WHERE sie.organization_id = sis.organization_id
-              AND sie.serialized_item_id = sis.serialized_item_id
-              AND sie.event_type = 'rma_received'
-              AND sie.occurred_at >= COALESCE(sis.shipped_at, sis.created_at)
-          )
-      ),
-      layer_bounds AS (
-        SELECT COUNT(*)::int AS cnt
-        FROM inventory_cost_layers icl
-        WHERE icl.organization_id = ${organizationId}
-          AND (
-            icl.quantity_remaining < 0
-            OR icl.quantity_remaining > icl.quantity_received
-          )
-      )
-      SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN inv.quantity_on_hand > 0 AND inv.active_qty = 0 THEN 1
-            ELSE 0
-          END
-        ), 0)::int AS stock_without_active_layers,
-        COALESCE(SUM(
-          CASE
-            WHEN ABS(inv.inventory_value - inv.active_value) > ${valueDriftTolerance} THEN 1
-            ELSE 0
-          END
-        ), 0)::int AS inventory_value_mismatch_count,
-        COALESCE(SUM(ABS(inv.inventory_value - inv.active_value)), 0)::numeric AS total_absolute_value_drift,
-        (SELECT cnt FROM layer_bounds) AS negative_or_overconsumed_layers,
-        (SELECT cnt FROM serialized_dupes) AS duplicate_active_serialized_allocations,
-        (SELECT cnt FROM shipment_mismatch) AS shipment_link_status_mismatch
-      FROM inv
-    `
-  );
+  const aggregate = await readInventoryFinanceIntegrityAggregate({
+    organizationId,
+    valueDriftTolerance,
+  });
 
   const topDriftRowsResult = await db.execute<{
     inventory_id: string;
@@ -274,16 +192,6 @@ async function getFinanceIntegritySummary(
     `
   );
 
-  const aggregate = (
-    aggregateResult as unknown as Array<{
-      stock_without_active_layers: number;
-      inventory_value_mismatch_count: number;
-      total_absolute_value_drift: number;
-      negative_or_overconsumed_layers: number;
-      duplicate_active_serialized_allocations: number;
-      shipment_link_status_mismatch: number;
-    }>
-  )[0];
   const topDriftRows = topDriftRowsResult as unknown as Array<{
     inventory_id: string;
     product_id: string;
@@ -297,14 +205,12 @@ async function getFinanceIntegritySummary(
     absolute_drift: number;
   }>;
 
-  const stockWithoutActiveLayers = Number(aggregate?.stock_without_active_layers ?? 0);
-  const inventoryValueMismatchCount = Number(aggregate?.inventory_value_mismatch_count ?? 0);
-  const totalAbsoluteValueDrift = Number(aggregate?.total_absolute_value_drift ?? 0);
-  const negativeOrOverconsumedLayers = Number(aggregate?.negative_or_overconsumed_layers ?? 0);
-  const duplicateActiveSerializedAllocations = Number(
-    aggregate?.duplicate_active_serialized_allocations ?? 0
-  );
-  const shipmentLinkStatusMismatch = Number(aggregate?.shipment_link_status_mismatch ?? 0);
+  const stockWithoutActiveLayers = aggregate.stockWithoutActiveLayers;
+  const inventoryValueMismatchCount = aggregate.valueMismatchRows;
+  const totalAbsoluteValueDrift = aggregate.totalAbsoluteValueDrift;
+  const negativeOrOverconsumedLayers = aggregate.negativeOrOverconsumedLayers;
+  const duplicateActiveSerializedAllocations = aggregate.duplicateActiveSerializedAllocations;
+  const shipmentLinkStatusMismatch = aggregate.shipmentLinkStatusMismatch;
 
   const hardFailures = [
     stockWithoutActiveLayers,
