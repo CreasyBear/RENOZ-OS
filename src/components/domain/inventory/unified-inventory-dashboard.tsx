@@ -40,6 +40,7 @@ import { InventoryDashboardAlertsSection } from './inventory-dashboard-alerts-se
 import { InventoryDashboardEmptyState } from './inventory-dashboard-empty-state';
 import { buildInventoryDashboardReadState } from './inventory-dashboard-read-state';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
+import { refreshInventoryDashboard } from './inventory-dashboard-refresh';
 import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-recent-movements-panel';
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
 import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
@@ -100,16 +101,17 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
-  // Use refetch from hooks instead of queryClient.invalidateQueries
-  const handleRefresh = useCallback(async () => {
-    await Promise.all([
-      refetchWMS(),
-      refetchDashboard(),
-      refetchMovements(),
-      refetchAlerts(),
-    ]);
-    toast.success('Dashboard refreshed');
-  }, [refetchWMS, refetchDashboard, refetchMovements, refetchAlerts]);
+  const handleRefresh = useCallback(
+    () =>
+      refreshInventoryDashboard({
+        refetchWMS,
+        refetchDashboard,
+        refetchMovements,
+        refetchAlerts,
+        notifySuccess: toast.success,
+      }),
+    [refetchWMS, refetchDashboard, refetchMovements, refetchAlerts]
+  );
 
   const handleAcknowledgeAlert = useCallback(
     (alertId: string) => {
