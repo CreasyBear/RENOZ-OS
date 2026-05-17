@@ -12,7 +12,6 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { z } from 'zod';
 import { Plus, Edit3, Loader2, CalendarIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -53,19 +52,15 @@ import { WorkstreamCreateDialog } from './workstream-dialogs';
 import { UserInviteDialog } from '@/components/domain/users/user-invite-dialog';
 import { useUserLookup } from '@/hooks/users';
 import { toast } from 'sonner';
-
-
-// ============================================================================
-// SCHEMAS
-// ============================================================================
-
-const taskFormSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255),
-  description: z.string().optional(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
-  estimatedHours: z.number().min(0).optional().nullable(),
-});
-
+import {
+  buildProjectTaskTemplateOptions,
+  getProjectTaskCreateDialogDefaultValues,
+  getProjectTaskCreateMoreResetValues,
+  getProjectTaskEditDialogDefaultValues,
+  getProjectTaskEditDialogResetValues,
+  projectTaskCreateDialogFormSchema,
+  projectTaskEditDialogFormSchema,
+} from './project-task-dialog-form-state';
 
 
 // ============================================================================
@@ -79,14 +74,6 @@ export interface TaskCreateDialogProps {
   onSuccess?: () => void;
 }
 
-// Extended schema for task creation with additional fields
-const createTaskFormSchema = taskFormSchema.omit({ status: true }).extend({
-  assigneeId: z.string().optional(),
-  dueDate: z.string().optional(),
-  priority: z.enum(['urgent', 'high', 'normal', 'low']).optional().default('normal'),
-  workstreamId: z.string().optional(),
-});
-
 export function TaskCreateDialog({
   open,
   onOpenChange,
@@ -99,22 +86,10 @@ export function TaskCreateDialog({
   const { data: templatesData } = useJobTemplates({ includeInactive: false });
   const createTask = useCreateTask();
 
-  // Flatten task templates from job templates for "From template" dropdown
-  const taskTemplateOptions = useMemo(() => {
-    const templates = templatesData?.templates ?? [];
-    const options: { value: string; label: string; title: string; description?: string }[] = [];
-    for (const t of templates) {
-      for (const task of t.defaultTasks ?? []) {
-        options.push({
-          value: `${t.id}:${task.id}`,
-          label: `${t.name}: ${task.title}`,
-          title: task.title,
-          description: task.description,
-        });
-      }
-    }
-    return options;
-  }, [templatesData]);
+  const taskTemplateOptions = useMemo(
+    () => buildProjectTaskTemplateOptions(templatesData?.templates ?? []),
+    [templatesData?.templates]
+  );
   const { userMap } = useUserLookup();
 
   // siteVisitId: '' = no visit (project-level), or a visit id when linked to a visit
@@ -129,16 +104,8 @@ export function TaskCreateDialog({
   const workstreams = workstreamsData?.data || [];
 
   const form = useTanStackForm({
-    schema: createTaskFormSchema,
-    defaultValues: {
-      title: '',
-      description: '',
-      assigneeId: '',
-      dueDate: '',
-      priority: 'normal',
-      estimatedHours: null,
-      workstreamId: '',
-    },
+    schema: projectTaskCreateDialogFormSchema,
+    defaultValues: getProjectTaskCreateDialogDefaultValues(),
     onValidationError: (error) => {
       const messages = error.issues.map(i => i.message).join(', ');
       toast.error(`Validation error: ${messages}`);
@@ -174,15 +141,7 @@ export function TaskCreateDialog({
 
         if (createMore) {
           // Keep dialog open, reset only title and description
-          form.reset({
-            title: '',
-            description: '',
-            assigneeId: values.assigneeId ? String(values.assigneeId) : '', // Keep assignee for batch creation
-            dueDate: '',
-            priority: values.priority, // Keep priority
-            estimatedHours: null,
-            workstreamId: values.workstreamId ? String(values.workstreamId) : '', // Keep workstream
-          });
+          form.reset(getProjectTaskCreateMoreResetValues(values));
         } else {
           onOpenChange(false);
           form.reset();
@@ -564,13 +523,6 @@ export interface TaskEditDialogProps {
   onSuccess?: () => void;
 }
 
-// Extended schema for editing with all fields
-const editTaskFormSchema = taskFormSchema.extend({
-  assigneeId: z.string().optional().nullable(),
-  dueDate: z.string().optional().nullable(),
-  priority: z.enum(['urgent', 'high', 'normal', 'low']).optional(),
-});
-
 export function TaskEditDialog({
   open,
   onOpenChange,
@@ -584,16 +536,8 @@ export function TaskEditDialog({
   const [showUserInvite, setShowUserInvite] = useState(false);
 
   const form = useTanStackForm({
-    schema: editTaskFormSchema,
-    defaultValues: {
-      title: '',
-      description: '',
-      status: 'pending' as const,
-      estimatedHours: null,
-      assigneeId: null,
-      dueDate: null,
-      priority: 'normal' as const,
-    },
+    schema: projectTaskEditDialogFormSchema,
+    defaultValues: getProjectTaskEditDialogDefaultValues(),
     onValidationError: (error) => {
       const messages = error.issues.map(i => i.message).join(', ');
       toast.error(`Validation error: ${messages}`);
@@ -632,18 +576,7 @@ export function TaskEditDialog({
 
   useEffect(() => {
     if (task && open) {
-      const dueDateStr = task.dueDate instanceof Date
-        ? task.dueDate.toISOString().slice(0, 10)
-        : (task.dueDate ?? null);
-      form.reset({
-        title: task.title,
-        description: task.description || '',
-        status: (task.status === 'pending' || task.status === 'in_progress' || task.status === 'completed' || task.status === 'blocked') ? task.status : 'pending',
-        estimatedHours: task.estimatedHours ?? null,
-        assigneeId: task.assigneeId,
-        dueDate: dueDateStr,
-        priority: task.priority || 'normal',
-      });
+      form.reset(getProjectTaskEditDialogResetValues(task));
     }
   }, [task, open, form]);
 
