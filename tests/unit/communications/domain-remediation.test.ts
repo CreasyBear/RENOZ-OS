@@ -85,6 +85,23 @@ describe('communications domain remediation trace', () => {
     expect(warranty).toContain('_shared/suppression-read');
   });
 
+  it('keeps unsubscribe token verification owned by signed HMAC tokens only', () => {
+    const route = read('src/routes/api/unsubscribe.$token.ts');
+    const secureTokens = read('src/lib/server/unsubscribe-tokens.ts');
+    const preferenceFacade = read('src/lib/server/communication-preferences.ts');
+
+    expect(route).toContain(
+      'verifyUnsubscribeToken as verifySecureToken',
+    );
+    expect(route).toContain('const securePayload = verifySecureToken(token)');
+    expect(route).not.toContain("from '@/lib/server/communication-preferences'");
+    expect(secureTokens).toContain('createHmac("sha256", secret)');
+    expect(secureTokens).toContain('timingSafeEqual');
+    expect(preferenceFacade).not.toContain('LegacyUnsubscribePayload');
+    expect(preferenceFacade).not.toContain('decodeBase64');
+    expect(preferenceFacade).not.toContain('verifyUnsubscribeToken');
+  });
+
   it('keeps Resend webhook signature failures behind provider-owned log context', () => {
     const route = read('src/routes/api/webhooks/resend.ts');
 

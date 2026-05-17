@@ -996,9 +996,9 @@ What is messy:
 
 #### P1
 
-- **The unsubscribe endpoint still accepts unsigned legacy tokens**
+- **Closed 2026-05-17: the unsubscribe endpoint no longer accepts unsigned legacy tokens**
   - Files: `src/routes/api/unsubscribe.$token.ts`, `src/lib/server/communication-preferences.ts`, `src/lib/server/unsubscribe-tokens.ts`
-  - The secure unsubscribe implementation uses HMAC-signed, expiring tokens, but the route still falls back to `verifyLegacyToken`, which only base64-decodes JSON containing `contactId` and `channel`. That legacy format has no signature and no expiry. In practice, that means an attacker who can guess or obtain a valid contact ID can forge a token shape that the route will accept. This is the strongest security finding in the deeper audit pass.
+  - Revalidated on the current branch in Communications Maintainer Sprint 30. The route verifies only HMAC-signed, expiring tokens through `src/lib/server/unsubscribe-tokens.ts`, the old base64 verifier surface has been removed from the communication-preferences compatibility module, and focused route coverage rejects unsigned legacy tokens.
 
 #### P2
 
@@ -1016,9 +1016,9 @@ What is messy:
 
 #### P3
 
-- **The stronger security model is not yet fully enforced by tests**
+- **The stronger security model still needs broader trust-boundary tests**
   - Evidence: route/auth/financial test packs
-  - The stronger paths are tested around Xero webhooks and auth routes, but there is no direct regression coverage proving that legacy unsubscribe tokens are retired, that public throttling behaves correctly behind proxy/config permutations, or that debug endpoints stay non-public where intended.
+  - The stronger paths are tested around Xero webhooks, auth routes, and signed unsubscribe-token handling. Remaining gaps are public throttling behavior behind proxy/config permutations and debug endpoint exposure policy.
 
 ### Positive Findings
 
@@ -1030,8 +1030,6 @@ What is messy:
 ### Deferred Cleanup Candidates
 
 Safe short-term:
-- remove or hard-disable the legacy unsubscribe token path
-- add regression tests proving unsigned unsubscribe tokens are rejected
 - decide whether public debug AI routes should exist at all in shipped code
 
 Structural medium-term:
