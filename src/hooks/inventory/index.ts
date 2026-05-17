@@ -60,9 +60,13 @@ export {
 // Location management
 export {
   useLocations,
+} from './use-locations';
+
+// Warehouse location read/cache contract
+export {
   useLocationHierarchy,
   useLocationDetail,
-} from './use-locations';
+} from './use-warehouse-location-reads';
 
 // Warehouse location mutation/cache contract
 export {

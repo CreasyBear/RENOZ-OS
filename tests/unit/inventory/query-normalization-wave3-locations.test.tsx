@@ -11,6 +11,7 @@ const mockGetLocation = vi.fn();
 const mockCreateLocation = vi.fn();
 const mockUpdateLocation = vi.fn();
 const mockDeleteLocation = vi.fn();
+const mockGetWarehouseLocationHierarchy = vi.fn();
 const mockCreateWarehouseLocation = vi.fn();
 const mockUpdateWarehouseLocation = vi.fn();
 const mockDeleteWarehouseLocation = vi.fn();
@@ -32,7 +33,7 @@ vi.mock('@/server/functions/inventory/locations', () => ({
   createLocation: (...args: unknown[]) => mockCreateLocation(...args),
   updateLocation: (...args: unknown[]) => mockUpdateLocation(...args),
   deleteLocation: (...args: unknown[]) => mockDeleteLocation(...args),
-  getWarehouseLocationHierarchy: vi.fn().mockResolvedValue({ hierarchy: [] }),
+  getWarehouseLocationHierarchy: (...args: unknown[]) => mockGetWarehouseLocationHierarchy(...args),
   createWarehouseLocation: (...args: unknown[]) => mockCreateWarehouseLocation(...args),
   updateWarehouseLocation: (...args: unknown[]) => mockUpdateWarehouseLocation(...args),
   deleteWarehouseLocation: (...args: unknown[]) => mockDeleteWarehouseLocation(...args),
@@ -104,6 +105,7 @@ describe('inventory locations query normalization wave 3', () => {
     mockCreateLocation.mockResolvedValue({ location: sampleLocation });
     mockUpdateLocation.mockResolvedValue({ location: sampleLocation });
     mockDeleteLocation.mockResolvedValue({ success: true });
+    mockGetWarehouseLocationHierarchy.mockResolvedValue({ hierarchy: [] });
     mockCreateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
     mockUpdateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
     mockDeleteWarehouseLocation.mockResolvedValue({ success: true });
@@ -122,6 +124,31 @@ describe('inventory locations query normalization wave 3', () => {
     expect(result.current.locations).toEqual([]);
     expect(result.current.hierarchy).toEqual([]);
     expect(result.current.locationsError).toBeNull();
+  });
+
+  it('keeps focused warehouse location hierarchy and detail reads successful', async () => {
+    mockGetWarehouseLocationHierarchy.mockResolvedValueOnce({ hierarchy: [sampleLocation] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useLocationHierarchy, useLocationDetail } = await import(
+      '@/hooks/inventory/use-warehouse-location-reads'
+    );
+
+    const hierarchy = renderHook(() => useLocationHierarchy('root-1'), {
+      wrapper: createWrapper(queryClient),
+    });
+    const detail = renderHook(() => useLocationDetail('loc-1'), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(hierarchy.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(detail.result.current.isSuccess).toBe(true));
+
+    expect(hierarchy.result.current.data).toEqual([sampleLocation]);
+    expect(detail.result.current.data?.location).toEqual(sampleLocation);
+    expect(mockGetWarehouseLocationHierarchy).toHaveBeenCalledWith({
+      data: { id: 'root-1' },
+    });
+    expect(mockGetLocation).toHaveBeenCalledWith({ data: { id: 'loc-1' } });
   });
 
   it('preserves not-found semantics for location detail reads', async () => {
@@ -202,6 +229,25 @@ describe('inventory locations query normalization wave 3', () => {
     expect(utilizationHook).toContain('queryKeys.locations.utilization()');
     expect(utilizationHook).toContain('Location utilization returned no data');
     expect(inventoryIndex).toContain("export { useLocationUtilization } from './use-location-utilization'");
+  });
+
+  it('keeps focused warehouse location read hooks outside the legacy location composite', () => {
+    const locationsHook = readFileSync(join(process.cwd(), 'src/hooks/inventory/use-locations.ts'), 'utf8');
+    const readHook = readFileSync(
+      join(process.cwd(), 'src/hooks/inventory/use-warehouse-location-reads.ts'),
+      'utf8'
+    );
+    const inventoryIndex = readFileSync(join(process.cwd(), 'src/hooks/inventory/index.ts'), 'utf8');
+
+    expect(locationsHook).toContain("from './use-warehouse-location-reads'");
+    expect(locationsHook).not.toContain('getWarehouseLocationHierarchy');
+    expect(locationsHook).not.toContain('getLocation as getLocationDetail');
+    expect(readHook).toContain(
+      "import {\n  getWarehouseLocationHierarchy,\n  getLocation as getLocationDetail,\n} from '@/server/functions/inventory/locations'"
+    );
+    expect(readHook).toContain('queryKeys.locations.hierarchy(rootId)');
+    expect(readHook).toContain('queryKeys.locations.detail(locationId)');
+    expect(inventoryIndex).toContain("} from './use-warehouse-location-reads'");
   });
 
   it('uses safe mutation fallback copy instead of raw composite location errors', async () => {
