@@ -130,7 +130,7 @@ const _getDocumentTemplateCached = cache(
 export const getDocumentTemplate = createServerFn({ method: "GET" })
   .inputValidator(normalizeObjectInput(getDocumentTemplateSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
     return _getDocumentTemplateCached(data.documentType, ctx.organizationId);
   });
 
@@ -146,7 +146,7 @@ export const getDocumentTemplate = createServerFn({ method: "GET" })
 export const updateDocumentTemplate = createServerFn({ method: "POST" })
   .inputValidator(updateDocumentTemplateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const { documentType, ...updateData } = data;
 
@@ -274,7 +274,7 @@ export const updateDocumentTemplate = createServerFn({ method: "POST" })
 export const getAllDocumentTemplates = createServerFn({ method: "GET" })
   .inputValidator(getAllDocumentTemplatesSchema)
   .handler(async () => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
 
     const templates = await db
       .select({
@@ -341,7 +341,7 @@ export const getAllDocumentTemplates = createServerFn({ method: "GET" })
 export const resetDocumentTemplate = createServerFn({ method: "POST" })
   .inputValidator(getDocumentTemplateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Find and delete the template
     const deleted = await db

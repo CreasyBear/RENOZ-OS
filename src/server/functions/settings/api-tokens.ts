@@ -22,6 +22,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { apiTokens, activities } from "../../../../drizzle/schema";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { withAuth } from "@/lib/server/protected";
 import { AuthError, PermissionDeniedError, NotFoundError } from "@/lib/server/errors";
 import {
@@ -90,7 +91,7 @@ async function verifyToken(token: string, hash: string): Promise<boolean> {
 export const createApiToken = createServerFn({ method: "POST" })
   .inputValidator(createApiTokenSchema)
   .handler(async ({ data }): Promise<CreateApiTokenResponse> => {
-    const ctx = await withAuth({ permission: "api_token.create" });
+    const ctx = await withAuth({ permission: PERMISSIONS.apiToken.create });
 
     // Generate and hash token (outside transaction - crypto operations)
     const plainToken = generateToken();

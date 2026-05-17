@@ -35,7 +35,7 @@ import { NotFoundError, ConflictError, ServerError } from '@/lib/server/errors';
 export const listWinLossReasons = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(winLossReasonFilterSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { type, isActive } = data;
 
@@ -71,7 +71,7 @@ export const listWinLossReasons = createServerFn({ method: 'GET' })
 export const getWinLossReason = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(winLossReasonParamsSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 
@@ -101,7 +101,7 @@ export const createWinLossReason = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     // Admin-only permission - use organization.update for settings management
     const ctx = await withAuth({
-      permission: PERMISSIONS.organization?.update ?? 'organization:update',
+      permission: PERMISSIONS.organization.update,
     });
 
     const { name, type, description, isActive, sortOrder } = data;
@@ -156,7 +156,7 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.organization?.update ?? 'organization:update',
+      permission: PERMISSIONS.organization.update,
     });
 
     const { id, data: updateData } = data;
@@ -210,7 +210,7 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
   .inputValidator(winLossReasonParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.organization?.update ?? 'organization:update',
+      permission: PERMISSIONS.organization.update,
     });
 
     const { id } = data;
@@ -301,7 +301,7 @@ export const winLossAnalysisQuerySchema = normalizeObjectInput(
 export const getWinLossAnalysis = createServerFn({ method: 'GET' })
   .inputValidator(winLossAnalysisQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, type } = data;
 
@@ -440,7 +440,7 @@ export const getCompetitors = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo } = data;
 

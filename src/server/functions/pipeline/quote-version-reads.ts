@@ -22,7 +22,7 @@ import { opportunities, quoteVersions } from 'drizzle/schema';
 export const getQuoteVersion = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(quoteVersionParamsSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 
@@ -45,7 +45,7 @@ export const getQuoteVersion = createServerFn({ method: 'GET' })
 export const listQuoteVersions = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(quoteVersionFilterSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { opportunityId } = data;
 

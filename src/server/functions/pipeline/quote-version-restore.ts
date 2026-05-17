@@ -24,7 +24,7 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
   .inputValidator(restoreQuoteVersionSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { opportunityId, sourceVersionId, notes } = data;

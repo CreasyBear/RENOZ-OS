@@ -1320,7 +1320,7 @@ export const getIssuesWithSlaMetricsCursor = createServerFn({ method: 'GET' })
 export const deleteIssue = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.support?.delete ?? 'support:delete' });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.delete });
     const logger = createActivityLoggerWithContext(ctx);
     const { id } = data;
 

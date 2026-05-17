@@ -56,7 +56,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
   .inputValidator(sendQuoteSchema)
   .handler(async ({ data }): Promise<SendQuoteResult> => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const {

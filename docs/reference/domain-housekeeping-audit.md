@@ -1009,9 +1009,9 @@ What is messy:
   - Files: `src/routes/api/ai/debug-ping.ts`, `src/routes/api/ai/debug-rls-clash.ts`
   - Revalidated and remediated in AI Maintainer Sprint 3. Both debug routes now return a generic 404 response unless `AI_DEBUG_ROUTES_ENABLED=true` in a non-production runtime; production stays disabled even when the flag is present. The RLS diagnostic route no longer accepts arbitrary org inspection by default in preview or development environments.
 
-- **Permission fallback strings create silent authorization-drift risk**
-  - Files: `src/server/functions/jobs/checklists.ts`, `src/server/functions/jobs/job-time.ts`, `src/server/functions/jobs/job-materials.ts`, `src/server/functions/jobs/job-tasks.ts`, `src/server/functions/pipeline/pipeline.ts`, `src/server/functions/support/issues.ts`, `src/server/functions/orders/rma.ts`
-  - Multiple server functions use optional chaining plus raw-string fallbacks for permissions. The jobs domain is the worst example: several handlers fall back to `customer.read`, `customer.create`, `customer.update`, or `customer.delete` if `PERMISSIONS.job` is missing. Today `PERMISSIONS.job` exists, so this is not a live exploit, but it is exactly the kind of latent auth bug that can appear during refactors or partial migrations.
+- **Closed 2026-05-17: permission fallback strings no longer create silent authorization-drift risk**
+  - Files: `src/server/functions/jobs/checklists.ts`, `src/server/functions/jobs/job-time.ts`, `src/server/functions/jobs/job-materials.ts`, `src/server/functions/jobs/job-tasks.ts`, `src/server/functions/jobs/job-tasks-kanban.ts`, `src/server/functions/pipeline/pipeline.ts`, `src/server/functions/pipeline/*`, `src/server/functions/documents/document-templates.ts`, `src/server/functions/settings/api-tokens.ts`, `src/server/functions/support/issues.ts`, `src/server/functions/orders/rma.ts`, `src/routes/_authenticated/admin/admin-page.tsx`
+  - Revalidated and remediated in Operations Maintainer Sprint 90. Optional-chained permission constants and raw string fallbacks were replaced with direct `PERMISSIONS.<domain>.<action>` references so permission drift fails at typecheck/code-review time instead of quietly falling back to the wrong business domain or authentication-only behavior. Added `tests/unit/auth/permission-source-contract.test.ts` to prevent these patterns returning.
 
 #### P3
 
@@ -1033,7 +1033,7 @@ Safe short-term:
 - verify deployed Upstash Redis/proxy configuration for the shared public endpoint limiter
 
 Structural medium-term:
-- remove permission fallback strings in favor of canonical permission constants only
+- review whether job, pipeline, support/RMA, settings, and API-token permission granularity matches current operator roles
 
 ---
 

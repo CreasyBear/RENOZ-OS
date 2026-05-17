@@ -168,7 +168,7 @@ export const convertToOrder = createServerFn({ method: 'POST' })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { id } = data;

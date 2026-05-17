@@ -25,6 +25,7 @@ import { PageLayout } from '@/components/layout';
 import { PermissionGuard } from '@/components/shared/permission-guard';
 import { useUsers } from '@/hooks/users/use-users';
 import { buttonVariants } from '@/components/ui/button';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
 
 // Admin feature cards for navigation
@@ -35,7 +36,7 @@ const adminFeatures = [
     href: '/admin/users',
     icon: Users,
     color: 'text-blue-500',
-    permission: 'user.read',
+    permission: PERMISSIONS.user.read,
   },
   {
     title: 'Groups',
@@ -43,7 +44,7 @@ const adminFeatures = [
     href: '/admin/groups',
     icon: UsersRound,
     color: 'text-purple-500',
-    permission: 'group.read',
+    permission: PERMISSIONS.group.read,
   },
   {
     title: 'Invitations',
@@ -51,7 +52,7 @@ const adminFeatures = [
     href: '/admin/invitations',
     icon: Mail,
     color: 'text-green-500',
-    permission: 'user.read',
+    permission: PERMISSIONS.user.read,
   },
   {
     title: 'Activities',
@@ -59,7 +60,7 @@ const adminFeatures = [
     href: '/admin/activities',
     icon: Activity,
     color: 'text-orange-500',
-    permission: 'activity.read',
+    permission: PERMISSIONS.activity.read,
   },
   {
     title: 'Audit Log',
@@ -67,7 +68,7 @@ const adminFeatures = [
     href: '/admin/audit',
     icon: ShieldCheck,
     color: 'text-red-500',
-    permission: 'audit.read',
+    permission: PERMISSIONS.audit.read,
   },
 ] as const;
 

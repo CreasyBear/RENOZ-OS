@@ -71,7 +71,7 @@ function generateAlertId(opportunityId: string, alertType: string): string {
 export const getOpportunityAlerts = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(opportunityAlertsQuerySchema))
   .handler(async ({ data }): Promise<OpportunityAlertsResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       opportunityId,
@@ -269,7 +269,7 @@ export const getOpportunityAlerts = createServerFn({ method: 'GET' })
 export const getOpportunityActiveItems = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(opportunityActiveItemsQuerySchema))
   .handler(async ({ data }): Promise<OpportunityActiveItems> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { opportunityId, pendingActivitiesLimit, quoteVersionsLimit } = data;
 

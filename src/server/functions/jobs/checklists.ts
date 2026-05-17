@@ -132,7 +132,7 @@ export const listChecklistTemplates = createServerFn({ method: 'GET' })
   .inputValidator(listChecklistTemplatesSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const conditions = [eq(checklistTemplates.organizationId, ctx.organizationId)];
@@ -174,7 +174,7 @@ export const getChecklistTemplate = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getChecklistTemplateSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const [template] = await db
@@ -216,7 +216,7 @@ export const createChecklistTemplate = createServerFn({ method: 'POST' })
   .inputValidator(createChecklistTemplateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.create ?? 'customer.create',
+      permission: PERMISSIONS.job.create,
     });
 
     const [template] = await db
@@ -246,7 +246,7 @@ export const updateChecklistTemplate = createServerFn({ method: 'POST' })
   .inputValidator(updateChecklistTemplateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     // Verify access
@@ -297,7 +297,7 @@ export const deleteChecklistTemplate = createServerFn({ method: 'POST' })
   .inputValidator(deleteChecklistTemplateSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.delete ?? 'customer.delete',
+      permission: PERMISSIONS.job.delete,
     });
 
     // Verify access
@@ -334,7 +334,7 @@ export const applyChecklistToJob = createServerFn({ method: 'POST' })
   .inputValidator(applyChecklistToJobSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     // Verify job access
@@ -428,7 +428,7 @@ export const updateChecklistItem = createServerFn({ method: 'POST' })
   .inputValidator(updateChecklistItemSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     // Verify access
@@ -513,7 +513,7 @@ export const getJobChecklist = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getJobChecklistSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Verify job access
@@ -668,7 +668,7 @@ export const getChecklistItem = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getChecklistItemSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const [item] = await db

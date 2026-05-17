@@ -74,7 +74,7 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
   .inputValidator(createQuoteVersionSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { opportunityId, items, notes } = data;

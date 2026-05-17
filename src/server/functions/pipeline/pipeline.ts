@@ -329,7 +329,7 @@ function validateStageTransition(current: OpportunityStage, next: OpportunitySta
 export const listOpportunities = createServerFn({ method: 'GET' })
   .inputValidator(opportunityListQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       page,
@@ -486,7 +486,7 @@ export const listOpportunities = createServerFn({ method: 'GET' })
 export const listOpportunitiesCursor = createServerFn({ method: 'GET' })
   .inputValidator(opportunityCursorQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       cursor,
@@ -669,7 +669,7 @@ const _getOpportunityCached = cache(
 export const getOpportunity = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(opportunityParamsSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
     const result = await _getOpportunityCached(data.id, ctx.organizationId);
     if (!result) {
       setResponseStatus(404);
@@ -689,7 +689,7 @@ export const createOpportunity = createServerFn({ method: 'POST' })
   .inputValidator(createOpportunitySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.create ?? 'opportunity:create',
+      permission: PERMISSIONS.opportunity.create,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -799,7 +799,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunitySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -933,7 +933,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunityStageSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -1068,7 +1068,7 @@ export const bulkUpdateOpportunityStage = createServerFn({ method: 'POST' })
       data: { opportunityIds, stage, probability, winLossReasonId, lostNotes, competitorName },
     }): Promise<{ updated: number; failed: string[] }> => {
       const ctx = await withAuth({
-        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+        permission: PERMISSIONS.opportunity.update,
       });
       const logger = createActivityLoggerWithContext(ctx);
 
@@ -1242,7 +1242,7 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.delete ?? 'opportunity:delete',
+      permission: PERMISSIONS.opportunity.delete,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -1328,7 +1328,7 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
 export const getPipelineMetrics = createServerFn({ method: 'GET' })
   .inputValidator(pipelineMetricsQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, assignedTo, customerId } = data;
 
@@ -1435,7 +1435,7 @@ export const getPipelineMetrics = createServerFn({ method: 'GET' })
 export const listActivities = createServerFn({ method: 'GET' })
   .inputValidator(listOpportunityActivitiesQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       page = 1,
@@ -1516,7 +1516,7 @@ export const listActivities = createServerFn({ method: 'GET' })
 export const getActivity = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(opportunityActivityParamsSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 
@@ -1541,7 +1541,7 @@ export const logActivity = createServerFn({ method: 'POST' })
   .inputValidator(createOpportunityActivitySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { opportunityId, type, description, outcome, scheduledAt, completedAt } = data;
@@ -1599,7 +1599,7 @@ export const updateActivity = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { id, ...updates } = data;
@@ -1653,7 +1653,7 @@ export const completeActivity = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { id, outcome } = data;
@@ -1693,7 +1693,7 @@ export const deleteActivity = createServerFn({ method: 'POST' })
   .inputValidator(opportunityActivityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { id } = data;
@@ -1735,7 +1735,7 @@ export const getActivityTimeline = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { opportunityId, days } = data;
 
@@ -1804,7 +1804,7 @@ export const getUpcomingFollowUps = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { days, opportunityId, assignedTo } = data;
 
@@ -1882,7 +1882,7 @@ export const getActivityAnalytics = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, opportunityId } = data;
 
@@ -1979,7 +1979,7 @@ import {
 export const getPipelineForecast = createServerFn({ method: 'GET' })
   .inputValidator(forecastQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { startDate, endDate, groupBy, includeWeighted, assignedTo, customerId, stages } = data;
 
@@ -2081,7 +2081,7 @@ export const getPipelineForecast = createServerFn({ method: 'GET' })
 export const getForecastByEntity = createServerFn({ method: 'GET' })
   .inputValidator(forecastQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { startDate, endDate, groupBy, assignedTo, customerId } = data;
 
@@ -2196,7 +2196,7 @@ export const getForecastByEntity = createServerFn({ method: 'GET' })
 export const getPipelineVelocity = createServerFn({ method: 'GET' })
   .inputValidator(velocityQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo } = data;
 
@@ -2316,7 +2316,7 @@ export const getPipelineVelocity = createServerFn({ method: 'GET' })
 export const getRevenueAttribution = createServerFn({ method: 'GET' })
   .inputValidator(revenueAttributionQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, groupBy } = data;
 

@@ -56,7 +56,7 @@ interface QuoteVersionItemRaw {
 export const generateQuotePdf = createServerFn({ method: 'POST' })
   .inputValidator(quoteVersionParamsSchema)
   .handler(async ({ data }): Promise<GenerateQuotePdfResult> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 

@@ -37,7 +37,7 @@ export const listJobTasksForKanban = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(listJobTasksForKanbanSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Build where conditions
@@ -168,7 +168,7 @@ export const getMyTasksForKanban = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getMyTasksForKanbanSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const { siteVisits, projects, projectWorkstreams } = await import('drizzle/schema');

@@ -33,7 +33,7 @@ export const getExpiringQuotes = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { warningDays, limit } = data;
 
@@ -88,7 +88,7 @@ export const getExpiredQuotes = createServerFn({ method: 'GET' })
   )
   .handler(async ({ data }) => {
     const { limit } = data;
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const now = new Date();
 
@@ -131,7 +131,7 @@ export const getQuoteValidityStatsSchema = normalizeObjectInput(z.object({}));
 export const getQuoteValidityStats = createServerFn({ method: 'GET' })
   .inputValidator(getQuoteValidityStatsSchema)
   .handler(async () => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const now = new Date();
     const sevenDaysFromNow = new Date();
@@ -169,7 +169,7 @@ export const updateQuoteExpiration = createServerFn({ method: 'POST' })
   .inputValidator(updateQuoteExpirationSchema)
   .handler(async ({ data }): Promise<{ opportunity: typeof opportunities.$inferSelect }> => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+      permission: PERMISSIONS.opportunity.update,
     });
 
     const { opportunityId, quoteExpiresAt } = data;
@@ -205,7 +205,7 @@ export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
       data,
     }): Promise<{ opportunity: typeof opportunities.$inferSelect; expiresAt: Date }> => {
       const ctx = await withAuth({
-        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+        permission: PERMISSIONS.opportunity.update,
       });
 
       const { opportunityId } = data;
@@ -255,7 +255,7 @@ export const extendQuoteValidity = createServerFn({ method: 'POST' })
       newExpiration: Date;
     }> => {
       const ctx = await withAuth({
-        permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
+        permission: PERMISSIONS.opportunity.update,
       });
 
       const { opportunityId, newExpirationDate, reason } = data;
@@ -326,7 +326,7 @@ export const validateQuoteForConversion = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { opportunityId } = data;
 

@@ -1832,7 +1832,7 @@ export const cancelRma = createServerFn({ method: 'POST' })
     reason: z.string().optional(),
   }))
   .handler(async ({ data }): Promise<RmaResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.support?.delete ?? 'support:delete' });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.delete });
     const logger = createActivityLoggerWithContext(ctx);
     const { id, reason } = data;
 

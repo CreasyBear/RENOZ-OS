@@ -84,7 +84,7 @@ export const listJobTasks = createServerFn({ method: 'GET' })
   .inputValidator(listJobTasksSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Verify job access
@@ -200,7 +200,7 @@ export const createTask = createServerFn({ method: 'POST' })
   .inputValidator(createTaskSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.create ?? 'customer.create',
+      permission: PERMISSIONS.job.create,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -342,7 +342,7 @@ export const updateTask = createServerFn({ method: 'POST' })
   .inputValidator(updateTaskSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -436,7 +436,7 @@ export const deleteTask = createServerFn({ method: 'POST' })
   .inputValidator(deleteTaskSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.delete ?? 'customer.delete',
+      permission: PERMISSIONS.job.delete,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -506,7 +506,7 @@ export const reorderTasks = createServerFn({ method: 'POST' })
   .inputValidator(reorderTasksSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     // Verify job access
@@ -550,7 +550,7 @@ export const getTask = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getTaskSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Query task with assignee

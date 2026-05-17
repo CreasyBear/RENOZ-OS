@@ -336,7 +336,7 @@ export const startTimer = createServerFn({ method: 'POST' })
   .inputValidator(startTimerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id, {
@@ -418,7 +418,7 @@ export const stopTimer = createServerFn({ method: 'POST' })
   .inputValidator(stopTimerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     const scope =
@@ -477,7 +477,7 @@ export const createManualEntry = createServerFn({ method: 'POST' })
   .inputValidator(createManualEntrySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id, {
@@ -535,7 +535,7 @@ export const updateTimeEntry = createServerFn({ method: 'POST' })
   .inputValidator(updateTimeEntrySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     const scope =
@@ -604,7 +604,7 @@ export const deleteTimeEntry = createServerFn({ method: 'POST' })
   .inputValidator(deleteTimeEntrySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.delete ?? 'customer.delete',
+      permission: PERMISSIONS.job.delete,
     });
 
     const scope =
@@ -638,7 +638,7 @@ export const getJobTimeEntries = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getJobTimeEntriesSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id);
@@ -725,7 +725,7 @@ export const calculateJobLaborCost = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(calculateJobLaborCostSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const scope = await resolveTimeTrackingScope(data, ctx.organizationId, ctx.user.id);
@@ -796,7 +796,7 @@ export const getTimeEntry = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getTimeEntrySchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     const scope =

@@ -30,7 +30,7 @@ export const compareQuoteVersions = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? 'opportunity:read' });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { version1Id, version2Id } = data;
 

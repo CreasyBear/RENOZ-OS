@@ -81,7 +81,7 @@ export const listJobMaterials = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(listJobMaterialsSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Verify job access
@@ -151,7 +151,7 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
   .inputValidator(addJobMaterialSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -238,7 +238,7 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
   .inputValidator(updateJobMaterialSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -374,7 +374,7 @@ export const removeJobMaterial = createServerFn({ method: 'POST' })
   .inputValidator(removeJobMaterialSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
@@ -457,7 +457,7 @@ export const reserveJobStock = createServerFn({ method: 'POST' })
   .inputValidator(reserveJobStockSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
 
     // Verify job access
@@ -535,7 +535,7 @@ export const calculateJobMaterialCost = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(calculateJobMaterialCostSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Verify job access
@@ -594,7 +594,7 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(getJobMaterialSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.read ?? 'customer.read',
+      permission: PERMISSIONS.job.read,
     });
 
     // Verify material access
@@ -672,7 +672,7 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
   .inputValidator(recordMaterialInstallationSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({
-      permission: PERMISSIONS.job?.update ?? 'customer.update',
+      permission: PERMISSIONS.job.update,
     });
     const logger = createActivityLoggerWithContext(ctx);
 
