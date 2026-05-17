@@ -62,10 +62,14 @@ export {
   useLocations,
   useLocationHierarchy,
   useLocationDetail,
+} from './use-locations';
+
+// Warehouse location mutation/cache contract
+export {
   useCreateWarehouseLocation,
   useUpdateWarehouseLocation,
   useDeleteWarehouseLocation,
-} from './use-locations';
+} from './use-warehouse-location-mutations';
 
 // Alert management
 export {

@@ -17,6 +17,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { normalizeReadQueryError } from '@/lib/read-path-policy';
 import { toast } from '../_shared/use-toast';
 import { formatInventoryMutationError } from './_mutation-errors';
+import { invalidateWarehouseLocationMutationQueries } from './use-warehouse-location-mutations';
 import {
   listLocations,
   getLocation,
@@ -33,8 +34,6 @@ import type {
   HookLocationFilters,
   CreateLocationInput,
   UpdateLocationInput,
-  CreateWarehouseLocationInput,
-  UpdateWarehouseLocationInput,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -94,21 +93,6 @@ interface UseLocationsResult {
   // Filters
   filters: HookLocationFilters;
   setFilters: (filters: HookLocationFilters) => void;
-}
-
-function invalidateLocationMutationQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  locationId?: string
-) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.locations.lists() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.locations.tree() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.locations.hierarchies() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.locations.utilization() });
-
-  if (locationId) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.locations.detail(locationId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.locations.contents(locationId) });
-  }
 }
 
 // ============================================================================
@@ -262,7 +246,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
         toast.success('Location created', {
           description: `${location.name} (${location.code})`,
         });
-        invalidateLocationMutationQueries(queryClient, location.id);
+        invalidateWarehouseLocationMutationQueries(queryClient, location.id);
       }
     },
     onError: (error: unknown) => {
@@ -301,7 +285,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
     },
     onSuccess: (location, variables) => {
       toast.success('Location updated');
-      invalidateLocationMutationQueries(queryClient, location?.id ?? variables.locationId);
+      invalidateWarehouseLocationMutationQueries(queryClient, location?.id ?? variables.locationId);
     },
     onError: (error: unknown) => {
       toast.error(formatInventoryMutationError(error, 'Failed to update location'));
@@ -330,7 +314,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
     },
     onSuccess: (locationId) => {
       toast.success('Location deleted');
-      invalidateLocationMutationQueries(queryClient, locationId);
+      invalidateWarehouseLocationMutationQueries(queryClient, locationId);
     },
     onError: (error: unknown) => {
       toast.error(
@@ -627,9 +611,6 @@ export default useLocations;
 import {
   getWarehouseLocationHierarchy,
   getLocation as getLocationDetail,
-  createWarehouseLocation,
-  updateWarehouseLocation,
-  deleteWarehouseLocation,
 } from '@/server/functions/inventory/locations';
 
 /**
@@ -662,61 +643,8 @@ export function useLocationDetail(locationId: string, enabled = true) {
   });
 }
 
-// Types imported from schema - CreateWarehouseLocationInput, UpdateWarehouseLocationInput
-
-/**
- * Create a warehouse location
- */
-export function useCreateWarehouseLocation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: CreateWarehouseLocationInput) =>
-      createWarehouseLocation({ data }),
-    onSuccess: (result) => {
-      toast.success('Location created');
-      invalidateLocationMutationQueries(queryClient, result?.location?.id);
-    },
-    onError: (error: unknown) => {
-      toast.error(formatInventoryMutationError(error, 'Failed to create location'));
-    },
-  });
-}
-
-/**
- * Update a warehouse location
- */
-export function useUpdateWarehouseLocation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseLocationInput }) =>
-      updateWarehouseLocation({ data: { id, data } }),
-    onSuccess: (result, variables) => {
-      toast.success('Location updated');
-      invalidateLocationMutationQueries(queryClient, result?.location?.id ?? variables.id);
-    },
-    onError: (error: unknown) => {
-      toast.error(formatInventoryMutationError(error, 'Failed to update location'));
-    },
-  });
-}
-
-/**
- * Delete a warehouse location
- */
-export function useDeleteWarehouseLocation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (locationId: string) =>
-      deleteWarehouseLocation({ data: { id: locationId } }),
-    onSuccess: (_result, locationId) => {
-      toast.success('Location deleted');
-      invalidateLocationMutationQueries(queryClient, locationId);
-    },
-    onError: (error: unknown) => {
-      toast.error(formatInventoryMutationError(error, 'Failed to delete location'));
-    },
-  });
-}
+export {
+  useCreateWarehouseLocation,
+  useUpdateWarehouseLocation,
+  useDeleteWarehouseLocation,
+} from './use-warehouse-location-mutations';

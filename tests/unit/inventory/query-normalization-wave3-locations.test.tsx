@@ -278,7 +278,7 @@ describe('inventory locations query normalization wave 3', () => {
       useCreateWarehouseLocation,
       useUpdateWarehouseLocation,
       useDeleteWarehouseLocation,
-    } = await import('@/hooks/inventory/use-locations');
+    } = await import('@/hooks/inventory/use-warehouse-location-mutations');
 
     const create = renderHook(() => useCreateWarehouseLocation(), {
       wrapper: createWrapper(queryClient),
@@ -335,7 +335,9 @@ describe('inventory locations query normalization wave 3', () => {
     );
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { useDeleteWarehouseLocation } = await import('@/hooks/inventory/use-locations');
+    const { useDeleteWarehouseLocation } = await import(
+      '@/hooks/inventory/use-warehouse-location-mutations'
+    );
 
     const { result } = renderHook(() => useDeleteWarehouseLocation(), {
       wrapper: createWrapper(queryClient),
@@ -348,6 +350,26 @@ describe('inventory locations query normalization wave 3', () => {
     });
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to delete location');
+  });
+
+  it('keeps focused warehouse location mutation hooks outside the legacy location composite', () => {
+    const locationsHook = readFileSync(join(process.cwd(), 'src/hooks/inventory/use-locations.ts'), 'utf8');
+    const mutationHook = readFileSync(
+      join(process.cwd(), 'src/hooks/inventory/use-warehouse-location-mutations.ts'),
+      'utf8'
+    );
+    const inventoryIndex = readFileSync(join(process.cwd(), 'src/hooks/inventory/index.ts'), 'utf8');
+
+    expect(locationsHook).toContain("from './use-warehouse-location-mutations'");
+    expect(locationsHook).toContain('invalidateWarehouseLocationMutationQueries');
+    expect(locationsHook).not.toContain('createWarehouseLocation,');
+    expect(locationsHook).not.toContain('updateWarehouseLocation,');
+    expect(locationsHook).not.toContain('deleteWarehouseLocation,');
+    expect(mutationHook).toContain(
+      "import {\n  createWarehouseLocation,\n  updateWarehouseLocation,\n  deleteWarehouseLocation,\n} from '@/server/functions/inventory/locations'"
+    );
+    expect(mutationHook).toContain('queryKeys.locations.utilization()');
+    expect(inventoryIndex).toContain("} from './use-warehouse-location-mutations'");
   });
 
   it('uses safe route submit copy instead of raw warehouse-location errors', async () => {
