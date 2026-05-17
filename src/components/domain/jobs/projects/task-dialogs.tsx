@@ -12,7 +12,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Plus, Edit3, Loader2, CalendarIcon } from 'lucide-react';
+import { Plus, Edit3, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,10 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 import type { TaskWithWorkstream } from '@/lib/schemas/jobs';
 
@@ -36,7 +32,6 @@ import {
   FormDialog,
   TextField,
   TextareaField,
-  NumberField,
   FormField,
 } from '@/components/shared/forms';
 import {
@@ -61,6 +56,13 @@ import {
   projectTaskCreateDialogFormSchema,
   projectTaskEditDialogFormSchema,
 } from './project-task-dialog-form-state';
+import {
+  ProjectTaskAssigneeField,
+  ProjectTaskDueDateField,
+  ProjectTaskEstimatedHoursField,
+  ProjectTaskPriorityField,
+  ProjectTaskStatusField,
+} from './project-task-dialog-fields';
 
 
 // ============================================================================
@@ -371,114 +373,30 @@ export function TaskCreateDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <form.Field name="priority">
-              {(field) => (
-                <FormField label="Priority" name={field.name}>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(val) => {
-                      if (val === 'urgent' || val === 'high' || val === 'normal' || val === 'low') {
-                        field.setValue(val);
-                      }
-                    }}
-                    onOpenChange={(open) => !open && field.handleBlur()}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              )}
+              {(field) => <ProjectTaskPriorityField field={field} />}
             </form.Field>
 
             <form.Field name="assigneeId">
               {(field) => (
-                <FormField label="Assignee" name={field.name}>
-                  <Select
-                    value={field.state.value || 'unassigned'}
-                    onValueChange={(val) => {
-                      if (val === '__invite_user__') {
-                        setShowUserInvite(true);
-                        return;
-                      }
-                      field.setValue(val === 'unassigned' ? '' : val);
-                    }}
-                    onOpenChange={(open) => !open && field.handleBlur()}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select assignee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {Array.from(userMap.values()).map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name || user.email || user.id}
-                        </SelectItem>
-                      ))}
-                      <SelectItem
-                        value="__invite_user__"
-                        className="text-primary font-medium border-t mt-1 pt-1"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Plus className="h-4 w-4" />
-                          Invite team member
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
+                <ProjectTaskAssigneeField
+                  field={field}
+                  users={Array.from(userMap.values())}
+                  emptyValue=""
+                  onInviteUser={() => setShowUserInvite(true)}
+                />
               )}
             </form.Field>
 
             <form.Field name="dueDate">
-              {(field) => {
-                const dateValue = field.state.value ? new Date(field.state.value) : undefined;
-                return (
-                  <FormField label="Due Date" name={field.name}>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !dateValue && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateValue ? format(dateValue, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateValue}
-                          onSelect={(date) => {
-                            field.handleChange(date ? format(date, "yyyy-MM-dd") : '');
-                            field.handleBlur();
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </FormField>
-                );
-              }}
+              {(field) => <ProjectTaskDueDateField field={field} emptyValue="" />}
             </form.Field>
           </div>
 
           <form.Field name="estimatedHours">
             {(field) => (
-              <NumberField
+              <ProjectTaskEstimatedHoursField
                 field={field}
-                label="Estimated Hours"
                 placeholder="0"
-                min={0}
-                step={0.5}
               />
             )}
           </form.Field>
@@ -636,142 +554,36 @@ export function TaskEditDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <form.Field name="status">
-              {(field) => (
-                <FormField label="Status" name={field.name}>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(val) => {
-                      if (val === 'pending' || val === 'in_progress' || val === 'completed' || val === 'blocked') {
-                        field.setValue(val);
-                      }
-                    }}
-                    onOpenChange={(open) => !open && field.handleBlur()}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="blocked">Blocked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              )}
+              {(field) => <ProjectTaskStatusField field={field} />}
             </form.Field>
 
             <form.Field name="priority">
-              {(field) => (
-                <FormField label="Priority" name={field.name}>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(val) => {
-                      if (val === 'urgent' || val === 'high' || val === 'normal' || val === 'low') {
-                        field.setValue(val);
-                      }
-                    }}
-                    onOpenChange={(open) => !open && field.handleBlur()}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
-              )}
+              {(field) => <ProjectTaskPriorityField field={field} />}
             </form.Field>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <form.Field name="assigneeId">
               {(field) => (
-                <FormField label="Assignee" name={field.name}>
-                  <Select
-                    value={field.state.value || 'unassigned'}
-                    onValueChange={(val) => {
-                      if (val === '__invite_user__') {
-                        setShowUserInvite(true);
-                        return;
-                      }
-                      field.setValue(val === 'unassigned' ? null : val);
-                    }}
-                    onOpenChange={(open) => !open && field.handleBlur()}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select assignee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {Array.from(userMap.values()).map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name || user.email || user.id}
-                        </SelectItem>
-                      ))}
-                      <SelectItem
-                        value="__invite_user__"
-                        className="text-primary font-medium border-t mt-1 pt-1"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Plus className="h-4 w-4" />
-                          Invite team member
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormField>
+                <ProjectTaskAssigneeField
+                  field={field}
+                  users={Array.from(userMap.values())}
+                  emptyValue={null}
+                  onInviteUser={() => setShowUserInvite(true)}
+                />
               )}
             </form.Field>
 
             <form.Field name="dueDate">
-              {(field) => {
-                const dateValue = field.state.value ? new Date(field.state.value) : undefined;
-                return (
-                  <FormField label="Due Date" name={field.name}>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !dateValue && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateValue ? format(dateValue, "PPP") : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateValue}
-                          onSelect={(date) => {
-                            field.handleChange(date ? format(date, "yyyy-MM-dd") : null);
-                            field.handleBlur();
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </FormField>
-                );
-              }}
+              {(field) => <ProjectTaskDueDateField field={field} emptyValue={null} />}
             </form.Field>
           </div>
 
           <form.Field name="estimatedHours">
             {(field) => (
-              <NumberField
+              <ProjectTaskEstimatedHoursField
                 field={field}
-                label="Estimated Hours"
                 placeholder="e.g., 4"
-                min={0}
-                step={0.5}
               />
             )}
           </form.Field>
