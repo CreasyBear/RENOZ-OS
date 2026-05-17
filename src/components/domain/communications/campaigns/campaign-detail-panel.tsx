@@ -23,11 +23,6 @@ import {
 import {
   AlertTriangle,
   ArrowLeft,
-  Send,
-  BarChart3,
-  History,
-  Pause,
-  Play,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,10 +34,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
-import { EntityHeader } from "@/components/shared/detail-view";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -55,13 +48,13 @@ import {
   type CampaignDetailActionResult,
 } from "./campaign-detail-actions";
 import { CampaignDetailAlertsSection } from "./campaign-detail-alerts-section";
+import { CampaignDetailHeader } from "./campaign-detail-header";
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
 import { CampaignDetailMetaSection } from "./campaign-detail-meta-section";
 import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
 import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
 import { CampaignDetailTestSendDialog } from "./campaign-detail-test-send-dialog";
-import { getCampaignStatusVariant } from "./campaign-status-config";
 import {
   COMMUNICATION_READ_MESSAGES,
   formatCommunicationReadError,
@@ -283,6 +276,10 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     return result;
   }, [campaign, campaignDetailActionMutations]);
 
+  const handleOpenTestSendDialog = useCallback(() => {
+    setTestSendDialogOpen(true);
+  }, []);
+
   // Loading state
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;
@@ -316,83 +313,19 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   return (
     <div className={cn("space-y-6", className)}>
       {/* Zone 1: Entity Header */}
-      <EntityHeader
-        name={campaign.name}
-        subtitle={
-          <>
-            {campaign.templateType.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())} template
-            {campaign.description && ` · ${campaign.description}`}
-          </>
-        }
-        avatarFallback={campaign.name.slice(0, 2).toUpperCase()}
-        status={{
-          value: campaign.status,
-          variant: getCampaignStatusVariant(campaign.status),
-        }}
-        typeBadge={
-          <Badge variant="outline" className="text-xs">
-            {campaign.templateType.replace("_", " ")}
-          </Badge>
-        }
-        primaryAction={
-          campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "paused"
-            ? {
-                label: campaign.status === "paused" ? "Resume" : "Send Now",
-                onClick: campaign.status === "paused" ? handleResumeCampaign : handleSendCampaign,
-                icon: campaign.status === "paused" ? <Play className="h-4 w-4" /> : <Send className="h-4 w-4" />,
-                disabled: sendCampaignMutation.isPending || resumeCampaignMutation.isPending || campaign.recipientCount === 0,
-              }
-            : campaign.status === "sending"
-            ? {
-                label: "Pause",
-                onClick: handlePauseCampaign,
-                icon: <Pause className="h-4 w-4" />,
-                disabled: pauseCampaignMutation.isPending,
-              }
-            : campaign.status === "sent"
-            ? {
-                label: "View Analytics",
-                onClick: handleViewAnalytics,
-                icon: <BarChart3 className="h-4 w-4" />,
-              }
-            : undefined
-        }
-        onEdit={
-          campaign.status === "draft" || campaign.status === "scheduled"
-            ? handleEditCampaign
-            : undefined
-        }
-        secondaryActions={
-          [
-            ...(onBack
-              ? [
-                  {
-                    label: "Back to campaigns",
-                    onClick: onBack,
-                    icon: <ArrowLeft className="h-4 w-4" />,
-                  },
-                ]
-              : []),
-            ...(campaign.status === "draft" || campaign.status === "scheduled" || campaign.status === "paused"
-              ? [
-                  {
-                    label: "Send Test Email",
-                    onClick: () => setTestSendDialogOpen(true),
-                    icon: <Send className="h-4 w-4" />,
-                  },
-                ]
-              : []),
-            ...(campaign.status === "sent"
-              ? [
-                  {
-                    label: "View Email History",
-                    onClick: handleViewEmailHistory,
-                    icon: <History className="h-4 w-4" />,
-                  },
-                ]
-              : []),
-          ]
-        }
+      <CampaignDetailHeader
+        campaign={campaign}
+        isSendPending={sendCampaignMutation.isPending}
+        isPausePending={pauseCampaignMutation.isPending}
+        isResumePending={resumeCampaignMutation.isPending}
+        onBack={onBack}
+        onSendCampaign={handleSendCampaign}
+        onPauseCampaign={handlePauseCampaign}
+        onResumeCampaign={handleResumeCampaign}
+        onEditCampaign={handleEditCampaign}
+        onViewAnalytics={handleViewAnalytics}
+        onViewEmailHistory={handleViewEmailHistory}
+        onOpenTestSendDialog={handleOpenTestSendDialog}
       />
 
       {/* Zone 2: Progress Indicator */}
