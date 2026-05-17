@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -173,6 +175,36 @@ describe('inventory stock counts query normalization wave 3', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Stock Counts' }));
     expect(retry).toHaveBeenCalled();
+  });
+
+  it('maps stock count read errors to stable operator copy at the route boundary', async () => {
+    const {
+      getStockCountsReadErrorMessage,
+      STOCK_COUNTS_REFRESH_UNAVAILABLE_MESSAGE,
+      STOCK_COUNTS_UNAVAILABLE_MESSAGE,
+    } = await import('@/routes/_authenticated/inventory/stock-count-error-messages');
+
+    const rawDatabaseError = new Error('select * from stock_counts violates tenant policy');
+
+    expect(getStockCountsReadErrorMessage(rawDatabaseError)).toBe(
+      STOCK_COUNTS_UNAVAILABLE_MESSAGE
+    );
+    expect(
+      getStockCountsReadErrorMessage(rawDatabaseError, {
+        hasCachedCounts: true,
+      })
+    ).toBe(STOCK_COUNTS_REFRESH_UNAVAILABLE_MESSAGE);
+    expect(getStockCountsReadErrorMessage(null)).toBeNull();
+  });
+
+  it('keeps the stock count route from passing raw query errors into the presenter', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/routes/_authenticated/inventory/counts-page.tsx'),
+      'utf8'
+    );
+
+    expect(source).toContain('getStockCountsReadErrorMessage(countsError');
+    expect(source).not.toContain('countsError?.message');
   });
 
   it('keeps cached stock counts visible when a refetch fails', async () => {

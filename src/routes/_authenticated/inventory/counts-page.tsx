@@ -63,6 +63,7 @@ import {
 } from "@/hooks/inventory";
 import type { StockCountItemWithRelations } from "@/lib/schemas/inventory";
 import type { listStockCounts } from "@/server/functions/inventory/stock-counts";
+import { getStockCountsReadErrorMessage } from "./stock-count-error-messages";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -126,6 +127,9 @@ export default function StockCountsPage() {
     completedAt: c.completedAt ? new Date(c.completedAt) : null,
     createdAt: new Date(c.createdAt),
   }));
+  const stockCountsErrorMessage = getStockCountsReadErrorMessage(countsError, {
+    hasCachedCounts: counts.length > 0,
+  });
 
   // Transform data for detail/count view
   const selectedCount: StockCount | null = countDetailData?.count
@@ -304,7 +308,7 @@ export default function StockCountsPage() {
             counts={counts}
             isLoading={isLoading}
             isError={!!countsError}
-            errorMessage={countsError?.message ?? null}
+            errorMessage={stockCountsErrorMessage}
             onRetry={() => void refetchCounts()}
             onView={handleViewCount}
             onStart={handleStartCount}

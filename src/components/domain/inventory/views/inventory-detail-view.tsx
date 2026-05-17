@@ -65,6 +65,7 @@ import type { ItemDetailData } from '../item-detail';
 import type { MovementRecord, CostLayer, QualityRecord } from '../item-tabs';
 import { INVENTORY_STATUS_CONFIG, MOVEMENT_TYPE_CONFIG } from '../inventory-status-config';
 import { getMovementReferenceLink } from '../movement-reference-links';
+import { getQualityHistoryReadErrorMessage } from './quality-read-error-messages';
 import { StatusCell } from '@/components/shared/data-table';
 
 // ============================================================================
@@ -1024,6 +1025,9 @@ export const InventoryDetailView = memo(function InventoryDetailView({
   const costLayersCount = counts?.costLayers ?? costLayers.length;
   const qualityCount = counts?.qualityRecords ?? qualityRecords.length;
   const activitiesCount = counts?.activities ?? activities.length;
+  const qualityReadErrorMessage = getQualityHistoryReadErrorMessage(qualityError, {
+    hasCachedRecords: qualityRecords.length > 0,
+  });
 
   // Derive order association from movements if not provided
   const derivedOrderAssociation = useMemo(() => {
@@ -1187,7 +1191,7 @@ export const InventoryDetailView = memo(function InventoryDetailView({
                 qualityRecords={qualityRecords}
                 isLoading={isLoadingQuality}
                 isError={!!qualityError}
-                errorMessage={qualityError?.message ?? null}
+                errorMessage={qualityReadErrorMessage}
                 onRetry={onRetryQuality}
               />
             </TabsContent>

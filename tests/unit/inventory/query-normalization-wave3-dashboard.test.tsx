@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -318,7 +320,7 @@ describe('inventory dashboard query normalization wave 3', () => {
     mockUseWMSDashboard.mockReturnValueOnce({
       data: undefined,
       isLoading: false,
-      error: new Error('Inventory dashboard data is temporarily unavailable. Please refresh and try again.'),
+      error: new Error('select * from inventory violates tenant policy'),
       refetch: vi.fn(),
     });
 
@@ -329,6 +331,38 @@ describe('inventory dashboard query normalization wave 3', () => {
     render(<UnifiedInventoryDashboard />);
 
     expect(await screen.findByText('Failed to load inventory data')).toBeInTheDocument();
+    expect(
+      screen.getByText('Inventory dashboard data is temporarily unavailable. Please refresh and try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('select * from inventory violates tenant policy')).not.toBeInTheDocument();
+  });
+
+  it('keeps dashboard read-state presenters off raw query error messages', async () => {
+    const {
+      getInventoryDashboardReadErrorMessage,
+      getWmsDashboardReadErrorMessage,
+      INVENTORY_DASHBOARD_DATA_UNAVAILABLE_MESSAGE,
+      INVENTORY_DASHBOARD_METRICS_UNAVAILABLE_MESSAGE,
+    } = await import('@/components/domain/inventory/dashboard-read-error-messages');
+
+    expect(getWmsDashboardReadErrorMessage(new Error('raw warehouse SQL failure'))).toBe(
+      INVENTORY_DASHBOARD_DATA_UNAVAILABLE_MESSAGE
+    );
+    expect(getInventoryDashboardReadErrorMessage(new Error('raw dashboard SQL failure'))).toBe(
+      INVENTORY_DASHBOARD_METRICS_UNAVAILABLE_MESSAGE
+    );
+    expect(getWmsDashboardReadErrorMessage(null)).toBeNull();
+    expect(getInventoryDashboardReadErrorMessage(null)).toBeNull();
+
+    const source = readFileSync(
+      join(process.cwd(), 'src/components/domain/inventory/unified-inventory-dashboard.tsx'),
+      'utf8'
+    );
+
+    expect(source).toContain('getWmsDashboardReadErrorMessage(wmsError)');
+    expect(source).toContain('getInventoryDashboardReadErrorMessage(dashboardError)');
+    expect(source).not.toContain('dashboardError?.message');
+    expect(source).not.toContain('wmsError as { message');
   });
 
   it('labels dashboard stock semantics explicitly', async () => {
@@ -468,7 +502,7 @@ describe('inventory dashboard query normalization wave 3', () => {
         recentMovements: [],
       },
       isLoading: false,
-      error: new Error('Refresh failed for WMS.'),
+      error: new Error('select * from wms_dashboard timed out'),
       refetch: vi.fn(),
     });
     mockUseInventoryDashboard.mockReturnValueOnce({
@@ -489,7 +523,7 @@ describe('inventory dashboard query normalization wave 3', () => {
         topMoving: [{ productId: 'prod-1', productName: 'Battery Unit', productSku: 'BAT-001', sku: 'BAT-001', movementCount: 5, totalQuantity: 8, trend: 'up' }],
       },
       isLoading: false,
-      error: new Error('Refresh failed for dashboard metrics.'),
+      error: new Error('select * from inventory_dashboard timed out'),
       refetch: vi.fn(),
     });
 
@@ -505,6 +539,14 @@ describe('inventory dashboard query normalization wave 3', () => {
     expect(screen.getByText('Location breakdown may be stale.')).toBeInTheDocument();
     expect(screen.getByText('Showing the most recent dashboard metrics while refresh is unavailable.')).toBeInTheDocument();
     expect(screen.getByText('Top movers may be stale.')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('Inventory dashboard data is temporarily unavailable. Please refresh and try again.').length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('Inventory dashboard metrics are temporarily unavailable. Please refresh and try again.').length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText('select * from wms_dashboard timed out')).not.toBeInTheDocument();
+    expect(screen.queryByText('select * from inventory_dashboard timed out')).not.toBeInTheDocument();
     expect(screen.getByText('Main Warehouse')).toBeInTheDocument();
     expect(screen.getByText('Battery Unit')).toBeInTheDocument();
   });

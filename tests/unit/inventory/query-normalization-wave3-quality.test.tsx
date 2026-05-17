@@ -214,6 +214,39 @@ describe('inventory quality query normalization wave 3', () => {
     expect(retry).toHaveBeenCalled();
   });
 
+  it('maps raw quality presenter errors to stable operator copy', async () => {
+    const retry = vi.fn();
+    const { InventoryDetailView } = await import(
+      '@/components/domain/inventory/views/inventory-detail-view'
+    );
+
+    render(
+      <InventoryDetailView
+        item={baseItem}
+        activeTab="quality"
+        onTabChange={vi.fn()}
+        showMetaPanel={false}
+        onToggleMetaPanel={vi.fn()}
+        qualityRecords={[]}
+        isLoadingQuality={false}
+        qualityError={new Error('select * from quality_inspections violates tenant policy')}
+        onRetryQuality={retry}
+      />
+    );
+
+    expect(
+      screen.getByText('Quality inspection history is temporarily unavailable.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Quality inspection history is temporarily unavailable. Please refresh and try again.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('select * from quality_inspections violates tenant policy')
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps cached quality history visible when a refetch fails', async () => {
     const retry = vi.fn();
     const { InventoryDetailView } = await import(
@@ -238,7 +271,7 @@ describe('inventory quality query normalization wave 3', () => {
           },
         ]}
         isLoadingQuality={false}
-        qualityError={new Error('Refresh failed. The inspection history below may be stale until the next successful reload.')}
+        qualityError={new Error('select * from quality_inspections timed out')}
         onRetryQuality={retry}
       />
     );
@@ -248,6 +281,12 @@ describe('inventory quality query normalization wave 3', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Inspected by/i)).toBeInTheDocument();
     expect(screen.getByText('Passed visual inspection')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Refresh failed. The inspection history below may be stale until the next successful reload.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('select * from quality_inspections timed out')).not.toBeInTheDocument();
     expect(screen.queryByText('Quality inspection history is temporarily unavailable.')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Quality History' }));
@@ -262,6 +301,8 @@ describe('inventory quality query normalization wave 3', () => {
 
     expect(source).not.toContain('prefetchTab');
     expect(source).not.toContain('no-op placeholder');
+    expect(source).toContain('getQualityHistoryReadErrorMessage(qualityError');
+    expect(source).not.toContain('qualityError?.message');
   });
 
   it('uses safe mutation fallback copy instead of raw quality inspection errors', async () => {

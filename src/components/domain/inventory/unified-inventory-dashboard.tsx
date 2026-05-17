@@ -78,6 +78,10 @@ import type { TriggeredAlert, DashboardTopMovingItem } from '@/lib/schemas/inven
 import { MetricCard } from '@/components/shared/metric-card';
 import { FormatAmount } from '@/components/shared/format';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
+import {
+  getInventoryDashboardReadErrorMessage,
+  getWmsDashboardReadErrorMessage,
+} from './dashboard-read-error-messages';
 import { STOCK_STATUS_CONFIG } from './inventory-status-config';
 import { StatusCell } from '@/components/shared/data-table';
 
@@ -316,19 +320,9 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   const showDashboardUnavailable = !!dashboardError && !hasUsableDashboardData;
   const showDashboardDegraded = !!dashboardError && hasUsableDashboardData;
   const wmsErrorMessage =
-    typeof wmsError === 'object' &&
-    wmsError !== null &&
-    'message' in wmsError &&
-    typeof (wmsError as { message?: unknown }).message === 'string'
-      ? (wmsError as { message: string }).message
-      : 'Please refresh and try again.';
+    getWmsDashboardReadErrorMessage(wmsError) ?? 'Please refresh and try again.';
   const dashboardErrorMessage =
-    typeof dashboardError === 'object' &&
-    dashboardError !== null &&
-    'message' in dashboardError &&
-    typeof (dashboardError as { message?: unknown }).message === 'string'
-      ? (dashboardError as { message: string }).message
-      : 'Please refresh and try again.';
+    getInventoryDashboardReadErrorMessage(dashboardError) ?? 'Please refresh and try again.';
 
   if (showWmsUnavailable) {
     const errorMessage = wmsErrorMessage;
@@ -729,7 +723,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             ) : showDashboardUnavailable ? (
               <DashboardReadWarning
                 title="Top movers are temporarily unavailable."
-                message={dashboardError?.message ?? 'Please refresh and try again.'}
+                message={dashboardErrorMessage}
               />
             ) : (
               <div className="space-y-4">
