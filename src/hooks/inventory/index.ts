@@ -10,11 +10,13 @@ export {
   useInventoryItem,
   useInventoryLowStock,
   useInventorySearch,
-  useLocationUtilization,
 } from './use-inventory';
 
 // Dashboard metrics read/cache contract
 export { useInventoryDashboard } from './use-inventory-dashboard';
+
+// Warehouse utilization read/cache contract
+export { useLocationUtilization } from './use-location-utilization';
 
 // Stock adjustment mutation/cache contract
 export { useAdjustInventory } from './use-adjust-inventory';

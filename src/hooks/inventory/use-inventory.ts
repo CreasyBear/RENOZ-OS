@@ -7,6 +7,7 @@
  * - Inventory movements history is exported from a dedicated movement hook
  * - Available serial reads are exported from a dedicated serial availability hook
  * - Inventory dashboard reads are exported from a dedicated dashboard hook
+ * - Location utilization reads are exported from a dedicated utilization hook
  * - Stock adjustments are exported from a dedicated adjustment hook
  * - Bulk status updates are exported from a dedicated status hook
  * - Stock transfers are exported from a dedicated transfer hook
@@ -24,7 +25,6 @@ import {
   getInventoryItem,
   quickSearchInventory,
 } from '@/server/functions/inventory/inventory';
-import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type { InventoryListQuery } from '@/lib/schemas/inventory';
 
 export { useAdjustInventory } from './use-adjust-inventory';
@@ -44,6 +44,7 @@ export {
   type UseAvailableSerialsOptions,
 } from './use-available-serials';
 export { useInventoryDashboard } from './use-inventory-dashboard';
+export { useLocationUtilization } from './use-location-utilization';
 
 // ============================================================================
 // LIST HOOKS
@@ -138,24 +139,5 @@ export function useInventoryLowStock(enabled = true) {
       ),
     enabled,
     staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-/**
- * Fetch location utilization data
- */
-export function useLocationUtilization(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.locations.utilization(),
-    queryFn: () =>
-      resolveReadResult(() => getLocationUtilization({}), {
-        message: 'Location utilization returned no data',
-        contractType: 'always-shaped',
-        fallbackMessage:
-          'Location utilization is temporarily unavailable. Please refresh and try again.',
-      }),
-    enabled,
-    staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000, // Auto-refresh every 60 seconds
   });
 }

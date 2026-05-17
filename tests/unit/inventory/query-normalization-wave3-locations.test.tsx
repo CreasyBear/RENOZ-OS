@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -12,6 +14,7 @@ const mockDeleteLocation = vi.fn();
 const mockCreateWarehouseLocation = vi.fn();
 const mockUpdateWarehouseLocation = vi.fn();
 const mockDeleteWarehouseLocation = vi.fn();
+const mockGetLocationUtilization = vi.fn();
 const mockListInventory = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
@@ -33,6 +36,7 @@ vi.mock('@/server/functions/inventory/locations', () => ({
   createWarehouseLocation: (...args: unknown[]) => mockCreateWarehouseLocation(...args),
   updateWarehouseLocation: (...args: unknown[]) => mockUpdateWarehouseLocation(...args),
   deleteWarehouseLocation: (...args: unknown[]) => mockDeleteWarehouseLocation(...args),
+  getLocationUtilization: (...args: unknown[]) => mockGetLocationUtilization(...args),
 }));
 
 vi.mock('@/server/functions/inventory/inventory', () => ({
@@ -103,6 +107,7 @@ describe('inventory locations query normalization wave 3', () => {
     mockCreateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
     mockUpdateWarehouseLocation.mockResolvedValue({ location: sampleLocation });
     mockDeleteWarehouseLocation.mockResolvedValue({ success: true });
+    mockGetLocationUtilization.mockResolvedValue({ locations: [] });
   });
 
   it('treats the location list as always-shaped and preserves empty success', async () => {
@@ -165,6 +170,38 @@ describe('inventory locations query normalization wave 3', () => {
       utilization: 0,
     });
     expect(result.current.contentsError).toBeNull();
+  });
+
+  it('treats location utilization as always-shaped and preserves empty success', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useLocationUtilization } = await import('@/hooks/inventory/use-location-utilization');
+
+    const { result } = renderHook(() => useLocationUtilization(), {
+      wrapper: createWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ locations: [] });
+    expect(mockGetLocationUtilization).toHaveBeenCalledWith({});
+  });
+
+  it('keeps location utilization read orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = readFileSync(join(process.cwd(), 'src/hooks/inventory/use-inventory.ts'), 'utf8');
+    const utilizationHook = readFileSync(
+      join(process.cwd(), 'src/hooks/inventory/use-location-utilization.ts'),
+      'utf8'
+    );
+    const inventoryIndex = readFileSync(join(process.cwd(), 'src/hooks/inventory/index.ts'), 'utf8');
+
+    expect(inventoryHook).toContain("export { useLocationUtilization } from './use-location-utilization'");
+    expect(inventoryHook).not.toContain("from '@/server/functions/inventory/locations'");
+    expect(inventoryHook).not.toContain('Location utilization returned no data');
+    expect(utilizationHook).toContain(
+      "import { getLocationUtilization } from '@/server/functions/inventory/locations'"
+    );
+    expect(utilizationHook).toContain('queryKeys.locations.utilization()');
+    expect(utilizationHook).toContain('Location utilization returned no data');
+    expect(inventoryIndex).toContain("export { useLocationUtilization } from './use-location-utilization'");
   });
 
   it('uses safe mutation fallback copy instead of raw composite location errors', async () => {
