@@ -27,13 +27,11 @@ import {
   Calendar,
   Send,
   CheckCircle2,
-  XCircle,
   BarChart3,
   History,
   Pause,
   Play,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -45,11 +43,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
-import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -61,13 +57,13 @@ import {
   type CampaignDetailActionMutations,
   type CampaignDetailActionResult,
 } from "./campaign-detail-actions";
+import { CampaignDetailAlertsSection } from "./campaign-detail-alerts-section";
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
 import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
 import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
 import { CampaignDetailTestSendDialog } from "./campaign-detail-test-send-dialog";
 import { getCampaignStatusVariant } from "./campaign-status-config";
-import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 import {
   COMMUNICATION_READ_MESSAGES,
   formatCommunicationReadError,
@@ -174,7 +170,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   className,
 }: CampaignDetailPanelProps) {
   const navigate = useNavigate();
-  const { dismiss, isAlertDismissed } = useAlertDismissals();
   const { confirm } = useConfirmation();
   const [testSendDialogOpen, setTestSendDialogOpen] = useState(false);
 
@@ -334,25 +329,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     return fields;
   }, [campaign]);
 
-  // Generate alerts for critical issues using utility function
-  const allAlerts = useMemo(() => {
-    if (!campaign) return [];
-    return generateCampaignAlerts(campaign);
-  }, [campaign]);
-
-  // Filter dismissed alerts
-  const visibleAlerts = useMemo(() => {
-    return allAlerts.filter((alert) => !isAlertDismissed(alert.id)).slice(0, 3);
-  }, [allAlerts, isAlertDismissed]);
-
-  // Handle alert dismissal
-  const handleDismissAlert = useCallback(
-    (alertId: string) => {
-      dismiss(alertId);
-    },
-    [dismiss]
-  );
-
   // Loading state
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;
@@ -469,42 +445,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       <CampaignDetailLifecycleSection campaign={campaign} />
 
       {/* Zone 3: Alerts */}
-      {visibleAlerts.length > 0 && (
-        <section className="space-y-2" aria-label="Campaign alerts">
-          {visibleAlerts.map((alert) => (
-            <Alert
-              key={alert.id}
-              variant={alert.tone === "critical" ? "destructive" : "default"}
-            >
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>{alert.title}</AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-4">
-                <span>{alert.description}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {alert.onAction && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={alert.onAction}
-                    >
-                      {alert.actionLabel}
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => handleDismissAlert(alert.id)}
-                    aria-label="Dismiss alert"
-                  >
-                    <XCircle className="h-3 w-3" />
-                  </Button>
-                </div>
-              </AlertDescription>
-            </Alert>
-          ))}
-        </section>
-      )}
+      <CampaignDetailAlertsSection campaign={campaign} />
 
       {/* Zone 4: Key Metrics */}
       <CampaignDetailMetricsSection campaign={campaign} />
