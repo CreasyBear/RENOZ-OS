@@ -3,10 +3,12 @@ import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { buildDashboardAlerts } from '@/components/domain/inventory/inventory-dashboard-alert-mappers';
 import {
   InventoryDashboardAlertsSection,
   type DashboardAlert,
 } from '@/components/domain/inventory/inventory-dashboard-alerts-section';
+import type { TriggeredAlert } from '@/lib/schemas/inventory';
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -62,7 +64,111 @@ function alert(overrides: Partial<DashboardAlert>): DashboardAlert {
   };
 }
 
+function triggeredAlert(overrides: Partial<TriggeredAlert>): TriggeredAlert {
+  return {
+    alert: {
+      id: '00000000-0000-4000-8000-000000000001',
+      organizationId: '00000000-0000-4000-8000-000000000099',
+      alertType: 'low_stock',
+      productId: '00000000-0000-4000-8000-000000000011',
+      locationId: '00000000-0000-4000-8000-000000000022',
+      threshold: {},
+      isActive: true,
+      notificationChannels: [],
+      escalationUsers: [],
+      lastTriggeredAt: new Date('2026-05-18T01:00:00.000Z'),
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+      createdBy: null,
+      updatedBy: null,
+      version: 1,
+      ...(overrides.alert ?? {}),
+    },
+    product: 'product' in overrides
+      ? overrides.product
+      : {
+          id: '00000000-0000-4000-8000-000000000011',
+          name: 'Battery Module',
+          sku: 'BAT-001',
+        },
+    location: 'location' in overrides
+      ? overrides.location
+      : {
+          id: '00000000-0000-4000-8000-000000000022',
+          name: 'Main Warehouse',
+          locationCode: 'MAIN',
+        },
+    currentValue: overrides.currentValue ?? 2,
+    thresholdValue: overrides.thresholdValue ?? 10,
+    severity: overrides.severity ?? 'high',
+    message: overrides.message ?? 'Battery Module is below threshold',
+    affectedItems: overrides.affectedItems ?? [],
+    isFallback: overrides.isFallback,
+  };
+}
+
 describe('InventoryDashboardAlertsSection', () => {
+  it('maps triggered alert read models into dashboard alert view models', () => {
+    expect(
+      buildDashboardAlerts([
+        triggeredAlert({
+          severity: 'high',
+          isFallback: true,
+        }),
+        triggeredAlert({
+          alert: {
+            id: '00000000-0000-4000-8000-000000000002',
+            organizationId: '00000000-0000-4000-8000-000000000099',
+            alertType: 'expiry',
+            productId: null,
+            locationId: null,
+            threshold: {},
+            isActive: true,
+            notificationChannels: [],
+            escalationUsers: [],
+            lastTriggeredAt: new Date('2026-05-18T02:00:00.000Z'),
+            createdAt: new Date('2026-05-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+            createdBy: null,
+            updatedBy: null,
+            version: 1,
+          },
+          severity: 'low',
+          product: null,
+          location: null,
+          currentValue: 1,
+          thresholdValue: 3,
+          message: 'Expiry threshold triggered',
+        }),
+      ])
+    ).toEqual([
+      {
+        id: '00000000-0000-4000-8000-000000000001',
+        alertType: 'low_stock',
+        severity: 'warning',
+        productName: 'Battery Module',
+        locationName: 'Main Warehouse',
+        message: 'Battery Module is below threshold',
+        value: 2,
+        threshold: 10,
+        triggeredAt: new Date('2026-05-18T01:00:00.000Z'),
+        isFallback: true,
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000002',
+        alertType: 'expiry',
+        severity: 'info',
+        productName: undefined,
+        locationName: undefined,
+        message: 'Expiry threshold triggered',
+        value: 1,
+        threshold: 3,
+        triggeredAt: new Date('2026-05-18T02:00:00.000Z'),
+        isFallback: false,
+      },
+    ]);
+  });
+
   it('dismisses read-only fallback alerts without acknowledging them', () => {
     const onAcknowledge = vi.fn();
 
@@ -150,14 +256,23 @@ describe('InventoryDashboardAlertsSection', () => {
       join(root, 'src/components/domain/inventory/inventory-dashboard-alerts-section.tsx'),
       'utf8'
     );
-
-    expect(dashboard).toContain(
-      "InventoryDashboardAlertsSection,\n  type DashboardAlert,"
+    const alertMappers = readFileSync(
+      join(root, 'src/components/domain/inventory/inventory-dashboard-alert-mappers.ts'),
+      'utf8'
     );
+
+    expect(dashboard).toContain("import { buildDashboardAlerts } from './inventory-dashboard-alert-mappers'");
+    expect(dashboard).toContain("import { InventoryDashboardAlertsSection } from './inventory-dashboard-alerts-section'");
     expect(dashboard).toContain('<InventoryDashboardAlertsSection');
+    expect(dashboard).toContain('buildDashboardAlerts(alertsData?.alerts ?? [])');
     expect(dashboard).not.toContain('function AlertsSection');
+    expect(dashboard).not.toContain('severityMap');
+    expect(dashboard).not.toContain("type { TriggeredAlert }");
     expect(dashboard).not.toContain('Dismiss read-only alert');
     expect(alertsSection).toContain('export function InventoryDashboardAlertsSection');
+    expect(alertsSection).not.toContain('buildDashboardAlerts');
+    expect(alertMappers).toContain('export function buildDashboardAlerts');
+    expect(alertMappers).toContain('TriggeredAlert');
     expect(alertsSection).toContain('Dismiss read-only alert');
   });
 });

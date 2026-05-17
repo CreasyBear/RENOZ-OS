@@ -37,7 +37,6 @@ import {
   useTriggeredAlerts,
   useAcknowledgeAlert,
 } from '@/hooks/inventory';
-import type { TriggeredAlert } from '@/lib/schemas/inventory';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
 import {
   getInventoryDashboardReadErrorMessage,
@@ -45,10 +44,8 @@ import {
 } from './dashboard-read-error-messages';
 import { InventoryDashboardCommandBar } from './inventory-dashboard-command-bar';
 import { InventoryDashboardMetrics } from './inventory-dashboard-metrics';
-import {
-  InventoryDashboardAlertsSection,
-  type DashboardAlert,
-} from './inventory-dashboard-alerts-section';
+import { buildDashboardAlerts } from './inventory-dashboard-alert-mappers';
+import { InventoryDashboardAlertsSection } from './inventory-dashboard-alerts-section';
 import { InventoryDashboardEmptyState } from './inventory-dashboard-empty-state';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
 import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-recent-movements-panel';
@@ -105,29 +102,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
 
   const acknowledgeAlertMutation = useAcknowledgeAlert();
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Transformations
-  // ─────────────────────────────────────────────────────────────────────────
-  const alerts: DashboardAlert[] = (alertsData?.alerts ?? []).map((a: TriggeredAlert) => {
-    const severityMap: Record<string, 'critical' | 'warning' | 'info'> = {
-      critical: 'critical',
-      high: 'warning',
-      medium: 'info',
-      low: 'info',
-    };
-    return {
-      id: a.alert?.id ?? crypto.randomUUID(),
-      alertType: a.alert?.alertType ?? 'low_stock',
-      severity: severityMap[a.severity] ?? 'warning',
-      productName: a.product?.name,
-      locationName: a.location?.name,
-      message: a.message ?? 'Alert triggered',
-      value: a.currentValue,
-      threshold: a.thresholdValue,
-      triggeredAt: a.alert?.lastTriggeredAt ? new Date(a.alert.lastTriggeredAt) : new Date(),
-      isFallback: a.isFallback ?? false,
-    };
-  });
+  const alerts = buildDashboardAlerts(alertsData?.alerts ?? []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
