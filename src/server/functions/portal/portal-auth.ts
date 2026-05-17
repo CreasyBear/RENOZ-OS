@@ -31,7 +31,7 @@ export const requestPortalLink = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
     const request = getRequest();
     const clientId = getClientIdentifier(request);
-    checkRateLimit('portal-link-request', clientId, RATE_LIMITS.publicAction);
+    await checkRateLimit('portal-link-request', clientId, RATE_LIMITS.publicAction);
 
     const admin = createAdminSupabase();
 

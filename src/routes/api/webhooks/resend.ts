@@ -19,7 +19,7 @@
 
 import { Resend } from 'resend';
 import {
-  checkRateLimitSync,
+  checkRateLimitResult,
   getClientIdentifier,
   type RateLimitOptions,
 } from '@/lib/server/rate-limit';
@@ -106,7 +106,11 @@ export async function POST({ request }: { request: Request }) {
   // Step 1: Check rate limit
   // -------------------------------------------------------------------------
   const clientId = getClientIdentifier(request);
-  const rateLimitResult = checkRateLimitSync('resend-webhook', clientId, WEBHOOK_RATE_LIMIT);
+  const rateLimitResult = await checkRateLimitResult(
+    'resend-webhook',
+    clientId,
+    WEBHOOK_RATE_LIMIT
+  );
 
   if (!rateLimitResult.allowed) {
     const retryAfterSeconds = Math.ceil(rateLimitResult.retryAfterMs / 1000);

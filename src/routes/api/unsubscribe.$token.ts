@@ -21,7 +21,7 @@ import { eq } from "drizzle-orm";
 import { verifyUnsubscribeToken as verifySecureToken } from "@/lib/server/unsubscribe-tokens";
 import { addSuppressionDirect } from "@/server/functions/communications/_shared/suppression-mutations";
 import {
-  checkRateLimitSync,
+  checkRateLimitResult,
   getClientIdentifier,
 } from "@/lib/server/rate-limit";
 import { logger } from "@/lib/logger";
@@ -89,7 +89,7 @@ export async function GET({
 
   // Rate limiting (SEC-003)
   const clientId = getClientIdentifier(request);
-  const rateLimitResult = checkRateLimitSync(
+  const rateLimitResult = await checkRateLimitResult(
     "unsubscribe",
     clientId,
     UNSUBSCRIBE_RATE_LIMIT
@@ -202,7 +202,7 @@ export async function POST({
 
   // Rate limiting (SEC-003)
   const clientId = getClientIdentifier(request);
-  const rateLimitResult = checkRateLimitSync(
+  const rateLimitResult = await checkRateLimitResult(
     "unsubscribe",
     clientId,
     UNSUBSCRIBE_RATE_LIMIT

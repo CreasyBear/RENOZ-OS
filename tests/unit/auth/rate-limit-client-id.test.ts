@@ -20,7 +20,7 @@ describe('client identifier trust model', () => {
     });
 
     expect(getAuthClientIdentifier(request)).toBe('unknown-client');
-    expect(getServerClientIdentifier(request)).toBe('default-client');
+    expect(getServerClientIdentifier(request)).toBe('unknown-client');
   });
 
   it('accepts forwarded headers when TRUST_PROXY is true', () => {

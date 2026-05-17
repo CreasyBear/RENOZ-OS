@@ -34,7 +34,7 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
 
     // Throttle token verification to reduce abuse and token-guess attempts.
     const clientId = getClientIdentifier(request);
-    checkRateLimit('auth-confirm-portal', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
+    await checkRateLimit('auth-confirm-portal', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
 
     if (token_hash && type) {
       const supabase = createServerSupabase(request);

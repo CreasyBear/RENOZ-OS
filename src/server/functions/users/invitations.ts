@@ -383,7 +383,7 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
     // Rate limit check
     const request = getRequest();
     const clientId = getClientIdentifier(request);
-    checkRateLimit('invitation-lookup', clientId, RATE_LIMITS.publicLookup);
+    await checkRateLimit('invitation-lookup', clientId, RATE_LIMITS.publicLookup);
 
     const [invitation] = await db
       .select({
@@ -449,7 +449,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
     // Rate limit check (outside transaction)
     const request = getRequest();
     const clientId = getClientIdentifier(request);
-    checkRateLimit('invitation-accept', clientId, RATE_LIMITS.publicAction);
+    await checkRateLimit('invitation-accept', clientId, RATE_LIMITS.publicAction);
 
     // Lookup invitation first so we can create auth account with the canonical invitation email.
     const [invitation] = await db

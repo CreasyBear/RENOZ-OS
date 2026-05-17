@@ -35,7 +35,7 @@ vi.mock("@/server/functions/communications/_shared/suppression-mutations", () =>
 }));
 
 vi.mock("@/lib/server/rate-limit", () => ({
-  checkRateLimitSync: (...args: unknown[]) => mockCheckRateLimitSync(...args),
+  checkRateLimitResult: (...args: unknown[]) => mockCheckRateLimitSync(...args),
   getClientIdentifier: (...args: unknown[]) => mockGetClientIdentifier(...args),
 }));
 

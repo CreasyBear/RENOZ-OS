@@ -124,7 +124,7 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
 
     // Throttle token verification to reduce abuse and token-guess attempts.
     const clientId = getClientIdentifier(request);
-    checkRateLimit('auth-confirm-email', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
+    await checkRateLimit('auth-confirm-email', `${clientId}:${token_hash}`, RATE_LIMITS.publicAction);
 
     if (token_hash && type) {
       const supabase = createServerSupabase(request);

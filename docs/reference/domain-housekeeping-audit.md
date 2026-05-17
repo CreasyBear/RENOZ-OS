@@ -984,8 +984,7 @@ What is solid:
 - AI routes consistently require `withAuth`, which is better than the “forgot to protect one endpoint” pattern that often shows up in fast-moving integration code.
 
 What is fragile:
-- The unsubscribe flow still carries a legacy token path that does not meet the newer signed-token security model.
-- Public endpoint throttling depends on an in-memory rate limiter that is not a strong fit for multi-instance deploys.
+- Public endpoint throttling now has a distributed shared helper, but production configuration still needs deployed-environment evidence.
 - A few debug and permission-fallback patterns remain in shipped code, even if they are not all active failures today.
 
 What is messy:
@@ -1002,9 +1001,9 @@ What is messy:
 
 #### P2
 
-- **Public endpoint throttling relies on a non-distributed in-memory limiter**
-  - Files: `src/lib/server/rate-limit.ts`, `src/routes/api/unsubscribe.$token.ts`, `src/routes/api/webhooks/resend.ts`, `src/routes/api/oauth/initiate.ts`, `src/server/functions/auth/confirm.ts`
-  - The shared public-endpoint rate limiter is explicitly in-memory. In a multi-instance deployment, that means protections are per-instance rather than global. It also falls back to `'default-client'` when proxy headers are not trusted, which can collapse unrelated traffic into the same bucket or make rate limiting behave unpredictably. This is less severe than the unsubscribe token issue, but it is still real operational/security debt.
+- **Closed 2026-05-17: public endpoint throttling no longer relies on a non-distributed in-memory limiter**
+  - Files: `src/lib/server/rate-limit.ts`, `src/routes/api/unsubscribe.$token.ts`, `src/routes/api/webhooks/resend.ts`, `src/routes/api/oauth/initiate.ts`, `src/routes/portal/confirm.ts`, `src/server/functions/auth/confirm.ts`, `src/server/functions/portal/portal-auth.ts`, `src/server/functions/users/invitations.ts`
+  - Revalidated and remediated in Reliability Maintainer Sprint 42. The shared public-endpoint limiter is now Upstash Redis-backed when configured, falls back to the existing in-memory limiter only outside production, and fails closed in production when Redis is missing or unavailable. Public route call sites now use the async result helper, throwing public server-function checks are awaited, and the untrusted-proxy fallback is `unknown-client` instead of `default-client`.
 
 - **Closed 2026-05-17: AI debug endpoints now require explicit non-production opt-in**
   - Files: `src/routes/api/ai/debug-ping.ts`, `src/routes/api/ai/debug-rls-clash.ts`
@@ -1018,7 +1017,7 @@ What is messy:
 
 - **The stronger security model still needs broader trust-boundary tests**
   - Evidence: route/auth/financial test packs
-  - The stronger paths are tested around Xero webhooks, auth routes, signed unsubscribe-token handling, and AI debug route opt-in policy. Remaining gaps are public throttling behavior behind proxy/config permutations.
+  - The stronger paths are tested around Xero webhooks, auth routes, signed unsubscribe-token handling, AI debug route opt-in policy, and the public endpoint rate-limit source contract. Remaining gaps are deployed Redis/proxy configuration permutations.
 
 ### Positive Findings
 
@@ -1030,10 +1029,10 @@ What is messy:
 ### Deferred Cleanup Candidates
 
 Safe short-term:
-- no remaining short-term AI debug-route exposure item after Sprint 3; keep public throttling and distributed limiter work separate
+- no remaining short-term AI debug-route exposure item after Sprint 3
+- verify deployed Upstash Redis/proxy configuration for the shared public endpoint limiter
 
 Structural medium-term:
-- move public endpoint throttling onto a distributed limiter
 - remove permission fallback strings in favor of canonical permission constants only
 
 ---
@@ -1117,9 +1116,9 @@ What is messy:
   - Files: `src/lib/error-handling.ts`, `tests/unit/query-error-normalization.test.ts`
   - `normalizeQueryError`, `getUserFriendlyMessage`, and `isRetryableError` are strong primitives. The debt is that they are not yet the universal path for query/mutation/UI error handling, so resilience quality varies widely by feature.
 
-- **Public-endpoint degradation paths are real but uneven**
+- **Closed 2026-05-17: shared public-endpoint throttling has standardized production degradation semantics**
   - Files: `src/lib/server/rate-limit.ts`, `src/routes/api/webhooks/resend.ts`, `src/routes/api/unsubscribe.$token.ts`, `src/server/functions/auth/confirm.ts`
-  - Some public endpoints return explicit 429/503 behavior with retry headers, which is good. But the shared in-memory rate limiter and mixed fallback behavior mean degradation semantics are only partially standardized across the public edge.
+  - Reliability Maintainer Sprint 42 moved the shared public limiter to an async Redis-backed contract. Public endpoints keep explicit 429/retry behavior where they return responses directly, and throwing server-function call sites now await the shared helper so production fails closed when the limiter backend is missing or unavailable. Deployed Redis/proxy configuration still needs environment-level verification.
 
 #### P3
 

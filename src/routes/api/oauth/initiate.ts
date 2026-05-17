@@ -34,7 +34,7 @@ export async function POST({ request }: { request: globalThis.Request }) {
     }
 
     const clientId = getClientIdentifier(request);
-    checkRateLimit('oauth-initiate', clientId, RATE_LIMITS.publicAction);
+    await checkRateLimit('oauth-initiate', clientId, RATE_LIMITS.publicAction);
 
     const origin = new URL(request.url).origin;
     const redirectUrl = parsed.data.redirectUrl || `${origin}/integrations/oauth`;

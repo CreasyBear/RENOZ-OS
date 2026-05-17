@@ -25,7 +25,7 @@ vi.mock("@/trigger/client", () => ({
 }));
 
 vi.mock("@/lib/server/rate-limit", () => ({
-  checkRateLimitSync: (...args: unknown[]) => mockCheckRateLimitSync(...args),
+  checkRateLimitResult: (...args: unknown[]) => mockCheckRateLimitSync(...args),
   getClientIdentifier: (...args: unknown[]) => mockGetClientIdentifier(...args),
 }));
 
