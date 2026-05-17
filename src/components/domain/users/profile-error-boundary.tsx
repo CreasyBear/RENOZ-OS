@@ -11,6 +11,7 @@ import { Component, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatErrorBoundaryFeedback } from "@/lib/error-boundary-feedback";
 import { logger } from "@/lib/logger";
 
 interface ProfileErrorBoundaryProps {
@@ -75,6 +76,10 @@ export class ProfileErrorBoundary extends Component<
       const description =
         this.props.description ??
         "We encountered an error loading your profile. Please try again.";
+      const diagnosticMessage = formatErrorBoundaryFeedback(
+        this.state.error,
+        "The profile view failed to render. Retry or check the application logs."
+      );
 
       return (
         <Card className="border-destructive/50">
@@ -89,7 +94,7 @@ export class ProfileErrorBoundary extends Component<
 
             {import.meta.env.DEV && this.state.error && (
               <div className="max-h-32 overflow-y-auto rounded bg-destructive/10 p-3 font-mono text-sm text-destructive">
-                <strong>Error:</strong> {this.state.error.message}
+                <strong>Error:</strong> {diagnosticMessage}
                 {this.state.errorInfo && (
                   <div className="mt-2">
                     <strong>Component Stack:</strong>

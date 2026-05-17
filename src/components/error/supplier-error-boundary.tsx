@@ -9,6 +9,7 @@ import type { ReactNode, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatErrorBoundaryFeedback } from '@/lib/error-boundary-feedback';
 import { logError, userAnalytics } from '@/lib/monitoring';
 import { logger } from '@/lib/logger';
 
@@ -74,6 +75,11 @@ export class SupplierErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const diagnosticMessage = formatErrorBoundaryFeedback(
+        this.state.error,
+        'The supplier view failed to render. Retry or check the application logs.'
+      );
+
       return (
         <Card className="border-red-200">
           <CardHeader>
@@ -89,7 +95,7 @@ export class SupplierErrorBoundary extends Component<Props, State> {
 
             {import.meta.env.DEV && this.state.error && (
               <div className="max-h-32 overflow-y-auto rounded bg-red-50 p-3 font-mono text-sm text-red-800">
-                <strong>Error:</strong> {this.state.error.message}
+                <strong>Error:</strong> {diagnosticMessage}
                 {this.state.errorInfo && (
                   <div className="mt-2">
                     <strong>Component Stack:</strong>

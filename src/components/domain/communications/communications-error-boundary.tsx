@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatErrorBoundaryFeedback } from '@/lib/error-boundary-feedback';
 import { logger } from '@/lib/logger';
 
 interface Props {
@@ -73,6 +74,10 @@ export class CommunicationsErrorBoundary extends Component<Props, State> {
       const title = this.props.title ?? 'Failed to load communications';
       const description = this.props.description ??
         'We encountered an error loading communications. Please try again.';
+      const diagnosticMessage = formatErrorBoundaryFeedback(
+        this.state.error,
+        'The communications view failed to render. Retry or check the application logs.'
+      );
 
       return (
         <Card className="border-destructive/50">
@@ -94,7 +99,7 @@ export class CommunicationsErrorBoundary extends Component<Props, State> {
 
             {import.meta.env.DEV && this.state.error && (
               <div className="max-h-32 overflow-y-auto rounded bg-destructive/10 p-3 font-mono text-sm text-destructive">
-                <strong>Error:</strong> {this.state.error.message}
+                <strong>Error:</strong> {diagnosticMessage}
                 {this.state.errorInfo && (
                   <div className="mt-2">
                     <strong>Component Stack:</strong>

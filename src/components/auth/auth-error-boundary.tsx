@@ -13,6 +13,7 @@ import {
   Repeat,
   AlertTriangle,
 } from 'lucide-react';
+import { formatErrorBoundaryFeedback } from '@/lib/error-boundary-feedback';
 import { logger } from '@/lib/logger';
 
 interface AuthErrorBoundaryProps {
@@ -137,6 +138,10 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
       const errorCategory = categorizeError(this.state.error);
       const errorDisplay = getErrorDisplay(errorCategory, this.state.error);
       const ErrorIcon = errorDisplay.icon;
+      const diagnosticMessage = formatErrorBoundaryFeedback(
+        this.state.error,
+        'Authentication failed to render. Retry or check the application logs.'
+      );
 
       return (
         <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4 py-12 sm:px-6 lg:px-8">
@@ -159,7 +164,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
                       Error Details (Dev Only)
                     </summary>
                     <pre className="mt-2 whitespace-pre-wrap text-red-600">
-                      {this.state.error.message}
+                      {diagnosticMessage}
                       {this.state.errorId && `\n\nError ID: ${this.state.errorId}`}
                     </pre>
                   </details>

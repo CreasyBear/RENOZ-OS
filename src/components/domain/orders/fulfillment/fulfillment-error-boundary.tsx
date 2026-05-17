@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Home, Package } from 'lucide-react';
+import { formatErrorBoundaryFeedback } from '@/lib/error-boundary-feedback';
 import { logger } from '@/lib/logger';
 
 interface Props {
@@ -87,6 +88,11 @@ export class FulfillmentErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const diagnosticMessage = formatErrorBoundaryFeedback(
+        this.state.error,
+        'The fulfillment board failed to render. Retry or check the application logs.'
+      );
+
       return (
         <div className="flex min-h-[400px] items-center justify-center p-8">
           <Alert variant="destructive" className="max-w-md">
@@ -104,7 +110,7 @@ export class FulfillmentErrorBoundary extends Component<Props, State> {
                     Error Details (Development)
                   </summary>
                   <pre className="bg-muted mt-2 max-h-32 overflow-auto rounded p-2 text-xs">
-                    {this.state.error.message}
+                    {diagnosticMessage}
                     {this.state.errorInfo?.componentStack}
                   </pre>
                 </details>

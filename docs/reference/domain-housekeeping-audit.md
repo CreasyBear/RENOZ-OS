@@ -1112,8 +1112,12 @@ What is messy:
   - Files: `src/components/shared/modals/bulk-operations-modal.tsx`, `src/components/shared/bulk-import-wizard.tsx`
   - Revalidated and remediated in Reliability Maintainer Sprint 43. Shared bulk operation dialogs, operation result rows, bulk import parse failures, import rejections, and import result rows now route through `formatMutationError`, preserving safe business copy while replacing database/provider/stack wording with stable operator guidance.
 
+- **Closed 2026-05-17: tracked error boundaries no longer render raw exception messages**
+  - Files: `src/components/auth/auth-error-boundary.tsx`, `src/components/shared/kanban/kanban-error-boundary.tsx`, `src/components/domain/communications/communications-error-boundary.tsx`, `src/components/domain/users/profile-error-boundary.tsx`, `src/components/domain/orders/fulfillment/fulfillment-error-boundary.tsx`, `src/components/error/supplier-error-boundary.tsx`, `src/lib/error-boundary-feedback.ts`
+  - Revalidated and remediated in Reliability Maintainer Sprint 44. Boundary fallbacks now keep raw exception details in logging/monitoring paths while rendering formatter-owned diagnostic copy in fallback UI.
+
 - **User-facing surfaces still often expose raw technical error strings**
-  - Current examples: shared/domain error boundaries that render `this.state.error.message`, `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`, `src/hooks/files/use-files-supabase.ts`, and route-level import/upload result handling that still falls back to `'Unknown error'`.
+  - Current examples: `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`, `src/hooks/files/use-files-supabase.ts`, `src/routes/_authenticated/admin/users/import-page.tsx`, and `src/components/domain/financial/credit-notes-list-container.tsx`.
   - A recurring pattern in UI containers and dialogs is direct rendering of thrown messages or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
 
 - **The repo has a strong centralized resilience helper, but adoption is incomplete**
