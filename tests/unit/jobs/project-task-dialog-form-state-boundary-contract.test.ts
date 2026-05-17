@@ -12,21 +12,24 @@ describe('project task dialog form state boundary contract', () => {
   it('keeps task dialog form schemas and pure reset helpers out of the dialog renderer', () => {
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
     const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
+    const createDialogForm = read('src/components/domain/jobs/projects/project-task-create-dialog-form.ts');
     const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const formState = read('src/components/domain/jobs/projects/project-task-dialog-form-state.ts');
-    const dialogRenderers = `${createDialog}\n${editDialog}`;
+    const dialogFormOwners = `${createDialog}\n${createDialogForm}\n${editDialog}`;
 
     expect(createDialog).toContain("from './project-task-dialog-form-state'");
-    expect(editDialog).toContain("from './project-task-dialog-form-state'");
     expect(createDialog).toContain('buildProjectTaskTemplateOptions(templatesData?.templates ?? [])');
-    expect(createDialog).toContain('getProjectTaskCreateDialogDefaultValues()');
-    expect(createDialog).toContain('getProjectTaskCreateMoreResetValues(values)');
+    expect(createDialogForm).toContain("from './project-task-dialog-form-state'");
+    expect(createDialogForm).toContain('getProjectTaskCreateDialogDefaultValues()');
+    expect(createDialogForm).toContain('getProjectTaskCreateMoreResetValues(values)');
+    expect(createDialogForm).toContain('projectTaskCreateDialogFormSchema');
+    expect(editDialog).toContain("from './project-task-dialog-form-state'");
     expect(editDialog).toContain('getProjectTaskEditDialogDefaultValues()');
     expect(editDialog).toContain('getProjectTaskEditDialogResetValues(task)');
     expect(dialogs).not.toContain("from './project-task-dialog-form-state'");
-    expect(dialogRenderers).not.toContain("z.enum(['pending'");
-    expect(dialogRenderers).not.toContain("z.enum(['urgent'");
-    expect(dialogRenderers).not.toContain('const dueDateStr =');
+    expect(dialogFormOwners).not.toContain("z.enum(['pending'");
+    expect(dialogFormOwners).not.toContain("z.enum(['urgent'");
+    expect(dialogFormOwners).not.toContain('const dueDateStr =');
 
     expect(formState).toContain('jobTaskStatusSchema');
     expect(formState).toContain('jobTaskPrioritySchema');

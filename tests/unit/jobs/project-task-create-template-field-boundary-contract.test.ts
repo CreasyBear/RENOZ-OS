@@ -11,16 +11,20 @@ function read(path: string): string {
 describe('project task create template field boundary contract', () => {
   it('keeps create-only template prefill rendering in a focused component', () => {
     const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
+    const createDialogForm = read('src/components/domain/jobs/projects/project-task-create-dialog-form.ts');
     const templateField = read('src/components/domain/jobs/projects/project-task-create-template-field.tsx');
 
     expect(createDialog).toContain("from './project-task-create-template-field'");
     expect(createDialog).toContain('ProjectTaskCreateTemplateField');
-    expect(createDialog).toContain("form.setFieldValue('title', option.title)");
-    expect(createDialog).toContain("form.setFieldValue('description', option.description ?? '')");
+    expect(createDialog).toContain('onApplyTemplate={applyTemplate}');
+    expect(createDialog).not.toContain("form.setFieldValue('title', option.title)");
+    expect(createDialog).not.toContain("form.setFieldValue('description', option.description ?? '')");
     expect(createDialog).not.toContain('FormField label="From template (optional)"');
     expect(createDialog).not.toContain('Pre-fill from template');
     expect(createDialog).not.toContain('Start from scratch');
     expect(createDialog).not.toContain("from '@/components/ui/select'");
+    expect(createDialogForm).toContain("form.setFieldValue('title', option.title)");
+    expect(createDialogForm).toContain("form.setFieldValue('description', option.description ?? '')");
 
     expect(templateField).toContain('export function ProjectTaskCreateTemplateField');
     expect(templateField).toContain('FormField label="From template (optional)"');

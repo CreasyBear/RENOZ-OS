@@ -50,6 +50,7 @@ describe('project tasks mutation contract', () => {
     const reorderMutation = read('src/components/domain/jobs/projects/project-task-reorder-mutation.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
     const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
+    const createDialogForm = read('src/components/domain/jobs/projects/project-task-create-dialog-form.ts');
     const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const hooks = read('src/hooks/jobs/use-job-tasks.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
@@ -58,7 +59,7 @@ describe('project tasks mutation contract', () => {
     const compactTab = compact(tab);
     const compactDeleteMutation = compact(deleteMutation);
     const compactReorderMutation = compact(reorderMutation);
-    const taskDialogMutationOwners = `${createDialog}\n${editDialog}`;
+    const taskDialogMutationOwners = `${createDialogForm}\n${editDialog}`;
     const compactTaskDialogMutationOwners = compact(taskDialogMutationOwners);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
@@ -83,7 +84,8 @@ describe('project tasks mutation contract', () => {
     expect(compactReorderMutation).not.toContain('jobId:firstTask.siteVisitId');
 
     expect(dialogs).toContain('TaskCreateDialog');
-    expect(createDialog).toContain("formatProjectTaskMutationError(error, 'create')");
+    expect(createDialog).toContain('useProjectTaskCreateDialogForm');
+    expect(createDialogForm).toContain("formatProjectTaskMutationError(error, 'create')");
     expect(editDialog).toContain("formatProjectTaskMutationError(error, 'update')");
     expect(compactTaskDialogMutationOwners).toContain('jobId:task.jobId');
     expect(taskDialogMutationOwners).not.toContain("error instanceof Error ? error.message : 'Unknown error'");

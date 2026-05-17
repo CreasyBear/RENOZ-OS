@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import { Loader2, Plus } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,21 +10,14 @@ import {
   TextField,
 } from '@/components/shared/forms';
 import { UserInviteDialog } from '@/components/domain/users/user-invite-dialog';
-import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
-  formatProjectTaskMutationError,
-  useCreateTask,
   useJobTemplates,
   useSiteVisitsByProject,
   useWorkstreams,
 } from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
-import { toast } from 'sonner';
 import {
   buildProjectTaskTemplateOptions,
-  getProjectTaskCreateDialogDefaultValues,
-  getProjectTaskCreateMoreResetValues,
-  projectTaskCreateDialogFormSchema,
 } from './project-task-dialog-form-state';
 import {
   ProjectTaskAssigneeField,
@@ -33,6 +25,7 @@ import {
   ProjectTaskEstimatedHoursField,
   ProjectTaskPriorityField,
 } from './project-task-dialog-fields';
+import { useProjectTaskCreateDialogForm } from './project-task-create-dialog-form';
 import { ProjectTaskCreateScopeFields } from './project-task-create-scope-fields';
 import { ProjectTaskCreateTemplateField } from './project-task-create-template-field';
 import { SiteVisitCreateDialog } from './site-visit-create-dialog';
@@ -51,11 +44,9 @@ export function TaskCreateDialog({
   projectId,
   onSuccess,
 }: TaskCreateDialogProps) {
-  const navigate = useNavigate();
   const { data: siteVisitsData, isLoading: isLoadingVisits } = useSiteVisitsByProject(projectId);
   const { data: workstreamsData } = useWorkstreams(projectId);
   const { data: templatesData } = useJobTemplates({ includeInactive: false });
-  const createTask = useCreateTask();
 
   const taskTemplateOptions = useMemo(
     () => buildProjectTaskTemplateOptions(templatesData?.templates ?? []),
@@ -63,9 +54,7 @@ export function TaskCreateDialog({
   );
   const { userMap } = useUserLookup();
 
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedSiteVisitId, setSelectedSiteVisitId] = useState<string>('');
-  const [createMore, setCreateMore] = useState(false);
   const [showSiteVisitCreate, setShowSiteVisitCreate] = useState(false);
   const [showWorkstreamCreate, setShowWorkstreamCreate] = useState(false);
   const [showUserInvite, setShowUserInvite] = useState(false);
@@ -73,56 +62,20 @@ export function TaskCreateDialog({
   const siteVisits = siteVisitsData?.items || [];
   const workstreams = workstreamsData?.data || [];
 
-  const form = useTanStackForm({
-    schema: projectTaskCreateDialogFormSchema,
-    defaultValues: getProjectTaskCreateDialogDefaultValues(),
-    onValidationError: (error) => {
-      const messages = error.issues.map(i => i.message).join(', ');
-      toast.error(`Validation error: ${messages}`);
-    },
-    onSubmitInvalid: () => {
-      toast.error('Please fix the errors below and try again.');
-    },
-    onSubmit: async (values) => {
-      setSubmitError(null);
-      try {
-        await createTask.mutateAsync({
-          projectId,
-          siteVisitId: selectedSiteVisitId || undefined,
-          title: values.title,
-          description: values.description || undefined,
-          assigneeId: values.assigneeId || undefined,
-          dueDate: values.dueDate || undefined,
-          priority: values.priority || 'normal',
-          estimatedHours: values.estimatedHours ?? undefined,
-          workstreamId: values.workstreamId || undefined,
-          status: 'pending',
-        });
-
-        toast.success('Task created successfully', {
-          action: {
-            label: 'View Tasks',
-            onClick: () => {
-              onOpenChange(false);
-              navigate({ to: '/projects/$projectId', params: { projectId }, search: { tab: 'tasks' } });
-            },
-          },
-        });
-
-        if (createMore) {
-          form.reset(getProjectTaskCreateMoreResetValues(values));
-        } else {
-          onOpenChange(false);
-          form.reset();
-        }
-
-        onSuccess?.();
-      } catch (error) {
-        const message = formatProjectTaskMutationError(error, 'create');
-        setSubmitError(message);
-        toast.error(message);
-      }
-    },
+  const {
+    applyTemplate,
+    createMore,
+    createTask,
+    form,
+    handleOpenChange,
+    setCreateMore,
+    setWorkstreamId,
+    submitError,
+  } = useProjectTaskCreateDialogForm({
+    projectId,
+    selectedSiteVisitId,
+    onOpenChange,
+    onSuccess,
   });
 
   const handleSiteVisitCreated = () => {
@@ -132,14 +85,8 @@ export function TaskCreateDialog({
   const handleWorkstreamCreated = (workstreamId?: string) => {
     setShowWorkstreamCreate(false);
     if (workstreamId) {
-      form.setFieldValue('workstreamId', workstreamId);
+      setWorkstreamId(workstreamId);
     }
-  };
-
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && createTask.isPending) return;
-    if (!newOpen) setSubmitError(null);
-    onOpenChange(newOpen);
   };
 
   if (isLoadingVisits) {
@@ -208,10 +155,7 @@ export function TaskCreateDialog({
       >
         <ProjectTaskCreateTemplateField
           templateOptions={taskTemplateOptions}
-          onApplyTemplate={(option) => {
-            form.setFieldValue('title', option.title);
-            form.setFieldValue('description', option.description ?? '');
-          }}
+          onApplyTemplate={applyTemplate}
         />
 
         <form.Field name="title">

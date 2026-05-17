@@ -25,15 +25,17 @@ describe('project task create dialog boundary contract', () => {
     expect(dialogs).not.toContain('WorkstreamCreateDialog');
 
     expect(createDialog).toContain('export function TaskCreateDialog');
-    expect(createDialog).toContain('useCreateTask()');
+    expect(createDialog).toContain("from './project-task-create-dialog-form'");
+    expect(createDialog).toContain('useProjectTaskCreateDialogForm');
     expect(createDialog).toContain('useSiteVisitsByProject(projectId)');
     expect(createDialog).toContain('useWorkstreams(projectId)');
     expect(createDialog).toContain("from './project-task-create-scope-fields'");
     expect(createDialog).toContain('ProjectTaskCreateScopeFields');
     expect(createDialog).toContain("from './project-task-create-template-field'");
     expect(createDialog).toContain('ProjectTaskCreateTemplateField');
-    expect(createDialog).toContain("formatProjectTaskMutationError(error, 'create')");
     expect(createDialog).toContain('SiteVisitCreateDialog');
     expect(createDialog).toContain('WorkstreamCreateDialog');
+    expect(createDialog).not.toContain('useCreateTask()');
+    expect(createDialog).not.toContain("formatProjectTaskMutationError(error, 'create')");
   });
 });
