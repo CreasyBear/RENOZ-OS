@@ -165,6 +165,9 @@ describe('inventory valuation tenant-scope contract', () => {
 
   it('keeps manual cost-layer writes transactional and value-cache coherent', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const costLayerCreateSource = compact(
+      read('src/server/functions/inventory/inventory-cost-layer-create.ts')
+    );
     const costLayerReadSource = compact(
       read('src/server/functions/inventory/inventory-cost-layers-read.ts')
     );
@@ -186,16 +189,31 @@ describe('inventory valuation tenant-scope contract', () => {
     expect(costLayerReadSource).toContain(
       'where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,organizationId)))'
     );
-    expect(source).toContain(
+    expect(source).toContain("import{createManualInventoryCostLayer}from'./inventory-cost-layer-create'");
+    expect(source).not.toContain(
       "import{recomputeInventoryValueFromLayers}from'@/server/functions/_shared/inventory-finance'"
     );
     expect(source).toContain('exportconstcreateCostLayer=createServerFn({method:\'POST\'})');
-    expect(source).toContain('returnawaitdb.transaction(async(tx)=>{');
-    expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
     expect(source).toContain(
-      'const[inv]=awaittx.select({id:inventory.id}).from(inventory).where(and(eq(inventory.id,data.inventoryId),eq(inventory.organizationId,ctx.organizationId))).for(\'update\').limit(1)'
+      'returncreateManualInventoryCostLayer({organizationId:ctx.organizationId,userId:ctx.user.id,data,})'
     );
-    expect(source).toContain('awaitrecomputeInventoryValueFromLayers(tx,{organizationId:ctx.organizationId,inventoryId:data.inventoryId,userId:ctx.user.id,})');
+    expect(source).not.toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(costLayerCreateSource).toContain(
+      "import{recomputeInventoryValueFromLayers}from'@/server/functions/_shared/inventory-finance'"
+    );
+    expect(costLayerCreateSource).toContain('returnawaitdb.transaction(async(tx)=>{');
+    expect(costLayerCreateSource).toContain(
+      "sql`SELECTset_config('app.organization_id',${organizationId},false)`"
+    );
+    expect(costLayerCreateSource).toContain(
+      'const[inv]=awaittx.select({id:inventory.id}).from(inventory).where(and(eq(inventory.id,data.inventoryId),eq(inventory.organizationId,organizationId))).for(\'update\').limit(1)'
+    );
+    expect(costLayerCreateSource).toContain(
+      "thrownewNotFoundError('Inventoryitemnotfound','inventory')"
+    );
+    expect(costLayerCreateSource).toContain(
+      'awaitrecomputeInventoryValueFromLayers(tx,{organizationId,inventoryId:data.inventoryId,userId,})'
+    );
   });
 
   it('keeps COGS preview simulate-only, FIFO, and tenant-bounded', () => {

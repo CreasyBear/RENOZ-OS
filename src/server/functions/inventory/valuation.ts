@@ -9,14 +9,10 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { inventory, inventoryCostLayers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { NotFoundError } from '@/lib/server/errors';
 import {
   costLayerFilterSchema,
   createCostLayerSchema,
@@ -29,9 +25,9 @@ import {
   type InventoryTurnoverResult,
   type InventoryFinanceIntegritySummary,
 } from '@/lib/schemas/inventory';
-import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/inventory-finance';
 import { getFinanceIntegritySummary } from './finance-integrity-summary';
 import { reconcileInventoryFinanceIntegrityState } from './inventory-finance-reconcile';
+import { createManualInventoryCostLayer } from './inventory-cost-layer-create';
 import {
   listInventoryCostLayers,
   readInventoryCostLayers,
@@ -91,48 +87,10 @@ export const createCostLayer = createServerFn({ method: 'POST' })
   .inputValidator(createCostLayerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
-
-    return await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`
-      );
-
-      // Lock the inventory row so the layer insert and derived value cache stay coherent.
-      const [inv] = await tx
-        .select({ id: inventory.id })
-        .from(inventory)
-        .where(
-          and(eq(inventory.id, data.inventoryId), eq(inventory.organizationId, ctx.organizationId))
-        )
-        .for('update')
-        .limit(1);
-
-      if (!inv) {
-        throw new NotFoundError('Inventory item not found', 'inventory');
-      }
-
-      const [layer] = await tx
-        .insert(inventoryCostLayers)
-        .values({
-          organizationId: ctx.organizationId,
-          inventoryId: data.inventoryId,
-          receivedAt: data.receivedAt,
-          quantityReceived: data.quantityReceived,
-          quantityRemaining: data.quantityRemaining,
-          unitCost: String(data.unitCost),
-          ...(data.referenceType !== undefined && { referenceType: data.referenceType }),
-          ...(data.referenceId !== undefined && { referenceId: data.referenceId }),
-          ...(data.expiryDate !== undefined && { expiryDate: String(data.expiryDate) }),
-        })
-        .returning();
-
-      await recomputeInventoryValueFromLayers(tx, {
-        organizationId: ctx.organizationId,
-        inventoryId: data.inventoryId,
-        userId: ctx.user.id,
-      });
-
-      return { layer };
+    return createManualInventoryCostLayer({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      data,
     });
   });
 
