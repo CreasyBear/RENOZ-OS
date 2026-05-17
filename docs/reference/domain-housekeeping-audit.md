@@ -1116,8 +1116,12 @@ What is messy:
   - Files: `src/components/auth/auth-error-boundary.tsx`, `src/components/shared/kanban/kanban-error-boundary.tsx`, `src/components/domain/communications/communications-error-boundary.tsx`, `src/components/domain/users/profile-error-boundary.tsx`, `src/components/domain/orders/fulfillment/fulfillment-error-boundary.tsx`, `src/components/error/supplier-error-boundary.tsx`, `src/lib/error-boundary-feedback.ts`
   - Revalidated and remediated in Reliability Maintainer Sprint 44. Boundary fallbacks now keep raw exception details in logging/monitoring paths while rendering formatter-owned diagnostic copy in fallback UI.
 
+- **Closed 2026-05-17: shared upload, SKU copy, and job notification failures use formatter-owned feedback**
+  - Files: `src/hooks/files/use-files-supabase.ts`, `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`
+  - Revalidated and remediated in Reliability Maintainer Sprint 45. Exhausted upload retries now throw stable retry guidance while preserving the original error as `cause`, SKU copy diagnostics are sanitized before logging, and job-progress notification failure text uses the automation job feedback helper instead of raw job metadata.
+
 - **User-facing surfaces still often expose raw technical error strings**
-  - Current examples: `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`, `src/hooks/files/use-files-supabase.ts`, `src/routes/_authenticated/admin/users/import-page.tsx`, and `src/components/domain/financial/credit-notes-list-container.tsx`.
+  - Current examples: `src/routes/_authenticated/admin/users/import-page.tsx` and `src/components/domain/financial/credit-notes-list-container.tsx`. The shared bulk-import wizard still logs bounded caught-exception messages for diagnostics, but its operator-facing feedback was normalized in Sprint 43.
   - A recurring pattern in UI containers and dialogs is direct rendering of thrown messages or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
 
 - **The repo has a strong centralized resilience helper, but adoption is incomplete**

@@ -38,6 +38,7 @@ import {
   type UseQueryResult,
   type UseMutationResult,
 } from "@tanstack/react-query";
+import { formatMutationError } from "@/lib/mutation-error-feedback";
 import { normalizeReadQueryError } from "@/lib/read-path-policy";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -386,6 +387,12 @@ async function uploadToSupabase(
 /** Default retry attempts for upload */
 const DEFAULT_RETRY_ATTEMPTS = 3;
 
+function createUploadFailureError(error: Error | null, fallback: string): Error {
+  return new Error(formatMutationError(error, fallback), {
+    cause: error ?? undefined,
+  });
+}
+
 /**
  * Upload with automatic retry on transient failures.
  *
@@ -430,8 +437,9 @@ async function uploadWithRetry(
   }
 
   // All retries exhausted
-  throw new Error(
-    `Upload failed after ${maxAttempts} attempts: ${lastError?.message || "Unknown error"}`
+  throw createUploadFailureError(
+    lastError,
+    `Upload failed after ${maxAttempts} attempts. Check your connection and try again.`
   );
 }
 

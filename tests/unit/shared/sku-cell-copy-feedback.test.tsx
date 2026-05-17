@@ -73,12 +73,35 @@ describe('SkuCell copy feedback', () => {
     });
   });
 
+  it('sanitizes unsafe clipboard failure diagnostics before logging', async () => {
+    const copyError = new Error(
+      'TypeError: Cannot read properties of undefined (reading clipboard) at copySku()'
+    );
+    writeTextMock.mockRejectedValue(copyError);
+
+    render(<SkuCell value="BAT-100" copyable />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy SKU' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy failed' })).toBeInTheDocument();
+    });
+
+    expect(loggerMock.warn).toHaveBeenCalledWith('Failed to copy SKU to clipboard', {
+      component: 'SkuCell',
+      valueLength: 7,
+      error: 'Clipboard copy failed. The SKU was not copied.',
+    });
+  });
+
   it('keeps raw console errors out of the SKU cell', () => {
     const source = read('src/components/shared/data-table/cells/sku-cell.tsx');
 
     expect(source).toContain('logger.warn("Failed to copy SKU to clipboard"');
     expect(source).toContain('aria-label={copyLabel}');
+    expect(source).toContain('formatSkuCopyFailure(err)');
     expect(source).not.toContain('console.error');
     expect(source).not.toContain('Failed to copy:');
+    expect(source).not.toContain('err instanceof Error ? err.message');
   });
 });

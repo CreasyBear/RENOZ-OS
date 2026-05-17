@@ -41,9 +41,13 @@ describe('automation job progress feedback contract', () => {
 
   it('keeps job progress failure feedback behind the helper', () => {
     const hook = read('src/hooks/automation-jobs/use-job-progress.ts');
+    const notification = read('src/components/shared/notifications/job-progress-notification.tsx');
 
     expect(hook).toContain('formatAutomationJobFailureMessage(job.metadata)');
     expect(hook).not.toContain('metadata?.error?.message');
     expect(hook).not.toContain('error?: { message?: string }');
+
+    expect(notification).toContain('formatAutomationJobFailureMessage(metadata)');
+    expect(notification).not.toContain('metadata.error?.message');
   });
 });

@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks";
+import { formatAutomationJobFailureMessage } from "@/hooks/automation-jobs/job-progress-feedback";
 import type { Job, JobStatus, JobType, AutomationJobMetadata } from "@/lib/schemas/automation-jobs";
 
 // ============================================================================
@@ -177,7 +178,7 @@ export function JobProgressNotification({
       case "completed":
         return "Completed successfully";
       case "failed":
-        return metadata.error?.message || "Job failed";
+        return formatAutomationJobFailureMessage(metadata);
       default:
         return "";
     }

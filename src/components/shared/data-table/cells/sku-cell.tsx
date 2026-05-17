@@ -3,6 +3,7 @@ import { AlertCircle, Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
+import { formatMutationError } from "@/lib/mutation-error-feedback";
 
 export interface SkuCellProps {
   /** SKU value */
@@ -16,6 +17,10 @@ export interface SkuCellProps {
 }
 
 type CopyStatus = "idle" | "copied" | "failed";
+
+function formatSkuCopyFailure(error: unknown): string {
+  return formatMutationError(error, "Clipboard copy failed. The SKU was not copied.");
+}
 
 export const SkuCell = memo(function SkuCell({
   value,
@@ -63,7 +68,7 @@ export const SkuCell = memo(function SkuCell({
       logger.warn("Failed to copy SKU to clipboard", {
         component: "SkuCell",
         valueLength: value.length,
-        error: err instanceof Error ? err.message : String(err),
+        error: formatSkuCopyFailure(err),
       });
       setCopyStatus("failed");
       resetCopyStatusAfterDelay();
