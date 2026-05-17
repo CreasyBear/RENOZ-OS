@@ -5,6 +5,7 @@
  * - Inventory list with pagination and filtering
  * - Inventory item details
  * - Inventory movements history is exported from a dedicated movement hook
+ * - Available serial reads are exported from a dedicated serial availability hook
  * - Stock adjustments are exported from a dedicated adjustment hook
  * - Bulk status updates are exported from a dedicated status hook
  * - Stock transfers are exported from a dedicated transfer hook
@@ -23,7 +24,6 @@ import {
   quickSearchInventory,
 } from '@/server/functions/inventory/inventory';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
-import { getAvailableSerials } from '@/server/functions/inventory/serial-availability';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type { InventoryListQuery } from '@/lib/schemas/inventory';
 
@@ -39,6 +39,10 @@ export {
   useMovements,
   useMovementsDashboard,
 } from './use-inventory-movements';
+export {
+  useAvailableSerials,
+  type UseAvailableSerialsOptions,
+} from './use-available-serials';
 
 // ============================================================================
 // LIST HOOKS
@@ -178,39 +182,5 @@ export function useLocationUtilization(enabled = true) {
     enabled,
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000, // Auto-refresh every 60 seconds
-  });
-}
-
-// ============================================================================
-// SERIAL NUMBER HOOKS
-// ============================================================================
-
-export interface UseAvailableSerialsOptions {
-  productId: string;
-  locationId?: string;
-  enabled?: boolean;
-}
-
-/**
- * Fetch available serial numbers for a product.
- *
- * Used by the picking workflow to populate serial number selectors
- * for serialized products. Returns serials that are in inventory
- * and not already allocated to another order.
- */
-export function useAvailableSerials(options: UseAvailableSerialsOptions) {
-  const { productId, locationId, enabled = true } = options;
-
-  return useQuery({
-    queryKey: queryKeys.inventory.availableSerials(productId, locationId),
-    queryFn: () =>
-      resolveReadResult(() => getAvailableSerials({ data: { productId, locationId } }), {
-        message: 'Available serials returned no data',
-        contractType: 'always-shaped',
-        fallbackMessage:
-          'Available serials are temporarily unavailable. Please refresh and try again.',
-      }),
-    enabled: enabled && !!productId,
-    staleTime: 10 * 1000, // 10 seconds - serials can change frequently during picking
   });
 }

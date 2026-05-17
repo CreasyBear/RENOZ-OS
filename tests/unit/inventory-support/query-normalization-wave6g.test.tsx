@@ -100,7 +100,8 @@ describe('wave 6g inventory/support normalization', () => {
 
   it('treats inventory, serialized, and RMA lists as healthy shaped empty success', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { useInventory, useAvailableSerials } = await import('@/hooks/inventory/use-inventory');
+    const { useInventory } = await import('@/hooks/inventory/use-inventory');
+    const { useAvailableSerials } = await import('@/hooks/inventory/use-available-serials');
     const { useSerializedItems } = await import('@/hooks/inventory/use-serialized-items');
     const { useRmas } = await import('@/hooks/support/use-rma');
 
@@ -121,6 +122,25 @@ describe('wave 6g inventory/support normalization', () => {
     expect(serials.result.current.data).toEqual([]);
     expect(serialized.result.current.data?.items).toEqual([]);
     expect(rmas.result.current.data?.data).toEqual([]);
+  });
+
+  it('keeps available serial read orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = readFileSync(path.resolve('src/hooks/inventory/use-inventory.ts'), 'utf8');
+    const availableSerialsHook = readFileSync(
+      path.resolve('src/hooks/inventory/use-available-serials.ts'),
+      'utf8'
+    );
+    const inventoryIndex = readFileSync(path.resolve('src/hooks/inventory/index.ts'), 'utf8');
+
+    expect(inventoryHook).toContain("from './use-available-serials'");
+    expect(inventoryHook).not.toContain('getAvailableSerials({ data: { productId, locationId } })');
+    expect(inventoryHook).not.toContain('Available serials returned no data');
+    expect(availableSerialsHook).toContain(
+      "import { getAvailableSerials } from '@/server/functions/inventory/serial-availability'"
+    );
+    expect(availableSerialsHook).toContain('queryKeys.inventory.availableSerials(productId, locationId)');
+    expect(availableSerialsHook).toContain('Available serials returned no data');
+    expect(inventoryIndex).toContain("from './use-available-serials'");
   });
 
   it('preserves not-found semantics for inventory detail, serialized detail, and rma detail', async () => {

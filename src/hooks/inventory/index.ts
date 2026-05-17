@@ -40,7 +40,7 @@ export {
 export {
   useAvailableSerials,
   type UseAvailableSerialsOptions,
-} from './use-inventory';
+} from './use-available-serials';
 
 // Canonical serialized lineage
 export {
