@@ -1,4 +1,3 @@
-import { format, isPast, isToday, isTomorrow, addDays, formatDistanceToNow as formatDistanceToNowDateFns } from 'date-fns';
 import {
   AlertCircle,
   Calendar,
@@ -35,26 +34,10 @@ import {
   PROJECT_TASK_PRIORITY_CONFIG,
   PROJECT_TASK_STATUS_CONFIG,
 } from './project-task-config';
-
-function formatDueDate(date: Date | string | null | undefined): { text: string; isOverdue: boolean; isSoon: boolean } {
-  if (!date) return { text: 'No due date', isOverdue: false, isSoon: false };
-
-  const dueDate = date instanceof Date ? date : new Date(date);
-  const today = new Date();
-
-  if (isToday(dueDate)) return { text: 'Due today', isOverdue: false, isSoon: true };
-  if (isTomorrow(dueDate)) return { text: 'Due tomorrow', isOverdue: false, isSoon: true };
-  if (isPast(dueDate) && !isToday(dueDate)) return { text: `Overdue by ${formatDistanceToNowDateFns(dueDate)}`, isOverdue: true, isSoon: false };
-
-  if (dueDate <= addDays(today, 3)) return { text: format(dueDate, 'MMM d'), isOverdue: false, isSoon: true };
-
-  return { text: format(dueDate, 'MMM d, yyyy'), isOverdue: false, isSoon: false };
-}
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
+import {
+  formatProjectTaskDueDate,
+  getProjectTaskInitials,
+} from './project-task-display-utils';
 
 export interface ProjectTaskSortableCardProps {
   task: TaskWithWorkstream;
@@ -132,7 +115,7 @@ function ProjectTaskCardContent({
 }: ProjectTaskCardContentProps) {
   const priority = PROJECT_TASK_PRIORITY_CONFIG[task.priority || 'normal'];
   const status = PROJECT_TASK_STATUS_CONFIG[task.status];
-  const dueInfo = formatDueDate(task.dueDate);
+  const dueInfo = formatProjectTaskDueDate(task.dueDate);
   const isCompleted = task.status === 'completed';
   const PriorityIcon = priority.icon;
   const StatusIcon = status.icon;
@@ -217,7 +200,7 @@ function ProjectTaskCardContent({
                   <Avatar className="h-5 w-5">
                     <AvatarImage src={task.assigneeAvatar} />
                     <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                      {getInitials(task.assigneeName)}
+                      {getProjectTaskInitials(task.assigneeName)}
                     </AvatarFallback>
                   </Avatar>
                   {task.assigneeName && (

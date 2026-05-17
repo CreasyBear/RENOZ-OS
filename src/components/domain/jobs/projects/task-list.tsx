@@ -11,7 +11,6 @@
  */
 
 import { CheckCircle2, Circle, Clock, AlertCircle, Loader2, Calendar, Timer } from 'lucide-react';
-import { isPast, isToday, isTomorrow, addDays, format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -21,6 +20,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import {
+  formatProjectTaskDueDate,
+  getProjectTaskInitials,
+} from './project-task-display-utils';
 
 // ============================================================================
 // TYPES
@@ -98,34 +101,6 @@ const PRIORITY_CONFIG: Record<
 };
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-function formatDueDate(date: string | null | undefined): { text: string; isOverdue: boolean; isSoon: boolean } {
-  if (!date) return { text: 'No due date', isOverdue: false, isSoon: false };
-
-  const dueDate = new Date(date);
-  const today = new Date();
-
-  if (isToday(dueDate)) return { text: 'Due today', isOverdue: false, isSoon: true };
-  if (isTomorrow(dueDate)) return { text: 'Due tomorrow', isOverdue: false, isSoon: true };
-  if (isPast(dueDate) && !isToday(dueDate)) {
-    const days = Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-    return { text: `Overdue by ${days} day${days > 1 ? 's' : ''}`, isOverdue: true, isSoon: false };
-  }
-
-  // Within 3 days
-  if (dueDate <= addDays(today, 3)) return { text: format(dueDate, 'MMM d'), isOverdue: false, isSoon: true };
-
-  return { text: format(dueDate, 'MMM d, yyyy'), isOverdue: false, isSoon: false };
-}
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
-// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -174,7 +149,7 @@ export function TaskList({
           const StatusIcon = statusConfig.icon;
           const priorityConfig = task.priority ? PRIORITY_CONFIG[task.priority] : PRIORITY_CONFIG.normal;
           const PriorityIcon = priorityConfig.icon;
-          const dueInfo = formatDueDate(task.dueDate);
+          const dueInfo = formatProjectTaskDueDate(task.dueDate);
           const isCompleted = task.status === 'completed';
 
           return (
@@ -268,7 +243,7 @@ export function TaskList({
                           <Avatar className="h-5 w-5">
                             <AvatarImage src={task.assigneeAvatar ?? undefined} />
                             <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                              {getInitials(task.assigneeName)}
+                              {getProjectTaskInitials(task.assigneeName)}
                             </AvatarFallback>
                           </Avatar>
                           {task.assigneeName && (

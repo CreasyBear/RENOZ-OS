@@ -13,6 +13,8 @@ describe('project task workstream group boundary contract', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
     const group = read('src/components/domain/jobs/projects/project-task-workstream-group.tsx');
     const card = read('src/components/domain/jobs/projects/project-task-sortable-card.tsx');
+    const taskList = read('src/components/domain/jobs/projects/task-list.tsx');
+    const displayUtils = read('src/components/domain/jobs/projects/project-task-display-utils.ts');
 
     expect(tab).toContain("import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';");
     expect(tab).toContain('<ProjectTaskWorkstreamGroup');
@@ -44,12 +46,24 @@ describe('project task workstream group boundary contract', () => {
     expect(card).toContain('export function ProjectTaskSortableCard');
     expect(card).toContain('function ProjectTaskCardContent');
     expect(card).toContain('useSortable({ id: task.id })');
-    expect(card).toContain('function formatDueDate');
-    expect(card).toContain('function getInitials');
+    expect(card).toContain("from './project-task-display-utils';");
+    expect(card).toContain('formatProjectTaskDueDate(task.dueDate)');
+    expect(card).toContain('getProjectTaskInitials(task.assigneeName)');
+    expect(card).not.toContain('function formatDueDate');
+    expect(card).not.toContain('function getInitials');
     expect(card).toContain('PROJECT_TASK_PRIORITY_CONFIG');
     expect(card).toContain('PROJECT_TASK_STATUS_CONFIG');
     expect(card).toContain('Link');
     expect(card).toContain('DropdownMenu');
     expect(card).not.toContain('DndContext');
+
+    expect(taskList).toContain("from './project-task-display-utils';");
+    expect(taskList).toContain('formatProjectTaskDueDate(task.dueDate)');
+    expect(taskList).toContain('getProjectTaskInitials(task.assigneeName)');
+    expect(taskList).not.toContain('function formatDueDate');
+    expect(taskList).not.toContain('function getInitials');
+
+    expect(displayUtils).toContain('export function formatProjectTaskDueDate');
+    expect(displayUtils).toContain('export function getProjectTaskInitials');
   });
 });
