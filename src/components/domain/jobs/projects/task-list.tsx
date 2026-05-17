@@ -10,7 +10,7 @@
  * @source tasks from useProjectTasks hook (filtered by siteVisitId)
  */
 
-import { CheckCircle2, Circle, Clock, AlertCircle, Loader2, Calendar, Timer } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Calendar, Timer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -20,6 +20,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import type { JobTaskPriority, JobTaskStatus } from '@/lib/schemas/jobs';
+import {
+  getTaskPriority,
+  PROJECT_TASK_PRIORITY_CONFIG,
+  PROJECT_TASK_STATUS_CONFIG,
+} from './project-task-config';
 import {
   formatProjectTaskDueDate,
   getProjectTaskInitials,
@@ -33,8 +39,8 @@ interface Task {
   id: string;
   title: string;
   description?: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
-  priority?: 'low' | 'normal' | 'high' | 'urgent' | null;
+  status: JobTaskStatus;
+  priority?: JobTaskPriority | null;
   assigneeId?: string | null;
   assigneeName?: string | null;
   assigneeAvatar?: string | null;
@@ -55,50 +61,6 @@ export interface TaskListProps {
   /** Additional className */
   className?: string;
 }
-
-// ============================================================================
-// STATUS CONFIG
-// ============================================================================
-
-const STATUS_CONFIG: Record<
-  Task['status'],
-  { label: string; icon: typeof Circle; color: string; variant: 'neutral' | 'progress' | 'success' | 'error' }
-> = {
-  pending: {
-    label: 'Pending',
-    icon: Circle,
-    color: 'text-gray-600',
-    variant: 'neutral',
-  },
-  in_progress: {
-    label: 'In Progress',
-    icon: Clock,
-    color: 'text-blue-600',
-    variant: 'progress',
-  },
-  completed: {
-    label: 'Completed',
-    icon: CheckCircle2,
-    color: 'text-green-600',
-    variant: 'success',
-  },
-  blocked: {
-    label: 'Blocked',
-    icon: AlertCircle,
-    color: 'text-red-600',
-    variant: 'error',
-  },
-};
-
-const PRIORITY_CONFIG: Record<
-  NonNullable<Task['priority']>,
-  { label: string; color: string; bg: string; icon: typeof AlertCircle }
-> = {
-  low: { label: 'Low', color: 'text-green-600', bg: 'bg-green-100', icon: Clock },
-  normal: { label: 'Normal', color: 'text-blue-600', bg: 'bg-blue-100', icon: Clock },
-  high: { label: 'High', color: 'text-orange-600', bg: 'bg-orange-100', icon: AlertCircle },
-  urgent: { label: 'Urgent', color: 'text-red-600', bg: 'bg-red-100', icon: AlertCircle },
-};
 
 // ============================================================================
 // COMPONENT
@@ -145,9 +107,9 @@ export function TaskList({
     <TooltipProvider>
       <div className={cn('space-y-3', className)}>
         {sortedTasks.map((task) => {
-          const statusConfig = STATUS_CONFIG[task.status];
+          const statusConfig = PROJECT_TASK_STATUS_CONFIG[task.status];
           const StatusIcon = statusConfig.icon;
-          const priorityConfig = task.priority ? PRIORITY_CONFIG[task.priority] : PRIORITY_CONFIG.normal;
+          const priorityConfig = PROJECT_TASK_PRIORITY_CONFIG[getTaskPriority(task.priority)];
           const PriorityIcon = priorityConfig.icon;
           const dueInfo = formatProjectTaskDueDate(task.dueDate);
           const isCompleted = task.status === 'completed';
