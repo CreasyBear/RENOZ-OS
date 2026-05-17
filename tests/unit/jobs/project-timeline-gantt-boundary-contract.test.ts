@@ -12,14 +12,19 @@ describe('project timeline gantt boundary contract', () => {
   it('keeps timeline config and date helpers out of the presenter', () => {
     const gantt = read('src/components/domain/jobs/projects/project-timeline-gantt.tsx');
     const config = read('src/components/domain/jobs/projects/project-timeline-gantt-config.ts');
+    const mobileCards = read('src/components/domain/jobs/projects/project-timeline-gantt-mobile-cards.tsx');
     const taskBar = read('src/components/domain/jobs/projects/project-timeline-gantt-task-bar.tsx');
 
     expect(gantt).toContain("from './project-timeline-gantt-config';");
+    expect(gantt).toContain("from './project-timeline-gantt-mobile-cards';");
     expect(gantt).toContain("from './project-timeline-gantt-task-bar';");
+    expect(gantt).toContain('<ProjectTimelineGanttMobileCards');
     expect(gantt).toContain('<ProjectTimelineGanttTaskBar');
     expect(gantt).toContain('TIMELINE_STATUS_CONFIG[task.status]');
     expect(gantt).toContain('getTimelineDates(viewStart, viewMode)');
     expect(gantt).toContain('formatTimelineTaskDates(task.startDate, task.endDate)');
+    expect(gantt).not.toContain('function MobileGanttCardList');
+    expect(gantt).not.toContain('differenceInDays');
     expect(gantt).not.toContain('function TaskBar');
     expect(gantt).not.toContain('handlePointerDown');
     expect(gantt).not.toContain('dragKind');
@@ -39,6 +44,13 @@ describe('project timeline gantt boundary contract', () => {
     expect(taskBar).toContain('TIMELINE_STATUS_CONFIG[task.status]');
     expect(taskBar).not.toContain('VIEW_MODE_CONFIG');
     expect(taskBar).not.toContain('MobileGanttCardList');
+
+    expect(mobileCards).toContain('export interface ProjectTimelineGanttMobileCardsProps');
+    expect(mobileCards).toContain('export function ProjectTimelineGanttMobileCards');
+    expect(mobileCards).toContain('differenceInDays(task.endDate, task.startDate) + 1');
+    expect(mobileCards).toContain('TIMELINE_STATUS_CONFIG[task.status]');
+    expect(mobileCards).not.toContain('ProjectTimelineGanttTaskBar');
+    expect(mobileCards).not.toContain('VIEW_MODE_CONFIG');
 
     expect(config).toContain('export type TimelineTask');
     expect(config).toContain('export type TimelineStatus');
