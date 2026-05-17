@@ -218,6 +218,12 @@ describe('financial separation contract', () => {
     const dashboard = read('src/components/domain/financial/financial-dashboard.tsx');
     const paymentPlans = read('src/components/domain/financial/payment-plans-list.tsx');
     const creditNotesLegacy = read('src/components/domain/financial/credit-notes-list.tsx');
+    const creditNotesReadErrors = read(
+      'src/components/domain/financial/credit-note-read-error-messages.ts',
+    );
+    const creditNotesContainer = read(
+      'src/components/domain/financial/credit-notes-list-container.tsx',
+    );
     const creditNotesPresenter = read(
       'src/components/domain/financial/credit-notes-list-presenter.tsx',
     );
@@ -225,6 +231,7 @@ describe('financial separation contract', () => {
     expect(dashboard).not.toContain('error.message');
     expect(paymentPlans).not.toContain('error.message');
     expect(creditNotesLegacy).not.toContain('error.message');
+    expect(creditNotesContainer).not.toContain('error.message');
     expect(creditNotesPresenter).not.toContain('error.message');
 
     expect(dashboard).toContain(
@@ -236,8 +243,11 @@ describe('financial separation contract', () => {
     expect(creditNotesLegacy).toContain(
       'Credit notes are temporarily unavailable. Please refresh and try again.',
     );
-    expect(creditNotesPresenter).toContain(
+    expect(creditNotesReadErrors).toContain(
       'Credit notes are temporarily unavailable. Please refresh and try again.',
     );
+    expect(creditNotesContainer).toContain('getCreditNoteListReadErrorMessage(error)');
+    expect(creditNotesPresenter).toContain('readErrorMessage: string | null');
+    expect(creditNotesPresenter).toContain('description={readErrorMessage}');
   });
 });

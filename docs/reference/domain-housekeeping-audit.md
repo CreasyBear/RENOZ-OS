@@ -39,7 +39,7 @@ Important: older domain sections are historical audit snapshots, not automatical
 
 **Backlog priority from this baseline:**
 1. **Land the integration branch deliberately:** `origin/master` is an ancestor of `codex/cross-phase-closeout`; the merge shape is favorable. The repo-management task is to make `cross-phase-closeout` the new master line after readiness evidence, not to keep piling cleanup onto an unlanded integration branch.
-2. **Restore trust in the declared repo interface:** `bun run` currently fails locally with Bun's `CouldntReadCurrentDirectory` internal error, while direct underlying tools can run. This is a release-operator smell because the documented gates depend on package scripts.
+2. **Keep the declared repo interface honest:** `bun run` currently fails locally with Bun's `CouldntReadCurrentDirectory` internal error, while `npm run` and direct underlying tools can run. Sprint 49 removes nested `bun run` orchestration from the active package/deploy scripts and updates maintainer docs to use `npm run` as the local script entrypoint. Do not claim the Bun wrapper itself is healthy until the runtime issue is fixed upstream or in the local environment.
 3. **Cross-phase reviewability stewarding:** keep follow-up work on `codex/cross-phase-closeout` small; split by domain or invariant, and avoid turning quality cleanup into another unreviewable surface.
 4. **Error/resilience standardization:** define and migrate high-traffic operator surfaces away from raw technical error display.
 5. **Support issue concentration:** split or better test the issue detail/server orchestration seams already identified below.
@@ -1129,7 +1129,7 @@ What is messy:
   - Revalidated and remediated in Reliability Maintainer Sprint 47. Credit-note list and detail read failures now cross the container/presenter boundary as formatter-owned copy, preserving normalized read-path messages while removing raw error-object handoff and `Unknown error` wrapping from the list path.
 
 - **Closed 2026-05-17: admin user import no longer renders raw or unknown row-result failures**
-  - Files: `src/routes/_authenticated/admin/users/import-page.tsx`, `src/routes/_authenticated/admin/users/import-page-workflow.ts`, `src/server/functions/users/invitations.ts`
+  - Files: `src/routes/_authenticated/admin/users/import-page.tsx`, `src/routes/_authenticated/admin/users/-import-page-workflow.ts`, `src/server/functions/users/invitations.ts`
   - Revalidated and remediated in Reliability Maintainer Sprint 48. Admin import CSV parsing, column mapping, validation, payload creation, parse-error copy, and result-error copy now live behind tested workflow helpers. Batch invitation row results now preserve safe business copy while replacing raw database/unknown failures with stable operator guidance.
 
 - **User-facing surfaces still need ongoing raw-error review**

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console, process */
 /**
  * Deploy with rollout guardrails (Release Gates A + B)
  *
@@ -8,9 +9,9 @@
  * 4. Run post-deploy probes
  *
  * Usage: node scripts/deploy-with-guards.mjs [--skip-probe]
- * Or: bun run deploy:prod
+ * Or: npm run deploy:prod
  *
- * Requires: Bun, Vercel CLI via `bun x`, and APP_URL or VERCEL_URL for probe
+ * Requires: Vercel CLI from node_modules and APP_URL or VERCEL_URL for probe
  */
 
 import { spawn } from 'child_process';
@@ -19,6 +20,12 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
+const VERCEL_BIN = join(
+  ROOT,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'vercel.cmd' : 'vercel'
+);
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -36,29 +43,29 @@ async function main() {
   const skipProbe = process.argv.includes('--skip-probe');
 
   console.log('--- Release Gate A: Tests ---');
-  await run('bun', ['run', 'test:release-hardening']);
+  await run('npm', ['run', 'test:release-hardening']);
 
   console.log('--- Release Gate A: Reliability Gates ---');
-  await run('bun', ['run', 'reliability:release-gates']);
+  await run('npm', ['run', 'reliability:release-gates']);
 
   if (process.env.DATABASE_URL) {
     console.log('--- Release Gate A: Document Schema Gates ---');
-    await run('bun', ['run', 'reliability:document-gates']);
+    await run('npm', ['run', 'reliability:document-gates']);
   } else {
     console.log('--- Skipping document schema gates (DATABASE_URL not set) ---');
   }
 
   console.log('--- Release Gate A: Build ---');
-  await run('bun', ['run', 'build:vercel']);
+  await run('npm', ['run', 'build:vercel']);
 
   console.log('--- Deploy ---');
-  await run('bun', ['x', 'vercel', 'deploy', '--prebuilt', '--prod']);
+  await run(VERCEL_BIN, ['deploy', '--prebuilt', '--prod']);
 
   if (!skipProbe) {
     console.log('--- Release Gate B: Post-deploy probe (5 min window) ---');
     await run('node', ['scripts/probe-production.mjs']);
     console.log('--- Release Gate B: Post-deploy drift recheck ---');
-    await run('bun', ['run', 'reliability:release-gates']);
+    await run('npm', ['run', 'reliability:release-gates']);
   } else {
     console.log('--- Skipping probe (--skip-probe) ---');
   }

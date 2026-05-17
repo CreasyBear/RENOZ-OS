@@ -32,6 +32,13 @@ Release-gate artifacts under `artifacts/release-gates/` are generated local/runt
 
 ## Package Scripts
 
+Use `npm run` for package-script orchestration in the local maintainer runtime.
+`bun` remains pinned for dependency/runtime parity, but `bun run` can fail before
+script execution with `CouldntReadCurrentDirectory` in this environment. Package
+scripts should not chain through `bun run`; keep them runnable through npm and
+fall back to direct `node`/`node_modules/.bin` commands when a runtime blocks a
+wrapper.
+
 - `predeploy` → lint + reliability lint + typecheck + unit tests + build
 - `release:verify` → release-hardening tests + release gates
 - `lint:reliability` → check-route-casts + check-pending-dialog-guards + check-read-path-query-guards

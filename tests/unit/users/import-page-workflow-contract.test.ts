@@ -9,7 +9,7 @@ import {
   formatUserImportResultError,
   parseUserImportCsv,
   validateUserImportRows,
-} from '@/routes/_authenticated/admin/users/import-page-workflow';
+} from '@/routes/_authenticated/admin/users/-import-page-workflow';
 
 const root = process.cwd();
 
@@ -83,7 +83,7 @@ describe('admin user import workflow contract', () => {
 
   it('keeps import page and server batch results behind safe helpers', () => {
     const page = read('src/routes/_authenticated/admin/users/import-page.tsx');
-    const workflow = read('src/routes/_authenticated/admin/users/import-page-workflow.ts');
+    const workflow = read('src/routes/_authenticated/admin/users/-import-page-workflow.ts');
     const server = read('src/server/functions/users/invitations.ts');
 
     expect(page).toContain('parseUserImportCsv');

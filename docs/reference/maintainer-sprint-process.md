@@ -243,20 +243,24 @@ Run the narrowest meaningful gates first, then broader gates when risk justifies
 Default closeout checks:
 
 ```bash
-bun run lint
-bun run typecheck
+npm run lint
+npm run typecheck
 <focused test command for the touched workflow>
 git diff --check
 ```
 
 Broader gates should be risk-selected:
 
-- Run `bun run test:unit` or `bun run build` when the slice touches shared contracts, build-time behavior, route loading, or a cross-domain workflow.
-- Run `bun run lint:reliability` when the slice touches one of its routine guarded contracts: route casts, pending dialog guards, or read-path query guards.
-- The serialized gate pack is closed and no longer part of routine maintainer closeout. Do not list it as a skipped gate for unrelated slices. Future serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or repair-script work should define focused evidence inside that slice. If that future slice specifically needs the retained serialized read policy guard, run `bun run reliability:serialized-read-policy`.
+- Run `npm run test:unit` or `npm run build` when the slice touches shared contracts, build-time behavior, route loading, or a cross-domain workflow.
+- Run `npm run lint:reliability` when the slice touches one of its routine guarded contracts: route casts, pending dialog guards, or read-path query guards.
+- The serialized gate pack is closed and no longer part of routine maintainer closeout. Do not list it as a skipped gate for unrelated slices. Future serialized lineage, inventory identity, serialized movement, warranty/RMA serial continuity, or repair-script work should define focused evidence inside that slice. If that future slice specifically needs the retained serialized read policy guard, run `npm run reliability:serialized-read-policy`.
 - Run finance, document, release, or deploy gates only when the slice touches those contracts or when preparing a release.
 
-If local `bun run` is broken, run the underlying direct tool commands and record the reason.
+Use `npm run` for package-script orchestration in this local maintainer runtime.
+`bun` remains the pinned package manager/runtime in `package.json`, but `bun run`
+can fail before script execution with `CouldntReadCurrentDirectory` in this
+environment. If `npm run` is unavailable or a package script is blocked by the
+runtime, run the underlying direct tool command and record the reason.
 
 Verification output:
 

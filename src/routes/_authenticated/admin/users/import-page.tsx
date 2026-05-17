@@ -27,7 +27,7 @@ import {
   type ImportStep,
   type ParsedUserImportRow,
   type UserImportValidationResult,
-} from './import-page-workflow';
+} from './-import-page-workflow';
 
 // UI Components
 import { Button, buttonVariants } from '@/components/ui/button';
