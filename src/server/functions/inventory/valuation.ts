@@ -9,14 +9,14 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, asc, gt, isNull } from 'drizzle-orm';
+import { eq, and, sql, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
 import { inventory, inventoryCostLayers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { NotFoundError } from '@/lib/server/errors';
 import {
   costLayerFilterSchema,
   createCostLayerSchema,
@@ -27,7 +27,6 @@ import {
   inventoryFinanceIntegrityQuerySchema,
   inventoryFinanceReconcileSchema,
   type InventoryTurnoverResult,
-  type COGSResult,
   type InventoryFinanceIntegritySummary,
   type InventoryFinanceReconcileResult,
 } from '@/lib/schemas/inventory';
@@ -37,28 +36,11 @@ import {
   listInventoryCostLayers,
   readInventoryCostLayers,
 } from './inventory-cost-layers-read';
+import { previewInventoryCogs } from './inventory-cogs-preview';
 import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
 import { readInventoryValuation } from './inventory-valuation-read';
 import { readProductCostLayers } from './product-cost-layers-read';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
-
-// ============================================================================
-// TYPE HELPERS
-// ============================================================================
-
-/**
- * Convert decimal string to number for API response.
- * Drizzle returns decimal columns as strings, but schema expects numbers.
- */
-function parseDecimal(value: string | number): number {
-  return typeof value === 'string' ? Number(value) : value;
-}
 
 // ============================================================================
 // COST LAYERS
@@ -321,96 +303,14 @@ export const reconcileInventoryFinanceIntegrity = createServerFn({ method: 'POST
  */
 export const calculateCOGS = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(cogsCalculationSchema))
-  .handler(async ({ data }): Promise<COGSResult> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-
-    if (!data.simulate) {
-      throw new ValidationError(
-        'Manual COGS application is disabled. Use shipment and RMA workflows to post COGS.',
-        {
-          simulate: ['Set simulate=true for previews; workflow mutations apply canonical COGS.'],
-        }
-      );
-    }
-
-    // Verify inventory exists
-    const [inv] = await db
-      .select()
-      .from(inventory)
-      .where(
-        and(eq(inventory.id, data.inventoryId), eq(inventory.organizationId, ctx.organizationId))
-      )
-      .limit(1);
-
-    if (!inv) {
-      throw new NotFoundError('Inventory item not found', 'inventory');
-    }
-
-    // Get active cost layers in FIFO order
-    // OPTIMIZED: Add organizationId filter for security and to use index
-    const layers = await db
-      .select()
-      .from(inventoryCostLayers)
-      .where(
-        and(
-          eq(inventoryCostLayers.organizationId, ctx.organizationId),
-          eq(inventoryCostLayers.inventoryId, data.inventoryId),
-          gt(inventoryCostLayers.quantityRemaining, 0)
-        )
-      )
-      .orderBy(asc(inventoryCostLayers.receivedAt));
-
-    // Check if enough quantity
-    const totalAvailable = layers.reduce((sum, l) => sum + l.quantityRemaining, 0);
-    if (totalAvailable < data.quantity) {
-      throw new ValidationError('Insufficient inventory for COGS calculation', {
-        quantity: [`Only ${totalAvailable} available in cost layers`],
-      });
-    }
-
-    // Calculate COGS using FIFO
-    let remainingQuantity = data.quantity;
-    let totalCOGS = 0;
-    const usedLayers: CostLayerRecord[] = [];
-    const updatedLayers: CostLayerRecord[] = [];
-
-    for (const layer of layers) {
-      if (remainingQuantity <= 0) break;
-
-      const quantityFromLayer = Math.min(remainingQuantity, layer.quantityRemaining);
-      const layerCost = quantityFromLayer * Number(layer.unitCost);
-
-      totalCOGS += layerCost;
-      remainingQuantity -= quantityFromLayer;
-
-      usedLayers.push({
-        ...layer,
-        // Show how much would be taken from this layer
-        quantityRemaining: quantityFromLayer,
-      });
-
-      // Calculate what would remain
-      const newRemaining = layer.quantityRemaining - quantityFromLayer;
-      updatedLayers.push({
-        ...layer,
-        quantityRemaining: newRemaining,
-      });
-    }
-
-    // Convert unitCost from decimal (string) to number for API response
-    return {
-      cogs: totalCOGS,
-      costLayers: usedLayers.map((layer) => ({
-        ...layer,
-        unitCost: parseDecimal(layer.unitCost),
-      })),
-      remainingLayers: updatedLayers
-        .filter((l) => l.quantityRemaining > 0)
-        .map((layer) => ({
-          ...layer,
-          unitCost: parseDecimal(layer.unitCost),
-        })),
-    };
+    return previewInventoryCogs({
+      organizationId: ctx.organizationId,
+      inventoryId: data.inventoryId,
+      quantity: data.quantity,
+      simulate: data.simulate,
+    });
   });
 
 // ============================================================================

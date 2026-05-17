@@ -148,4 +148,33 @@ describe('inventory valuation tenant-scope contract', () => {
     );
     expect(source).toContain('awaitrecomputeInventoryValueFromLayers(tx,{organizationId:ctx.organizationId,inventoryId:data.inventoryId,userId:ctx.user.id,})');
   });
+
+  it('keeps COGS preview simulate-only, FIFO, and tenant-bounded', () => {
+    const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const cogsPreviewSource = compact(
+      read('src/server/functions/inventory/inventory-cogs-preview.ts')
+    );
+
+    expect(source).toContain("import{previewInventoryCogs}from'./inventory-cogs-preview'");
+    expect(source).toContain('exportconstcalculateCOGS=createServerFn({method:\'GET\'})');
+    expect(source).toContain(
+      'returnpreviewInventoryCogs({organizationId:ctx.organizationId,inventoryId:data.inventoryId,quantity:data.quantity,simulate:data.simulate,})'
+    );
+    expect(source).not.toContain('ManualCOGSapplicationisdisabled');
+    expect(source).not.toContain('InsufficientinventoryforCOGScalculation');
+    expect(cogsPreviewSource).toContain(
+      "thrownewValidationError('ManualCOGSapplicationisdisabled.UseshipmentandRMAworkflowstopostCOGS.',{simulate:['Setsimulate=trueforpreviews;workflowmutationsapplycanonicalCOGS.'],})"
+    );
+    expect(cogsPreviewSource).toContain(
+      'where(and(eq(inventory.id,inventoryId),eq(inventory.organizationId,organizationId)))'
+    );
+    expect(cogsPreviewSource).toContain(
+      'eq(inventoryCostLayers.organizationId,organizationId),eq(inventoryCostLayers.inventoryId,inventoryId),gt(inventoryCostLayers.quantityRemaining,0)'
+    );
+    expect(cogsPreviewSource).toContain('orderBy(asc(inventoryCostLayers.receivedAt))');
+    expect(cogsPreviewSource).toContain(
+      "thrownewValidationError('InsufficientinventoryforCOGScalculation',{quantity:[`Only${totalAvailable}availableincostlayers`],})"
+    );
+    expect(cogsPreviewSource).toContain('unitCost:parseDecimal(layer.unitCost)');
+  });
 });
