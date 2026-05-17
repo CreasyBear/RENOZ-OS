@@ -10,9 +10,24 @@
 import { Link } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
-import type { BatchInvitationItem, BatchSendInvitationsInput } from '@/hooks/users';
+import type { BatchSendInvitationsInput } from '@/hooks/users';
 import { formatUserMutationError } from '@/hooks/users/user-mutation-error-messages';
 import type { BatchInvitationResult } from '@/lib/schemas/users';
+import {
+  ALL_USER_IMPORT_FIELDS,
+  REQUIRED_USER_IMPORT_FIELDS,
+  buildBatchInvitationItems,
+  buildParsedUserImportRows,
+  createUserImportColumnMapping,
+  formatUserImportParseError,
+  formatUserImportResultError,
+  isUserImportCsvFile,
+  parseUserImportCsv,
+  validateUserImportRows,
+  type ImportStep,
+  type ParsedUserImportRow,
+  type UserImportValidationResult,
+} from './import-page-workflow';
 
 // UI Components
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -51,33 +66,6 @@ import {
 
 import { PageLayout } from '@/components/layout';
 
-// Types
-type ImportStep = 'upload' | 'map' | 'validate' | 'import' | 'complete';
-type UserRole = 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer';
-
-interface ParsedRow {
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  role?: string;
-  [key: string]: string | undefined;
-}
-
-interface ValidationResult {
-  row: number;
-  email: string;
-  valid: boolean;
-  errors: string[];
-}
-
-// Required and optional fields
-const REQUIRED_FIELDS = ['email'];
-const OPTIONAL_FIELDS = ['firstName', 'lastName', 'role', 'message'];
-const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
-
-// Valid roles
-const VALID_ROLES: UserRole[] = ['admin', 'manager', 'sales', 'operations', 'support', 'viewer'];
-
 // ============================================================================
 // PRESENTER PROPS INTERFACE
 // ============================================================================
@@ -102,8 +90,8 @@ export default function BulkUserImportPresenter({
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
-  const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
-  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const [parsedData, setParsedData] = useState<ParsedUserImportRow[]>([]);
+  const [validationResults, setValidationResults] = useState<UserImportValidationResult[]>([]);
 
   // Import state
   const [importProgress, setImportProgress] = useState(0);
@@ -115,58 +103,40 @@ export default function BulkUserImportPresenter({
 
   // Parse CSV file
   const parseCSV = useCallback((text: string) => {
-    const lines = text.split('\n').filter((line) => line.trim());
-    if (lines.length < 2) {
-      toast.error('CSV must have at least a header row and one data row');
-      return;
+    try {
+      const parsed = parseUserImportCsv(text);
+      setHeaders(parsed.headers);
+      setRows(parsed.rows);
+      setColumnMapping(createUserImportColumnMapping(parsed.headers));
+      setStep('map');
+    } catch (error) {
+      toast.error(formatUserImportParseError(error));
     }
-
-    // Parse headers
-    const headerLine = lines[0];
-    const csvHeaders = headerLine.split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
-    setHeaders(csvHeaders);
-
-    // Parse data rows
-    const dataRows = lines.slice(1).map((line) => {
-      // Simple CSV parsing (handles basic quoted fields)
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-
-      for (const char of line) {
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      values.push(current.trim());
-
-      return values;
-    });
-
-    setRows(dataRows);
-
-    // Auto-map columns
-    const autoMapping: Record<string, string> = {};
-    csvHeaders.forEach((header) => {
-      const normalized = header.toLowerCase().replace(/[_\s-]/g, '');
-      if (normalized.includes('email')) autoMapping['email'] = header;
-      else if (normalized.includes('firstname') || normalized === 'first')
-        autoMapping['firstName'] = header;
-      else if (normalized.includes('lastname') || normalized === 'last')
-        autoMapping['lastName'] = header;
-      else if (normalized.includes('role')) autoMapping['role'] = header;
-      else if (normalized.includes('message') || normalized.includes('note'))
-        autoMapping['message'] = header;
-    });
-    setColumnMapping(autoMapping);
-
-    setStep('map');
   }, []);
+
+  const readCsvFile = useCallback(
+    (selectedFile: File) => {
+      if (!isUserImportCsvFile(selectedFile)) {
+        toast.error('Please upload a CSV file');
+        return;
+      }
+
+      setFile(selectedFile);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result !== 'string') {
+          toast.error('CSV could not be read. Check the file format and try again.');
+          return;
+        }
+        parseCSV(event.target.result);
+      };
+      reader.onerror = () => {
+        toast.error('CSV could not be read. Check the file format and try again.');
+      };
+      reader.readAsText(selectedFile);
+    },
+    [parseCSV]
+  );
 
   // Handle file upload
   const handleFileUpload = useCallback(
@@ -174,20 +144,9 @@ export default function BulkUserImportPresenter({
       const uploadedFile = e.target.files?.[0];
       if (!uploadedFile) return;
 
-      if (!uploadedFile.name.endsWith('.csv')) {
-        toast.error('Please upload a CSV file');
-        return;
-      }
-
-      setFile(uploadedFile);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        parseCSV(text);
-      };
-      reader.readAsText(uploadedFile);
+      readCsvFile(uploadedFile);
     },
-    [parseCSV]
+    [readCsvFile]
   );
 
   // Handle drop
@@ -197,20 +156,9 @@ export default function BulkUserImportPresenter({
       const droppedFile = e.dataTransfer.files[0];
       if (!droppedFile) return;
 
-      if (!droppedFile.name.endsWith('.csv')) {
-        toast.error('Please upload a CSV file');
-        return;
-      }
-
-      setFile(droppedFile);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        parseCSV(text);
-      };
-      reader.readAsText(droppedFile);
+      readCsvFile(droppedFile);
     },
-    [parseCSV]
+    [readCsvFile]
   );
 
   // Apply column mapping and validate
@@ -221,45 +169,9 @@ export default function BulkUserImportPresenter({
       return;
     }
 
-    // Parse rows with mapping
-    const parsed: ParsedRow[] = rows.map((row) => {
-      const data: ParsedRow = { email: '' };
-      Object.entries(columnMapping).forEach(([field, csvHeader]) => {
-        const colIndex = headers.indexOf(csvHeader);
-        if (colIndex >= 0) {
-          data[field] = row[colIndex];
-        }
-      });
-      return data;
-    });
-
+    const parsed = buildParsedUserImportRows(rows, headers, columnMapping);
     setParsedData(parsed);
-
-    // Validate each row
-    const results: ValidationResult[] = parsed.map((row, index) => {
-      const errors: string[] = [];
-
-      // Check email
-      if (!row.email) {
-        errors.push('Email is required');
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-        errors.push('Invalid email format');
-      }
-
-      // Check role if provided
-      if (row.role && !VALID_ROLES.includes(row.role.toLowerCase() as UserRole)) {
-        errors.push(`Invalid role: ${row.role}`);
-      }
-
-      return {
-        row: index + 1,
-        email: row.email || '(empty)',
-        valid: errors.length === 0,
-        errors,
-      };
-    });
-
-    setValidationResults(results);
+    setValidationResults(validateUserImportRows(parsed));
     setStep('validate');
   }, [rows, headers, columnMapping]);
 
@@ -274,15 +186,7 @@ export default function BulkUserImportPresenter({
     setImportProgress(0);
     setStep('import');
 
-    // Prepare batch invitation data
-    const invitations: BatchInvitationItem[] = validRows.map((result) => {
-      const rowData = parsedData[result.row - 1];
-      return {
-        email: rowData.email,
-        role: (rowData.role?.toLowerCase() as UserRole) || 'viewer',
-        personalMessage: rowData.message || undefined,
-      };
-    });
+    const invitations = buildBatchInvitationItems(validRows, parsedData);
 
     try {
       // Show progress while processing
@@ -300,7 +204,7 @@ export default function BulkUserImportPresenter({
         .filter((r) => !r.success)
         .map((r) => ({
           email: r.email,
-          error: r.error || 'Unknown error',
+          error: formatUserImportResultError(r.error),
         }));
 
       setImportResults({
@@ -460,11 +364,11 @@ export default function BulkUserImportPresenter({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4">
-              {ALL_FIELDS.map((field) => (
+              {ALL_USER_IMPORT_FIELDS.map((field) => (
                 <div key={field} className="flex items-center gap-4">
                   <div className="flex w-32 items-center gap-2">
                     <span className="font-medium capitalize">{field}</span>
-                    {REQUIRED_FIELDS.includes(field) && (
+                    {REQUIRED_USER_IMPORT_FIELDS.includes(field) && (
                       <Badge variant="destructive" className="text-xs">
                         Required
                       </Badge>

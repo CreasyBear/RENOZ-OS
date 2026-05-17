@@ -775,6 +775,9 @@ export const expireOldInvitations = createServerFn({ method: 'POST' })
 // BATCH SEND INVITATIONS
 // ============================================================================
 
+const BATCH_INVITATION_ROW_FAILURE_MESSAGE =
+  'Invitation could not be queued. Please refresh and try again.';
+
 /**
  * Send multiple invitations in a batch.
  * Processes invitations in parallel batches for better performance.
@@ -955,13 +958,13 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
                 });
               }
             }
-          } catch (err) {
+          } catch {
             // If batch fails, mark all in batch as failed
             for (const item of batch) {
               results.push({
                 email: item.email,
                 success: false,
-                error: err instanceof Error ? err.message : 'Database error',
+                error: BATCH_INVITATION_ROW_FAILURE_MESSAGE,
               });
             }
           }
