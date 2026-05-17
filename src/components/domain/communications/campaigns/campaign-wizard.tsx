@@ -29,10 +29,19 @@ import {
 } from "@/hooks/communications/use-campaigns";
 import { formatCommunicationCampaignMutationError } from "@/hooks/communications";
 import { useTemplates } from "@/hooks/communications/use-templates";
-import { RecipientFilterBuilder, type RecipientCriteria } from "./recipient-filter-builder";
+import { RecipientFilterBuilder } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
+import {
+  CAMPAIGN_TEMPLATE_OPTIONS,
+  createCampaignWizardFormData,
+  createEmptyCampaignWizardFormData,
+  getCampaignWizardScheduledAt,
+  hasInvalidCampaignWizardTemplate,
+  validateCampaignWizardStep,
+  type CampaignWizardFormData,
+} from "./campaign-wizard-model";
 import { DateTimePicker } from "../date-time-picker";
-import { TimezoneSelect, getLocalTimezone } from "../timezone-select";
+import { TimezoneSelect } from "../timezone-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,26 +92,6 @@ import type {
   Campaign,
 } from "@/lib/schemas/communications";
 
-// CampaignFormData is specific to wizard internal state - keep inline
-interface CampaignFormData {
-  name: string;
-  description: string;
-  templateType: string;
-  templateData: {
-    templateId?: string;
-    templateVersion?: number;
-    subjectOverride?: string;
-    bodyOverride?: string;
-    variables?: Record<string, string>;
-    signatureId?: string;
-    signatureContent?: string;
-  };
-  recipientCriteria: RecipientCriteria;
-  scheduleEnabled: boolean;
-  scheduledAt: Date | null;
-  timezone: string;
-}
-
 // ============================================================================
 // STEP CONFIG
 // ============================================================================
@@ -113,97 +102,6 @@ const STEPS: { id: WizardStep; label: string; icon: typeof FileText }[] = [
   { id: "recipients", label: "Recipients", icon: Users },
   { id: "preview", label: "Preview", icon: Eye },
 ];
-
-// ============================================================================
-// TEMPLATE OPTIONS
-// ============================================================================
-
-const TEMPLATE_OPTIONS = [
-  {
-    value: "newsletter",
-    label: "Newsletter",
-    description: "Regular newsletter to subscribers",
-  },
-  {
-    value: "promotion",
-    label: "Promotion",
-    description: "Promotional offer or discount",
-  },
-  {
-    value: "announcement",
-    label: "Announcement",
-    description: "Important news or updates",
-  },
-  {
-    value: "follow_up",
-    label: "Follow Up",
-    description: "Follow up with contacts",
-  },
-  {
-    value: "welcome",
-    label: "Welcome",
-    description: "Welcome new customers",
-  },
-  {
-    value: "custom",
-    label: "Custom",
-    description: "Create from scratch",
-  },
-];
-
-// ============================================================================
-// INITIAL STATE
-// ============================================================================
-
-const initialFormData: CampaignFormData = {
-  name: "",
-  description: "",
-  templateType: "newsletter",
-  templateData: {},
-  recipientCriteria: {},
-  scheduleEnabled: false,
-  scheduledAt: null,
-  timezone: getLocalTimezone(),
-};
-
-// ============================================================================
-// STEP VALIDATION
-// ============================================================================
-
-function validateStep(step: WizardStep, data: CampaignFormData): string[] {
-  const errors: string[] = [];
-  const usesStoredTemplate = Boolean(data.templateData.templateId);
-
-  switch (step) {
-    case "details":
-      if (!data.name.trim()) {
-        errors.push("Campaign name is required");
-      }
-      break;
-    case "template":
-      if (!data.templateType && !usesStoredTemplate) {
-        errors.push("Template type is required");
-      }
-      if (data.templateType === "custom" && !usesStoredTemplate) {
-        if (!data.templateData.subjectOverride?.trim()) {
-          errors.push("Subject line is required for custom templates");
-        }
-        if (!data.templateData.bodyOverride?.trim()) {
-          errors.push("Email body is required for custom templates");
-        }
-      }
-      break;
-    case "recipients":
-      // Recipients are optional - will include all contacts if no filters
-      // Validation happens after recipient population
-      break;
-    case "preview":
-      // Validation handled by preview panel
-      break;
-  }
-
-  return errors;
-}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -238,25 +136,10 @@ function CampaignWizardContent({
 }: CampaignWizardProps) {
   const isEditMode = !!initialCampaign;
   const [currentStep, setCurrentStep] = useState<WizardStep>("details");
-  
-  // Initialize form data from initialCampaign if editing, otherwise use defaults
-  const getInitialFormData = (): CampaignFormData => {
-    if (initialCampaign) {
-      return {
-        name: initialCampaign.name,
-        description: initialCampaign.description || "",
-        templateType: initialCampaign.templateType,
-        templateData: (initialCampaign.templateData || {}) as CampaignFormData["templateData"],
-        recipientCriteria: (initialCampaign.recipientCriteria || {}) as RecipientCriteria,
-        scheduleEnabled: !!initialCampaign.scheduledAt,
-        scheduledAt: initialCampaign.scheduledAt || null,
-        timezone: getLocalTimezone(),
-      };
-    }
-    return initialFormData;
-  };
 
-  const [formData, setFormData] = useState<CampaignFormData>(getInitialFormData());
+  const [formData, setFormData] = useState<CampaignWizardFormData>(() =>
+    createCampaignWizardFormData(initialCampaign)
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -272,22 +155,22 @@ function CampaignWizardContent({
     (template) => template.id === formData.templateData.templateId
   );
   const hasLoadedTemplates = templatesData !== undefined;
-  const hasInvalidTemplate = Boolean(
-    formData.templateData.templateId && hasLoadedTemplates && !selectedTemplate
-  );
+  const hasInvalidTemplate = hasInvalidCampaignWizardTemplate(formData, {
+    hasLoadedTemplates,
+    hasSelectedTemplate: Boolean(selectedTemplate),
+  });
 
   // Reset form when dialog closes or initialize from initialCampaign
   useEffect(() => {
     if (!open) {
       setCurrentStep("details");
-      setFormData(initialFormData);
+      setFormData(createEmptyCampaignWizardFormData());
       setErrors([]);
       setSubmitError(null);
       setIsSubmitting(false);
       setRecipientCount(0);
     } else if (initialCampaign) {
-      // Initialize form data when opening in edit mode
-      setFormData(getInitialFormData());
+      setFormData(createCampaignWizardFormData(initialCampaign));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialCampaign?.id]);
@@ -297,7 +180,10 @@ function CampaignWizardContent({
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
   const updateFormData = useCallback(
-    <K extends keyof CampaignFormData>(field: K, value: CampaignFormData[K]) => {
+    <K extends keyof CampaignWizardFormData>(
+      field: K,
+      value: CampaignWizardFormData[K]
+    ) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
       setErrors([]);
     },
@@ -309,7 +195,7 @@ function CampaignWizardContent({
       setSubmitError("The selected saved template is no longer available. Choose another template or detach it before continuing.");
       return;
     }
-    const stepErrors = validateStep(currentStep, formData);
+    const stepErrors = validateCampaignWizardStep(currentStep, formData);
     if (stepErrors.length > 0) {
       setErrors(stepErrors);
       return;
@@ -342,11 +228,7 @@ function CampaignWizardContent({
         throw new Error("The selected saved template is no longer available. Choose another template or detach it before saving.");
       }
 
-      // Calculate scheduledAt with timezone
-      let scheduledAt: Date | undefined;
-      if (formData.scheduleEnabled && formData.scheduledAt) {
-        scheduledAt = formData.scheduledAt;
-      }
+      const scheduledAt = getCampaignWizardScheduledAt(formData);
 
       let campaign: Campaign;
 
@@ -564,7 +446,7 @@ function CampaignWizardContent({
                       <SelectValue placeholder="Select a template" />
                     </SelectTrigger>
                     <SelectContent>
-                      {TEMPLATE_OPTIONS.map((option) => (
+                      {CAMPAIGN_TEMPLATE_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           <div>
                             <div className="font-medium">{option.label}</div>
