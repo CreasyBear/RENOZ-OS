@@ -26,14 +26,12 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import {
   RefreshCw,
   ArrowRight,
-  Edit2,
   Package,
   AlertTriangle,
   Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
@@ -51,8 +49,6 @@ import {
   getInventoryDashboardReadErrorMessage,
   getWmsDashboardReadErrorMessage,
 } from './dashboard-read-error-messages';
-import { STOCK_STATUS_CONFIG } from './inventory-status-config';
-import { StatusCell } from '@/components/shared/data-table';
 import { InventoryDashboardCommandBar } from './inventory-dashboard-command-bar';
 import { InventoryDashboardMetrics } from './inventory-dashboard-metrics';
 import {
@@ -66,19 +62,7 @@ import {
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
 import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface TrackedItemStatus {
-  productId: string;
-  sku: string;
-  name: string;
-  quantity: number;
-  reorderPoint: number;
-  status: 'healthy' | 'low' | 'out';
-}
+import { InventoryDashboardTrackedItemsPanel } from './inventory-dashboard-tracked-items-panel';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -132,18 +116,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   // Transformations
   // ─────────────────────────────────────────────────────────────────────────
-  const trackedItemsWithStatus: TrackedItemStatus[] = (trackedItems ?? []).map(
-    (item: { id: string; sku: string; name: string; quantity: number }) => ({
-      productId: item.id,
-      sku: item.sku,
-      name: item.name,
-      quantity: item.quantity,
-      reorderPoint: 10,
-      status: getStockStatus(item.quantity, 10),
-    })
-  );
-
-  // Transform alerts
   const alerts: DashboardAlert[] = (alertsData?.alerts ?? []).map((a: TriggeredAlert) => {
     const severityMap: Record<string, 'critical' | 'warning' | 'info'> = {
       critical: 'critical',
@@ -284,44 +256,14 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           readErrorMessage={wmsErrorMessage}
         />
 
-        {/* Tracked Items */}
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Tracked Items</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsTrackedDialogOpen(true)}
-              className="text-xs h-7"
-            >
-              <Edit2 className="h-3 w-3 mr-1" />
-              Edit
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoadingTracked ? (
-              <TrackedItemsSkeleton />
-            ) : trackedProductsUnavailable && trackedProductsSelection.length > 0 ? (
-              <InventoryDashboardReadWarning
-                title="Tracked items are temporarily unavailable."
-                message={trackedProductsUnavailable}
-              />
-            ) : (
-              <div className="space-y-4">
-                {trackedProductsWarning ? (
-                  <InventoryDashboardReadWarning
-                    title="Tracked items may be stale."
-                    message={trackedProductsWarning}
-                  />
-                ) : null}
-                <TrackedItemsList
-                  items={trackedItemsWithStatus}
-                  onAddItems={() => setIsTrackedDialogOpen(true)}
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <InventoryDashboardTrackedItemsPanel
+          items={trackedItems ?? []}
+          selectedCount={trackedProductsSelection.length}
+          isLoading={isLoadingTracked}
+          warningMessage={trackedProductsWarning}
+          unavailableMessage={trackedProductsUnavailable}
+          onEdit={() => setIsTrackedDialogOpen(true)}
+        />
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
@@ -410,102 +352,5 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     </div>
   );
 });
-
-// ============================================================================
-// TRACKED ITEMS LIST
-// ============================================================================
-
-function TrackedItemsList({
-  items,
-  onAddItems,
-}: {
-  items: TrackedItemStatus[];
-  onAddItems: () => void;
-}) {
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No items tracked yet</p>
-        <Button variant="link" size="sm" className="mt-1" onClick={onAddItems}>
-          Add items to track
-        </Button>
-      </div>
-    );
-  }
-
-  // Map dashboard status keys to STOCK_STATUS_CONFIG keys
-  // Dashboard uses: healthy/low/out
-  // Config uses: in_stock/low_stock/out_of_stock
-  const statusKeyMap: Record<string, keyof typeof STOCK_STATUS_CONFIG> = {
-    healthy: 'in_stock',
-    low: 'low_stock',
-    out: 'out_of_stock',
-  };
-
-  return (
-    <div className="space-y-2">
-      {items.slice(0, 5).map((item) => {
-        const mappedStatus = statusKeyMap[item.status] ?? 'in_stock';
-        return (
-          <Link
-            key={item.productId}
-            to="/products/$productId"
-            params={{ productId: item.productId }}
-            search={{ tab: 'inventory' }}
-            className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium truncate">{item.sku}</p>
-              <p className="text-xs text-muted-foreground truncate">{item.name}</p>
-            </div>
-            <div className="flex items-center gap-2 ml-2">
-              <span className="text-xs tabular-nums">{item.quantity}</span>
-              <StatusCell
-                status={mappedStatus}
-                statusConfig={STOCK_STATUS_CONFIG}
-                showIcon
-                className="text-xs"
-              />
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// SKELETONS
-// ============================================================================
-
-function TrackedItemsSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex items-center justify-between p-2">
-          <div>
-            <Skeleton className="h-4 w-16 mb-1" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-6" />
-            <Skeleton className="h-5 w-10" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function getStockStatus(quantity: number, reorderPoint: number): 'healthy' | 'low' | 'out' {
-  if (quantity === 0) return 'out';
-  if (quantity <= reorderPoint) return 'low';
-  return 'healthy';
-}
 
 export default UnifiedInventoryDashboard;
