@@ -10,9 +10,9 @@
  * @see docs/design-system/JOBS-DOMAIN-WORKFLOW.md
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Plus, Edit3, Loader2 } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,8 +25,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import type { TaskWithWorkstream } from '@/lib/schemas/jobs';
-
 import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
   FormDialog,
@@ -36,7 +34,6 @@ import {
 } from '@/components/shared/forms';
 import {
   formatProjectTaskMutationError,
-  useUpdateTask,
   useCreateTask,
   useSiteVisitsByProject,
   useWorkstreams,
@@ -51,19 +48,16 @@ import {
   buildProjectTaskTemplateOptions,
   getProjectTaskCreateDialogDefaultValues,
   getProjectTaskCreateMoreResetValues,
-  getProjectTaskEditDialogDefaultValues,
-  getProjectTaskEditDialogResetValues,
   projectTaskCreateDialogFormSchema,
-  projectTaskEditDialogFormSchema,
 } from './project-task-dialog-form-state';
 import {
   ProjectTaskAssigneeField,
   ProjectTaskDueDateField,
   ProjectTaskEstimatedHoursField,
   ProjectTaskPriorityField,
-  ProjectTaskStatusField,
 } from './project-task-dialog-fields';
 
+export { TaskEditDialog, type TaskEditDialogProps } from './task-edit-dialog';
 
 // ============================================================================
 // CREATE DIALOG
@@ -419,175 +413,6 @@ export function TaskCreateDialog({
         projectId={projectId}
         onSuccess={() => handleWorkstreamCreated()}
       />
-
-      <UserInviteDialog
-        open={showUserInvite}
-        onOpenChange={setShowUserInvite}
-        onSuccess={() => {}}
-      />
-    </>
-  );
-}
-
-// ============================================================================
-// EDIT DIALOG
-// ============================================================================
-
-export interface TaskEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  projectId: string;
-  task: TaskWithWorkstream | null;
-  onSuccess?: () => void;
-}
-
-export function TaskEditDialog({
-  open,
-  onOpenChange,
-  projectId: _projectId,
-  task,
-  onSuccess,
-}: TaskEditDialogProps) {
-  const updateTask = useUpdateTask();
-  const { userMap } = useUserLookup();
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [showUserInvite, setShowUserInvite] = useState(false);
-
-  const form = useTanStackForm({
-    schema: projectTaskEditDialogFormSchema,
-    defaultValues: getProjectTaskEditDialogDefaultValues(),
-    onValidationError: (error) => {
-      const messages = error.issues.map(i => i.message).join(', ');
-      toast.error(`Validation error: ${messages}`);
-    },
-    onSubmitInvalid: () => {
-      toast.error('Please fix the errors below and try again.');
-    },
-    onSubmit: async (data) => {
-      if (!task) return;
-
-      setSubmitError(null);
-      try {
-        await updateTask.mutateAsync({
-          taskId: task.id,
-          jobId: task.jobId,
-          title: data.title,
-          description: data.description,
-          status: data.status,
-          estimatedHours: data.estimatedHours ?? undefined,
-          assigneeId: data.assigneeId || undefined,
-          dueDate: data.dueDate || undefined,
-          priority: data.priority,
-        });
-
-        toast.success('Task updated successfully');
-        form.reset();
-        onOpenChange(false);
-        onSuccess?.();
-      } catch (error) {
-        const message = formatProjectTaskMutationError(error, 'update');
-        setSubmitError(message);
-        toast.error(message);
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (task && open) {
-      form.reset(getProjectTaskEditDialogResetValues(task));
-    }
-  }, [task, open, form]);
-
-  if (!task) return null;
-
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && updateTask.isPending) return;
-    if (!newOpen) setSubmitError(null);
-    onOpenChange(newOpen);
-  };
-
-  return (
-    <>
-    <FormDialog
-      open={open}
-      onOpenChange={handleOpenChange}
-      title={
-        <span className="flex items-center gap-2">
-          <Edit3 className="h-5 w-5" />
-          Edit Task
-        </span>
-      }
-      description={
-        <>
-          Update task details
-          <span className="ml-2 text-xs text-muted-foreground">(Cmd+Enter to save)</span>
-        </>
-      }
-      form={form}
-      submitLabel="Save Changes"
-      loadingLabel="Saving..."
-      submitError={submitError}
-      submitDisabled={updateTask.isPending}
-      size="lg"
-      className="max-w-lg"
-      resetOnClose={false}
-    >
-          <form.Field name="title">
-            {(field) => (
-              <TextField
-                field={field}
-                label="Title"
-                required
-              />
-            )}
-          </form.Field>
-
-          <form.Field name="description">
-            {(field) => (
-              <TextareaField
-                field={field}
-                label="Description"
-                rows={3}
-              />
-            )}
-          </form.Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <form.Field name="status">
-              {(field) => <ProjectTaskStatusField field={field} />}
-            </form.Field>
-
-            <form.Field name="priority">
-              {(field) => <ProjectTaskPriorityField field={field} />}
-            </form.Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <form.Field name="assigneeId">
-              {(field) => (
-                <ProjectTaskAssigneeField
-                  field={field}
-                  users={Array.from(userMap.values())}
-                  emptyValue={null}
-                  onInviteUser={() => setShowUserInvite(true)}
-                />
-              )}
-            </form.Field>
-
-            <form.Field name="dueDate">
-              {(field) => <ProjectTaskDueDateField field={field} emptyValue={null} />}
-            </form.Field>
-          </div>
-
-          <form.Field name="estimatedHours">
-            {(field) => (
-              <ProjectTaskEstimatedHoursField
-                field={field}
-                placeholder="e.g., 4"
-              />
-            )}
-          </form.Field>
-    </FormDialog>
 
       <UserInviteDialog
         open={showUserInvite}

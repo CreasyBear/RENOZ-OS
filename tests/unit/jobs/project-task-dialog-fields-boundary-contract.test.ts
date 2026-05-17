@@ -11,18 +11,21 @@ function read(path: string): string {
 describe('project task dialog fields boundary contract', () => {
   it('keeps repeated create/edit field rendering behind focused field components', () => {
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
+    const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const fields = read('src/components/domain/jobs/projects/project-task-dialog-fields.tsx');
+    const dialogRenderers = `${dialogs}\n${editDialog}`;
 
     expect(dialogs).toContain("from './project-task-dialog-fields'");
-    expect(dialogs).toContain('ProjectTaskPriorityField');
-    expect(dialogs).toContain('ProjectTaskStatusField');
-    expect(dialogs).toContain('ProjectTaskAssigneeField');
-    expect(dialogs).toContain('ProjectTaskDueDateField');
-    expect(dialogs).toContain('ProjectTaskEstimatedHoursField');
-    expect(dialogs).not.toContain('CalendarIcon');
-    expect(dialogs).not.toContain('PopoverTrigger');
-    expect(dialogs).not.toContain('NumberField');
-    expect(dialogs).not.toContain("value=\"__invite_user__\"");
+    expect(editDialog).toContain("from './project-task-dialog-fields'");
+    expect(dialogRenderers).toContain('ProjectTaskPriorityField');
+    expect(dialogRenderers).toContain('ProjectTaskStatusField');
+    expect(dialogRenderers).toContain('ProjectTaskAssigneeField');
+    expect(dialogRenderers).toContain('ProjectTaskDueDateField');
+    expect(dialogRenderers).toContain('ProjectTaskEstimatedHoursField');
+    expect(dialogRenderers).not.toContain('CalendarIcon');
+    expect(dialogRenderers).not.toContain('PopoverTrigger');
+    expect(dialogRenderers).not.toContain('NumberField');
+    expect(dialogRenderers).not.toContain("value=\"__invite_user__\"");
 
     expect(fields).toContain('PROJECT_TASK_PRIORITY_OPTIONS');
     expect(fields).toContain('PROJECT_TASK_STATUS_OPTIONS');

@@ -49,6 +49,7 @@ describe('project tasks mutation contract', () => {
     const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
     const reorderMutation = read('src/components/domain/jobs/projects/project-task-reorder-mutation.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
+    const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const hooks = read('src/hooks/jobs/use-job-tasks.ts');
     const jobsIndex = read('src/hooks/jobs/index.ts');
     const server = read('src/server/functions/jobs/job-tasks.ts');
@@ -56,7 +57,8 @@ describe('project tasks mutation contract', () => {
     const compactTab = compact(tab);
     const compactDeleteMutation = compact(deleteMutation);
     const compactReorderMutation = compact(reorderMutation);
-    const compactDialogs = compact(dialogs);
+    const taskDialogMutationOwners = `${dialogs}\n${editDialog}`;
+    const compactTaskDialogMutationOwners = compact(taskDialogMutationOwners);
     const compactHooks = compact(hooks);
     const compactServer = compact(server);
     const compactSchema = compact(schema);
@@ -80,11 +82,11 @@ describe('project tasks mutation contract', () => {
     expect(compactReorderMutation).not.toContain('jobId:firstTask.siteVisitId');
 
     expect(dialogs).toContain("formatProjectTaskMutationError(error, 'create')");
-    expect(dialogs).toContain("formatProjectTaskMutationError(error, 'update')");
-    expect(compactDialogs).toContain('jobId:task.jobId');
-    expect(dialogs).not.toContain("error instanceof Error ? error.message : 'Unknown error'");
-    expect(dialogs).not.toContain('toast.error(`Failed to create task: ${message}`)');
-    expect(dialogs).not.toContain('toast.error(`Failed to update task: ${message}`)');
+    expect(editDialog).toContain("formatProjectTaskMutationError(error, 'update')");
+    expect(compactTaskDialogMutationOwners).toContain('jobId:task.jobId');
+    expect(taskDialogMutationOwners).not.toContain("error instanceof Error ? error.message : 'Unknown error'");
+    expect(taskDialogMutationOwners).not.toContain('toast.error(`Failed to create task: ${message}`)');
+    expect(taskDialogMutationOwners).not.toContain('toast.error(`Failed to update task: ${message}`)');
 
     expect(jobsIndex).toContain('formatProjectTaskMutationError');
     expect(compactHooks).toContain('deleteTask({data:{taskId,jobId}})');
