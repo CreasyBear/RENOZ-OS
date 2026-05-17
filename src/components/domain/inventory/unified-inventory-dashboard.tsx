@@ -21,14 +21,11 @@
  * @see docs/design-system/INVENTORY-DASHBOARD-SPEC.md
  */
 
-import { useState, useCallback, Fragment, memo } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   RefreshCw,
   ArrowRight,
-  ArrowDownToLine,
-  ArrowRightLeft,
-  ArrowUpFromLine,
   Edit2,
   Package,
   MapPin,
@@ -38,7 +35,6 @@ import {
   Clock,
   BarChart3,
 } from 'lucide-react';
-import { format, isToday, isYesterday } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,7 +53,6 @@ import {
   useAcknowledgeAlert,
   type CategoryStock,
   type LocationStock,
-  type RecentMovement,
 } from '@/hooks/inventory';
 import type { TriggeredAlert, DashboardTopMovingItem } from '@/lib/schemas/inventory';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
@@ -73,6 +68,10 @@ import {
   InventoryDashboardAlertsSection,
   type DashboardAlert,
 } from './inventory-dashboard-alerts-section';
+import {
+  InventoryDashboardMovementsSkeleton,
+  InventoryDashboardMovementsTimeline,
+} from './inventory-dashboard-movements-timeline';
 
 // ============================================================================
 // TYPES
@@ -102,24 +101,6 @@ function DashboardReadWarning({
     </Alert>
   );
 }
-
-// ============================================================================
-// MOVEMENT ICONS & COLORS
-// ============================================================================
-
-const movementIcons = {
-  receipt: ArrowDownToLine,
-  receive: ArrowDownToLine,
-  transfer: ArrowRightLeft,
-  allocation: ArrowUpFromLine,
-  allocate: ArrowUpFromLine,
-  pick: ArrowUpFromLine,
-  ship: ArrowUpFromLine,
-  adjust: ArrowRightLeft,
-  return: ArrowDownToLine,
-  deallocate: ArrowRightLeft,
-};
-
 
 // ============================================================================
 // MAIN COMPONENT
@@ -178,9 +159,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     (value: number) => formatCurrency(value, { cents: false }),
     [formatCurrency]
   );
-
-  const groupedMovements = groupMovementsByDate(wmsData?.recentMovements ?? []);
-
   const trackedItemsWithStatus: TrackedItemStatus[] = (trackedItems ?? []).map(
     (item: { id: string; sku: string; name: string; quantity: number }) => ({
       productId: item.id,
@@ -443,7 +421,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           </CardHeader>
           <CardContent>
             {isWmsLoading ? (
-              <MovementsSkeleton />
+              <InventoryDashboardMovementsSkeleton />
             ) : showWmsUnavailable ? (
               <DashboardReadWarning
                 title="Recent movements are temporarily unavailable."
@@ -457,7 +435,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
                     message={wmsErrorMessage}
                   />
                 ) : null}
-                <MovementsTimeline groupedMovements={groupedMovements} />
+                <InventoryDashboardMovementsTimeline movements={wmsData?.recentMovements ?? []} />
               </div>
             )}
           </CardContent>
@@ -684,212 +662,6 @@ function TrackedItemsList({
 }
 
 // ============================================================================
-// MOVEMENTS TIMELINE (Activity-Style Aggregation)
-// ============================================================================
-
-interface AggregatedActivity {
-  id: string;
-  type: string;
-  reference: string | null;
-  timestamp: Date;
-  totalQuantity: number;
-  skuCount: number;
-  skus: string[];
-  location: string;
-  toLocation: string | null;
-}
-
-/**
- * Aggregate movements by reference (order/PO) or by type+location+timeWindow.
- * This creates meaningful activity entries instead of individual "+1" movements.
- */
-function aggregateMovementsIntoActivities(movements: RecentMovement[]): AggregatedActivity[] {
-  const activityMap = new Map<string, AggregatedActivity>();
-
-  for (const m of movements) {
-    // Create a grouping key based on reference OR type+location+hour
-    const hourKey = format(new Date(m.timestamp), 'yyyy-MM-dd-HH');
-    const groupKey = m.reference
-      ? `${m.type}-${m.reference}`
-      : `${m.type}-${m.location}-${hourKey}`;
-
-    const existing = activityMap.get(groupKey);
-    if (existing) {
-      existing.totalQuantity += m.quantity;
-      if (!existing.skus.includes(m.productSku)) {
-        existing.skus.push(m.productSku);
-        existing.skuCount = existing.skus.length;
-      }
-      // Keep the most recent timestamp
-      if (new Date(m.timestamp) > existing.timestamp) {
-        existing.timestamp = new Date(m.timestamp);
-      }
-    } else {
-      activityMap.set(groupKey, {
-        id: groupKey,
-        type: m.type,
-        reference: m.reference,
-        timestamp: new Date(m.timestamp),
-        totalQuantity: m.quantity,
-        skuCount: 1,
-        skus: [m.productSku],
-        location: m.location,
-        toLocation: m.toLocation,
-      });
-    }
-  }
-
-  // Sort by timestamp (most recent first)
-  return Array.from(activityMap.values()).sort(
-    (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-  );
-}
-
-/**
- * Format activity into human-readable description
- */
-function formatActivityDescription(activity: AggregatedActivity): string {
-  const { type, reference, totalQuantity, skuCount, location, toLocation } = activity;
-  const skuText = skuCount === 1 ? '1 SKU' : `${skuCount} SKUs`;
-  const qtyText = `${totalQuantity} unit${totalQuantity !== 1 ? 's' : ''}`;
-
-  switch (type) {
-    case 'receipt':
-    case 'receive':
-      return reference
-        ? `Received ${reference}: ${qtyText} (${skuText})`
-        : `Received ${qtyText} (${skuText}) at ${location}`;
-    case 'transfer':
-      return toLocation
-        ? `Transferred ${qtyText} (${skuText}): ${location} → ${toLocation}`
-        : `Transferred ${qtyText} (${skuText}) at ${location}`;
-    case 'allocation':
-    case 'allocate':
-      return reference
-        ? `Allocated for ${reference}: ${qtyText} (${skuText})`
-        : `Allocated ${qtyText} (${skuText}) at ${location}`;
-    case 'pick':
-    case 'ship':
-      return reference
-        ? `Shipped ${reference}: ${qtyText} (${skuText})`
-        : `Shipped ${qtyText} (${skuText}) from ${location}`;
-    case 'adjust':
-      return `Adjusted ${qtyText} (${skuText}) at ${location}`;
-    case 'return':
-      return reference
-        ? `Returned from ${reference}: ${qtyText} (${skuText})`
-        : `Returned ${qtyText} (${skuText}) at ${location}`;
-    default:
-      return `${type}: ${qtyText} (${skuText}) at ${location}`;
-  }
-}
-
-function MovementsTimeline({
-  groupedMovements,
-}: {
-  groupedMovements: Map<string, RecentMovement[]>;
-}) {
-  // Flatten all movements and aggregate into activities
-  const allMovements = Array.from(groupedMovements.values()).flat();
-  const activities = aggregateMovementsIntoActivities(allMovements);
-
-  if (activities.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <ArrowRightLeft className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No recent activity</p>
-      </div>
-    );
-  }
-
-  // Re-group activities by date for display
-  const activitiesByDate = new Map<string, AggregatedActivity[]>();
-  for (const activity of activities) {
-    let dateLabel: string;
-    if (isToday(activity.timestamp)) {
-      dateLabel = 'Today';
-    } else if (isYesterday(activity.timestamp)) {
-      dateLabel = 'Yesterday';
-    } else {
-      dateLabel = format(activity.timestamp, 'MMM d');
-    }
-    const existing = activitiesByDate.get(dateLabel) ?? [];
-    existing.push(activity);
-    activitiesByDate.set(dateLabel, existing);
-  }
-
-  return (
-    <div className="space-y-1 max-h-[320px] overflow-y-auto">
-      {Array.from(activitiesByDate.entries()).map(([dateLabel, dateActivities]) => (
-        <Fragment key={dateLabel}>
-          {dateLabel !== 'Today' && (
-            <p className="text-xs font-medium text-muted-foreground pt-3 pb-1 sticky top-0 bg-card z-10">
-              {dateLabel}
-            </p>
-          )}
-          {dateActivities.map((activity) => {
-            const Icon = (activity.type in movementIcons
-              ? movementIcons[activity.type as keyof typeof movementIcons]
-              : ArrowRightLeft);
-            const isOutbound = ['allocation', 'allocate', 'pick', 'ship'].includes(activity.type);
-
-            return (
-              <div
-                key={activity.id}
-                className="flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0"
-              >
-                <div
-                  className={cn(
-                    'mt-0.5 p-1.5 rounded-full shrink-0',
-                    isOutbound
-                      ? 'bg-amber-100 dark:bg-amber-900/30'
-                      : 'bg-green-100 dark:bg-green-900/30'
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      isOutbound
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-green-600 dark:text-green-400'
-                    )}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium leading-tight">
-                    {formatActivityDescription(activity)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {format(activity.timestamp, 'h:mm a')}
-                    {activity.skuCount <= 3 && activity.skus.length > 0 && (
-                      <span className="ml-2 text-muted-foreground/70">
-                        {activity.skus.join(', ')}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    'shrink-0 tabular-nums text-xs',
-                    isOutbound
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  )}
-                >
-                  {isOutbound ? '-' : '+'}
-                  {activity.totalQuantity}
-                </Badge>
-              </div>
-            );
-          })}
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
 // TOP MOVERS LIST
 // ============================================================================
 
@@ -995,22 +767,6 @@ function TrackedItemsSkeleton() {
   );
 }
 
-function MovementsSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 py-1.5">
-          <Skeleton className="h-3 w-10" />
-          <Skeleton className="h-3.5 w-3.5" />
-          <Skeleton className="h-3 w-12" />
-          <Skeleton className="h-3 w-6" />
-          <Skeleton className="h-3 flex-1" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function TopMoversSkeleton() {
   return (
     <div className="space-y-3">
@@ -1038,29 +794,6 @@ function getStockStatus(quantity: number, reorderPoint: number): 'healthy' | 'lo
   if (quantity === 0) return 'out';
   if (quantity <= reorderPoint) return 'low';
   return 'healthy';
-}
-
-function groupMovementsByDate(movements: RecentMovement[]): Map<string, RecentMovement[]> {
-  const grouped = new Map<string, RecentMovement[]>();
-
-  for (const m of movements) {
-    let dateLabel: string;
-    const date = new Date(m.timestamp);
-
-    if (isToday(date)) {
-      dateLabel = 'Today';
-    } else if (isYesterday(date)) {
-      dateLabel = 'Yesterday';
-    } else {
-      dateLabel = format(date, 'MMM d');
-    }
-
-    const existing = grouped.get(dateLabel) ?? [];
-    existing.push(m);
-    grouped.set(dateLabel, existing);
-  }
-
-  return grouped;
 }
 
 export default UnifiedInventoryDashboard;
