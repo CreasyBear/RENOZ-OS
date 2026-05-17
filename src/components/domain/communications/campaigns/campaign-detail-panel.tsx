@@ -46,17 +46,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { createPendingDialogInteractionGuards } from "@/components/ui/dialog-pending-guards";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
@@ -70,11 +59,13 @@ import {
   testSendCampaignFromDetail,
   type CampaignDetailActionFeedback,
   type CampaignDetailActionMutations,
+  type CampaignDetailActionResult,
 } from "./campaign-detail-actions";
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
 import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
 import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
+import { CampaignDetailTestSendDialog } from "./campaign-detail-test-send-dialog";
 import { getCampaignStatusVariant } from "./campaign-status-config";
 import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 import {
@@ -186,7 +177,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   const { dismiss, isAlertDismissed } = useAlertDismissals();
   const { confirm } = useConfirmation();
   const [testSendDialogOpen, setTestSendDialogOpen] = useState(false);
-  const [testEmail, setTestEmail] = useState("");
 
   const { data: campaignData, isLoading: campaignLoading, error: campaignError } = useCampaign({
     campaignId,
@@ -286,8 +276,8 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     });
   }, [navigate, campaign]);
 
-  const handleTestSend = useCallback(async () => {
-    if (!campaign || !testEmail) return;
+  const handleTestSend = useCallback(async (testEmail: string): Promise<CampaignDetailActionResult> => {
+    if (!campaign) return { status: "blocked", feedback: [] };
 
     const result = await testSendCampaignFromDetail({
       campaign,
@@ -297,11 +287,8 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
 
     showCampaignDetailActionFeedback(result.feedback);
 
-    if (result.status === "success") {
-      setTestSendDialogOpen(false);
-      setTestEmail("");
-    }
-  }, [campaign, campaignDetailActionMutations, testEmail]);
+    return result;
+  }, [campaign, campaignDetailActionMutations]);
 
   // Build campaign meta fields for DetailGrid
   const campaignMetaFields = useMemo(() => {
@@ -543,54 +530,12 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
         isLoading={recipientsLoading}
       />
 
-      {/* Test Send Dialog */}
-      <Dialog open={testSendDialogOpen} onOpenChange={setTestSendDialogOpen}>
-        <DialogContent
-          onEscapeKeyDown={createPendingDialogInteractionGuards(testSendMutation.isPending).onEscapeKeyDown}
-          onInteractOutside={createPendingDialogInteractionGuards(testSendMutation.isPending).onInteractOutside}
-        >
-          <DialogHeader>
-            <DialogTitle>Send Test Email</DialogTitle>
-            <DialogDescription>
-              Send a test email for this campaign to verify how it looks.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="test-email">Test Email Address</Label>
-              <Input
-                id="test-email"
-                type="email"
-                placeholder="test@example.com"
-                value={testEmail}
-                onChange={(e) => setTestEmail(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && testEmail && !testSendMutation.isPending) {
-                    handleTestSend();
-                  }
-                }}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setTestSendDialogOpen(false);
-                setTestEmail("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleTestSend}
-              disabled={!testEmail || testSendMutation.isPending}
-            >
-              {testSendMutation.isPending ? "Sending..." : "Send Test Email"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CampaignDetailTestSendDialog
+        open={testSendDialogOpen}
+        isPending={testSendMutation.isPending}
+        onOpenChange={setTestSendDialogOpen}
+        onSendTestEmail={handleTestSend}
+      />
     </div>
   );
 });
