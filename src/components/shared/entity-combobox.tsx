@@ -43,6 +43,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover"
+import { logger } from "~/lib/logger"
 import { cn } from "~/lib/utils"
 
 export interface EntityComboboxProps<T> {
@@ -64,6 +65,8 @@ export interface EntityComboboxProps<T> {
   searchPlaceholder?: string
   /** Empty state message */
   emptyMessage?: string
+  /** Error state message when search fails */
+  searchErrorMessage?: string
   /** Debounce delay in ms */
   debounceMs?: number
   /** Whether the field is disabled */
@@ -88,6 +91,7 @@ export function EntityCombobox<T>({
   placeholder = "Select...",
   searchPlaceholder = "Search...",
   emptyMessage = "No results found.",
+  searchErrorMessage = "Search failed. Try again.",
   debounceMs = 300,
   disabled = false,
   className,
@@ -99,6 +103,7 @@ export function EntityCombobox<T>({
   const [query, setQuery] = useState("")
   const [options, setOptions] = useState<T[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null!)
   const abortControllerRef = useRef<AbortController | null>(null!)
@@ -112,26 +117,33 @@ export function EntityCombobox<T>({
 
       if (!searchQuery.trim()) {
         setOptions([])
+        setSearchError(null)
         setIsLoading(false)
         return
       }
 
       setIsLoading(true)
+      setSearchError(null)
 
       try {
         const results = await searchFn(searchQuery)
         setOptions(results)
+        setSearchError(null)
       } catch (error) {
         // Ignore abort errors
         if (error instanceof Error && error.name !== "AbortError") {
-          console.error("Search error:", error)
+          logger.error("Entity combobox search failed", error, {
+            component: "EntityCombobox",
+            queryLength: searchQuery.length,
+          })
           setOptions([])
+          setSearchError(searchErrorMessage)
         }
       } finally {
         setIsLoading(false)
       }
     },
-    [searchFn]
+    [searchFn, searchErrorMessage]
   )
 
   // Handle query change with debounce
@@ -165,6 +177,7 @@ export function EntityCombobox<T>({
     onSelect(entity)
     setOpen(false)
     setQuery("")
+    setSearchError(null)
   }
 
   return (
@@ -202,7 +215,7 @@ export function EntityCombobox<T>({
               </div>
             ) : options.length === 0 ? (
               <CommandEmpty>
-                {query.trim() ? emptyMessage : "Type to search..."}
+                {searchError ?? (query.trim() ? emptyMessage : "Type to search...")}
               </CommandEmpty>
             ) : (
               <CommandGroup>
