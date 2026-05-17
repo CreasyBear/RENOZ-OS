@@ -59,6 +59,20 @@ describe('communications mutation error formatting', () => {
     ).toBe('Unable to delete communication campaign.');
 
     expect(
+      formatCommunicationCampaignMutationError(
+        new Error('supabase database constraint failed while sending campaign'),
+        'send'
+      )
+    ).toBe('Unable to send communication campaign.');
+
+    expect(
+      formatCommunicationCampaignMutationError(
+        new Error('postgres database stack trace while updating campaign recipients'),
+        'populate'
+      )
+    ).toBe('Unable to populate communication campaign recipients.');
+
+    expect(
       formatCommunicationInboxMutationError(
         new Error('supabase database constraint failed while archiving inbox item'),
         'archive'
@@ -131,6 +145,13 @@ describe('communications mutation error formatting', () => {
     ).toBe('Unable to send communication campaign test email.');
 
     expect(
+      formatCommunicationCampaignMutationError(
+        new Error('ReferenceError: campaignPayload is not defined'),
+        'update'
+      )
+    ).toBe('Unable to update communication campaign.');
+
+    expect(
       formatCommunicationInboxAccountMutationError(
         new Error('ReferenceError: providerToken is not defined'),
         'sync'
@@ -179,8 +200,14 @@ describe('communications mutation error formatting', () => {
     expect(pageHook).not.toContain('throw new Error("Failed to restore template version")');
   });
 
-  it('keeps communications campaign route actions on communications-owned formatters', () => {
+  it('keeps communications campaign actions on communications-owned formatters', () => {
     const route = read('src/routes/_authenticated/communications/campaigns/campaigns-page.tsx');
+    const detailPanel = read(
+      'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
+    );
+    const wizard = read(
+      'src/components/domain/communications/campaigns/campaign-wizard.tsx'
+    );
 
     expect(route).toContain('formatCommunicationCampaignMutationError(error, "cancel")');
     expect(route).toContain('formatCommunicationCampaignMutationError(error, "delete")');
@@ -193,6 +220,17 @@ describe('communications mutation error formatting', () => {
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to delete campaign"');
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to duplicate campaign"');
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to send test email"');
+
+    expect(detailPanel).toContain('formatCommunicationCampaignMutationError(error, "send")');
+    expect(detailPanel).toContain('formatCommunicationCampaignMutationError(error, "pause")');
+    expect(detailPanel).toContain('formatCommunicationCampaignMutationError(error, "resume")');
+    expect(detailPanel).toContain('formatCommunicationCampaignMutationError(error, "testSend")');
+    expect(detailPanel).not.toContain('getUserFriendlyMessage(normalizeError(error))');
+
+    expect(wizard).toContain('formatCommunicationCampaignMutationError(error, "populate")');
+    expect(wizard).toContain('formatCommunicationCampaignMutationError(error, "send")');
+    expect(wizard).toContain('isEditMode ? "update" : "create"');
+    expect(wizard).not.toContain('getUserFriendlyMessage(error as Error)');
   });
 
   it('keeps communications inbox actions on communications-owned formatters', () => {

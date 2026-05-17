@@ -11,6 +11,9 @@ const TEMPLATE_FALLBACKS = {
 
 const CAMPAIGN_FALLBACKS = {
   create: 'Unable to create communication campaign.',
+  update: 'Unable to update communication campaign.',
+  populate: 'Unable to populate communication campaign recipients.',
+  send: 'Unable to send communication campaign.',
   cancel: 'Unable to cancel communication campaign.',
   delete: 'Unable to delete communication campaign.',
   duplicate: 'Unable to duplicate communication campaign.',

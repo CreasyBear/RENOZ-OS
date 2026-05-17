@@ -74,7 +74,7 @@ import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
 import { useReducedMotion } from "@/hooks/_shared/use-reduced-motion";
 import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage, normalizeError } from "@/lib/error-handling";
+import { formatCommunicationCampaignMutationError } from "@/hooks/communications";
 import {
   getCampaignStatusVariant,
   getCampaignStageIndex,
@@ -309,7 +309,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       });
     } catch (error) {
       toast.error("Failed to send campaign", {
-        description: getUserFriendlyMessage(normalizeError(error)),
+        description: formatCommunicationCampaignMutationError(error, "send"),
       });
     }
   }, [campaign, confirm, sendCampaignMutation]);
@@ -330,7 +330,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       });
     } catch (error) {
       toast.error("Failed to pause campaign", {
-        description: getUserFriendlyMessage(normalizeError(error)),
+        description: formatCommunicationCampaignMutationError(error, "pause"),
       });
     }
   }, [campaign, confirm, pauseCampaignMutation]);
@@ -345,7 +345,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       });
     } catch (error) {
       toast.error("Failed to resume campaign", {
-        description: getUserFriendlyMessage(normalizeError(error)),
+        description: formatCommunicationCampaignMutationError(error, "resume"),
       });
     }
   }, [campaign, resumeCampaignMutation]);
@@ -382,7 +382,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       setTestEmail("");
     } catch (error) {
       toast.error("Failed to send test email", {
-        description: getUserFriendlyMessage(normalizeError(error)),
+        description: formatCommunicationCampaignMutationError(error, "testSend"),
       });
     }
   }, [campaign, testEmail, testSendMutation]);

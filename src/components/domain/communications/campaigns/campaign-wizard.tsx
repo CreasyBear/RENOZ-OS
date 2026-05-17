@@ -27,6 +27,7 @@ import {
   usePopulateCampaignRecipients,
   useSendCampaign,
 } from "@/hooks/communications/use-campaigns";
+import { formatCommunicationCampaignMutationError } from "@/hooks/communications";
 import { useTemplates } from "@/hooks/communications/use-templates";
 import { RecipientFilterBuilder, type RecipientCriteria } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
@@ -69,7 +70,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
-import { getUserFriendlyMessage } from "@/lib/error-handling";
 import { CommunicationsErrorBoundary } from "../communications-error-boundary";
 import { SignatureSelector } from "../signatures/signature-selector";
 
@@ -377,7 +377,7 @@ function CampaignWizardContent({
         } catch (error) {
           // Recipient population failure is non-critical for edits
           toast.warning('Campaign updated but failed to refresh recipients', {
-            description: getUserFriendlyMessage(error as Error),
+            description: formatCommunicationCampaignMutationError(error, "populate"),
           });
         }
 
@@ -405,7 +405,7 @@ function CampaignWizardContent({
         });
       } catch (error) {
         toast.error('Failed to populate recipients', {
-          description: getUserFriendlyMessage(error as Error),
+          description: formatCommunicationCampaignMutationError(error, "populate"),
         });
         setIsSubmitting(false);
         return;
@@ -428,7 +428,7 @@ function CampaignWizardContent({
         } catch (error) {
           // Campaign created but send failed - still show success but warn user
           toast.warning('Campaign created but failed to start sending', {
-            description: getUserFriendlyMessage(error as Error) + ' You can send it manually from the campaign detail page.',
+            description: `${formatCommunicationCampaignMutationError(error, "send")} You can send it manually from the campaign detail page.`,
           });
           setIsSubmitting(false);
           return;
@@ -440,7 +440,12 @@ function CampaignWizardContent({
       onSuccess?.(campaign.id);
       onOpenChange(false);
     } catch (error) {
-      setSubmitError(getUserFriendlyMessage(error as Error));
+      setSubmitError(
+        formatCommunicationCampaignMutationError(
+          error,
+          isEditMode ? "update" : "create"
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
