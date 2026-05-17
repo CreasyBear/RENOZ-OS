@@ -8,11 +8,8 @@
 export {
   useInventory,
   useInventoryItem,
-  useInventoryMovements,
   useInventoryLowStock,
   useInventorySearch,
-  useMovements,
-  useMovementsDashboard,
   useInventoryDashboard,
   useLocationUtilization,
 } from './use-inventory';
@@ -31,6 +28,13 @@ export { useReceiveInventory } from './use-receive-inventory';
 
 // Transfer mutation/cache contract
 export { useTransferInventory } from './use-transfer-inventory';
+
+// Movement read/cache contract
+export {
+  useInventoryMovements,
+  useMovements,
+  useMovementsDashboard,
+} from './use-inventory-movements';
 
 // Serial number management
 export {

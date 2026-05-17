@@ -180,7 +180,7 @@ describe('wave 7b inventory reconciliation', () => {
     const { useInventoryValuation, useInventoryFinanceIntegrity } = await import(
       '@/hooks/inventory/use-valuation'
     );
-    const { useMovements } = await import('@/hooks/inventory/use-inventory');
+    const { useMovements } = await import('@/hooks/inventory/use-inventory-movements');
 
     const wms = renderHook(() => useWMSDashboard(), { wrapper: createWrapper(queryClient) });
     const valuation = renderHook(() => useInventoryValuation(), {

@@ -4,7 +4,7 @@
  * TanStack Query hooks for inventory management:
  * - Inventory list with pagination and filtering
  * - Inventory item details
- * - Inventory movements history
+ * - Inventory movements history is exported from a dedicated movement hook
  * - Stock adjustments are exported from a dedicated adjustment hook
  * - Bulk status updates are exported from a dedicated status hook
  * - Stock transfers are exported from a dedicated transfer hook
@@ -23,13 +23,9 @@ import {
   quickSearchInventory,
 } from '@/server/functions/inventory/inventory';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
-import { listMovements } from '@/server/functions/inventory/movements';
 import { getAvailableSerials } from '@/server/functions/inventory/serial-availability';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
-import type {
-  InventoryListQuery,
-  MovementListQuery,
-} from '@/lib/schemas/inventory';
+import type { InventoryListQuery } from '@/lib/schemas/inventory';
 
 export { useAdjustInventory } from './use-adjust-inventory';
 export {
@@ -38,6 +34,11 @@ export {
 } from './use-bulk-update-inventory-status';
 export { useReceiveInventory } from './use-receive-inventory';
 export { useTransferInventory } from './use-transfer-inventory';
+export {
+  useInventoryMovements,
+  useMovements,
+  useMovementsDashboard,
+} from './use-inventory-movements';
 
 // ============================================================================
 // LIST HOOKS
@@ -112,30 +113,6 @@ export function useInventoryItem(inventoryId: string, enabled = true) {
 }
 
 /**
- * Fetch inventory movements for an item
- */
-export function useInventoryMovements(inventoryId: string, enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.inventory.movements({ inventoryId, page: 1, pageSize: 50 }),
-    queryFn: () =>
-      resolveReadResult(
-        () =>
-          listMovements({
-            data: { inventoryId, page: 1, pageSize: 50, sortOrder: 'desc' } satisfies MovementListQuery,
-          }),
-        {
-          message: 'Inventory movements returned no data',
-          contractType: 'always-shaped',
-          fallbackMessage:
-            'Inventory movements are temporarily unavailable. Please refresh and try again.',
-        }
-      ),
-    enabled: enabled && !!inventoryId,
-    staleTime: 30 * 1000,
-  });
-}
-
-/**
  * Fetch low stock inventory items
  */
 export function useInventoryLowStock(enabled = true) {
@@ -156,65 +133,6 @@ export function useInventoryLowStock(enabled = true) {
       ),
     enabled,
     staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-// ============================================================================
-// MOVEMENT HOOKS
-// ============================================================================
-
-/**
- * Fetch inventory movements with filtering (general query, not tied to specific inventory item)
- */
-export function useMovements(
-  filters: Partial<MovementListQuery> & { page?: number; pageSize?: number; sortOrder?: 'asc' | 'desc' } = {},
-  enabled = true
-) {
-  const queryFilters: MovementListQuery = {
-    page: filters.page ?? 1,
-    pageSize: filters.pageSize ?? 50,
-    sortOrder: filters.sortOrder ?? 'desc',
-    ...filters,
-  };
-  return useQuery({
-    queryKey: queryKeys.inventory.movements(queryFilters),
-    queryFn: () =>
-      resolveReadResult(() => listMovements({ data: queryFilters }), {
-        message: 'Inventory movements returned no data',
-        contractType: 'always-shaped',
-        fallbackMessage:
-          'Inventory movements are temporarily unavailable. Please refresh and try again.',
-      }),
-    enabled,
-    staleTime: 30 * 1000,
-  });
-}
-
-/**
- * Fetch inventory movements with auto-refresh for dashboard
- */
-export function useMovementsDashboard(
-  filters: Partial<MovementListQuery> & { page?: number; pageSize?: number; sortOrder?: 'asc' | 'desc' } = {},
-  enabled = true
-) {
-  const queryFilters: MovementListQuery = {
-    page: filters.page ?? 1,
-    pageSize: filters.pageSize ?? 50,
-    sortOrder: filters.sortOrder ?? 'desc',
-    ...filters,
-  };
-  return useQuery({
-    queryKey: queryKeys.inventory.movements({ ...queryFilters, dashboard: true }),
-    queryFn: () =>
-      resolveReadResult(() => listMovements({ data: queryFilters }), {
-        message: 'Inventory dashboard movements returned no data',
-        contractType: 'always-shaped',
-        fallbackMessage:
-          'Inventory dashboard movements are temporarily unavailable. Please refresh and try again.',
-      }),
-    enabled,
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
   });
 }
 

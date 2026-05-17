@@ -22,10 +22,10 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   useInventoryItem,
-  useInventoryMovements,
   useAdjustInventory,
   useTransferInventory,
 } from './use-inventory';
+import { useInventoryMovements } from './use-inventory-movements';
 import { useQualityInspections } from './use-quality';
 import { useCostLayers } from './use-valuation';
 import { useLocations } from './use-locations';

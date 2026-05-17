@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -147,6 +149,12 @@ function createWrapper(queryClient: QueryClient) {
   return Wrapper;
 }
 
+const root = process.cwd();
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8');
+}
+
 describe('inventory movement query normalization wave 3', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -241,7 +249,9 @@ describe('inventory movement query normalization wave 3', () => {
 
   it('treats movement reads as shaped success states when no movement data exists', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { useMovements, useMovementsDashboard } = await import('@/hooks/inventory/use-inventory');
+    const { useMovements, useMovementsDashboard } = await import(
+      '@/hooks/inventory/use-inventory-movements'
+    );
 
     const movements = renderHook(() => useMovements({ page: 1, pageSize: 100 }), {
       wrapper: createWrapper(queryClient),
@@ -274,7 +284,7 @@ describe('inventory movement query normalization wave 3', () => {
     });
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { useMovements } = await import('@/hooks/inventory/use-inventory');
+    const { useMovements } = await import('@/hooks/inventory/use-inventory-movements');
 
     const { result } = renderHook(() => useMovements({ page: 1, pageSize: 100 }), {
       wrapper: createWrapper(queryClient),
@@ -313,5 +323,21 @@ describe('inventory movement query normalization wave 3', () => {
 
     expect(await screen.findByText('movement-empty')).toBeInTheDocument();
     expect(screen.queryByText('Inventory movement analytics are temporarily unavailable.')).not.toBeInTheDocument();
+  });
+
+  it('keeps movement read orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = read('src/hooks/inventory/use-inventory.ts');
+    const movementHook = read('src/hooks/inventory/use-inventory-movements.ts');
+    const inventoryIndex = read('src/hooks/inventory/index.ts');
+
+    expect(inventoryHook).toContain("from './use-inventory-movements'");
+    expect(inventoryHook).not.toContain('listMovements({ data: queryFilters })');
+    expect(inventoryHook).not.toContain('Inventory dashboard movements returned no data');
+    expect(movementHook).toContain(
+      "import { listMovements } from '@/server/functions/inventory/movements'"
+    );
+    expect(movementHook).toContain('queryKeys.inventory.movements(queryFilters)');
+    expect(movementHook).toContain('Inventory dashboard movements returned no data');
+    expect(inventoryIndex).toContain("from './use-inventory-movements'");
   });
 });
