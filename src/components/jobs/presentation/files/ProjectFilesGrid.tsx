@@ -174,6 +174,9 @@ function FileCard({
   const IconComponent = config.icon;
   const extension = getFileExtension(file.fileName);
   const isImage = isProjectFileImage(file);
+  const imageUrl = file.fileUrl ?? '';
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const shouldRenderImage = isImage && imageUrl.length > 0 && failedImageUrl !== imageUrl;
 
   if (viewMode === 'list') {
     return (
@@ -247,14 +250,12 @@ function FileCard({
             config.bgColor
           )}
         >
-          {isImage && file.fileUrl ? (
+          {shouldRenderImage ? (
             <img 
-              src={file.fileUrl} 
+              src={imageUrl}
               alt={file.fileName || 'File'}
               className="h-full w-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
+              onError={() => setFailedImageUrl(imageUrl)}
             />
           ) : (
             <div className="text-center">

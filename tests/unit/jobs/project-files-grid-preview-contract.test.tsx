@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -53,6 +53,28 @@ describe('ProjectFilesGrid preview classification', () => {
     expect(image).toHaveAttribute('src', 'https://example.com/files/site-photo.jpg');
   });
 
+  it('falls back to the file icon thumbnail when an image thumbnail fails to load', async () => {
+    render(
+      <ProjectFilesGrid
+        files={[
+          makeProjectFile({
+            fileUrl: 'https://example.com/files/missing-photo.jpg',
+            fileName: 'Missing install photo.jpg',
+            mimeType: 'image/jpeg',
+            fileType: 'photo',
+          }),
+        ]}
+      />
+    );
+
+    fireEvent.error(screen.getByRole('img', { name: 'Missing install photo.jpg' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('img', { name: 'Missing install photo.jpg' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('JPG')).toBeInTheDocument();
+  });
+
   it('keeps non-image files on icon thumbnails', () => {
     render(
       <ProjectFilesGrid
@@ -76,7 +98,11 @@ describe('ProjectFilesGrid preview classification', () => {
     expect(source).toContain("return file.mimeType?.startsWith('image/') === true;");
     expect(source).toContain("return file.mimeType?.includes('pdf') === true;");
     expect(source).toContain('const isImage = isProjectFileImage(file);');
+    expect(source).toContain("const imageUrl = file.fileUrl ?? '';");
+    expect(source).toContain('const shouldRenderImage = isImage && imageUrl.length > 0 && failedImageUrl !== imageUrl;');
+    expect(source).toContain('onError={() => setFailedImageUrl(imageUrl)}');
     expect(source).not.toContain('TODO: Detect from mimeType when properly stored');
     expect(source).not.toContain('const isImage = false');
+    expect(source).not.toContain('style.display');
   });
 });
