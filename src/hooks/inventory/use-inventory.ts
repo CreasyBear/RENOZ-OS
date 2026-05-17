@@ -6,24 +6,21 @@
  * - Inventory item details
  * - Inventory movements history
  * - Stock adjustments are exported from a dedicated adjustment hook
+ * - Bulk status updates are exported from a dedicated status hook
  * - Stock transfers are exported from a dedicated transfer hook
  * - Stock receiving is exported from a dedicated receive hook
  *
  * @see _Initiation/_prd/2-domains/inventory/inventory.prd.json
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import {
   resolveReadResult,
 } from '@/lib/read-path-policy';
-import { toast } from '../_shared/use-toast';
-import { formatInventoryMutationError } from './_mutation-errors';
-import { invalidateInventoryStockMutationQueries } from './_stock-mutation-cache';
 import {
   listInventory,
   getInventoryItem,
   quickSearchInventory,
-  bulkUpdateStatus,
 } from '@/server/functions/inventory/inventory';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
 import { listMovements } from '@/server/functions/inventory/movements';
@@ -31,11 +28,14 @@ import { getAvailableSerials } from '@/server/functions/inventory/serial-availab
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,
-  Inventory,
   MovementListQuery,
 } from '@/lib/schemas/inventory';
 
 export { useAdjustInventory } from './use-adjust-inventory';
+export {
+  useBulkUpdateInventoryStatus,
+  type BulkUpdateInventoryStatusInput,
+} from './use-bulk-update-inventory-status';
 export { useReceiveInventory } from './use-receive-inventory';
 export { useTransferInventory } from './use-transfer-inventory';
 
@@ -45,12 +45,6 @@ export { useTransferInventory } from './use-transfer-inventory';
 
 export interface UseInventoryListOptions extends Partial<InventoryListQuery> {
   enabled?: boolean;
-}
-
-export interface BulkUpdateInventoryStatusInput {
-  inventoryIds: string[];
-  status: Inventory['status'];
-  reason: string;
 }
 
 /**
@@ -166,7 +160,7 @@ export function useInventoryLowStock(enabled = true) {
 }
 
 // ============================================================================
-// MUTATION HOOKS
+// MOVEMENT HOOKS
 // ============================================================================
 
 /**
@@ -221,46 +215,6 @@ export function useMovementsDashboard(
     enabled,
     staleTime: 15 * 1000,
     refetchInterval: 30 * 1000,
-  });
-}
-
-/**
- * Bulk update inventory disposition status.
- *
- * This path does not optimistically patch status. Status changes can affect
- * serialized lineage, available serials, movements, and product stock summaries,
- * so the cache contract is refetch-first after the server transaction commits.
- */
-export function useBulkUpdateInventoryStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (params: BulkUpdateInventoryStatusInput) => bulkUpdateStatus({ data: params }),
-    onSuccess: (data, variables) => {
-      const updatedCount = data.updatedCount ?? variables.inventoryIds.length;
-      toast.success(
-        updatedCount === 1
-          ? 'Inventory status updated'
-          : `${updatedCount} inventory statuses updated`
-      );
-
-      invalidateInventoryStockMutationQueries(queryClient, {
-        result: data,
-        includeMovements: true,
-      });
-    },
-    onError: (error) => {
-      toast.error(
-        formatInventoryMutationError(error, 'Unable to update inventory statuses', {
-          codeMessages: {
-            allocated_inventory_status_change:
-              'Release allocations before changing inventory status.',
-            workflow_owned_inventory_status:
-              'Use allocation or fulfillment workflows for allocated or sold inventory.',
-          },
-        })
-      );
-    },
   });
 }
 

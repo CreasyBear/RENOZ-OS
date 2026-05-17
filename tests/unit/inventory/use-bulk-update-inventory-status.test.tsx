@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -19,6 +21,9 @@ vi.mock('@/server/functions/inventory/inventory', () => ({
   listInventory: vi.fn(),
   getInventoryItem: vi.fn(),
   quickSearchInventory: vi.fn(),
+}))
+
+vi.mock('@/server/functions/inventory/status-updates', () => ({
   bulkUpdateStatus: (...args: unknown[]) => mockBulkUpdateStatus(...args),
 }))
 
@@ -58,6 +63,12 @@ function createWrapper(queryClient: QueryClient) {
   return Wrapper
 }
 
+const root = process.cwd()
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8')
+}
+
 describe('useBulkUpdateInventoryStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -83,7 +94,7 @@ describe('useBulkUpdateInventoryStatus', () => {
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-inventory')
+    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-bulk-update-inventory-status')
     const { result } = renderHook(() => useBulkUpdateInventoryStatus(), {
       wrapper: createWrapper(queryClient),
     })
@@ -158,7 +169,7 @@ describe('useBulkUpdateInventoryStatus', () => {
 
     const queryClient = new QueryClient()
 
-    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-inventory')
+    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-bulk-update-inventory-status')
     const { result } = renderHook(() => useBulkUpdateInventoryStatus(), {
       wrapper: createWrapper(queryClient),
     })
@@ -189,7 +200,7 @@ describe('useBulkUpdateInventoryStatus', () => {
 
     const queryClient = new QueryClient()
 
-    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-inventory')
+    const { useBulkUpdateInventoryStatus } = await import('@/hooks/inventory/use-bulk-update-inventory-status')
     const { result } = renderHook(() => useBulkUpdateInventoryStatus(), {
       wrapper: createWrapper(queryClient),
     })
@@ -209,5 +220,22 @@ describe('useBulkUpdateInventoryStatus', () => {
         'Use allocation or fulfillment workflows for allocated or sold inventory.'
       )
     })
+  })
+
+  it('keeps bulk status mutation orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = read('src/hooks/inventory/use-inventory.ts')
+    const statusHook = read('src/hooks/inventory/use-bulk-update-inventory-status.ts')
+    const inventoryIndex = read('src/hooks/inventory/index.ts')
+
+    expect(inventoryHook).toContain("from './use-bulk-update-inventory-status'")
+    expect(inventoryHook).not.toContain('bulkUpdateStatus({ data: params })')
+    expect(inventoryHook).not.toContain('allocated_inventory_status_change')
+    expect(statusHook).toContain(
+      "import { bulkUpdateStatus } from '@/server/functions/inventory/status-updates'"
+    )
+    expect(statusHook).toContain('bulkUpdateStatus({ data: params })')
+    expect(statusHook).toContain('includeMovements: true')
+    expect(statusHook).toContain('allocated_inventory_status_change')
+    expect(inventoryIndex).toContain("from './use-bulk-update-inventory-status'")
   })
 })
