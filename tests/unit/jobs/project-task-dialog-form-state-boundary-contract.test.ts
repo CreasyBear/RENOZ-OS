@@ -14,8 +14,9 @@ describe('project task dialog form state boundary contract', () => {
     const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
     const createDialogForm = read('src/components/domain/jobs/projects/project-task-create-dialog-form.ts');
     const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
+    const editDialogForm = read('src/components/domain/jobs/projects/project-task-edit-dialog-form.ts');
     const formState = read('src/components/domain/jobs/projects/project-task-dialog-form-state.ts');
-    const dialogFormOwners = `${createDialog}\n${createDialogForm}\n${editDialog}`;
+    const dialogFormOwners = `${createDialog}\n${createDialogForm}\n${editDialog}\n${editDialogForm}`;
 
     expect(createDialog).toContain("from './project-task-dialog-form-state'");
     expect(createDialog).toContain('buildProjectTaskTemplateOptions(templatesData?.templates ?? [])');
@@ -23,9 +24,10 @@ describe('project task dialog form state boundary contract', () => {
     expect(createDialogForm).toContain('getProjectTaskCreateDialogDefaultValues()');
     expect(createDialogForm).toContain('getProjectTaskCreateMoreResetValues(values)');
     expect(createDialogForm).toContain('projectTaskCreateDialogFormSchema');
-    expect(editDialog).toContain("from './project-task-dialog-form-state'");
-    expect(editDialog).toContain('getProjectTaskEditDialogDefaultValues()');
-    expect(editDialog).toContain('getProjectTaskEditDialogResetValues(task)');
+    expect(editDialogForm).toContain("from './project-task-dialog-form-state'");
+    expect(editDialogForm).toContain('getProjectTaskEditDialogDefaultValues()');
+    expect(editDialogForm).toContain('getProjectTaskEditDialogResetValues(task)');
+    expect(editDialogForm).toContain('projectTaskEditDialogFormSchema');
     expect(dialogs).not.toContain("from './project-task-dialog-form-state'");
     expect(dialogFormOwners).not.toContain("z.enum(['pending'");
     expect(dialogFormOwners).not.toContain("z.enum(['urgent'");

@@ -22,10 +22,11 @@ describe('project task edit dialog boundary contract', () => {
     expect(dialogs).not.toContain('getProjectTaskEditDialogResetValues(task)');
 
     expect(editDialog).toContain('export function TaskEditDialog');
-    expect(editDialog).toContain('useUpdateTask()');
-    expect(editDialog).toContain('getProjectTaskEditDialogResetValues(task)');
-    expect(editDialog).toContain("formatProjectTaskMutationError(error, 'update')");
-    expect(editDialog).toContain('jobId: task.jobId');
+    expect(editDialog).toContain("from './project-task-edit-dialog-form'");
+    expect(editDialog).toContain('useProjectTaskEditDialogForm');
     expect(editDialog).toContain('ProjectTaskStatusField');
+    expect(editDialog).not.toContain('useUpdateTask()');
+    expect(editDialog).not.toContain('getProjectTaskEditDialogResetValues(task)');
+    expect(editDialog).not.toContain("formatProjectTaskMutationError(error, 'update')");
   });
 });
