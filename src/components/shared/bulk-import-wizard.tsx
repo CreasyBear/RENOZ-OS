@@ -49,6 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -801,13 +802,26 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
         // Skip mapping step if not showing it
         setCurrentStep(showFieldMapping ? 'mapping' : 'validate');
       } catch (err) {
-        console.error('Failed to parse file:', err);
+        logger.warn('Bulk import file parsing failed', {
+          component: 'BulkImportWizard',
+          entityNamePlural,
+          fileSize: selectedFile.size,
+          fileType: selectedFile.type || 'unknown',
+          error: err instanceof Error ? err.message : String(err),
+        });
         setError(err instanceof Error ? err.message : 'Failed to parse file');
       } finally {
         setIsProcessing(false);
       }
     },
-    [config.parseFile, maxRows, autoMapColumns, parseRowsWithMappings, showFieldMapping]
+    [
+      config.parseFile,
+      entityNamePlural,
+      maxRows,
+      autoMapColumns,
+      parseRowsWithMappings,
+      showFieldMapping,
+    ]
   );
 
   // Handle mapping change
@@ -844,6 +858,7 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
     setCurrentStep('importing');
     setIsProcessing(true);
     setImportProgress(0);
+    setError(null);
 
     const validRows = parsedRows.filter((r) => r.isValid);
 
@@ -863,13 +878,19 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
       setImportResult(result);
     } catch (err) {
       clearInterval(progressInterval);
-      console.error('Import failed:', err);
+      logger.warn('Bulk import operation failed', {
+        component: 'BulkImportWizard',
+        entityNamePlural,
+        rowCount: validRows.length,
+        importMode: showImportMode ? importMode : 'default',
+        error: err instanceof Error ? err.message : String(err),
+      });
       setError(err instanceof Error ? err.message : 'Import failed');
       setCurrentStep('validate');
     } finally {
       setIsProcessing(false);
     }
-  }, [parsedRows, onImport, showImportMode, importMode]);
+  }, [parsedRows, onImport, showImportMode, importMode, entityNamePlural]);
 
   // Check if can proceed to next step
   const canProceed = useCallback(() => {
@@ -939,6 +960,14 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
       </div>
 
       {/* Step Content */}
+      {error && currentStep !== 'upload' && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Import issue</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardContent className="pt-6">
           {currentStep === 'upload' && (
