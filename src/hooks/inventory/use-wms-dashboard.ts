@@ -25,7 +25,6 @@ import type {
   RecentMovement,
   WMSDashboardData,
 } from '@/lib/schemas/inventory';
-import { inventoryLogger } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -59,27 +58,13 @@ export type { CategoryStock, LocationStock, RecentMovement, WMSDashboardData };
 export function useWMSDashboard() {
   return useQuery({
     queryKey: queryKeys.inventory.wmsDashboard(),
-    queryFn: async () => {
-      inventoryLogger.debug('[useWMSDashboard] queryFn started');
-      try {
-        return await resolveReadResult(async () => {
-          const result = await getWMSDashboard({ data: {} });
-          inventoryLogger.debug('[useWMSDashboard] getWMSDashboard returned', {
-            status: result == null ? 'null/undefined' : 'ok',
-            totalValue: result?.totals?.totalValue,
-          });
-          return result;
-        }, {
-          message: 'WMS dashboard returned no data',
-          contractType: 'always-shaped',
-          fallbackMessage:
-            'Inventory dashboard data is temporarily unavailable. Please refresh and try again.',
-        });
-      } catch (err) {
-        inventoryLogger.error('[useWMSDashboard] queryFn error', err);
-        throw err;
-      }
-    },
+    queryFn: () =>
+      resolveReadResult(() => getWMSDashboard({ data: {} }), {
+        message: 'WMS dashboard returned no data',
+        contractType: 'always-shaped',
+        fallbackMessage:
+          'Inventory dashboard data is temporarily unavailable. Please refresh and try again.',
+      }),
     staleTime: 60 * 1000, // 1 minute
   });
 }
