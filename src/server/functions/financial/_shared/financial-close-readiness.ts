@@ -69,6 +69,14 @@ export async function readFinancialCloseReadiness(
           WHERE sis.organization_id = ${ctx.organizationId}
             AND si.organization_id = ${ctx.organizationId}
             AND si.status NOT IN ('shipped', 'returned')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM serialized_item_events sie
+              WHERE sie.organization_id = sis.organization_id
+                AND sie.serialized_item_id = sis.serialized_item_id
+                AND sie.event_type = 'rma_received'
+                AND sie.occurred_at >= COALESCE(sis.shipped_at, sis.created_at)
+            )
         )
         SELECT
           stock_without_layers.stock_without_active_layers,

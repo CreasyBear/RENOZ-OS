@@ -63,6 +63,14 @@ shipment_mismatch AS (
   FROM shipment_item_serials sis
   JOIN serialized_items si ON si.id = sis.serialized_item_id
   WHERE si.status NOT IN ('shipped', 'returned')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM serialized_item_events sie
+      WHERE sie.organization_id = sis.organization_id
+        AND sie.serialized_item_id = sis.serialized_item_id
+        AND sie.event_type = 'rma_received'
+        AND sie.occurred_at >= COALESCE(sis.shipped_at, sis.created_at)
+    )
 )
 SELECT
   stock_without_layers.stock_without_active_layers,
@@ -103,4 +111,3 @@ try {
 } finally {
   await db.end({ timeout: 5 });
 }
-

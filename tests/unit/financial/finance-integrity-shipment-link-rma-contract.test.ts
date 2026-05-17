@@ -1,0 +1,45 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8');
+}
+
+const financeIntegrityFiles = [
+  'scripts/run-finance-integrity-gates.mjs',
+  'src/server/functions/financial/_shared/financial-close-readiness.ts',
+  'src/server/functions/inventory/valuation.ts',
+];
+
+describe('finance integrity shipment-link RMA contract', () => {
+  it('does not block close readiness for historical shipment links superseded by RMA receipt', () => {
+    for (const file of financeIntegrityFiles) {
+      const source = read(file);
+
+      expect(source, `${file} should keep the shipment-link hard gate`).toContain(
+        'shipment_mismatch'
+      );
+      expect(source, `${file} should keep non-shipped current status detection`).toContain(
+        "si.status NOT IN ('shipped', 'returned')"
+      );
+      expect(source, `${file} should ignore shipment links after RMA receipt`).toContain(
+        'NOT EXISTS ('
+      );
+      expect(source, `${file} should use canonical serialized events`).toContain(
+        'FROM serialized_item_events sie'
+      );
+      expect(source, `${file} should require same serial lineage`).toContain(
+        'sie.serialized_item_id = sis.serialized_item_id'
+      );
+      expect(source, `${file} should only exempt RMA receipt lineage`).toContain(
+        "sie.event_type = 'rma_received'"
+      );
+      expect(source, `${file} should compare receipt timing to shipment timing`).toContain(
+        'sie.occurred_at >= COALESCE(sis.shipped_at, sis.created_at)'
+      );
+    }
+  });
+});
