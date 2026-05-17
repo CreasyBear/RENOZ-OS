@@ -30,17 +30,13 @@ import {
   Package,
   MapPin,
   AlertTriangle,
-  TrendingUp,
-  TrendingDown,
   Clock,
-  BarChart3,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { toast, useOrgFormat } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
@@ -54,7 +50,7 @@ import {
   type CategoryStock,
   type LocationStock,
 } from '@/hooks/inventory';
-import type { TriggeredAlert, DashboardTopMovingItem } from '@/lib/schemas/inventory';
+import type { TriggeredAlert } from '@/lib/schemas/inventory';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
 import {
   getInventoryDashboardReadErrorMessage,
@@ -72,6 +68,8 @@ import {
   InventoryDashboardMovementsSkeleton,
   InventoryDashboardMovementsTimeline,
 } from './inventory-dashboard-movements-timeline';
+import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
+import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
 
 // ============================================================================
 // TYPES
@@ -84,22 +82,6 @@ interface TrackedItemStatus {
   quantity: number;
   reorderPoint: number;
   status: 'healthy' | 'low' | 'out';
-}
-
-function DashboardReadWarning({
-  title,
-  message,
-}: {
-  title: string;
-  message: string;
-}) {
-  return (
-    <Alert className="border-amber-500/30 bg-amber-500/5 text-foreground">
-      <AlertTriangle className="h-4 w-4 text-amber-600" />
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>{message}</AlertDescription>
-    </Alert>
-  );
 }
 
 // ============================================================================
@@ -192,16 +174,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     };
   });
 
-  // Top movers from dashboard data
-  const topMovers = (dashboardData?.topMoving ?? []).map((m: DashboardTopMovingItem) => ({
-    productId: m.productId,
-    productName: m.productName ?? 'Unknown',
-    sku: m.productSku ?? m.sku ?? '',
-    movementCount: m.movementCount ?? 0,
-    totalQuantity: m.totalQuantity ?? 0,
-    trend: (m.trend ?? 'stable') as 'up' | 'down' | 'stable',
-  }));
-
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
   // ─────────────────────────────────────────────────────────────────────────
@@ -268,13 +240,13 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   return (
     <div className="space-y-6">
       {showWmsDegraded ? (
-        <DashboardReadWarning
+        <InventoryDashboardReadWarning
           title="Showing the most recent inventory dashboard snapshot while refresh is unavailable."
           message={wmsErrorMessage}
         />
       ) : null}
       {showDashboardDegraded ? (
-        <DashboardReadWarning
+        <InventoryDashboardReadWarning
           title="Showing the most recent dashboard metrics while refresh is unavailable."
           message={dashboardErrorMessage}
         />
@@ -324,7 +296,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             ) : (
               <div className="space-y-4">
                 {showWmsDegraded ? (
-                  <DashboardReadWarning
+                  <InventoryDashboardReadWarning
                     title="Category breakdown may be stale."
                     message={wmsErrorMessage}
                   />
@@ -346,7 +318,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             ) : (
               <div className="space-y-4">
                 {showWmsDegraded ? (
-                  <DashboardReadWarning
+                  <InventoryDashboardReadWarning
                     title="Location breakdown may be stale."
                     message={wmsErrorMessage}
                   />
@@ -375,14 +347,14 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             {isLoadingTracked ? (
               <TrackedItemsSkeleton />
             ) : trackedProductsUnavailable && trackedProductsSelection.length > 0 ? (
-              <DashboardReadWarning
+              <InventoryDashboardReadWarning
                 title="Tracked items are temporarily unavailable."
                 message={trackedProductsUnavailable}
               />
             ) : (
               <div className="space-y-4">
                 {trackedProductsWarning ? (
-                  <DashboardReadWarning
+                  <InventoryDashboardReadWarning
                     title="Tracked items may be stale."
                     message={trackedProductsWarning}
                   />
@@ -423,14 +395,14 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
             {isWmsLoading ? (
               <InventoryDashboardMovementsSkeleton />
             ) : showWmsUnavailable ? (
-              <DashboardReadWarning
+              <InventoryDashboardReadWarning
                 title="Recent movements are temporarily unavailable."
                 message={wmsErrorMessage}
               />
             ) : (
               <div className="space-y-4">
                 {showWmsDegraded ? (
-                  <DashboardReadWarning
+                  <InventoryDashboardReadWarning
                     title="Recent movements may be stale."
                     message={wmsErrorMessage}
                   />
@@ -442,35 +414,13 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
         </Card>
 
         {/* Top Movers */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Top Moving Products
-            </CardTitle>
-            <CardDescription>By movement volume this period</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isDashboardLoading ? (
-              <TopMoversSkeleton />
-            ) : showDashboardUnavailable ? (
-              <DashboardReadWarning
-                title="Top movers are temporarily unavailable."
-                message={dashboardErrorMessage}
-              />
-            ) : (
-              <div className="space-y-4">
-                {showDashboardDegraded ? (
-                  <DashboardReadWarning
-                    title="Top movers may be stale."
-                    message={dashboardErrorMessage}
-                  />
-                ) : null}
-                <TopMoversList movers={topMovers} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <InventoryDashboardTopMoversPanel
+          topMoving={dashboardData?.topMoving ?? []}
+          isLoading={isDashboardLoading}
+          showUnavailable={showDashboardUnavailable}
+          showDegraded={showDashboardDegraded}
+          readErrorMessage={dashboardErrorMessage}
+        />
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────
@@ -662,57 +612,6 @@ function TrackedItemsList({
 }
 
 // ============================================================================
-// TOP MOVERS LIST
-// ============================================================================
-
-function TopMoversList({
-  movers,
-}: {
-  movers: Array<{
-    productId: string;
-    productName: string;
-    sku: string;
-    totalQuantity: number;
-    trend: 'up' | 'down' | 'stable';
-  }>;
-}) {
-  if (movers.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No movement data yet</p>
-      </div>
-    );
-  }
-
-  const maxQuantity = Math.max(...movers.map((m) => m.totalQuantity));
-
-  return (
-    <div className="space-y-3">
-      {movers.slice(0, 5).map((mover) => {
-        const percentage = (mover.totalQuantity / maxQuantity) * 100;
-        return (
-          <div key={mover.productId} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{mover.productName}</p>
-                <p className="text-xs text-muted-foreground">{mover.sku}</p>
-              </div>
-              <div className="flex items-center gap-2 ml-2">
-                <span className="text-sm font-medium tabular-nums">{mover.totalQuantity}</span>
-                {mover.trend === 'up' && <TrendingUp className="h-3.5 w-3.5 text-green-600" />}
-                {mover.trend === 'down' && <TrendingDown className="h-3.5 w-3.5 text-red-600" />}
-              </div>
-            </div>
-            <Progress value={percentage} className="h-1.5" />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
 // SKELETONS
 // ============================================================================
 
@@ -761,25 +660,6 @@ function TrackedItemsSkeleton() {
             <Skeleton className="h-4 w-6" />
             <Skeleton className="h-5 w-10" />
           </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TopMoversSkeleton() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="space-y-1.5">
-          <div className="flex justify-between">
-            <div>
-              <Skeleton className="h-4 w-28 mb-1" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-            <Skeleton className="h-4 w-8" />
-          </div>
-          <Skeleton className="h-1.5 w-full" />
         </div>
       ))}
     </div>
