@@ -33,7 +33,6 @@ import {
   Package,
   MapPin,
   AlertTriangle,
-  DollarSign,
   TrendingUp,
   TrendingDown,
   Clock,
@@ -63,8 +62,6 @@ import {
   type RecentMovement,
 } from '@/hooks/inventory';
 import type { TriggeredAlert, DashboardTopMovingItem } from '@/lib/schemas/inventory';
-import { MetricCard } from '@/components/shared/metric-card';
-import { FormatAmount } from '@/components/shared/format';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
 import {
   getInventoryDashboardReadErrorMessage,
@@ -73,6 +70,7 @@ import {
 import { STOCK_STATUS_CONFIG } from './inventory-status-config';
 import { StatusCell } from '@/components/shared/data-table';
 import { InventoryDashboardCommandBar } from './inventory-dashboard-command-bar';
+import { InventoryDashboardMetrics } from './inventory-dashboard-metrics';
 
 // ============================================================================
 // TYPES
@@ -298,12 +296,7 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   const totals = wmsData?.totals ?? { totalValue: 0, totalUnits: 0, totalSkus: 0 };
   const metrics = dashboardData?.metrics ?? null;
-  const lowStockCount = metrics?.lowStockCount;
-  const outOfStockCount = metrics?.outOfStockCount;
   const locationsCount = metrics?.locationsCount ?? wmsData?.stockByLocation?.length ?? 0;
-  const alertsComparisonIsComparable =
-    wmsData?.stockSemantics?.currentAlerts === wmsData?.stockSemantics?.previousPeriodComparison;
-  const alertsChangeCanRenderAsTrend = wmsData?.comparisonUnits?.alertsChange === 'percentage';
 
   return (
     <div className="space-y-6">
@@ -328,60 +321,16 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
       {/* ─────────────────────────────────────────────────────────────────────
           Section 2: Key Metrics
       ───────────────────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Total Value"
-          value={<FormatAmount amount={totals.totalValue} />}
-          subtitle={`${totals.totalSkus.toLocaleString()} SKUs`}
-          icon={DollarSign}
-          isLoading={isLoading}
-          delta={comparison?.totalValueChange !== undefined ? Math.abs(comparison.totalValueChange) : undefined}
-          positive={comparison?.totalValueChange !== undefined ? comparison.totalValueChange > 0 : undefined}
-        />
-        <MetricCard
-          title="On-Hand Units"
-          value={totals.totalUnits.toLocaleString()}
-          subtitle="Physical stock"
-          icon={Package}
-          isLoading={isLoading}
-          delta={comparison?.totalUnitsChange !== undefined ? Math.abs(comparison.totalUnitsChange) : undefined}
-          positive={comparison?.totalUnitsChange !== undefined ? comparison.totalUnitsChange > 0 : undefined}
-        />
-        <MetricCard
-          title="Allocatable Alerts"
-          value={showDashboardUnavailable ? '--' : (lowStockCount ?? 0) + (outOfStockCount ?? 0)}
-          subtitle={
-            showDashboardUnavailable
-              ? 'Alert metrics unavailable'
-              : `${lowStockCount ?? 0} low, ${outOfStockCount ?? 0} out available`
-          }
-          icon={AlertTriangle}
-          isLoading={isLoading}
-          alert={!showDashboardUnavailable && ((lowStockCount ?? 0) + (outOfStockCount ?? 0) > 0)}
-          delta={
-            alertsChangeCanRenderAsTrend &&
-            alertsComparisonIsComparable &&
-            comparison?.alertsChange !== undefined &&
-            comparison.alertsChange !== 0
-              ? Math.abs(comparison.alertsChange)
-              : undefined
-          }
-          positive={
-            alertsChangeCanRenderAsTrend &&
-            alertsComparisonIsComparable &&
-            comparison?.alertsChange !== undefined
-              ? comparison.alertsChange < 0 // Inverse: fewer alerts is better
-              : undefined
-          }
-        />
-        <MetricCard
-          title="Locations"
-          value={locationsCount}
-          subtitle="Active warehouses"
-          icon={MapPin}
-          isLoading={isLoading}
-        />
-      </div>
+      <InventoryDashboardMetrics
+        totals={totals}
+        comparison={comparison}
+        metrics={metrics}
+        locationsCount={locationsCount}
+        isLoading={isLoading}
+        showDashboardUnavailable={showDashboardUnavailable}
+        stockSemantics={wmsData?.stockSemantics}
+        comparisonUnits={wmsData?.comparisonUnits}
+      />
 
       {/* ─────────────────────────────────────────────────────────────────────
           Section 3: Active Alerts (if any)
