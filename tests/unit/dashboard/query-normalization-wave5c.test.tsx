@@ -17,6 +17,15 @@ const mockGetDashboardLayout = vi.fn();
 const mockGetUserLayout = vi.fn();
 const mockGetAvailableWidgets = vi.fn();
 const mockGetRecentOutstandingInvoices = vi.fn();
+const mockNavigate = vi.fn();
+
+vi.mock('@tanstack/react-router', async () => {
+  const actual = await vi.importActual<object>('@tanstack/react-router');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock('@/server/functions/products/product-inventory', () => ({
   getProductInventory: (...args: unknown[]) => mockGetProductInventory(...args),
@@ -65,6 +74,7 @@ function createWrapper(queryClient: QueryClient) {
 describe('dashboard/product operational query normalization wave 5c', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockReset();
     const storage = new Map<string, string>();
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,

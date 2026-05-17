@@ -4,6 +4,7 @@ import { act, render, renderHook, screen, waitFor } from '@testing-library/react
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '@/lib/query-keys';
 
+const mockUseServerFn = vi.fn((fn: unknown) => fn);
 const mockListProducts = vi.fn();
 const mockGetProduct = vi.fn();
 const mockQuickSearchProducts = vi.fn();
@@ -27,6 +28,14 @@ const mockCalculateBundlePrice = vi.fn();
 const mockValidateBundle = vi.fn();
 const mockExpandBundle = vi.fn();
 const mockFindBundlesContaining = vi.fn();
+
+vi.mock('@tanstack/react-start', async () => {
+  const actual = await vi.importActual<object>('@tanstack/react-start');
+  return {
+    ...actual,
+    useServerFn: (fn: unknown) => mockUseServerFn(fn),
+  };
+});
 
 vi.mock('@/server/functions/products', () => ({
   listProducts: (...args: unknown[]) => mockListProducts(...args),
