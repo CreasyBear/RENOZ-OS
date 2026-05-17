@@ -37,8 +37,6 @@ import {
   TrendingDown,
   Clock,
   BarChart3,
-  X,
-  ChevronRight,
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -71,6 +69,10 @@ import { STOCK_STATUS_CONFIG } from './inventory-status-config';
 import { StatusCell } from '@/components/shared/data-table';
 import { InventoryDashboardCommandBar } from './inventory-dashboard-command-bar';
 import { InventoryDashboardMetrics } from './inventory-dashboard-metrics';
+import {
+  InventoryDashboardAlertsSection,
+  type DashboardAlert,
+} from './inventory-dashboard-alerts-section';
 
 // ============================================================================
 // TYPES
@@ -83,19 +85,6 @@ interface TrackedItemStatus {
   quantity: number;
   reorderPoint: number;
   status: 'healthy' | 'low' | 'out';
-}
-
-interface DashboardAlert {
-  id: string;
-  alertType: string;
-  severity: 'critical' | 'warning' | 'info';
-  productName?: string;
-  locationName?: string;
-  message: string;
-  value: number;
-  threshold: number;
-  triggeredAt: Date;
-  isFallback?: boolean;
 }
 
 function DashboardReadWarning({
@@ -336,7 +325,10 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           Section 3: Active Alerts (if any)
       ───────────────────────────────────────────────────────────────────── */}
       {!isAlertsLoading && alerts.length > 0 && (
-        <AlertsSection alerts={alerts} onAcknowledge={handleAcknowledgeAlert} />
+        <InventoryDashboardAlertsSection
+          alerts={alerts}
+          onAcknowledge={handleAcknowledgeAlert}
+        />
       )}
 
       {/* ─────────────────────────────────────────────────────────────────────
@@ -535,80 +527,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     </div>
   );
 });
-
-// ============================================================================
-// ALERTS SECTION
-// ============================================================================
-
-function AlertsSection({
-  alerts,
-  onAcknowledge,
-}: {
-  alerts: DashboardAlert[];
-  onAcknowledge: (id: string) => void;
-}) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-
-  const visibleAlerts = alerts.filter((a) => !dismissed.has(a.id)).slice(0, 3);
-
-  if (visibleAlerts.length === 0) return null;
-
-  const severityStyles: Record<string, string> = {
-    critical: 'border-destructive/50 bg-destructive/10 text-destructive',
-    warning: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-    info: 'border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  };
-
-  const alertTypeLabels: Record<string, string> = {
-    low_stock: 'Low Stock',
-    out_of_stock: 'Out of Stock',
-    overstock: 'Overstock',
-    expiry: 'Expiring Soon',
-    slow_moving: 'Slow Moving',
-  };
-
-  return (
-    <div className="space-y-2">
-      {visibleAlerts.map((alert) => (
-        <Alert key={alert.id} className={cn('relative pr-10', severityStyles[alert.severity])}>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle className="font-medium">
-            {alertTypeLabels[alert.alertType] ?? alert.alertType}
-            {alert.productName && `: ${alert.productName}`}
-          </AlertTitle>
-          <AlertDescription className="text-sm mt-0.5">{alert.message}</AlertDescription>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 h-6 w-6 opacity-50 hover:opacity-100"
-            aria-label={
-              alert.isFallback
-                ? `Dismiss read-only alert: ${alert.message}`
-                : `Acknowledge alert: ${alert.message}`
-            }
-            onClick={() => {
-              setDismissed((prev) => new Set([...prev, alert.id]));
-              if (!alert.isFallback) {
-                onAcknowledge(alert.id);
-              }
-            }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </Alert>
-      ))}
-      {alerts.length > 3 && (
-        <Link
-          to="/inventory/alerts"
-          className="block text-sm text-muted-foreground text-center hover:text-foreground"
-        >
-          View all {alerts.length} alerts
-          <ChevronRight className="inline h-3 w-3 ml-1" />
-        </Link>
-      )}
-    </div>
-  );
-}
 
 // ============================================================================
 // CATEGORY LIST

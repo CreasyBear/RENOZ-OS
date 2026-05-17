@@ -32,15 +32,18 @@ describe('WMS stock semantics contract', () => {
 
   it('does not show alert trend deltas unless alert semantics and units are comparable', () => {
     const dashboard = read('src/components/domain/inventory/unified-inventory-dashboard.tsx');
+    const metrics = read('src/components/domain/inventory/inventory-dashboard-metrics.tsx');
 
-    expect(dashboard).toContain('const alertsComparisonIsComparable');
-    expect(dashboard).toContain('const alertsChangeCanRenderAsTrend');
-    expect(dashboard).toContain("wmsData?.comparisonUnits?.alertsChange === 'percentage'");
-    expect(dashboard).toContain(
-      'wmsData?.stockSemantics?.currentAlerts === wmsData?.stockSemantics?.previousPeriodComparison'
+    expect(dashboard).toContain('stockSemantics={wmsData?.stockSemantics}');
+    expect(dashboard).toContain('comparisonUnits={wmsData?.comparisonUnits}');
+    expect(metrics).toContain('const alertsComparisonIsComparable');
+    expect(metrics).toContain('const alertsChangeCanRenderAsTrend');
+    expect(metrics).toContain("comparisonUnits?.alertsChange === 'percentage'");
+    expect(metrics).toContain(
+      'stockSemantics?.currentAlerts === stockSemantics?.previousPeriodComparison'
     );
-    expect(dashboard).toContain('alertsComparisonIsComparable &&');
-    expect(dashboard).toContain('comparison.alertsChange !== 0');
+    expect(metrics).toContain('alertsComparisonIsComparable &&');
+    expect(metrics).toContain('comparison.alertsChange !== 0');
   });
 
   it('keeps valuation/reporting stock as physical on-hand finance inventory', () => {
