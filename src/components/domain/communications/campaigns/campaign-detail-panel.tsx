@@ -22,9 +22,6 @@ import {
 } from "@/hooks/communications/use-campaigns";
 import { format, formatDistanceToNow } from "date-fns";
 import {
-  Mail,
-  Eye,
-  MousePointerClick,
   AlertTriangle,
   ArrowLeft,
   Calendar,
@@ -65,7 +62,6 @@ import { createPendingDialogInteractionGuards } from "@/components/ui/dialog-pen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { MetricCard } from "@/components/shared";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
 import { StatusCell } from "@/components/shared/data-table/cells/status-cell";
@@ -81,9 +77,9 @@ import {
   type CampaignDetailActionMutations,
 } from "./campaign-detail-actions";
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
+import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { getCampaignStatusVariant } from "./campaign-status-config";
 import { CAMPAIGN_RECIPIENT_STATUS_CONFIG } from "./campaign-recipient-status-config";
-import { calculatePercentage } from "@/lib/communications/campaign-utils";
 import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 import {
   COMMUNICATION_READ_MESSAGES,
@@ -99,17 +95,6 @@ import type {
   CampaignRecipient,
   CampaignDetailPanelProps,
 } from "@/lib/schemas/communications";
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const CAMPAIGN_STAT_STYLES = {
-  default: { iconClassName: "text-muted-foreground" },
-  success: { iconClassName: "text-green-600 dark:text-green-400" },
-  warning: { iconClassName: "text-amber-600 dark:text-amber-400" },
-  error: { iconClassName: "text-red-600 dark:text-red-400" },
-} as const;
 
 function showCampaignDetailActionFeedback(feedback: CampaignDetailActionFeedback[]) {
   for (const item of feedback) {
@@ -192,26 +177,6 @@ export const CampaignDetailSkeleton = memo(function CampaignDetailSkeleton() {
     </div>
   );
 });
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Format campaign stat value with percentage
- * Uses utility function for consistent calculation
- */
-function formatCampaignStatValue(value: number, total?: number): React.ReactNode {
-  const percentage = total !== undefined ? calculatePercentage(value, total) : 0;
-  return (
-    <span className="flex items-baseline gap-2">
-      <span>{value.toLocaleString()}</span>
-      {total !== undefined && total > 0 && (
-        <span className="text-sm font-normal text-muted-foreground">({percentage}%)</span>
-      )}
-    </span>
-  );
-}
 
 // ============================================================================
 // RECIPIENT STATUS BADGE (memoized)
@@ -433,23 +398,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     [dismiss]
   );
 
-  // Memoized metric values
-  const metrics = useMemo(() => {
-    if (!campaign) return null;
-    return {
-      recipients: campaign.recipientCount.toLocaleString(),
-      sent: formatCampaignStatValue(campaign.sentCount, campaign.recipientCount),
-      opened: formatCampaignStatValue(campaign.openCount, campaign.sentCount),
-      clicked: formatCampaignStatValue(campaign.clickCount, campaign.sentCount),
-      openedIconClass: campaign.openCount > 0 
-        ? CAMPAIGN_STAT_STYLES.success.iconClassName 
-        : CAMPAIGN_STAT_STYLES.default.iconClassName,
-      clickedIconClass: campaign.clickCount > 0 
-        ? CAMPAIGN_STAT_STYLES.success.iconClassName 
-        : CAMPAIGN_STAT_STYLES.default.iconClassName,
-    };
-  }, [campaign]);
-
   // Loading state
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;
@@ -604,59 +552,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       )}
 
       {/* Zone 4: Key Metrics */}
-      {metrics && (
-        <div
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          aria-label="Campaign statistics"
-        >
-          <MetricCard
-            title="Recipients"
-            value={metrics.recipients}
-            icon={Users}
-            iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
-          />
-          <MetricCard
-            title="Sent"
-            value={metrics.sent}
-            icon={Mail}
-            iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
-          />
-          <MetricCard
-            title="Opened"
-            value={metrics.opened}
-            icon={Eye}
-            iconClassName={metrics.openedIconClass}
-          />
-          <MetricCard
-            title="Clicked"
-            value={metrics.clicked}
-            icon={MousePointerClick}
-            iconClassName={metrics.clickedIconClass}
-          />
-        </div>
-      )}
-
-      {/* Error Stats (if any) */}
-      {campaign.bounceCount > 0 || campaign.failedCount > 0 ? (
-        <div className="grid grid-cols-2 gap-4">
-          {campaign.bounceCount > 0 && (
-            <MetricCard
-              title="Bounced"
-              value={formatCampaignStatValue(campaign.bounceCount, campaign.sentCount)}
-              icon={XCircle}
-              iconClassName={CAMPAIGN_STAT_STYLES.warning.iconClassName}
-            />
-          )}
-          {campaign.failedCount > 0 && (
-            <MetricCard
-              title="Failed"
-              value={formatCampaignStatValue(campaign.failedCount, campaign.recipientCount)}
-              icon={AlertTriangle}
-              iconClassName={CAMPAIGN_STAT_STYLES.error.iconClassName}
-            />
-          )}
-        </div>
-      ) : null}
+      <CampaignDetailMetricsSection campaign={campaign} />
 
       {/* Terminal State: Action Suggestions (when campaign is completed) */}
       {campaign.status === "sent" && (
