@@ -9,6 +9,7 @@ Scripts in this directory and their current status. Last updated: 2026-02-22.
 | `check-pending-dialog-guards.mjs` | Ensures dialogs with async submit have Escape/outside-click guards | Refined to exclude AlertDialog-only files |
 | `check-read-path-query-guards.mjs` | Prevents new raw null-sentinel read-hook patterns in `src/hooks/**` | Inspects `useQuery`/read `queryFn` bodies for multiline null-sentinel throws and legacy `normalizeQueryError` usage; an empty baseline only means the currently-scanned read-hook set is clean |
 | `check-route-casts.mjs` | Route cast guard (lint:reliability) | |
+| `check-serialized-read-auto-upsert.mjs` | Focused serialized read policy guard | Run through `reliability:serialized-read-policy` only for slices that deliberately touch serial-lineage or inventory identity contracts |
 | `run-document-schema-gates.mjs` | Verifies document-lineage columns exist before deploy | Manual or release-only; requires `DATABASE_URL` |
 | `run-route-intent-smoke.mjs` | Route-intent unit tests + auth redirect smoke | Requires a local loopback port for the auth smoke helper |
 | `download-pdf-fonts.mjs` | Download Inter fonts for react-pdf | |
@@ -34,6 +35,7 @@ Release-gate artifacts under `artifacts/release-gates/` are generated local/runt
 - `predeploy` → lint + reliability lint + typecheck + unit tests + build
 - `release:verify` → release-hardening tests + release gates
 - `lint:reliability` → check-route-casts + check-pending-dialog-guards + check-read-path-query-guards
+- `reliability:serialized-read-policy` → check-serialized-read-auto-upsert
 - `reliability:release-gates` → run-release-gates.mjs
 - `reliability:document-gates` → run-document-schema-gates.mjs
 - `reliability:finance-gates` → run-finance-integrity-gates.mjs

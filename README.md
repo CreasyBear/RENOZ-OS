@@ -59,6 +59,10 @@ bun run test:unit
 bun run build
 ```
 
+Run `bun run reliability:serialized-read-policy` only for slices that
+deliberately touch serialized lineage, inventory identity, serialized movement,
+warranty/RMA serial continuity, or related repair scripts.
+
 Canonical PR/merge gate:
 
 ```bash
