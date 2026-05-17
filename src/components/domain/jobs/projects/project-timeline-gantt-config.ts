@@ -1,6 +1,10 @@
 import { addDays, format } from 'date-fns';
 
-export type TimelineStatus = 'todo' | 'in_progress' | 'completed' | 'blocked';
+import type { ProjectTimelineTask } from '@/lib/schemas/jobs/project-detail';
+
+export type TimelineTask = ProjectTimelineTask;
+
+export type TimelineStatus = TimelineTask['status'];
 
 export type ViewMode = 'day' | 'week' | 'month' | 'quarter';
 
