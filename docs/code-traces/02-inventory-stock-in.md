@@ -133,7 +133,7 @@ Bulk receiving intentionally preserves the existing partial-failure contract: in
 | `bulkReceiveGoods` | Delegates prepared POs to `receiveGoods`; row failures remain outside the per-PO transaction | Per successful PO via delegated transaction |
 | `receiveStock` / receive `recordMovement` | Delegates to `receiveInventory` | Delegated transaction |
 
-Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/hooks/inventory/use-inventory.ts); PO list invalidation typically via callers of `useReceiveGoods` (trace separately if tightening).
+Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/hooks/inventory/use-receive-inventory.ts); PO list invalidation typically via callers of `useReceiveGoods` (trace separately if tightening).
 
 ---
 
@@ -154,7 +154,7 @@ Side effects outside row writes: toasts from [`useReceiveInventory`](../../src/h
 
 ## 7. Cache / read-after-write
 
-[`useReceiveInventory`](../../src/hooks/inventory/use-inventory.ts): **optimistic** update of `queryKeys.inventory.lists()` and `details()` on mutate; **rollback** on error; **invalidate** lists, details, `lowStock()`, WMS, valuation, finance-integrity, serialized list, available serials, product detail/inventory/stats/alerts/movements, and movement prefixes according to the manual receive cache contract.
+[`useReceiveInventory`](../../src/hooks/inventory/use-receive-inventory.ts): **optimistic** update of `queryKeys.inventory.lists()` and `details()` on mutate; **rollback** on error; **invalidate** lists, details, `lowStock()`, WMS, valuation, finance-integrity, serialized list, available serials, product detail/inventory/stats/alerts/movements, and movement prefixes according to the manual receive cache contract.
 
 **Stale window:** Brief inconsistency if server rejects after optimistic patch until `onError` restores prior cache.
 

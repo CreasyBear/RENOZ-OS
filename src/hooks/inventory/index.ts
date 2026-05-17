@@ -15,12 +15,14 @@ export {
   useMovementsDashboard,
   useAdjustInventory,
   useTransferInventory,
-  useReceiveInventory,
   useBulkUpdateInventoryStatus,
   useInventoryDashboard,
   useLocationUtilization,
   type BulkUpdateInventoryStatusInput,
 } from './use-inventory';
+
+// Manual receive mutation/cache contract
+export { useReceiveInventory } from './use-receive-inventory';
 
 // Serial number management
 export {

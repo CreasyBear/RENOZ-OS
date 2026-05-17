@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
@@ -73,6 +75,12 @@ function inventoryList(items: Array<Record<string, unknown>>) {
   }
 }
 
+const root = process.cwd()
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8')
+}
+
 describe('useReceiveInventory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -87,7 +95,7 @@ describe('useReceiveInventory', () => {
 
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
 
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
@@ -175,7 +183,7 @@ describe('useReceiveInventory', () => {
 
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
 
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
@@ -234,7 +242,7 @@ describe('useReceiveInventory', () => {
       ])
     )
 
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -294,7 +302,7 @@ describe('useReceiveInventory', () => {
       ])
     )
 
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -353,7 +361,7 @@ describe('useReceiveInventory', () => {
       ])
     )
 
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -388,7 +396,7 @@ describe('useReceiveInventory', () => {
     mockReceiveInventory.mockRejectedValue(receiveError)
 
     const queryClient = new QueryClient()
-    const { useReceiveInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useReceiveInventory } = await import('@/hooks/inventory/use-receive-inventory')
 
     const { result } = renderHook(() => useReceiveInventory(), {
       wrapper: createWrapper(queryClient),
@@ -409,5 +417,21 @@ describe('useReceiveInventory', () => {
     expect(mockToastError).toHaveBeenCalledWith(
       'Cost layers are incomplete for this item. Reconcile layers and retry.'
     )
+  })
+
+  it('keeps manual receive mutation orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = read('src/hooks/inventory/use-inventory.ts')
+    const receiveHook = read('src/hooks/inventory/use-receive-inventory.ts')
+    const inventoryIndex = read('src/hooks/inventory/index.ts')
+    const stockInTrace = read('docs/code-traces/02-inventory-stock-in.md')
+
+    expect(inventoryHook).toContain("export { useReceiveInventory } from './use-receive-inventory'")
+    expect(inventoryHook).not.toContain('receiveInventory({ data: params })')
+    expect(inventoryHook).not.toContain('matchesReceiveInventoryScope(')
+    expect(receiveHook).toContain('receiveInventory({ data: params })')
+    expect(receiveHook).toContain('matchesReceiveInventoryScope(')
+    expect(receiveHook).toContain('invalidateInventoryStockMutationQueries(queryClient')
+    expect(inventoryIndex).toContain("export { useReceiveInventory } from './use-receive-inventory'")
+    expect(stockInTrace).toContain('src/hooks/inventory/use-receive-inventory.ts')
   })
 })

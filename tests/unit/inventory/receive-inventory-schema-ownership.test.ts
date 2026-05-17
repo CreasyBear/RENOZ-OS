@@ -17,6 +17,7 @@ describe('receive inventory schema ownership', () => {
     const receivingSchema = read('src/lib/schemas/inventory/receiving.ts');
     const receivingServer = read('src/server/functions/inventory/receiving.ts');
     const inventoryHook = read('src/hooks/inventory/use-inventory.ts');
+    const receiveHook = read('src/hooks/inventory/use-receive-inventory.ts');
     const stockInTrace = read('docs/code-traces/02-inventory-stock-in.md');
 
     expect(receivingSchema).toContain('export const receiveInventorySchema');
@@ -24,9 +25,13 @@ describe('receive inventory schema ownership', () => {
     expect(receivingServer).toContain('receiveInventorySchema');
     expect(receivingServer).not.toContain('const receiveInventorySchema');
     expect(receivingServer).not.toContain("from 'zod'");
-    expect(inventoryHook).toContain('ReceiveInventoryInput');
+    expect(inventoryHook).toContain("export { useReceiveInventory } from './use-receive-inventory'");
+    expect(receiveHook).toContain('ReceiveInventoryInput');
+    expect(receiveHook).toContain('receiveInventory({ data: params })');
     expect(inventoryHook).not.toContain('interface ReceiveInventoryInput');
+    expect(receiveHook).not.toContain('interface ReceiveInventoryInput');
     expect(stockInTrace).toContain('src/lib/schemas/inventory/receiving.ts');
+    expect(stockInTrace).toContain('src/hooks/inventory/use-receive-inventory.ts');
   });
 
   it('preserves receive inventory validation behavior', () => {

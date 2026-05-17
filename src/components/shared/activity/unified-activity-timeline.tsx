@@ -214,6 +214,15 @@ function formatEntityLabel(entityType: string): string {
   return entityType.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatLocalDateKey(date: string | Date): string {
+  return format(new Date(date), 'yyyy-MM-dd');
+}
+
+function dateFromLocalDateKey(dateKey: string): Date {
+  const [year = '0', month = '1', day = '1'] = dateKey.split('-');
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
 // ============================================================================
 // ACTIVITY ITEM COMPONENT
 // ============================================================================
@@ -841,7 +850,7 @@ export function UnifiedActivityTimeline({
 
     const groups: Record<string, TimelineActivityEntry[]> = {};
     for (const entry of filteredActivities) {
-      const date = new Date(entry.activity.createdAt).toISOString().split('T')[0];
+      const date = formatLocalDateKey(entry.activity.createdAt);
       if (!groups[date]) groups[date] = [];
       groups[date].push(entry);
     }
@@ -892,7 +901,7 @@ export function UnifiedActivityTimeline({
         items.push({
           type: 'date-header',
           date,
-          label: getDateLabel(new Date(date)),
+          label: getDateLabel(dateFromLocalDateKey(date)),
           count: dateGroups[date].length,
         });
         for (const entry of dateGroups[date]) {
