@@ -10,6 +10,14 @@ export default defineConfig({
     testTimeout: 10000, // 10 second timeout per test
     hookTimeout: 10000, // 10 second timeout for hooks
     pool: 'forks', // Use forks for better isolation
+    poolOptions: {
+      forks: {
+        // Node 25 exposes experimental global localStorage behind Web Storage.
+        // Supabase probes globalThis.localStorage during module import, before
+        // jsdom can safely own the browser storage contract for tests.
+        execArgv: ['--no-experimental-webstorage'],
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
