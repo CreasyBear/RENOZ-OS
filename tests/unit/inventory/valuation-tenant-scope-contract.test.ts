@@ -47,11 +47,17 @@ describe('inventory valuation tenant-scope contract', () => {
     const financeIntegritySource = compact(
       read('src/server/functions/inventory/finance-integrity-summary.ts')
     );
+    const agingSource = compact(read('src/server/functions/inventory/inventory-aging-read.ts'));
 
     expect(source).toContain(
       "import{getFinanceIntegritySummary}from'./finance-integrity-summary'"
     );
+    expect(source).toContain("import{readInventoryAging}from'./inventory-aging-read'");
+    expect(source).toContain(
+      'returnreadInventoryAging({organizationId:ctx.organizationId,locationId:data.locationId,ageBuckets:data.ageBuckets,})'
+    );
     expect(source).not.toContain('ASabsolute_drift');
+    expect(source).not.toContain('EXTRACT(DAYFROMNOW()');
     expect(financeIntegritySource).toContain(
       'LEFTJOINproductspONp.id=i.product_idANDp.organization_id=${organizationId}ANDp.deleted_atISNULL'
     );
@@ -59,11 +65,11 @@ describe('inventory valuation tenant-scope contract', () => {
       'LEFTJOINwarehouse_locationslONl.id=i.location_idANDl.organization_id=${organizationId}'
     );
     expect(financeIntegritySource).toContain('WHEREi.organization_id=${organizationId}');
-    expect(source).toContain(
-      'innerJoin(inventory,and(eq(inventoryCostLayers.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
+    expect(agingSource).toContain(
+      'innerJoin(inventory,and(eq(inventoryCostLayers.inventoryId,inventory.id),eq(inventory.organizationId,organizationId)))'
     );
-    expect(source).toContain(
-      'leftJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'
+    expect(agingSource).toContain(
+      'leftJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,organizationId)))'
     );
   });
 

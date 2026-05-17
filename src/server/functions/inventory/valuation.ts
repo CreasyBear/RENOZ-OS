@@ -23,7 +23,6 @@ import {
 import { inventoryCostLayerCapitalizations } from 'drizzle/schema/inventory/inventory';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { formatAmount } from '@/lib/currency';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   costLayerFilterSchema,
@@ -36,7 +35,6 @@ import {
   inventoryFinanceReconcileSchema,
   type InventoryValuationResult,
   type InventoryTurnoverResult,
-  type AggregatedAgingItem,
   type COGSResult,
   type InventoryFinanceIntegritySummary,
   type InventoryFinanceReconcileResult,
@@ -46,6 +44,7 @@ import {
 import type { FlexibleJson } from '@/lib/schemas/_shared/patterns';
 import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/inventory-finance';
 import { getFinanceIntegritySummary } from './finance-integrity-summary';
+import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
 
 // ============================================================================
@@ -729,246 +728,12 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
   .inputValidator(inventoryAgingQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-
-    const conditions = [eq(inventoryCostLayers.organizationId, ctx.organizationId)];
-
-    // Build age bucket CASE expression
-    const buckets = data.ageBuckets.sort((a, b) => a - b);
-    const bucketLabels = [
-      `0-${buckets[0]} days`,
-      ...buckets.slice(0, -1).map((b, i) => `${b + 1}-${buckets[i + 1]} days`),
-      `>${buckets[buckets.length - 1]} days`,
-    ];
-
-    // Get aging data with cost layers and location
-    const aging = await db
-      .select({
-        inventoryId: inventoryCostLayers.inventoryId,
-        productId: inventory.productId,
-        productSku: products.sku,
-        productName: products.name,
-        locationId: inventory.locationId,
-        locationName: locations.name,
-        layerId: inventoryCostLayers.id,
-        receivedAt: inventoryCostLayers.receivedAt,
-        quantityRemaining: inventoryCostLayers.quantityRemaining,
-        unitCost: inventoryCostLayers.unitCost,
-        ageInDays: sql<number>`EXTRACT(DAY FROM NOW() - ${inventoryCostLayers.receivedAt})::int`,
-      })
-      .from(inventoryCostLayers)
-      .innerJoin(
-        inventory,
-        and(
-          eq(inventoryCostLayers.inventoryId, inventory.id),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      )
-      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
-      .leftJoin(
-        locations,
-        and(
-          eq(inventory.locationId, locations.id),
-          eq(locations.organizationId, ctx.organizationId)
-        )
-      )
-      .where(
-        and(
-          ...conditions,
-          gt(inventoryCostLayers.quantityRemaining, 0),
-          data.locationId ? eq(inventory.locationId, data.locationId) : sql`true`
-        )
-      )
-      .orderBy(asc(inventoryCostLayers.receivedAt));
-
-    // Calculate total value for percentage calculations
-    const totalValue = aging.reduce(
-      (sum, item) => sum + item.quantityRemaining * Number(item.unitCost),
-      0
-    );
-
-    // Group by age bucket
-    const bucketData = bucketLabels.map((label, index) => {
-      const minDays = index === 0 ? 0 : buckets[index - 1] + 1;
-      const maxDays = index < buckets.length ? buckets[index] : Infinity;
-
-      const itemsInBucket = aging.filter(
-        (item) => item.ageInDays >= minDays && item.ageInDays <= maxDays
-      );
-
-      const totalQuantity = itemsInBucket.reduce((sum, item) => sum + item.quantityRemaining, 0);
-      const bucketValue = itemsInBucket.reduce(
-        (sum, item) => sum + item.quantityRemaining * Number(item.unitCost),
-        0
-      );
-
-      // Determine risk level based on age
-      const risk = maxDays === Infinity || maxDays >= 365
-        ? 'critical'
-        : maxDays >= 180
-        ? 'high'
-        : maxDays >= 90
-        ? 'medium'
-        : 'low';
-
-      // Aggregate items by productId + locationId
-      const aggregatedMap = new Map<string, AggregatedAgingItem>();
-      
-      itemsInBucket.forEach((item) => {
-        const key = `${item.productId}-${item.locationId}`;
-        const quantity = item.quantityRemaining;
-        const unitCost = Number(item.unitCost);
-        const itemValue = quantity * unitCost;
-        const itemAge = item.ageInDays;
-        const itemRisk: 'low' | 'medium' | 'high' | 'critical' = 
-          itemAge >= 365 ? 'critical' :
-          itemAge >= 180 ? 'high' :
-          itemAge >= 90 ? 'medium' : 'low';
-
-        const existing = aggregatedMap.get(key);
-        if (existing) {
-          // Aggregate: sum quantities and values, track oldest date, highest risk
-          existing.totalQuantity += quantity;
-          existing.totalValue += itemValue;
-          existing.weightedAverageCost = existing.totalQuantity > 0 
-            ? existing.totalValue / existing.totalQuantity 
-            : 0;
-          
-          if (item.receivedAt < existing.oldestReceivedAt) {
-            existing.oldestReceivedAt = item.receivedAt;
-            existing.ageInDays = itemAge;
-          }
-          
-          // Update risk to highest level
-          const riskLevels: Record<'low' | 'medium' | 'high' | 'critical', number> = { 
-            low: 0, 
-            medium: 1, 
-            high: 2, 
-            critical: 3 
-          };
-          if (riskLevels[itemRisk] > riskLevels[existing.highestRisk]) {
-            existing.highestRisk = itemRisk;
-          }
-        } else {
-          // Create new aggregated item
-          aggregatedMap.set(key, {
-            productId: item.productId,
-            productSku: item.productSku ?? '',
-            productName: item.productName ?? 'Unknown Product',
-            locationId: item.locationId,
-            locationName: item.locationName ?? 'Unknown',
-            totalQuantity: quantity,
-            totalValue: itemValue,
-            weightedAverageCost: unitCost,
-            oldestReceivedAt: item.receivedAt,
-            highestRisk: itemRisk,
-            ageInDays: itemAge,
-          });
-        }
-      });
-
-      // Convert to array and sort by totalValue descending, then limit to top 10
-      const aggregatedItems = Array.from(aggregatedMap.values())
-        .sort((a, b) => b.totalValue - a.totalValue)
-        .slice(0, 10)
-        .map((agg) => ({
-          inventoryId: '', // Not applicable for aggregated items
-          productId: agg.productId,
-          productSku: agg.productSku,
-          productName: agg.productName,
-          locationId: agg.locationId,
-          locationName: agg.locationName,
-          layerId: '', // Not applicable for aggregated items
-          receivedAt: agg.oldestReceivedAt,
-          quantity: agg.totalQuantity,
-          unitCost: agg.weightedAverageCost,
-          totalValue: agg.totalValue,
-          ageInDays: agg.ageInDays,
-          risk: agg.highestRisk,
-        }));
-
-      return {
-        bucket: label,
-        minDays,
-        maxDays: maxDays === Infinity ? null : maxDays,
-        itemCount: aggregatedMap.size, // Count of unique product+location combinations
-        totalQuantity,
-        totalValue: bucketValue,
-        percentOfTotal: totalValue > 0 ? (bucketValue / totalValue) * 100 : 0,
-        risk,
-        items: aggregatedItems,
-      };
+    return readInventoryAging({
+      organizationId: ctx.organizationId,
+      locationId: data.locationId,
+      ageBuckets: data.ageBuckets,
     });
-
-    // Summary
-    const totalQuantity = aging.reduce((sum, item) => sum + item.quantityRemaining, 0);
-    const avgAge =
-      aging.length > 0 && totalQuantity > 0
-        ? aging.reduce((sum, item) => sum + item.ageInDays * item.quantityRemaining, 0) /
-          totalQuantity
-        : 0;
-
-    // Calculate value at risk (items over 180 days old)
-    const valueAtRisk = bucketData
-      .filter((b) => b.minDays >= 180)
-      .reduce((sum, b) => sum + b.totalValue, 0);
-    const riskPercentage = totalValue > 0 ? (valueAtRisk / totalValue) * 100 : 0;
-
-    // Count unique product+location combinations across all buckets
-    const uniqueProductLocations = new Set<string>();
-    bucketData.forEach((bucket) => {
-      bucket.items.forEach((item) => {
-        uniqueProductLocations.add(`${item.productId}-${item.locationId}`);
-      });
-    });
-
-    return {
-      aging: bucketData,
-      summary: {
-        totalItems: uniqueProductLocations.size, // Count unique product+location combinations
-        totalQuantity,
-        totalValue,
-        averageAge: Math.round(avgAge),
-        valueAtRisk,
-        riskPercentage,
-        oldestItem: aging.length > 0 ? aging[0] : null,
-      },
-      recommendations: generateAgingRecommendations(bucketData),
-    };
   });
-
-function generateAgingRecommendations(
-  bucketData: Array<{ bucket: string; totalValue: number; totalQuantity: number }>
-) {
-  const recommendations: Array<{ type: string; message: string; priority: string }> = [];
-
-  // Check for old inventory
-  const oldBuckets = bucketData.filter((b) => b.bucket.includes('>') || b.bucket.includes('365'));
-  const oldValue = oldBuckets.reduce((sum, b) => sum + b.totalValue, 0);
-
-  if (oldValue > 0) {
-    recommendations.push({
-      type: 'slow_moving',
-      message: `${formatAmount({ currency: 'AUD', amount: oldValue })} in inventory over 1 year old - consider markdown or disposal`,
-      priority: 'high',
-    });
-  }
-
-  // Check for concentration
-  const totalValue = bucketData.reduce((sum, b) => sum + b.totalValue, 0);
-  const newestBucket = bucketData[0];
-  if (newestBucket && totalValue > 0) {
-    const newestPercent = (newestBucket.totalValue / totalValue) * 100;
-    if (newestPercent < 30) {
-      recommendations.push({
-        type: 'turn_rate',
-        message: `Only ${newestPercent.toFixed(0)}% of inventory is recent - review purchasing patterns`,
-        priority: 'medium',
-      });
-    }
-  }
-
-  return recommendations;
-}
 
 // ============================================================================
 // TURNOVER ANALYSIS
