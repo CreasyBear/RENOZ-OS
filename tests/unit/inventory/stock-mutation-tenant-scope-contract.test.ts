@@ -23,38 +23,44 @@ function sliceBetween(source: string, startMarker: string, endMarker: string): s
 describe('inventory stock mutation tenant-scope contract', () => {
   it('keeps adjustment final inventory and serialized lineage writes organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/adjustments.ts'));
+    const adjustHelperSource = compact(
+      read('src/server/functions/inventory/adjust-inventory-quantity.ts')
+    );
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.adjust})');
+    expect(source).toContain("import{adjustInventoryQuantity}from'./adjust-inventory-quantity'");
     expect(source).toContain(
-      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for(\'update\')'
+      'returnadjustInventoryQuantity({organizationId:ctx.organizationId,userId:ctx.user.id,data,})'
     );
-    expect(source).toContain(
+    expect(adjustHelperSource).toContain(
+      'select({id:products.id,isSerialized:products.isSerialized,status:products.status,isActive:products.isActive,trackInventory:products.trackInventory,}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).for(\'update\')'
+    );
+    expect(adjustHelperSource).toContain(
       "if(!canCreateOrIncreaseStock&&data.adjustmentQty>0){thrownewValidationError('Productisnotavailableforstockincreases',{productId:['Onlyactiveinventory-trackedproductscancreateorincreasestock'],code:['product_not_adjustable_in'],});}"
     );
-    expect(source).toContain(
+    expect(adjustHelperSource).toContain(
       "if(!data.inventoryId&&matchingInventoryRows.length>1){thrownewValidationError('Adjustmentrequiresaspecificinventoryrow',{inventoryId:['Opentheinventorybrowserandadjustthespecificstockrow'],code:['ambiguous_adjustment_source'],});}"
     );
-    expect(source).toContain(
+    expect(adjustHelperSource).toContain(
       "if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow',{inventoryId:['Receiveinventorybeforeadjustingthisstockrow'],code:['adjustment_requires_existing_inventory'],});}"
     );
-    expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
-    expect(source).toContain(
-      'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,ctx.organizationId)))'
+    expect(adjustHelperSource).toContain("sql`SELECTset_config('app.organization_id',${organizationId},false)`");
+    expect(adjustHelperSource).toContain(
+      'where(and(eq(inventory.id,inventoryRecord.id),eq(inventory.organizationId,organizationId)))'
     );
-    expect(source).toContain(
-      'where(and(eq(serializedItems.id,serializedItem.id),eq(serializedItems.organizationId,ctx.organizationId)))'
+    expect(adjustHelperSource).toContain(
+      'where(and(eq(serializedItems.id,serializedItem.id),eq(serializedItems.organizationId,organizationId)))'
     );
-    expect(source).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
-    expect(source).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
+    expect(adjustHelperSource).not.toContain('.where(eq(inventory.id,inventoryRecord.id))');
+    expect(adjustHelperSource).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
   });
 
   it('locks adjustment product availability before inventory writes', () => {
-    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
-    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+    const adjustBlock = compact(read('src/server/functions/inventory/adjust-inventory-quantity.ts'));
 
     expect(adjustBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
     expect(adjustBlock).toContain(
-      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1)"
+      "from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).for('update').limit(1)"
     );
     expect(adjustBlock.indexOf("for('update').limit(1)")).toBeLessThan(
       adjustBlock.indexOf('constmatchingInventoryRows=awaittx')
@@ -63,8 +69,7 @@ describe('inventory stock mutation tenant-scope contract', () => {
   });
 
   it('rejects ambiguous product-location adjustment sources before writing inventory', () => {
-    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
-    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+    const adjustBlock = compact(read('src/server/functions/inventory/adjust-inventory-quantity.ts'));
 
     expect(adjustBlock).toContain('.limit(data.inventoryId?1:2);');
     expect(adjustBlock).toContain(
@@ -79,8 +84,7 @@ describe('inventory stock mutation tenant-scope contract', () => {
   });
 
   it('requires adjustment targets to be existing inventory rows', () => {
-    const source = compact(read('src/server/functions/inventory/adjustments.ts'));
-    const adjustBlock = sliceBetween(source, 'exportconstadjustInventory', '});});');
+    const adjustBlock = compact(read('src/server/functions/inventory/adjust-inventory-quantity.ts'));
 
     expect(adjustBlock).toContain(
       "if(!inventoryRecord){thrownewValidationError('Adjustmentrequiresanexistinginventoryrow',{inventoryId:['Receiveinventorybeforeadjustingthisstockrow'],code:['adjustment_requires_existing_inventory'],});}"
@@ -234,7 +238,7 @@ describe('inventory stock mutation tenant-scope contract', () => {
   });
 
   it('preserves inventory finance and serialized-lineage continuity references', () => {
-    const adjustmentSource = read('src/server/functions/inventory/adjustments.ts');
+    const adjustmentSource = read('src/server/functions/inventory/adjust-inventory-quantity.ts');
     const receivingSource = read('src/server/functions/inventory/manual-receive-inventory.ts');
     const allocationSource = read('src/server/functions/inventory/allocations.ts');
 
