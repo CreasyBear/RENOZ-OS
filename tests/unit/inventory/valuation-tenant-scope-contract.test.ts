@@ -64,11 +64,21 @@ describe('inventory valuation tenant-scope contract', () => {
     const financeIntegritySource = compact(
       read('src/server/functions/inventory/finance-integrity-summary.ts')
     );
+    const financeReconcileSource = compact(
+      read('src/server/functions/inventory/inventory-finance-reconcile.ts')
+    );
     const agingSource = compact(read('src/server/functions/inventory/inventory-aging-read.ts'));
 
     expect(source).toContain(
       "import{getFinanceIntegritySummary}from'./finance-integrity-summary'"
     );
+    expect(source).toContain(
+      "import{reconcileInventoryFinanceIntegrityState}from'./inventory-finance-reconcile'"
+    );
+    expect(source).toContain(
+      'returnreconcileInventoryFinanceIntegrityState({organizationId:ctx.organizationId,dryRun:data.dryRun,limit:data.limit,})'
+    );
+    expect(source).not.toContain('WITHlayer_totalsAS(');
     expect(source).toContain("import{readInventoryAging}from'./inventory-aging-read'");
     expect(source).toContain(
       'returnreadInventoryAging({organizationId:ctx.organizationId,locationId:data.locationId,ageBuckets:data.ageBuckets,})'
@@ -82,6 +92,24 @@ describe('inventory valuation tenant-scope contract', () => {
       'LEFTJOINwarehouse_locationslONl.id=i.location_idANDl.organization_id=${organizationId}'
     );
     expect(financeIntegritySource).toContain('WHEREi.organization_id=${organizationId}');
+    expect(financeReconcileSource).toContain('returndb.transaction(async(tx)=>{');
+    expect(financeReconcileSource).toContain(
+      "sql`SELECTset_config('app.organization_id',${organizationId},false)`"
+    );
+    expect(financeReconcileSource).toContain('WHEREi.organization_id=${organizationId}');
+    expect(financeReconcileSource).toContain('WHEREicl.organization_id=${organizationId}');
+    expect(financeReconcileSource).toContain(
+      'awaittx.insert(inventoryCostLayers).values({organizationId,inventoryId:row.inventory_id'
+    );
+    expect(financeReconcileSource).toContain('WHEREorganization_id=${organizationId}');
+    expect(financeReconcileSource).toContain('ANDi.organization_id=${organizationId}');
+    expect(financeReconcileSource).toContain(
+      'constpostIntegrity=awaitgetFinanceIntegritySummary(organizationId)'
+    );
+    expect(financeReconcileSource).toContain(
+      'constcurrentIntegrity=awaitgetFinanceIntegritySummary(organizationId)'
+    );
+    expect(financeReconcileSource).toContain('repairedMissingLayers:missingRows.length');
     expect(agingSource).toContain(
       'innerJoin(inventory,and(eq(inventoryCostLayers.inventoryId,inventory.id),eq(inventory.organizationId,organizationId)))'
     );
