@@ -75,9 +75,17 @@ describe('inventory valuation tenant-scope contract', () => {
 
   it('keeps product cost-layer reads and weighted-average writes active and tenant-owned', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const productCostLayerSource = compact(
+      read('src/server/functions/inventory/product-cost-layers-read.ts')
+    );
 
+    expect(source).toContain("import{readProductCostLayers}from'./product-cost-layers-read'");
     expect(source).toContain(
-      'eq(inventoryCostLayers.organizationId,ctx.organizationId),eq(inventory.productId,data.productId),eq(inventory.organizationId,ctx.organizationId)'
+      'returnreadProductCostLayers({organizationId:ctx.organizationId,productId:data.productId,})'
+    );
+    expect(source).not.toContain('lastPurchaseCost');
+    expect(productCostLayerSource).toContain(
+      'eq(inventoryCostLayers.organizationId,organizationId),eq(inventory.productId,productId),eq(inventory.organizationId,organizationId)'
     );
     expect(source).toContain(
       'select({id:products.id}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt)))'

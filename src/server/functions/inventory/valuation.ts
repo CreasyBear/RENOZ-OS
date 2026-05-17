@@ -46,6 +46,7 @@ import { recomputeInventoryValueFromLayers } from '@/server/functions/_shared/in
 import { getFinanceIntegritySummary } from './finance-integrity-summary';
 import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
+import { readProductCostLayers } from './product-cost-layers-read';
 
 // ============================================================================
 // TYPES
@@ -765,60 +766,10 @@ export const getProductCostLayers = createServerFn({ method: 'GET' })
   .inputValidator(normalizeObjectInput(z.object({ productId: z.string().uuid() })))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-
-    const layers = await db
-      .select({
-        id: inventoryCostLayers.id,
-        receivedAt: inventoryCostLayers.receivedAt,
-        quantityReceived: inventoryCostLayers.quantityReceived,
-        quantityRemaining: inventoryCostLayers.quantityRemaining,
-        unitCost: inventoryCostLayers.unitCost,
-        referenceType: inventoryCostLayers.referenceType,
-        referenceId: inventoryCostLayers.referenceId,
-        createdAt: inventoryCostLayers.createdAt,
-      })
-      .from(inventoryCostLayers)
-      .innerJoin(
-        inventory,
-        and(
-          eq(inventoryCostLayers.inventoryId, inventory.id),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      )
-      .where(
-        and(
-          eq(inventoryCostLayers.organizationId, ctx.organizationId),
-          eq(inventory.productId, data.productId),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      )
-      .orderBy(asc(inventoryCostLayers.receivedAt));
-
-    // Calculate summary
-    const activeLayers = layers.filter((l) => l.quantityRemaining > 0);
-    const totalRemaining = activeLayers.reduce((sum, l) => sum + l.quantityRemaining, 0);
-    const totalValue = activeLayers.reduce(
-      (sum, l) => sum + l.quantityRemaining * Number(l.unitCost),
-      0
-    );
-    const weightedAvgCost = totalRemaining > 0 ? totalValue / totalRemaining : 0;
-    const lastPurchaseCost =
-      layers.length > 0 ? Number(layers[layers.length - 1].unitCost) : 0;
-
-    return {
-      layers: layers.map((l) => ({
-        ...l,
-        unitCost: Number(l.unitCost),
-      })),
-      summary: {
-        totalLayers: layers.length,
-        activeLayers: activeLayers.length,
-        totalRemaining,
-        totalValue,
-        weightedAvgCost,
-        lastPurchaseCost,
-      },
-    };
+    return readProductCostLayers({
+      organizationId: ctx.organizationId,
+      productId: data.productId,
+    });
   });
 
 // ============================================================================
