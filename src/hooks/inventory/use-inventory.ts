@@ -6,6 +6,7 @@
  * - Inventory item details
  * - Inventory movements history is exported from a dedicated movement hook
  * - Available serial reads are exported from a dedicated serial availability hook
+ * - Inventory dashboard reads are exported from a dedicated dashboard hook
  * - Stock adjustments are exported from a dedicated adjustment hook
  * - Bulk status updates are exported from a dedicated status hook
  * - Stock transfers are exported from a dedicated transfer hook
@@ -23,7 +24,6 @@ import {
   getInventoryItem,
   quickSearchInventory,
 } from '@/server/functions/inventory/inventory';
-import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
 import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type { InventoryListQuery } from '@/lib/schemas/inventory';
 
@@ -43,6 +43,7 @@ export {
   useAvailableSerials,
   type UseAvailableSerialsOptions,
 } from './use-available-serials';
+export { useInventoryDashboard } from './use-inventory-dashboard';
 
 // ============================================================================
 // LIST HOOKS
@@ -137,32 +138,6 @@ export function useInventoryLowStock(enabled = true) {
       ),
     enabled,
     staleTime: 60 * 1000, // 1 minute
-  });
-}
-
-// ============================================================================
-// DASHBOARD HOOKS
-// ============================================================================
-
-/**
- * Fetch inventory dashboard metrics and top movers.
- */
-export function useInventoryDashboard(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.inventory.dashboard(),
-    queryFn: async () => {
-      return resolveReadResult(async () => {
-        return getInventoryDashboard();
-      }, {
-        message: 'Inventory dashboard returned no data',
-        contractType: 'always-shaped',
-        fallbackMessage:
-          'Inventory dashboard metrics are temporarily unavailable. Please refresh and try again.',
-      });
-    },
-    enabled,
-    staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
   });
 }
 

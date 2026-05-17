@@ -24,7 +24,7 @@ import { DollarSign, TrendingUp, ShoppingCart, Users } from 'lucide-react';
 import { useRevenueByPeriod } from '@/hooks/financial/use-financial';
 import { useOrders, useOrderStats } from '@/hooks/orders/use-orders';
 import { useActiveProjects } from '@/hooks/jobs/use-active-projects';
-import { useInventoryDashboard } from '@/hooks/inventory/use-inventory';
+import { useInventoryDashboard } from '@/hooks/inventory/use-inventory-dashboard';
 import { useDashboardMetrics, useTargetProgress, useTrackedProducts } from '@/hooks/dashboard';
 import { useOrgFormat } from '@/hooks/use-org-format';
 import { useDashboardDateRange } from '@/components/domain/dashboard/dashboard-context';

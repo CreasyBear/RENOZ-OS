@@ -265,7 +265,7 @@ describe('inventory dashboard query normalization wave 3', () => {
     try {
       const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const { useWMSDashboard } = await import('@/hooks/inventory/use-wms-dashboard');
-      const { useInventoryDashboard } = await import('@/hooks/inventory/use-inventory');
+      const { useInventoryDashboard } = await import('@/hooks/inventory/use-inventory-dashboard');
 
       const wms = renderHook(() => useWMSDashboard(), {
         wrapper: createWrapper(queryClient),
@@ -363,6 +363,38 @@ describe('inventory dashboard query normalization wave 3', () => {
     expect(source).toContain('getInventoryDashboardReadErrorMessage(dashboardError)');
     expect(source).not.toContain('dashboardError?.message');
     expect(source).not.toContain('wmsError as { message');
+  });
+
+  it('keeps inventory dashboard read orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = readFileSync(
+      join(process.cwd(), 'src/hooks/inventory/use-inventory.ts'),
+      'utf8'
+    );
+    const dashboardHook = readFileSync(
+      join(process.cwd(), 'src/hooks/inventory/use-inventory-dashboard.ts'),
+      'utf8'
+    );
+    const inventoryIndex = readFileSync(join(process.cwd(), 'src/hooks/inventory/index.ts'), 'utf8');
+    const overviewContainer = readFileSync(
+      join(process.cwd(), 'src/components/domain/dashboard/overview/overview-container.tsx'),
+      'utf8'
+    );
+    const businessOverviewContainer = readFileSync(
+      join(process.cwd(), 'src/components/domain/dashboard/business-overview/business-overview-container.tsx'),
+      'utf8'
+    );
+
+    expect(inventoryHook).toContain("export { useInventoryDashboard } from './use-inventory-dashboard'");
+    expect(inventoryHook).not.toContain("from '@/server/functions/inventory/dashboard'");
+    expect(inventoryHook).not.toContain('Inventory dashboard returned no data');
+    expect(dashboardHook).toContain(
+      "import { getInventoryDashboard } from '@/server/functions/inventory/dashboard'"
+    );
+    expect(dashboardHook).toContain('queryKeys.inventory.dashboard()');
+    expect(dashboardHook).toContain('Inventory dashboard returned no data');
+    expect(inventoryIndex).toContain("export { useInventoryDashboard } from './use-inventory-dashboard'");
+    expect(overviewContainer).toContain("from '@/hooks/inventory/use-inventory-dashboard'");
+    expect(businessOverviewContainer).toContain("from '@/hooks/inventory/use-inventory-dashboard'");
   });
 
   it('labels dashboard stock semantics explicitly', async () => {

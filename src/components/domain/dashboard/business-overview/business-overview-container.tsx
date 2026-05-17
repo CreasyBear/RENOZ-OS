@@ -38,7 +38,7 @@ import { useCustomerKpis, useHealthDistribution } from '@/hooks/customers/use-cu
 // Operations hooks
 import { useOrders } from '@/hooks/orders/use-orders';
 import { useActiveProjects } from '@/hooks/jobs/use-active-projects';
-import { useInventoryDashboard } from '@/hooks/inventory/use-inventory';
+import { useInventoryDashboard } from '@/hooks/inventory/use-inventory-dashboard';
 
 // Recent items hooks for popovers
 import {
