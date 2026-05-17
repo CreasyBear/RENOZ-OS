@@ -70,11 +70,16 @@ describe('CampaignDetailMetaSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const metaSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-meta-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailMetaSection campaign={campaign} />');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailMetaSection');
+    expect(loadedState).toContain('<CampaignDetailMetaSection campaign={campaign} />');
     expect(detailPanel).not.toContain('campaignMetaFields');
     expect(detailPanel).not.toContain('DetailGrid fields');
     expect(detailPanel).not.toContain('formatDistanceToNow');

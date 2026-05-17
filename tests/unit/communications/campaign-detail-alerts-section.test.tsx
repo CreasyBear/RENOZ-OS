@@ -100,11 +100,16 @@ describe('CampaignDetailAlertsSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const alertsSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-alerts-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailAlertsSection campaign={campaign} />');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailAlertsSection');
+    expect(loadedState).toContain('<CampaignDetailAlertsSection campaign={campaign} />');
     expect(detailPanel).not.toContain('generateCampaignAlerts');
     expect(detailPanel).not.toContain('useAlertDismissals');
     expect(detailPanel).not.toContain('Dismiss alert');

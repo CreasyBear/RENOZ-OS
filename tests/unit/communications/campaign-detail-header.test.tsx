@@ -157,11 +157,16 @@ describe('CampaignDetailHeader', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const header = read(
       'src/components/domain/communications/campaigns/campaign-detail-header.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailHeader');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailHeader');
+    expect(loadedState).toContain('<CampaignDetailHeader');
     expect(detailPanel).not.toContain('secondaryActions=');
     expect(detailPanel).not.toContain('getCampaignStatusVariant');
     expect(detailPanel).not.toContain('Send Test Email');

@@ -20,7 +20,6 @@ import {
   useResumeCampaign,
   useTestSendCampaign,
 } from "@/hooks/communications/use-campaigns";
-import { cn } from "@/lib/utils";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -32,15 +31,8 @@ import {
   type CampaignDetailActionMutations,
   type CampaignDetailActionResult,
 } from "./campaign-detail-actions";
-import { CampaignDetailAlertsSection } from "./campaign-detail-alerts-section";
-import { CampaignDetailHeader } from "./campaign-detail-header";
-import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
-import { CampaignDetailMetaSection } from "./campaign-detail-meta-section";
-import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
-import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
-import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
+import { CampaignDetailLoadedState } from "./campaign-detail-loaded-state";
 import { CampaignDetailSkeleton } from "./campaign-detail-skeleton";
-import { CampaignDetailTestSendDialog } from "./campaign-detail-test-send-dialog";
 import { CampaignDetailUnavailableState } from "./campaign-detail-unavailable-state";
 
 // ============================================================================
@@ -197,55 +189,26 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   }
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Zone 1: Entity Header */}
-      <CampaignDetailHeader
-        campaign={campaign}
-        isSendPending={sendCampaignMutation.isPending}
-        isPausePending={pauseCampaignMutation.isPending}
-        isResumePending={resumeCampaignMutation.isPending}
-        onBack={onBack}
-        onSendCampaign={handleSendCampaign}
-        onPauseCampaign={handlePauseCampaign}
-        onResumeCampaign={handleResumeCampaign}
-        onEditCampaign={handleEditCampaign}
-        onViewAnalytics={handleViewAnalytics}
-        onViewEmailHistory={handleViewEmailHistory}
-        onOpenTestSendDialog={handleOpenTestSendDialog}
-      />
-
-      {/* Zone 2: Progress Indicator */}
-      <CampaignDetailLifecycleSection campaign={campaign} />
-
-      {/* Zone 3: Alerts */}
-      <CampaignDetailAlertsSection campaign={campaign} />
-
-      {/* Zone 4: Key Metrics */}
-      <CampaignDetailMetricsSection campaign={campaign} />
-
-      <CampaignDetailNextStepsSection
-        status={campaign.status}
-        onViewAnalytics={handleViewAnalytics}
-        onCreateNewCampaign={onBack}
-        onViewEmailHistory={handleViewEmailHistory}
-      />
-
-      {/* Zone 5: Campaign Information */}
-      <CampaignDetailMetaSection campaign={campaign} />
-
-      {/* Zone 5: Recipients List */}
-      <CampaignDetailRecipientsSection
-        recipientCount={campaign.recipientCount}
-        recipients={recipients}
-        isLoading={recipientsLoading}
-      />
-
-      <CampaignDetailTestSendDialog
-        open={testSendDialogOpen}
-        isPending={testSendMutation.isPending}
-        onOpenChange={setTestSendDialogOpen}
-        onSendTestEmail={handleTestSend}
-      />
-    </div>
+    <CampaignDetailLoadedState
+      campaign={campaign}
+      recipients={recipients}
+      recipientsLoading={recipientsLoading}
+      className={className}
+      isSendPending={sendCampaignMutation.isPending}
+      isPausePending={pauseCampaignMutation.isPending}
+      isResumePending={resumeCampaignMutation.isPending}
+      testSendDialogOpen={testSendDialogOpen}
+      isTestSendPending={testSendMutation.isPending}
+      onBack={onBack}
+      onSendCampaign={handleSendCampaign}
+      onPauseCampaign={handlePauseCampaign}
+      onResumeCampaign={handleResumeCampaign}
+      onEditCampaign={handleEditCampaign}
+      onViewAnalytics={handleViewAnalytics}
+      onViewEmailHistory={handleViewEmailHistory}
+      onOpenTestSendDialog={handleOpenTestSendDialog}
+      onTestSendDialogOpenChange={setTestSendDialogOpen}
+      onSendTestEmail={handleTestSend}
+    />
   );
 });

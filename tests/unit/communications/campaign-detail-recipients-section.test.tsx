@@ -120,11 +120,16 @@ describe('CampaignDetailRecipientsSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const recipientsSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-recipients-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailRecipientsSection');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailRecipientsSection');
+    expect(loadedState).toContain('<CampaignDetailRecipientsSection');
     expect(detailPanel).not.toContain('Campaign recipients');
     expect(detailPanel).not.toContain('No recipients yet');
     expect(detailPanel).not.toContain('RecipientStatusBadge');

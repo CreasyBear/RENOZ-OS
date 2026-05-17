@@ -90,11 +90,16 @@ describe('CampaignDetailTestSendDialog', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const testSendDialog = read(
       'src/components/domain/communications/campaigns/campaign-detail-test-send-dialog.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailTestSendDialog');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailTestSendDialog');
+    expect(loadedState).toContain('<CampaignDetailTestSendDialog');
     expect(detailPanel).not.toContain('Test Email Address');
     expect(detailPanel).not.toContain('createPendingDialogInteractionGuards');
     expect(testSendDialog).toContain('Test Email Address');

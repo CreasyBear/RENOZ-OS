@@ -90,11 +90,16 @@ describe('CampaignDetailLifecycleSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const lifecycleSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-lifecycle-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailLifecycleSection campaign={campaign} />');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailLifecycleSection');
+    expect(loadedState).toContain('<CampaignDetailLifecycleSection campaign={campaign} />');
     expect(detailPanel).not.toContain('calculateSendProgress(campaign.sentCount');
     expect(detailPanel).not.toContain('CAMPAIGN_STAGES.map');
     expect(lifecycleSection).toContain('calculateSendProgress(campaign.sentCount');

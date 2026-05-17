@@ -116,11 +116,16 @@ describe('CampaignDetailMetricsSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const metricsSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-metrics-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailMetricsSection campaign={campaign} />');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailMetricsSection');
+    expect(loadedState).toContain('<CampaignDetailMetricsSection campaign={campaign} />');
     expect(detailPanel).not.toContain('formatCampaignStatValue');
     expect(detailPanel).not.toContain('CAMPAIGN_STAT_STYLES');
     expect(detailPanel).not.toContain('MetricCard');

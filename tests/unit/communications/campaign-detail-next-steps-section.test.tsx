@@ -59,11 +59,16 @@ describe('CampaignDetailNextStepsSection', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const loadedState = read(
+      'src/components/domain/communications/campaigns/campaign-detail-loaded-state.tsx'
+    );
     const nextStepsSection = read(
       'src/components/domain/communications/campaigns/campaign-detail-next-steps-section.tsx'
     );
 
-    expect(detailPanel).toContain('<CampaignDetailNextStepsSection');
+    expect(detailPanel).toContain('<CampaignDetailLoadedState');
+    expect(detailPanel).not.toContain('<CampaignDetailNextStepsSection');
+    expect(loadedState).toContain('<CampaignDetailNextStepsSection');
     expect(detailPanel).not.toContain('Campaign completed successfully');
     expect(detailPanel).not.toContain('Create New Campaign');
     expect(nextStepsSection).toContain('Campaign completed successfully');
