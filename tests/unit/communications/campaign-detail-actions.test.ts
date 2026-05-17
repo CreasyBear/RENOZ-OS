@@ -7,7 +7,7 @@ import {
   sendCampaignFromDetail,
   testSendCampaignFromDetail,
   type CampaignDetailActionMutations,
-} from '@/components/domain/communications/campaigns/campaign-detail-actions';
+} from '@/lib/communications/campaign-detail-actions';
 
 import type { Campaign } from '@/lib/schemas/communications';
 
@@ -307,16 +307,25 @@ describe('campaign detail actions', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const detailHook = read(
+      'src/hooks/communications/use-campaign-detail-actions.ts'
+    );
     const actions = read(
-      'src/components/domain/communications/campaigns/campaign-detail-actions.ts'
+      'src/lib/communications/campaign-detail-actions.ts'
     );
 
-    expect(detailPanel).toContain('sendCampaignFromDetail({');
-    expect(detailPanel).toContain('pauseCampaignFromDetail({');
-    expect(detailPanel).toContain('resumeCampaignFromDetail({');
-    expect(detailPanel).toContain('testSendCampaignFromDetail({');
-    expect(detailPanel).toContain('showCampaignDetailActionFeedback(result.feedback)');
+    expect(detailPanel).toContain('useCampaignDetailActions({');
+    expect(detailPanel).not.toContain('sendCampaignFromDetail({');
+    expect(detailPanel).not.toContain('pauseCampaignFromDetail({');
+    expect(detailPanel).not.toContain('resumeCampaignFromDetail({');
+    expect(detailPanel).not.toContain('testSendCampaignFromDetail({');
+    expect(detailPanel).not.toContain('showCampaignDetailActionFeedback(result.feedback)');
     expect(detailPanel).not.toContain('formatCommunicationCampaignMutationError(error');
+    expect(detailHook).toContain('sendCampaignFromDetail({');
+    expect(detailHook).toContain('pauseCampaignFromDetail({');
+    expect(detailHook).toContain('resumeCampaignFromDetail({');
+    expect(detailHook).toContain('testSendCampaignFromDetail({');
+    expect(detailHook).toContain('showCampaignDetailActionFeedback(result.feedback)');
     expect(actions).toContain('formatCommunicationCampaignMutationError(error, "send")');
     expect(actions).toContain('formatCommunicationCampaignMutationError(error, "pause")');
     expect(actions).toContain('formatCommunicationCampaignMutationError(error, "resume")');

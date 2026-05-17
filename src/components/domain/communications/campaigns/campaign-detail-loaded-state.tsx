@@ -13,7 +13,7 @@ import type {
   Campaign,
   CampaignRecipient,
 } from "@/lib/schemas/communications";
-import type { CampaignDetailActionResult } from "./campaign-detail-actions";
+import type { CampaignDetailActionResult } from "@/lib/communications/campaign-detail-actions";
 
 type CampaignDetailLoadedRecipient = Omit<CampaignRecipient, "status"> & {
   status: CampaignRecipient["status"] | "skipped";

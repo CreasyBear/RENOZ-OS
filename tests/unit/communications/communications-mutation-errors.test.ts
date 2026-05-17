@@ -205,8 +205,11 @@ describe('communications mutation error formatting', () => {
     const detailPanel = read(
       'src/components/domain/communications/campaigns/campaign-detail-panel.tsx'
     );
+    const detailHook = read(
+      'src/hooks/communications/use-campaign-detail-actions.ts'
+    );
     const detailActions = read(
-      'src/components/domain/communications/campaigns/campaign-detail-actions.ts'
+      'src/lib/communications/campaign-detail-actions.ts'
     );
     const wizard = read(
       'src/components/domain/communications/campaigns/campaign-wizard.tsx'
@@ -227,7 +230,8 @@ describe('communications mutation error formatting', () => {
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to duplicate campaign"');
     expect(route).not.toContain('error instanceof Error ? error.message : "Failed to send test email"');
 
-    expect(detailPanel).toContain('sendCampaignFromDetail({');
+    expect(detailPanel).toContain('useCampaignDetailActions({');
+    expect(detailHook).toContain('sendCampaignFromDetail({');
     expect(detailActions).toContain('formatCommunicationCampaignMutationError(error, "send")');
     expect(detailActions).toContain('formatCommunicationCampaignMutationError(error, "pause")');
     expect(detailActions).toContain('formatCommunicationCampaignMutationError(error, "resume")');

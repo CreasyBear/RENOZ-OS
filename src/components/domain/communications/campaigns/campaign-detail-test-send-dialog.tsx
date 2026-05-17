@@ -12,7 +12,7 @@ import { createPendingDialogInteractionGuards } from "@/components/ui/dialog-pen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import type { CampaignDetailActionResult } from "./campaign-detail-actions";
+import type { CampaignDetailActionResult } from "@/lib/communications/campaign-detail-actions";
 
 interface CampaignDetailTestSendDialogProps {
   open: boolean;

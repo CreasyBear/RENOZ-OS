@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { CampaignDetailTestSendDialog } from '@/components/domain/communications/campaigns/campaign-detail-test-send-dialog';
-import type { CampaignDetailActionResult } from '@/components/domain/communications/campaigns/campaign-detail-actions';
+import type { CampaignDetailActionResult } from '@/lib/communications/campaign-detail-actions';
 
 const root = process.cwd();
 

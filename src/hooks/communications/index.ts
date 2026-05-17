@@ -45,6 +45,7 @@ export * from './use-customer-communications';
 
 // Campaigns (full CRUD)
 export * from './use-campaigns';
+export * from './use-campaign-detail-actions';
 
 // Email templates
 export * from './use-templates';
