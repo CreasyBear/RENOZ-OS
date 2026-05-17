@@ -13,12 +13,14 @@ export {
   useInventorySearch,
   useMovements,
   useMovementsDashboard,
-  useAdjustInventory,
   useBulkUpdateInventoryStatus,
   useInventoryDashboard,
   useLocationUtilization,
   type BulkUpdateInventoryStatusInput,
 } from './use-inventory';
+
+// Stock adjustment mutation/cache contract
+export { useAdjustInventory } from './use-adjust-inventory';
 
 // Manual receive mutation/cache contract
 export { useReceiveInventory } from './use-receive-inventory';

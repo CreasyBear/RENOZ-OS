@@ -5,7 +5,7 @@
  * - Inventory list with pagination and filtering
  * - Inventory item details
  * - Inventory movements history
- * - Stock adjustments with optimistic updates
+ * - Stock adjustments are exported from a dedicated adjustment hook
  * - Stock transfers are exported from a dedicated transfer hook
  * - Stock receiving is exported from a dedicated receive hook
  *
@@ -25,7 +25,6 @@ import {
   quickSearchInventory,
   bulkUpdateStatus,
 } from '@/server/functions/inventory/inventory';
-import { adjustInventory } from '@/server/functions/inventory/adjustments';
 import { getInventoryDashboard } from '@/server/functions/inventory/dashboard';
 import { listMovements } from '@/server/functions/inventory/movements';
 import { getAvailableSerials } from '@/server/functions/inventory/serial-availability';
@@ -34,9 +33,9 @@ import type {
   InventoryListQuery,
   Inventory,
   MovementListQuery,
-  StockAdjustment,
 } from '@/lib/schemas/inventory';
 
+export { useAdjustInventory } from './use-adjust-inventory';
 export { useReceiveInventory } from './use-receive-inventory';
 export { useTransferInventory } from './use-transfer-inventory';
 
@@ -47,9 +46,6 @@ export { useTransferInventory } from './use-transfer-inventory';
 export interface UseInventoryListOptions extends Partial<InventoryListQuery> {
   enabled?: boolean;
 }
-
-type InventoryListResult = Awaited<ReturnType<typeof listInventory>>;
-type InventoryDetailResult = Awaited<ReturnType<typeof getInventoryItem>>;
 
 export interface BulkUpdateInventoryStatusInput {
   inventoryIds: string[];
@@ -172,54 +168,6 @@ export function useInventoryLowStock(enabled = true) {
 // ============================================================================
 // MUTATION HOOKS
 // ============================================================================
-
-/**
- * Adjust inventory stock levels
- */
-export function useAdjustInventory() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (params: StockAdjustment) => adjustInventory({ data: params }),
-    onMutate: async (_variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.inventory.lists() });
-      await queryClient.cancelQueries({ queryKey: queryKeys.inventory.details() });
-
-      const previousLists = queryClient.getQueriesData<InventoryListResult>({
-        queryKey: queryKeys.inventory.lists(),
-      });
-      const previousDetails = queryClient.getQueriesData<InventoryDetailResult>({
-        queryKey: queryKeys.inventory.details(),
-      });
-
-      // Adjustment writes are row-scoped or single-row product/location scoped
-      // on the server. Let refetch reconcile exact rows instead of patching
-      // aggregates across lots, dispositions, or serialized units.
-      return { previousLists, previousDetails };
-    },
-    onError: (error, _variables, context) => {
-      if (!context) return;
-      context.previousLists.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-      context.previousDetails.forEach(([key, data]) => {
-        queryClient.setQueryData(key, data);
-      });
-      toast.error(formatInventoryMutationError(error, 'Failed to adjust inventory'));
-    },
-    onSuccess: (data, variables) => {
-      toast.success('Inventory adjusted successfully');
-
-      invalidateInventoryStockMutationQueries(queryClient, {
-        productId: variables.productId,
-        result: data,
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
-    },
-  });
-}
 
 /**
  * Fetch inventory movements with filtering (general query, not tied to specific inventory item)

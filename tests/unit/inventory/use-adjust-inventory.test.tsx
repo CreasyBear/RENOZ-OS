@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
@@ -73,6 +75,12 @@ function inventoryList(items: Array<Record<string, unknown>>) {
   }
 }
 
+const root = process.cwd()
+
+function read(path: string): string {
+  return readFileSync(join(root, path), 'utf8')
+}
+
 describe('useAdjustInventory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -113,7 +121,7 @@ describe('useAdjustInventory', () => {
       ])
     )
 
-    const { useAdjustInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useAdjustInventory } = await import('@/hooks/inventory/use-adjust-inventory')
     const { result } = renderHook(() => useAdjustInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -159,7 +167,7 @@ describe('useAdjustInventory', () => {
       ])
     )
 
-    const { useAdjustInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useAdjustInventory } = await import('@/hooks/inventory/use-adjust-inventory')
     const { result } = renderHook(() => useAdjustInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -191,7 +199,7 @@ describe('useAdjustInventory', () => {
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { useAdjustInventory } = await import('@/hooks/inventory/use-inventory')
+    const { useAdjustInventory } = await import('@/hooks/inventory/use-adjust-inventory')
     const { result } = renderHook(() => useAdjustInventory(), {
       wrapper: createWrapper(queryClient),
     })
@@ -239,5 +247,19 @@ describe('useAdjustInventory', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.inventory.movementsAll(),
     })
+  })
+
+  it('keeps adjustment mutation orchestration outside the broad inventory hook module', () => {
+    const inventoryHook = read('src/hooks/inventory/use-inventory.ts')
+    const adjustHook = read('src/hooks/inventory/use-adjust-inventory.ts')
+    const inventoryIndex = read('src/hooks/inventory/index.ts')
+
+    expect(inventoryHook).toContain("export { useAdjustInventory } from './use-adjust-inventory'")
+    expect(inventoryHook).not.toContain('adjustInventory({ data: params })')
+    expect(inventoryHook).not.toContain('Adjustment writes are row-scoped')
+    expect(adjustHook).toContain('adjustInventory({ data: params })')
+    expect(adjustHook).toContain('Adjustment writes are row-scoped')
+    expect(adjustHook).toContain('invalidateInventoryStockMutationQueries(queryClient')
+    expect(inventoryIndex).toContain("export { useAdjustInventory } from './use-adjust-inventory'")
   })
 })
