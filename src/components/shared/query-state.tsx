@@ -24,6 +24,7 @@ import type { LucideIcon } from "lucide-react"
 import { LoadingState, type LoadingStateProps } from "./loading-state"
 import { ErrorState } from "./error-state"
 import { EmptyState } from "./empty-state"
+import { formatQueryStateError } from "./query-state-feedback"
 import { cn } from "~/lib/utils"
 
 export interface QueryStateProps {
@@ -94,7 +95,7 @@ export function QueryState({
     return (
       <div className={cn(className)}>
         <ErrorState
-          message={error.message}
+          message={formatQueryStateError(error)}
           onRetry={onRetry}
           isRetrying={isRetrying}
         />

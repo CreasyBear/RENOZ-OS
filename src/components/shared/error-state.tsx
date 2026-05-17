@@ -7,7 +7,7 @@
  * ```tsx
  * <ErrorState
  *   title="Failed to load customers"
- *   message={error.message}
+ *   message="Customers are temporarily unavailable. Please refresh and try again."
  *   onRetry={() => refetch()}
  * />
  * ```

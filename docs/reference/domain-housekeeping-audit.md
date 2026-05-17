@@ -1120,8 +1120,12 @@ What is messy:
   - Files: `src/hooks/files/use-files-supabase.ts`, `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`
   - Revalidated and remediated in Reliability Maintainer Sprint 45. Exhausted upload retries now throw stable retry guidance while preserving the original error as `cause`, SKU copy diagnostics are sanitized before logging, and job-progress notification failure text uses the automation job feedback helper instead of raw job metadata.
 
+- **Closed 2026-05-17: shared QueryState read failures use formatter-owned feedback**
+  - Files: `src/components/shared/query-state.tsx`, `src/components/shared/query-state-feedback.ts`, `src/components/shared/error-state.tsx`
+  - Revalidated and remediated in Reliability Maintainer Sprint 46. Shared `QueryState` now preserves normalized `ReadQueryError` messages while mapping raw auth/not-found/rate-limit states to stable copy and failing closed for raw validation/system/unknown technical failures. The shared `ErrorState` example no longer teaches `message={error.message}`.
+
 - **User-facing surfaces still often expose raw technical error strings**
-  - Current examples: `src/routes/_authenticated/admin/users/import-page.tsx` and `src/components/domain/financial/credit-notes-list-container.tsx`. The shared bulk-import wizard still logs bounded caught-exception messages for diagnostics, but its operator-facing feedback was normalized in Sprint 43.
+  - Current examples: `src/routes/_authenticated/admin/users/import-page.tsx` and `src/components/domain/financial/credit-notes-list-container.tsx`. Direct `ErrorState` callers outside `QueryState` still need local review when they pass raw error strings. The shared bulk-import wizard still logs bounded caught-exception messages for diagnostics, but its operator-facing feedback was normalized in Sprint 43.
   - A recurring pattern in UI containers and dialogs is direct rendering of thrown messages or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
 
 - **The repo has a strong centralized resilience helper, but adoption is incomplete**
