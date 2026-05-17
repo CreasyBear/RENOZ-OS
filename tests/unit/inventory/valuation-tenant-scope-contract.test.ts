@@ -44,13 +44,21 @@ describe('inventory valuation tenant-scope contract', () => {
 
   it('keeps finance integrity and aging joins organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const financeIntegritySource = compact(
+      read('src/server/functions/inventory/finance-integrity-summary.ts')
+    );
 
     expect(source).toContain(
+      "import{getFinanceIntegritySummary}from'./finance-integrity-summary'"
+    );
+    expect(source).not.toContain('ASabsolute_drift');
+    expect(financeIntegritySource).toContain(
       'LEFTJOINproductspONp.id=i.product_idANDp.organization_id=${organizationId}ANDp.deleted_atISNULL'
     );
-    expect(source).toContain(
+    expect(financeIntegritySource).toContain(
       'LEFTJOINwarehouse_locationslONl.id=i.location_idANDl.organization_id=${organizationId}'
     );
+    expect(financeIntegritySource).toContain('WHEREi.organization_id=${organizationId}');
     expect(source).toContain(
       'innerJoin(inventory,and(eq(inventoryCostLayers.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
     );

@@ -15,6 +15,10 @@ const rmaAwarePredicateFiles = [
 
 const appConsumerFiles = [
   'src/server/functions/financial/_shared/financial-close-readiness.ts',
+  'src/server/functions/inventory/finance-integrity-summary.ts',
+];
+
+const inventoryValuationEntrypointFiles = [
   'src/server/functions/inventory/valuation.ts',
 ];
 
@@ -53,6 +57,23 @@ describe('finance integrity shipment-link RMA contract', () => {
 
       expect(source, `${file} should consume the shared aggregate reader`).toContain(
         'readInventoryFinanceIntegrityAggregate'
+      );
+      expect(source, `${file} should not own duplicated shipment mismatch SQL`).not.toContain(
+        'shipment_mismatch AS'
+      );
+      expect(source, `${file} should not own duplicated serialized event predicate`).not.toContain(
+        'FROM serialized_item_events sie'
+      );
+    }
+
+    for (const file of inventoryValuationEntrypointFiles) {
+      const source = read(file);
+
+      expect(source, `${file} should consume the inventory finance summary boundary`).toContain(
+        'getFinanceIntegritySummary'
+      );
+      expect(source, `${file} should not own duplicated drift-row SQL`).not.toContain(
+        'AS absolute_drift'
       );
       expect(source, `${file} should not own duplicated shipment mismatch SQL`).not.toContain(
         'shipment_mismatch AS'
