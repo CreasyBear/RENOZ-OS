@@ -23,24 +23,38 @@ function sliceBetween(source: string, startMarker: string, endMarker: string): s
 describe('inventory stock count tenant-scope contract', () => {
   it('keeps stock count parent mutations organization-scoped', () => {
     const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const completeHelperSource = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(source).toContain('withAuth({permission:PERMISSIONS.inventory.count})');
+    expect(source).toContain(
+      "import{completeStockCountReconciliation}from'./complete-stock-count-reconciliation'"
+    );
+    expect(source).toContain(
+      'returncompleteStockCountReconciliation({organizationId:ctx.organizationId,userId:ctx.user.id,data,})'
+    );
     expect(source).toContain("sql`SELECTset_config('app.organization_id',${ctx.organizationId},false)`");
+    expect(completeHelperSource).toContain(
+      "sql`SELECTset_config('app.organization_id',${organizationId},false)`"
+    );
     expect(source).toContain(
       'where(and(eq(stockCounts.id,id),eq(stockCounts.organizationId,ctx.organizationId)))'
     );
-    expect(source).toContain(
-      'where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,ctx.organizationId)))'
+    expect(completeHelperSource).toContain(
+      'where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,organizationId)))'
     );
     expect(source).not.toContain('.where(eq(stockCounts.id,id))');
-    expect(source).not.toContain('.where(eq(stockCounts.id,data.id))');
+    expect(completeHelperSource).not.toContain('.where(eq(stockCounts.id,data.id))');
   });
 
   it('locks the parent count and reads completion items inside the transaction', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const source = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(source).toContain(
-      "from(stockCounts).where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,ctx.organizationId))).for('update').limit(1)"
+      "from(stockCounts).where(and(eq(stockCounts.id,data.id),eq(stockCounts.organizationId,organizationId))).for('update').limit(1)"
     );
     expect(source).toContain('constitems=awaittx.select().from(stockCountItems)');
     expect(source.indexOf("for('update').limit(1)")).toBeLessThan(
@@ -158,20 +172,24 @@ describe('inventory stock count tenant-scope contract', () => {
   });
 
   it('keeps reconciliation inventory and serialized lineage writes organization-scoped', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const source = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(source).toContain(
-      'where(and(eq(inventory.id,inv.id),eq(inventory.organizationId,ctx.organizationId)))'
+      'where(and(eq(inventory.id,inv.id),eq(inventory.organizationId,organizationId)))'
     );
     expect(source).toContain(
-      'where(and(eq(serializedItems.id,serializedItem.id),eq(serializedItems.organizationId,ctx.organizationId)))'
+      'where(and(eq(serializedItems.id,serializedItem.id),eq(serializedItems.organizationId,organizationId)))'
     );
     expect(source).not.toContain('.where(eq(inventory.id,inv.id))');
     expect(source).not.toContain('.where(eq(serializedItems.id,serializedItem.id))');
   });
 
   it('locks all counted rows and rejects stale count-sheet snapshots before reconciliation', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const source = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(source).toContain('functionassertStockCountInventorySnapshotFresh');
     expect(source).toContain('constinventoryIds=Array.from(newSet(items.map((item)=>item.inventoryId)))');
@@ -181,7 +199,7 @@ describe('inventory stock count tenant-scope contract', () => {
       "thrownewConflictError('Inventorychangedsincecountsheetwasgenerated.Refreshandrecountbeforecompleting.')"
     );
     expect(source).toContain(
-      "where(and(eq(inventory.organizationId,ctx.organizationId),inArray(inventory.id,inventoryIds))).for('update')"
+      "where(and(eq(inventory.organizationId,organizationId),inArray(inventory.id,inventoryIds))).for('update')"
     );
     expect(source).toContain(
       'assertStockCountInventorySnapshotFresh({currentQuantity:Number(inv.quantityOnHand??0),expectedQuantity:item.expectedQuantity,});'
@@ -218,7 +236,7 @@ describe('inventory stock count tenant-scope contract', () => {
   });
 
   it('preserves stock count finance and serialized-lineage continuity references', () => {
-    const source = read('src/server/functions/inventory/stock-counts.ts');
+    const source = read('src/server/functions/inventory/complete-stock-count-reconciliation.ts');
 
     expect(source).toContain('consumeLayersFIFO');
     expect(source).toContain('createReceiptLayersWithCostComponents');
@@ -230,8 +248,9 @@ describe('inventory stock count tenant-scope contract', () => {
   });
 
   it('returns affected cost layer ids from stock count reconciliation', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
-    const completeBlock = sliceBetween(source, 'exportconstcompleteStockCount', 'exportconstcancelStockCount');
+    const completeBlock = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(completeBlock).toContain('constaffectedLayerIds=newSet<string>();');
     expect(completeBlock).toContain('affectedLayerIds.add(delta.layerId);');
@@ -241,8 +260,9 @@ describe('inventory stock count tenant-scope contract', () => {
   });
 
   it('returns affected product ids from stock count reconciliation', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
-    const completeBlock = sliceBetween(source, 'exportconstcompleteStockCount', 'exportconstcancelStockCount');
+    const completeBlock = compact(
+      read('src/server/functions/inventory/complete-stock-count-reconciliation.ts')
+    );
 
     expect(completeBlock).toContain('constaffectedProductIds=newSet<string>();');
     expect(completeBlock).toContain('affectedProductIds.add(inv.productId);');
