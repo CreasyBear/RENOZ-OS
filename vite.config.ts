@@ -1,5 +1,6 @@
 // vite.config.ts
 import { defineConfig } from 'vite'
+import type { LoggingFunction, RollupLog } from 'rollup'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
@@ -14,6 +15,44 @@ const REACT_DOM_SERVER_NODE_SHIM = fileURLToPath(
 const REACT_DOM_SERVER_BROWSER_SHIM = fileURLToPath(
   new URL('./src/lib/shims/react-dom-server.browser.ts', import.meta.url)
 )
+
+function isKnownDependencyUseClientDirectiveWarning(warning: RollupLog) {
+  return (
+    warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
+    warning.message?.includes('"use client"') &&
+    warning.message.includes('node_modules/')
+  )
+}
+
+function isKnownDependencyUnusedExternalImportWarning(warning: RollupLog) {
+  return (
+    warning.message?.includes('node_modules/') &&
+    warning.message.includes(' imported from external module ') &&
+    warning.message.includes(' but never used ')
+  )
+}
+
+function isKnownDependencyEmptyLibChunkWarning(warning: RollupLog) {
+  return warning.message?.startsWith('Generated an empty chunk: "_libs/') === true
+}
+
+function isKnownDependencyBuildWarning(warning: RollupLog) {
+  return (
+    isKnownDependencyUseClientDirectiveWarning(warning) ||
+    isKnownDependencyUnusedExternalImportWarning(warning) ||
+    isKnownDependencyEmptyLibChunkWarning(warning)
+  )
+}
+
+function warnUnlessKnownDependencyBuildWarning(
+  warning: RollupLog,
+  warn: LoggingFunction,
+) {
+  if (isKnownDependencyBuildWarning(warning)) {
+    return
+  }
+  warn(warning)
+}
 
 /**
  * Provides the tanstack-start-injected-head-scripts virtual module.
@@ -291,6 +330,7 @@ export default defineConfig(({ command }) => ({
       },
       rollupConfig: {
         maxParallelFileOps: 2,
+        onwarn: warnUnlessKnownDependencyBuildWarning,
       },
     }),
     react(),
@@ -316,14 +356,9 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       // Minimal parallelism to reduce peak memory (OOM on Vercel 8GB)
       maxParallelFileOps: 2,
-      onwarn(warning, warn) {
-        // Suppress "use client" directive warnings from node_modules (framer-motion, radix, etc.)
-        // - harmless: Rollup strips them during SSR bundle; apps work correctly
-        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message?.includes('use client')) {
-          return
-        }
-        warn(warning)
-      },
+      // Suppress known dependency-only Rollup noise.
+      // App-owned warnings and chunk-size warnings stay visible.
+      onwarn: warnUnlessKnownDependencyBuildWarning,
       // Disable manualChunks - reduces peak memory during build (chunk splitting increases it)
       // Avoid output: {} which can override Rollup asset path defaults and cause chunk 404s
       output: {

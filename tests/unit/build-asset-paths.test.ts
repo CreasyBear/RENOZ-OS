@@ -13,4 +13,18 @@ describe('build asset path config', () => {
     const content = readFileSync(configPath, 'utf-8');
     expect(content).toMatch(/base:\s*['"]\/['"]/);
   });
+
+  it('keeps build warning filtering scoped to known dependency-only noise', () => {
+    const configPath = join(process.cwd(), 'vite.config.ts');
+    const content = readFileSync(configPath, 'utf-8');
+
+    expect(content).toContain('isKnownDependencyBuildWarning');
+    expect(content).toContain("warning.code === 'MODULE_LEVEL_DIRECTIVE'");
+    expect(content).toContain('node_modules/');
+    expect(content).toContain('imported from external module');
+    expect(content).toContain('Generated an empty chunk: "_libs/');
+    expect(content.match(/onwarn: warnUnlessKnownDependencyBuildWarning/g)).toHaveLength(2);
+    expect(content).toContain('manualChunks: undefined');
+    expect(content).not.toContain('chunkSizeWarningLimit');
+  });
 });
