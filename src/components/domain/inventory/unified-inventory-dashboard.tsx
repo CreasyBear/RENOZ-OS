@@ -28,17 +28,14 @@ import {
   ArrowRight,
   Edit2,
   Package,
-  MapPin,
   AlertTriangle,
   Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { toast, useOrgFormat } from '@/hooks';
+import { toast } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
 import { DataTableEmpty } from '@/components/shared/data-table';
 import {
@@ -47,8 +44,6 @@ import {
   useMovementsDashboard,
   useTriggeredAlerts,
   useAcknowledgeAlert,
-  type CategoryStock,
-  type LocationStock,
 } from '@/hooks/inventory';
 import type { TriggeredAlert } from '@/lib/schemas/inventory';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
@@ -69,6 +64,7 @@ import {
   InventoryDashboardMovementsTimeline,
 } from './inventory-dashboard-movements-timeline';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
+import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
 import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
 
 // ============================================================================
@@ -90,7 +86,6 @@ interface TrackedItemStatus {
 
 export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard() {
   const navigate = useNavigate();
-  const { formatCurrency } = useOrgFormat();
   const [isTrackedDialogOpen, setIsTrackedDialogOpen] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -137,10 +132,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   // Transformations
   // ─────────────────────────────────────────────────────────────────────────
-  const formatValue = useCallback(
-    (value: number) => formatCurrency(value, { cents: false }),
-    [formatCurrency]
-  );
   const trackedItemsWithStatus: TrackedItemStatus[] = (trackedItems ?? []).map(
     (item: { id: string; sku: string; name: string; quantity: number }) => ({
       productId: item.id,
@@ -285,49 +276,13 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           Section 4: Stock Breakdown (Category + Location + Tracked Items)
       ───────────────────────────────────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Stock by Category */}
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">On-Hand by Category</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <CategorySkeleton />
-            ) : (
-              <div className="space-y-4">
-                {showWmsDegraded ? (
-                  <InventoryDashboardReadWarning
-                    title="Category breakdown may be stale."
-                    message={wmsErrorMessage}
-                  />
-                ) : null}
-                <CategoryList categories={wmsData?.stockByCategory ?? []} formatValue={formatValue} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Stock by Location */}
-        <Card className="lg:col-span-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">On-Hand by Location</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <LocationSkeleton />
-            ) : (
-              <div className="space-y-4">
-                {showWmsDegraded ? (
-                  <InventoryDashboardReadWarning
-                    title="Location breakdown may be stale."
-                    message={wmsErrorMessage}
-                  />
-                ) : null}
-                <LocationList locations={wmsData?.stockByLocation ?? []} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <InventoryDashboardStockBreakdownCards
+          categories={wmsData?.stockByCategory ?? []}
+          locations={wmsData?.stockByLocation ?? []}
+          isLoading={isLoading}
+          showDegraded={showWmsDegraded}
+          readErrorMessage={wmsErrorMessage}
+        />
 
         {/* Tracked Items */}
         <Card className="lg:col-span-1">
@@ -457,97 +412,6 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
 });
 
 // ============================================================================
-// CATEGORY LIST
-// ============================================================================
-
-function CategoryList({
-  categories,
-  formatValue,
-}: {
-  categories: CategoryStock[];
-  formatValue: (v: number) => string;
-}) {
-  if (categories.length === 0) {
-    return (
-      <DataTableEmpty
-        variant="empty"
-        icon={Package}
-        title="No categories found"
-        description="Inventory items will be grouped by category once products are assigned categories."
-        className="py-4"
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {categories.slice(0, 5).map((cat) => (
-        <div key={cat.categoryId ?? 'uncategorized'} className="flex items-center justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{cat.categoryName}</p>
-            <p className="text-xs text-muted-foreground">{formatValue(cat.totalValue)}</p>
-          </div>
-          <Badge variant="secondary" className="ml-2 tabular-nums">
-            {cat.unitCount.toLocaleString()}
-          </Badge>
-        </div>
-      ))}
-      {categories.length > 5 && (
-        <p className="text-xs text-muted-foreground text-center pt-2">
-          +{categories.length - 5} more categories
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
-// LOCATION LIST
-// ============================================================================
-
-function LocationList({
-  locations,
-}: {
-  locations: LocationStock[];
-}) {
-  if (locations.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No locations configured</p>
-        <Link to="/inventory/locations" className={cn(buttonVariants({ variant: 'link', size: 'sm' }))}>
-          Add a location
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {locations.slice(0, 5).map((loc) => (
-        <div key={loc.locationId}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium truncate">{loc.locationName}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {loc.percentage}%
-            </span>
-          </div>
-          <Progress value={loc.percentage} className="h-1.5" />
-        </div>
-      ))}
-      {locations.length > 5 && (
-        <Link
-          to="/inventory/locations"
-          className="block text-xs text-muted-foreground text-center pt-2 hover:text-foreground"
-        >
-          View all {locations.length} locations
-        </Link>
-      )}
-    </div>
-  );
-}
-
-// ============================================================================
 // TRACKED ITEMS LIST
 // ============================================================================
 
@@ -614,38 +478,6 @@ function TrackedItemsList({
 // ============================================================================
 // SKELETONS
 // ============================================================================
-
-function CategorySkeleton() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-4 w-24 mb-1" />
-            <Skeleton className="h-3 w-16" />
-          </div>
-          <Skeleton className="h-5 w-12" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function LocationSkeleton() {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i}>
-          <div className="flex justify-between mb-1">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-8" />
-          </div>
-          <Skeleton className="h-1.5 w-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function TrackedItemsSkeleton() {
   return (
