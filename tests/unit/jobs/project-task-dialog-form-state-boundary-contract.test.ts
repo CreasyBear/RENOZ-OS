@@ -11,17 +11,19 @@ function read(path: string): string {
 describe('project task dialog form state boundary contract', () => {
   it('keeps task dialog form schemas and pure reset helpers out of the dialog renderer', () => {
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
+    const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
     const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const formState = read('src/components/domain/jobs/projects/project-task-dialog-form-state.ts');
-    const dialogRenderers = `${dialogs}\n${editDialog}`;
+    const dialogRenderers = `${createDialog}\n${editDialog}`;
 
-    expect(dialogs).toContain("from './project-task-dialog-form-state'");
+    expect(createDialog).toContain("from './project-task-dialog-form-state'");
     expect(editDialog).toContain("from './project-task-dialog-form-state'");
-    expect(dialogs).toContain('buildProjectTaskTemplateOptions(templatesData?.templates ?? [])');
-    expect(dialogs).toContain('getProjectTaskCreateDialogDefaultValues()');
-    expect(dialogs).toContain('getProjectTaskCreateMoreResetValues(values)');
+    expect(createDialog).toContain('buildProjectTaskTemplateOptions(templatesData?.templates ?? [])');
+    expect(createDialog).toContain('getProjectTaskCreateDialogDefaultValues()');
+    expect(createDialog).toContain('getProjectTaskCreateMoreResetValues(values)');
     expect(editDialog).toContain('getProjectTaskEditDialogDefaultValues()');
     expect(editDialog).toContain('getProjectTaskEditDialogResetValues(task)');
+    expect(dialogs).not.toContain("from './project-task-dialog-form-state'");
     expect(dialogRenderers).not.toContain("z.enum(['pending'");
     expect(dialogRenderers).not.toContain("z.enum(['urgent'");
     expect(dialogRenderers).not.toContain('const dueDateStr =');

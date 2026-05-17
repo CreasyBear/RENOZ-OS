@@ -11,11 +11,12 @@ function read(path: string): string {
 describe('project task dialog fields boundary contract', () => {
   it('keeps repeated create/edit field rendering behind focused field components', () => {
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
+    const createDialog = read('src/components/domain/jobs/projects/task-create-dialog.tsx');
     const editDialog = read('src/components/domain/jobs/projects/task-edit-dialog.tsx');
     const fields = read('src/components/domain/jobs/projects/project-task-dialog-fields.tsx');
-    const dialogRenderers = `${dialogs}\n${editDialog}`;
+    const dialogRenderers = `${createDialog}\n${editDialog}`;
 
-    expect(dialogs).toContain("from './project-task-dialog-fields'");
+    expect(createDialog).toContain("from './project-task-dialog-fields'");
     expect(editDialog).toContain("from './project-task-dialog-fields'");
     expect(dialogRenderers).toContain('ProjectTaskPriorityField');
     expect(dialogRenderers).toContain('ProjectTaskStatusField');
@@ -26,6 +27,7 @@ describe('project task dialog fields boundary contract', () => {
     expect(dialogRenderers).not.toContain('PopoverTrigger');
     expect(dialogRenderers).not.toContain('NumberField');
     expect(dialogRenderers).not.toContain("value=\"__invite_user__\"");
+    expect(dialogs).not.toContain("from './project-task-dialog-fields'");
 
     expect(fields).toContain('PROJECT_TASK_PRIORITY_OPTIONS');
     expect(fields).toContain('PROJECT_TASK_STATUS_OPTIONS');
