@@ -13,12 +13,12 @@
  * @source tasks from useProjectTasks hook
  * @source workstreams from useWorkstreams hook
  * @source users from useUserLookup hook
- * @source mutations from useUpdateJobTaskStatus, useDeleteProjectTask hooks
+ * @source mutations from project task mutation hooks
  *
  * SPRINT-03: Enhanced task tab maximizing schema potential
  */
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus,
   ExternalLink,
@@ -26,13 +26,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Link } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { toast } from '@/lib/toast';
 
 // Hooks
 import {
-  formatProjectTaskMutationError,
   useProjectTasks,
-  useDeleteProjectTask,
   useWorkstreams,
   useSiteVisitsByProject,
 } from '@/hooks/jobs';
@@ -44,6 +41,7 @@ import {
   ProjectTaskFilterPopover,
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
+import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';
 import { useProjectTaskQuickAdd } from './project-task-quick-add';
 import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
@@ -94,7 +92,6 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
   const { data: tasksData, error, isLoading, refetch } = useProjectTasks({ projectId });
   const { data: workstreamsData } = useWorkstreams(projectId);
   const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
-  const deleteTask = useDeleteProjectTask(projectId);
   const { getUser, currentUserId } = useUserLookup();
   const { filters, sortBy, updateFilters, updateSort } = useProjectTaskRouteState(projectId);
 
@@ -109,19 +106,10 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
 
   const [editingTask, setEditingTask] = useState<TaskWithWorkstream | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-
-  // Undo deletion pattern - track tasks pending deletion
-  const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
-  const deleteTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
-  // Cleanup timeouts on unmount to prevent memory leaks
-  useEffect(() => {
-    const timeouts = deleteTimeouts.current;
-    return () => {
-      timeouts.forEach((timeout) => clearTimeout(timeout));
-      timeouts.clear();
-    };
-  }, []);
+  const { pendingDeletions, handleDeleteTask } = useProjectTaskDeleteMutation({
+    projectId,
+    onDeleted: refetch,
+  });
 
   // Get workstreams for grouping
   const workstreams = useMemo(
@@ -168,65 +156,6 @@ export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTa
     onCompleteProjectClick,
   });
   const { handleReorderTasks } = useProjectTaskReorderMutation({ tasks });
-
-  const handleDeleteTask = useCallback(
-    (task: TaskWithWorkstream) => {
-      const taskId = task.id;
-      const jobId = task.jobId;
-
-      // Add to pending deletions immediately (optimistic)
-      setPendingDeletions((prev) => new Set(prev).add(taskId));
-
-      // Set timeout to actually delete after 5 seconds
-      const timeoutId = setTimeout(async () => {
-        try {
-          await deleteTask.mutateAsync({ taskId, jobId });
-          // Clean up after successful deletion
-          deleteTimeouts.current.delete(taskId);
-          setPendingDeletions((prev) => {
-            const next = new Set(prev);
-            next.delete(taskId);
-            return next;
-          });
-          refetch();
-        } catch (error) {
-          // On error, restore the task
-          setPendingDeletions((prev) => {
-            const next = new Set(prev);
-            next.delete(taskId);
-            return next;
-          });
-          toast.error(formatProjectTaskMutationError(error, 'delete'));
-        }
-      }, 5000);
-
-      deleteTimeouts.current.set(taskId, timeoutId);
-
-      // Show toast with undo action
-      toast.success(`Task "${task.title}" deleted`, {
-        duration: 5000,
-        action: {
-          label: 'Undo',
-          onClick: () => {
-            // Cancel the deletion
-            const timeout = deleteTimeouts.current.get(taskId);
-            if (timeout) {
-              clearTimeout(timeout);
-              deleteTimeouts.current.delete(taskId);
-            }
-            // Restore the task
-            setPendingDeletions((prev) => {
-              const next = new Set(prev);
-              next.delete(taskId);
-              return next;
-            });
-            toast.info('Task restored');
-          },
-        },
-      });
-    },
-    [deleteTask, refetch]
-  );
 
   // Check if any filters are active (moved before early returns for proper scoping)
   const hasActiveFilters = hasProjectTaskActiveFilters(filters);

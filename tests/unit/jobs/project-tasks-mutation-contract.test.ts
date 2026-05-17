@@ -45,6 +45,7 @@ describe('project tasks mutation contract', () => {
   it('keeps project task mutations job-scoped, cache-safe, and operator-safe', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
     const quickAdd = read('src/components/domain/jobs/projects/project-task-quick-add.ts');
+    const deleteMutation = read('src/components/domain/jobs/projects/project-task-delete-mutation.ts');
     const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
     const reorderMutation = read('src/components/domain/jobs/projects/project-task-reorder-mutation.ts');
     const dialogs = read('src/components/domain/jobs/projects/task-dialogs.tsx');
@@ -53,6 +54,7 @@ describe('project tasks mutation contract', () => {
     const server = read('src/server/functions/jobs/job-tasks.ts');
     const schema = read('src/lib/schemas/jobs/job-tasks.ts');
     const compactTab = compact(tab);
+    const compactDeleteMutation = compact(deleteMutation);
     const compactReorderMutation = compact(reorderMutation);
     const compactDialogs = compact(dialogs);
     const compactHooks = compact(hooks);
@@ -63,16 +65,18 @@ describe('project tasks mutation contract', () => {
     expect(tab).not.toContain("formatProjectTaskMutationError(error, 'create')");
     expect(statusMutation).toContain("formatProjectTaskMutationError(error, 'status')");
     expect(tab).not.toContain("formatProjectTaskMutationError(error, 'status')");
-    expect(tab).toContain("formatProjectTaskMutationError(error, 'delete')");
+    expect(deleteMutation).toContain("formatProjectTaskMutationError(error, 'delete')");
+    expect(tab).not.toContain("formatProjectTaskMutationError(error, 'delete')");
     expect(reorderMutation).toContain("formatProjectTaskMutationError(error, 'reorder')");
     expect(tab).not.toContain("formatProjectTaskMutationError(error, 'reorder')");
     expect(tab).not.toContain("toastError('Failed to create task. Please try again.')");
     expect(tab).not.toContain("toast.error('Failed to update task')");
     expect(tab).not.toContain("toast.error('Failed to delete task')");
     expect(tab).not.toContain("toast.error('Failed to reorder tasks')");
-    expect(compactTab).toContain('constjobId=task.jobId;');
+    expect(compactDeleteMutation).toContain('constjobId=task.jobId;');
     expect(compactReorderMutation).toContain('jobId,');
     expect(compactTab).not.toContain("constjobId=task.siteVisitId||'';");
+    expect(compactDeleteMutation).not.toContain("constjobId=task.siteVisitId||'';");
     expect(compactReorderMutation).not.toContain('jobId:firstTask.siteVisitId');
 
     expect(dialogs).toContain("formatProjectTaskMutationError(error, 'create')");
