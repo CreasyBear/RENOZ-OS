@@ -15,43 +15,53 @@ function compact(source: string): string {
 describe('inventory transfer tenant-scope contract', () => {
   it('keeps transfer authorization and transaction tenant-scoped', () => {
     const source = read('src/server/functions/inventory/transfers.ts');
+    const helperSource = read('src/server/functions/inventory/transfer-inventory-quantity.ts');
 
     expect(source).toContain(
       'const ctx = await withAuth({ permission: PERMISSIONS.inventory.transfer });'
     );
     expect(source).toContain(
-      "sql`SELECT set_config('app.organization_id', ${ctx.organizationId}, false)`"
+      "import { transferInventoryQuantity } from './transfer-inventory-quantity';"
     );
-    expect(source).toContain('eq(products.organizationId, ctx.organizationId)');
+    expect(source).toContain('return transferInventoryQuantity({');
+    expect(source).toContain('organizationId: ctx.organizationId');
+    expect(source).toContain('userId: ctx.user.id');
+    expect(source).toContain(
+      'data,'
+    );
+    expect(helperSource).toContain(
+      "sql`SELECT set_config('app.organization_id', ${organizationId}, false)`"
+    );
+    expect(helperSource).toContain('eq(products.organizationId, organizationId)');
   });
 
   it('keeps transfer inventory reads and final updates organization-scoped', () => {
-    const source = read('src/server/functions/inventory/transfers.ts');
+    const source = read('src/server/functions/inventory/transfer-inventory-quantity.ts');
 
-    expect(source).toContain('eq(inventory.organizationId, ctx.organizationId)');
+    expect(source).toContain('eq(inventory.organizationId, organizationId)');
     expect(source).toContain(
-      'where(and(eq(inventory.id, row.id), eq(inventory.organizationId, ctx.organizationId)))'
+      'where(and(eq(inventory.id, row.id), eq(inventory.organizationId, organizationId)))'
     );
     expect(source).toContain(
-      'and(eq(inventory.id, destRow.id), eq(inventory.organizationId, ctx.organizationId))'
+      'and(eq(inventory.id, destRow.id), eq(inventory.organizationId, organizationId))'
     );
     expect(source).toContain('eq(inventory.id, sourceInventory.id)');
     expect(source).toContain('eq(inventory.id, destInventory.id)');
   });
 
   it('locks the transfer product serialization gate inside the transaction', () => {
-    const source = compact(read('src/server/functions/inventory/transfers.ts'));
+    const source = compact(read('src/server/functions/inventory/transfer-inventory-quantity.ts'));
 
     expect(source).toContain('returnawaitdb.transaction(async(tx)=>{');
     expect(source).toContain(
-      "const[product]=awaittx.select({id:products.id,isSerialized:products.isSerialized}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,ctx.organizationId),isNull(products.deletedAt))).for('update').limit(1);"
+      "const[product]=awaittx.select({id:products.id,isSerialized:products.isSerialized}).from(products).where(and(eq(products.id,data.productId),eq(products.organizationId,organizationId),isNull(products.deletedAt))).for('update').limit(1);"
     );
     expect(source).toContain("if(product.isSerialized){");
     expect(source).not.toContain('const[product]=awaitdb.select');
   });
 
   it('preserves transfer finance and serialized-lineage continuity contracts', () => {
-    const source = read('src/server/functions/inventory/transfers.ts');
+    const source = read('src/server/functions/inventory/transfer-inventory-quantity.ts');
 
     expect(source).toContain('moveLayersBetweenInventory');
     expect(source).toContain('recomputeInventoryValueFromLayers');
@@ -62,7 +72,7 @@ describe('inventory transfer tenant-scope contract', () => {
   });
 
   it('preserves source disposition when transfer creates destination inventory and lineage', () => {
-    const source = compact(read('src/server/functions/inventory/transfers.ts'));
+    const source = compact(read('src/server/functions/inventory/transfer-inventory-quantity.ts'));
 
     expect(source).toContain(
       "functionresolveTransferDestinationStatus(status:InventoryStatus):TransferDestinationStatus{if(status==='damaged'||status==='returned'||status==='quarantined'){returnstatus;}return'available';}"
@@ -86,7 +96,9 @@ describe('inventory transfer tenant-scope contract', () => {
   });
 
   it('requires row scope for non-serialized source selection', () => {
-    const transferServer = compact(read('src/server/functions/inventory/transfers.ts'));
+    const transferServer = compact(
+      read('src/server/functions/inventory/transfer-inventory-quantity.ts')
+    );
     const transferHook = compact(read('src/hooks/inventory/use-transfer-inventory.ts'));
 
     expect(transferServer).toContain("if(!product.isSerialized&&!data.inventoryId){");
@@ -102,7 +114,7 @@ describe('inventory transfer tenant-scope contract', () => {
   });
 
   it('persists transfer reason as movement context without container-side notes duplication', () => {
-    const transferServer = read('src/server/functions/inventory/transfers.ts');
+    const transferServer = read('src/server/functions/inventory/transfer-inventory-quantity.ts');
     const detailContainer = read(
       'src/components/domain/inventory/containers/inventory-detail-container.tsx'
     );
