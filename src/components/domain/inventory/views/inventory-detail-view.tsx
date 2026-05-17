@@ -26,7 +26,6 @@ import {
   AlertTriangle,
   Hash,
   Barcode,
-  Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,8 +38,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { UnifiedActivityTimeline } from '@/components/shared/activity';
-import { getActivitiesFeedSearch } from '@/lib/activities';
 import { MobileSidebarSheet } from '@/components/shared/mobile-sidebar-sheet';
 import type { UnifiedActivity } from '@/lib/schemas/unified-activity';
 import type { InventoryItemAlert } from '@/lib/schemas/inventory/item-alerts';
@@ -62,6 +59,7 @@ import { CostLayersTabContent } from './inventory-cost-layers-tab-content';
 import { QualityTabContent } from './inventory-quality-tab-content';
 import { CostingBreakdown } from './inventory-costing-breakdown';
 import { RightMetaPanel } from './inventory-right-meta-panel';
+import { ActivityTabContent } from './inventory-activity-tab-content';
 
 // ============================================================================
 // TYPES
@@ -477,28 +475,12 @@ export const InventoryDetailView = memo(function InventoryDetailView({
 
             {/* Activity Tab */}
             <TabsContent value="activity" className="mt-0 pt-6">
-              <div className="space-y-4">
-                {onLogActivity && (
-                  <div className="flex items-center justify-end">
-                    <Button size="sm" onClick={onLogActivity}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Log Activity
-                    </Button>
-                  </div>
-                )}
-                <UnifiedActivityTimeline
-                  activities={activities}
-                  isLoading={activitiesLoading}
-                  hasError={!!activitiesError}
-                  error={activitiesError || undefined}
-                  title="Activity Timeline"
-                  description="Complete history of inventory changes, stock movements, and system events"
-                  showFilters={true}
-                  viewAllSearch={getActivitiesFeedSearch('inventory')}
-                  emptyMessage="No activity recorded yet"
-                  emptyDescription="Inventory activities will appear here when changes are made."
-                />
-              </div>
+              <ActivityTabContent
+                activities={activities}
+                activitiesLoading={activitiesLoading}
+                activitiesError={activitiesError}
+                onLogActivity={onLogActivity}
+              />
             </TabsContent>
           </Tabs>
         </div>
