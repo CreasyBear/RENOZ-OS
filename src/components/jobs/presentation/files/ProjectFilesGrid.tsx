@@ -133,6 +133,14 @@ function getFileExtension(filename?: string | null): string {
   return filename.split('.').pop()?.toUpperCase() || '';
 }
 
+function isProjectFileImage(file: Pick<ProjectFile, 'mimeType'>): boolean {
+  return file.mimeType?.startsWith('image/') === true;
+}
+
+function isProjectFilePdf(file: Pick<ProjectFile, 'mimeType'>): boolean {
+  return file.mimeType?.includes('pdf') === true;
+}
+
 // ============================================================================
 // COMPONENTS
 // ============================================================================
@@ -165,7 +173,7 @@ function FileCard({
   const config = FILE_TYPE_CONFIG[file.fileType as ProjectFileType];
   const IconComponent = config.icon;
   const extension = getFileExtension(file.fileName);
-  const isImage = false; // TODO: Detect from mimeType when properly stored
+  const isImage = isProjectFileImage(file);
 
   if (viewMode === 'list') {
     return (
@@ -335,8 +343,8 @@ function FilePreviewDialog({
 }) {
   if (!file) return null;
 
-  const isImage = file.mimeType?.startsWith('image/');
-  const isPdf = file.mimeType?.includes('pdf');
+  const isImage = isProjectFileImage(file);
+  const isPdf = isProjectFilePdf(file);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
