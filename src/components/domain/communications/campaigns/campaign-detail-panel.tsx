@@ -72,9 +72,16 @@ import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@
 import { StatusCell } from "@/components/shared/data-table/cells/status-cell";
 import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
 import { useReducedMotion } from "@/hooks/_shared/use-reduced-motion";
-import { useConfirmation, confirmations } from "@/hooks/_shared/use-confirmation";
+import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
-import { formatCommunicationCampaignMutationError } from "@/hooks/communications";
+import {
+  pauseCampaignFromDetail,
+  resumeCampaignFromDetail,
+  sendCampaignFromDetail,
+  testSendCampaignFromDetail,
+  type CampaignDetailActionFeedback,
+  type CampaignDetailActionMutations,
+} from "./campaign-detail-actions";
 import {
   getCampaignStatusVariant,
   getCampaignStageIndex,
@@ -111,6 +118,15 @@ const CAMPAIGN_STAT_STYLES = {
   warning: { iconClassName: "text-amber-600 dark:text-amber-400" },
   error: { iconClassName: "text-red-600 dark:text-red-400" },
 } as const;
+
+function showCampaignDetailActionFeedback(feedback: CampaignDetailActionFeedback[]) {
+  for (const item of feedback) {
+    const options = item.description ? { description: item.description } : undefined;
+    if (item.type === "success") toast.success(item.title, options);
+    if (item.type === "warning") toast.warning(item.title, options);
+    if (item.type === "error") toast.error(item.title, options);
+  }
+}
 
 // ============================================================================
 // SKELETON COMPONENT
@@ -268,6 +284,21 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   const resumeCampaignMutation = useResumeCampaign();
   const testSendMutation = useTestSendCampaign();
 
+  const campaignDetailActionMutations = useMemo<CampaignDetailActionMutations>(
+    () => ({
+      sendCampaign: (input) => sendCampaignMutation.mutateAsync(input),
+      pauseCampaign: (input) => pauseCampaignMutation.mutateAsync(input),
+      resumeCampaign: (input) => resumeCampaignMutation.mutateAsync(input),
+      testSendCampaign: (input) => testSendMutation.mutateAsync(input),
+    }),
+    [
+      pauseCampaignMutation,
+      resumeCampaignMutation,
+      sendCampaignMutation,
+      testSendMutation,
+    ]
+  );
+
   // Memoized computations
   const recipients = useMemo(
     () => recipientsData?.items ?? [],
@@ -288,67 +319,37 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   const handleSendCampaign = useCallback(async () => {
     if (!campaign) return;
 
-    // Validate recipients
-    if (campaign.recipientCount === 0) {
-      toast.error("Cannot send campaign", {
-        description: "This campaign has no recipients. Please add recipients before sending.",
-      });
-      return;
-    }
+    const result = await sendCampaignFromDetail({
+      campaign,
+      confirm,
+      mutations: campaignDetailActionMutations,
+    });
 
-    const { confirmed } = await confirm(
-      confirmations.sendCampaign(campaign.name, campaign.recipientCount)
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await sendCampaignMutation.mutateAsync({ id: campaign.id });
-      toast.success("Campaign sending started", {
-        description: `Your campaign "${campaign.name}" is now being sent to ${campaign.recipientCount} recipients.`,
-      });
-    } catch (error) {
-      toast.error("Failed to send campaign", {
-        description: formatCommunicationCampaignMutationError(error, "send"),
-      });
-    }
-  }, [campaign, confirm, sendCampaignMutation]);
+    showCampaignDetailActionFeedback(result.feedback);
+  }, [campaign, campaignDetailActionMutations, confirm]);
 
   const handlePauseCampaign = useCallback(async () => {
     if (!campaign) return;
 
-    const { confirmed } = await confirm(
-      confirmations.pauseCampaign(campaign.name)
-    );
+    const result = await pauseCampaignFromDetail({
+      campaign,
+      confirm,
+      mutations: campaignDetailActionMutations,
+    });
 
-    if (!confirmed) return;
-
-    try {
-      await pauseCampaignMutation.mutateAsync({ id: campaign.id });
-      toast.success("Campaign paused", {
-        description: `Campaign "${campaign.name}" has been paused. You can resume it later.`,
-      });
-    } catch (error) {
-      toast.error("Failed to pause campaign", {
-        description: formatCommunicationCampaignMutationError(error, "pause"),
-      });
-    }
-  }, [campaign, confirm, pauseCampaignMutation]);
+    showCampaignDetailActionFeedback(result.feedback);
+  }, [campaign, campaignDetailActionMutations, confirm]);
 
   const handleResumeCampaign = useCallback(async () => {
     if (!campaign) return;
 
-    try {
-      await resumeCampaignMutation.mutateAsync({ id: campaign.id });
-      toast.success("Campaign resumed", {
-        description: `Campaign "${campaign.name}" is now sending again.`,
-      });
-    } catch (error) {
-      toast.error("Failed to resume campaign", {
-        description: formatCommunicationCampaignMutationError(error, "resume"),
-      });
-    }
-  }, [campaign, resumeCampaignMutation]);
+    const result = await resumeCampaignFromDetail({
+      campaign,
+      mutations: campaignDetailActionMutations,
+    });
+
+    showCampaignDetailActionFeedback(result.feedback);
+  }, [campaign, campaignDetailActionMutations]);
 
   const handleEditCampaign = useCallback(() => {
     navigate({
@@ -373,19 +374,20 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
 
   const handleTestSend = useCallback(async () => {
     if (!campaign || !testEmail) return;
-    try {
-      await testSendMutation.mutateAsync({ campaignId: campaign.id, testEmail });
-      toast.success("Test email sent", {
-        description: `Sent to ${testEmail}`,
-      });
+
+    const result = await testSendCampaignFromDetail({
+      campaign,
+      testEmail,
+      mutations: campaignDetailActionMutations,
+    });
+
+    showCampaignDetailActionFeedback(result.feedback);
+
+    if (result.status === "success") {
       setTestSendDialogOpen(false);
       setTestEmail("");
-    } catch (error) {
-      toast.error("Failed to send test email", {
-        description: formatCommunicationCampaignMutationError(error, "testSend"),
-      });
     }
-  }, [campaign, testEmail, testSendMutation]);
+  }, [campaign, campaignDetailActionMutations, testEmail]);
 
   const currentStageIndex = useMemo(
     () => (campaign ? getCampaignStageIndex(campaign.status) : -1),
