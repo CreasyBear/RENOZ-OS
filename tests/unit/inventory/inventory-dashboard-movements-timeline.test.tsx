@@ -90,13 +90,20 @@ describe('InventoryDashboardMovementsTimeline', () => {
       join(root, 'src/components/domain/inventory/inventory-dashboard-movements-timeline.tsx'),
       'utf8'
     );
+    const recentPanel = readFileSync(
+      join(root, 'src/components/domain/inventory/inventory-dashboard-recent-movements-panel.tsx'),
+      'utf8'
+    );
 
-    expect(dashboard).toContain('InventoryDashboardMovementsTimeline');
-    expect(dashboard).toContain('InventoryDashboardMovementsSkeleton');
+    expect(dashboard).toContain('InventoryDashboardRecentMovementsPanel');
+    expect(dashboard).not.toContain('InventoryDashboardMovementsTimeline');
+    expect(dashboard).not.toContain('InventoryDashboardMovementsSkeleton');
     expect(dashboard).not.toContain('function aggregateMovementsIntoActivities');
     expect(dashboard).not.toContain('function formatActivityDescription');
     expect(dashboard).not.toContain('const movementIcons');
     expect(dashboard).not.toContain('groupMovementsByDate');
+    expect(recentPanel).toContain('InventoryDashboardMovementsTimeline');
+    expect(recentPanel).toContain('InventoryDashboardMovementsSkeleton');
     expect(movementsTimeline).toContain('export function InventoryDashboardMovementsTimeline');
     expect(movementsTimeline).toContain('export function InventoryDashboardMovementsSkeleton');
     expect(movementsTimeline).toContain('function aggregateMovementsIntoActivities');

@@ -22,17 +22,13 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import {
   RefreshCw,
-  ArrowRight,
   Package,
   AlertTriangle,
-  Clock,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
 import { DataTableEmpty } from '@/components/shared/data-table';
@@ -55,11 +51,8 @@ import {
   InventoryDashboardAlertsSection,
   type DashboardAlert,
 } from './inventory-dashboard-alerts-section';
-import {
-  InventoryDashboardMovementsSkeleton,
-  InventoryDashboardMovementsTimeline,
-} from './inventory-dashboard-movements-timeline';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
+import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-recent-movements-panel';
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
 import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
 import { InventoryDashboardTrackedItemsPanel } from './inventory-dashboard-tracked-items-panel';
@@ -270,45 +263,13 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
           Section 5: Activity (Movements + Top Movers)
       ───────────────────────────────────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Movements */}
-        <Card>
-          <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Recent Movements
-              </CardTitle>
-              <CardDescription className="mt-1">Last 24 hours</CardDescription>
-            </div>
-            <Link
-              to="/inventory/analytics"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-xs h-7')}
-            >
-              View All
-              <ArrowRight className="h-3 w-3 ml-1" />
-            </Link>
-          </CardHeader>
-          <CardContent>
-            {isWmsLoading ? (
-              <InventoryDashboardMovementsSkeleton />
-            ) : showWmsUnavailable ? (
-              <InventoryDashboardReadWarning
-                title="Recent movements are temporarily unavailable."
-                message={wmsErrorMessage}
-              />
-            ) : (
-              <div className="space-y-4">
-                {showWmsDegraded ? (
-                  <InventoryDashboardReadWarning
-                    title="Recent movements may be stale."
-                    message={wmsErrorMessage}
-                  />
-                ) : null}
-                <InventoryDashboardMovementsTimeline movements={wmsData?.recentMovements ?? []} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <InventoryDashboardRecentMovementsPanel
+          movements={wmsData?.recentMovements ?? []}
+          isLoading={isWmsLoading}
+          showUnavailable={showWmsUnavailable}
+          showDegraded={showWmsDegraded}
+          readErrorMessage={wmsErrorMessage}
+        />
 
         {/* Top Movers */}
         <InventoryDashboardTopMoversPanel
