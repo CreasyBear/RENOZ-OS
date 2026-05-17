@@ -14,7 +14,14 @@ function compact(source: string): string {
 
 describe('inventory turnover window contract', () => {
   it('uses chronological previous-period bounds for product turnover trends', () => {
-    const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const valuationSource = compact(read('src/server/functions/inventory/valuation.ts'));
+    const source = compact(read('src/server/functions/inventory/inventory-turnover-read.ts'));
+
+    expect(valuationSource).toContain(
+      "import{readInventoryTurnover}from'./inventory-turnover-read'"
+    );
+    expect(valuationSource).toContain('returnreadInventoryTurnover({organizationId:ctx.organizationId,period:data.period,productId:data.productId,})');
+    expect(valuationSource).not.toContain('product_cogs_prevAS');
 
     expect(source).toContain('constpreviousPeriodStartDaysAgo=periodDays*2;');
     expect(source).toContain('constpreviousPeriodEndDaysAgo=periodDays;');
@@ -33,7 +40,7 @@ describe('inventory turnover window contract', () => {
   });
 
   it('uses chronological trend bucket bounds ending at now for the current bucket', () => {
-    const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const source = compact(read('src/server/functions/inventory/inventory-turnover-read.ts'));
 
     expect(source).toContain('consttrendWindowStartDaysAgo=(i+1)*trendInterval;');
     expect(source).toContain('consttrendWindowEndDaysAgo=i*trendInterval;');
