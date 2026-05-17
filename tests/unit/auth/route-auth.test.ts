@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { isRetryableAuthError, withAuthRetry } from '@/lib/auth/route-auth'
+
+const root = process.cwd()
+const read = (path: string) => readFileSync(join(root, path), 'utf8')
 
 describe('route-auth retry behavior', () => {
   it('treats temporary 401s as retryable during auth bootstrap', () => {
@@ -40,5 +45,15 @@ describe('route-auth retry behavior', () => {
 
     expect(result).toBe('ok')
     expect(fn).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('route-auth import boundary', () => {
+  it('keeps the browser Supabase client on one static import path for build chunking', () => {
+    const source = read('src/lib/auth/route-auth.ts')
+
+    expect(source).toContain("from '@/lib/supabase/client'")
+    expect(source).not.toContain("import('@/lib/supabase/client')")
+    expect(source).not.toContain('import("@/lib/supabase/client")')
   })
 })

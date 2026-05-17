@@ -1,4 +1,5 @@
 import type { User, Session } from '@supabase/supabase-js'
+import { onAuthStateChange, supabase } from '@/lib/supabase/client'
 import { toLoginRedirect as policyToLoginRedirect } from './route-policy'
 
 type RouteLocation = {
@@ -138,7 +139,6 @@ function isCacheFresh(validatedAt: number, ttlMs: number) {
 
 async function ensureAuthStateListener() {
   if (listenerRegistered || typeof window === 'undefined') return
-  const { onAuthStateChange } = await import('@/lib/supabase/client')
   onAuthStateChange((event) => {
     if (
       event === 'SIGNED_OUT' ||
@@ -162,7 +162,6 @@ export function bootstrapAuthListener(): void {
 }
 
 async function resolveAuthContext(location?: RouteLocation): Promise<AuthRouteContext> {
-  const { supabase } = await import('@/lib/supabase/client')
   const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine
 
   if (!isOnline) {
@@ -257,7 +256,6 @@ export async function getAuthContext(location?: RouteLocation): Promise<AuthRout
         message.includes('app_user_missing') ||
         message.includes('user_not_active')
       ) {
-        const { supabase } = await import('@/lib/supabase/client')
         await supabase.auth.signOut()
         invalidateAuthCache()
         throw toLoginRedirect(location, 'invalid_user')
@@ -279,7 +277,6 @@ export async function getAuthContext(location?: RouteLocation): Promise<AuthRout
         message.includes('forbidden')
       ) {
         // Clear stale session to avoid JWT/session confusion on next load
-        const { supabase } = await import('@/lib/supabase/client')
         await supabase.auth.signOut()
         invalidateAuthCache()
         throw toLoginRedirect(location, 'session_expired')
