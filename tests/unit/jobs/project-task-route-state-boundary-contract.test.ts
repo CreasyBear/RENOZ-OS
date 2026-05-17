@@ -11,10 +11,14 @@ function read(path: string): string {
 describe('project task route state boundary contract', () => {
   it('keeps task URL search parsing and navigation payloads out of the task tab', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const routeState = read('src/components/domain/jobs/projects/project-task-route-state.ts');
 
-    expect(tab).toContain("import { useProjectTaskRouteState } from './project-task-route-state';");
-    expect(tab).toContain('useProjectTaskRouteState(projectId)');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).not.toContain("import { useProjectTaskRouteState } from './project-task-route-state';");
+    expect(tab).not.toContain('useProjectTaskRouteState(projectId)');
+    expect(controller).toContain("import { useProjectTaskRouteState } from './project-task-route-state';");
+    expect(controller).toContain('useProjectTaskRouteState(projectId)');
     expect(tab).not.toContain('useSearch({ from:');
     expect(tab).not.toContain('useNavigate()');
     expect(tab).not.toContain('search.taskStatus');

@@ -11,12 +11,19 @@ function read(path: string): string {
 describe('project task view model boundary contract', () => {
   it('keeps task enrichment, counting, filtering, sorting, and grouping outside the tab', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const viewModel = read('src/components/domain/jobs/projects/project-task-view-model.ts');
 
-    expect(tab).toContain("from './project-task-view-model';");
-    expect(tab).toContain('buildProjectTaskViewModels({');
-    expect(tab).toContain('filterProjectTasks({');
-    expect(tab).toContain('groupProjectTasksByWorkstream({ tasks, workstreams })');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).toContain('useProjectTasksTabController({');
+    expect(tab).not.toContain("from './project-task-view-model';");
+    expect(tab).not.toContain('buildProjectTaskViewModels({');
+    expect(tab).not.toContain('filterProjectTasks({');
+    expect(tab).not.toContain('groupProjectTasksByWorkstream({ tasks, workstreams })');
+    expect(controller).toContain("from './project-task-view-model';");
+    expect(controller).toContain('buildProjectTaskViewModels({');
+    expect(controller).toContain('filterProjectTasks({');
+    expect(controller).toContain('groupProjectTasksByWorkstream({ tasks, workstreams })');
 
     expect(tab).not.toContain('workstreamName: workstream?.name');
     expect(tab).not.toContain('const byStatus: Record<JobTaskStatus, number>');

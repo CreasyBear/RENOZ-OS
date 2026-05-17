@@ -18,7 +18,6 @@
  * SPRINT-03: Enhanced task tab maximizing schema potential
  */
 
-import { useMemo } from 'react';
 import {
   Plus,
   ExternalLink,
@@ -27,13 +26,6 @@ import { Button } from '@/components/ui/button';
 import { Link } from '@tanstack/react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-// Hooks
-import {
-  useProjectTasks,
-  useWorkstreams,
-  useSiteVisitsByProject,
-} from '@/hooks/jobs';
-import { useUserLookup } from '@/hooks/users';
 import { DEFAULT_TASK_FILTERS } from './project-task-config';
 import { ProjectTaskCompletionCta } from './project-task-completion-cta';
 import {
@@ -41,13 +33,7 @@ import {
   ProjectTaskFilterPopover,
   ProjectTaskSortDropdown,
 } from './project-task-filter-controls';
-import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';
-import { useProjectTaskDialogState } from './project-task-dialog-state';
-import { useProjectTaskQuickAdd } from './project-task-quick-add';
-import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';
 import { ProjectTaskSummaryCards } from './project-task-summary-cards';
-import { useProjectTaskRouteState } from './project-task-route-state';
-import { useProjectTaskStatusMutation } from './project-task-status-mutation';
 import {
   ProjectTasksCachedWarning,
   ProjectTasksEmptyState,
@@ -55,15 +41,7 @@ import {
   ProjectTasksLoadingState,
   ProjectTasksUnavailableState,
 } from './project-task-states';
-import {
-  areAllProjectTasksComplete,
-  buildProjectTaskViewModels,
-  filterProjectTasks,
-  getProjectTaskCounts,
-  groupProjectTasksByWorkstream,
-  hasProjectTaskActiveFilters,
-  sortProjectTasks,
-} from './project-task-view-model';
+import { useProjectTasksTabController } from './project-tasks-tab-controller';
 import { ProjectTaskWorkstreamGroup } from './project-task-workstream-group';
 
 // Dialogs
@@ -85,82 +63,37 @@ interface ProjectTasksTabProps {
 // ============================================================================
 
 export function ProjectTasksTab({ projectId, onCompleteProjectClick }: ProjectTasksTabProps) {
-  const { data: tasksData, error, isLoading, refetch } = useProjectTasks({ projectId });
-  const { data: workstreamsData } = useWorkstreams(projectId);
-  const { data: siteVisitsData } = useSiteVisitsByProject(projectId);
-  const { getUser, currentUserId } = useUserLookup();
-  const { filters, sortBy, updateFilters, updateSort } = useProjectTaskRouteState(projectId);
-
-  const siteVisits = useMemo(
-    () => siteVisitsData?.items ?? [],
-    [siteVisitsData?.items]
-  );
-  const { handleQuickAdd, isQuickAddPending } = useProjectTaskQuickAdd({
-    projectId,
-    siteVisits,
-  });
-
-  const taskDialogs = useProjectTaskDialogState();
-  const { pendingDeletions, handleDeleteTask } = useProjectTaskDeleteMutation({
-    projectId,
-    onDeleted: refetch,
-  });
-
-  // Get workstreams for grouping
-  const workstreams = useMemo(
-    () => workstreamsData?.data ?? [],
-    [workstreamsData?.data]
-  );
-
-  // Build task view model
-  const allTasks = useMemo(() => {
-    return buildProjectTaskViewModels({
-      tasks: tasksData || [],
-      workstreams,
-      siteVisits,
-      getUser,
-    });
-  }, [tasksData, workstreams, siteVisits, getUser]);
-
-  // Calculate counts for filter UI
-  const taskCounts = useMemo(() => getProjectTaskCounts(allTasks), [allTasks]);
-
-  // Apply filters (including pending deletion exclusion)
-  const filteredTasks = useMemo(() => {
-    return filterProjectTasks({
-      tasks: allTasks,
-      filters,
-      currentUserId,
-      pendingDeletions,
-    });
-  }, [allTasks, filters, currentUserId, pendingDeletions]);
-
-  // Apply sorting
-  const tasks = useMemo(() => {
-    return sortProjectTasks(filteredTasks, sortBy);
-  }, [filteredTasks, sortBy]);
-
-  // Group by workstream
-  const groupedTasks = useMemo(() => {
-    return groupProjectTasksByWorkstream({ tasks, workstreams });
-  }, [tasks, workstreams]);
-
-  const { handleToggleTask } = useProjectTaskStatusMutation({
-    projectId,
+  const {
+    allTasks,
+    allTasksComplete,
+    error,
+    filters,
+    groupedTasks,
+    handleDeleteTask,
+    handleQuickAdd,
+    handleReorderTasks,
+    handleToggleTask,
+    hasActiveFilters,
+    hasUnavailableTasks,
+    isLoading,
+    isQuickAddPending,
+    refetch,
+    sortBy,
+    taskCounts,
+    taskDialogs,
     tasks,
+    updateFilters,
+    updateSort,
+  } = useProjectTasksTabController({
+    projectId,
     onCompleteProjectClick,
   });
-  const { handleReorderTasks } = useProjectTaskReorderMutation({ tasks });
-
-  // Check if any filters are active (moved before early returns for proper scoping)
-  const hasActiveFilters = hasProjectTaskActiveFilters(filters);
-  const allTasksComplete = areAllProjectTasksComplete(allTasks);
 
   if (isLoading) {
     return <ProjectTasksLoadingState />;
   }
 
-  if (error && tasksData === undefined) {
+  if (hasUnavailableTasks) {
     return (
       <ProjectTasksUnavailableState
         error={error}

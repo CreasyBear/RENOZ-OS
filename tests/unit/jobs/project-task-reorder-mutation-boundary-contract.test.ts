@@ -11,11 +11,15 @@ function read(path: string): string {
 describe('project task reorder mutation boundary contract', () => {
   it('keeps reorder job-scope lookup and mutation feedback behind a focused hook', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const reorderMutation = read('src/components/domain/jobs/projects/project-task-reorder-mutation.ts');
     const reorderState = read('src/components/domain/jobs/projects/project-task-reorder-state.ts');
 
-    expect(tab).toContain("import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';");
-    expect(tab).toContain('useProjectTaskReorderMutation({ tasks })');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).not.toContain("import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';");
+    expect(tab).not.toContain('useProjectTaskReorderMutation({ tasks })');
+    expect(controller).toContain("import { useProjectTaskReorderMutation } from './project-task-reorder-mutation';");
+    expect(controller).toContain('useProjectTaskReorderMutation({ tasks })');
     expect(tab).toContain('onReorderTasks={handleReorderTasks}');
     expect(tab).not.toContain('useReorderTasks');
     expect(tab).not.toContain('firstTask?.jobId');

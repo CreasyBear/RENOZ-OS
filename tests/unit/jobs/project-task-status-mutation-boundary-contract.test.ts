@@ -11,10 +11,14 @@ function read(path: string): string {
 describe('project task status mutation boundary contract', () => {
   it('keeps status optimistic cache, rollback, and completion prompting behind a focused hook', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const statusMutation = read('src/components/domain/jobs/projects/project-task-status-mutation.ts');
 
-    expect(tab).toContain("import { useProjectTaskStatusMutation } from './project-task-status-mutation';");
-    expect(tab).toContain('useProjectTaskStatusMutation({');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).not.toContain("import { useProjectTaskStatusMutation } from './project-task-status-mutation';");
+    expect(tab).not.toContain('useProjectTaskStatusMutation({');
+    expect(controller).toContain("import { useProjectTaskStatusMutation } from './project-task-status-mutation';");
+    expect(controller).toContain('useProjectTaskStatusMutation({');
     expect(tab).not.toContain('useUpdateProjectTaskStatus');
     expect(tab).not.toContain('previousProjectTasks');
     expect(tab).not.toContain('queryKeys.projectTasks.byProject(projectId)');

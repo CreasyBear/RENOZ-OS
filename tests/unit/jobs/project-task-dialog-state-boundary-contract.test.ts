@@ -11,10 +11,14 @@ function read(path: string): string {
 describe('project task dialog state boundary contract', () => {
   it('keeps create/edit dialog state ownership behind a focused hook', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const dialogState = read('src/components/domain/jobs/projects/project-task-dialog-state.ts');
 
-    expect(tab).toContain("import { useProjectTaskDialogState } from './project-task-dialog-state';");
-    expect(tab).toContain('const taskDialogs = useProjectTaskDialogState()');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).not.toContain("import { useProjectTaskDialogState } from './project-task-dialog-state';");
+    expect(tab).not.toContain('const taskDialogs = useProjectTaskDialogState()');
+    expect(controller).toContain("import { useProjectTaskDialogState } from './project-task-dialog-state';");
+    expect(controller).toContain('const taskDialogs = useProjectTaskDialogState()');
     expect(tab).toContain('taskDialogs.openCreateDialog');
     expect(tab).toContain('taskDialogs.openEditTask');
     expect(tab).toContain('taskDialogs.handleEditDialogOpenChange');

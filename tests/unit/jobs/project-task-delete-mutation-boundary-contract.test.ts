@@ -11,13 +11,18 @@ function read(path: string): string {
 describe('project task delete mutation boundary contract', () => {
   it('keeps undoable delete timing, restore, and operator-safe failure behind a focused hook', () => {
     const tab = read('src/components/domain/jobs/projects/project-tasks-tab.tsx');
+    const controller = read('src/components/domain/jobs/projects/project-tasks-tab-controller.ts');
     const deleteMutation = read('src/components/domain/jobs/projects/project-task-delete-mutation.ts');
     const deleteState = read('src/components/domain/jobs/projects/project-task-delete-state.ts');
 
-    expect(tab).toContain("import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';");
-    expect(tab).toContain('useProjectTaskDeleteMutation({');
-    expect(tab).toContain('onDeleted: refetch');
-    expect(tab).toContain('pendingDeletions');
+    expect(tab).toContain("from './project-tasks-tab-controller';");
+    expect(tab).not.toContain("import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';");
+    expect(tab).not.toContain('useProjectTaskDeleteMutation({');
+    expect(tab).not.toContain('pendingDeletions');
+    expect(controller).toContain("import { useProjectTaskDeleteMutation } from './project-task-delete-mutation';");
+    expect(controller).toContain('useProjectTaskDeleteMutation({');
+    expect(controller).toContain('onDeleted: refetch');
+    expect(controller).toContain('pendingDeletions');
     expect(tab).not.toContain('useDeleteProjectTask');
     expect(tab).not.toContain('deleteTimeouts');
     expect(tab).not.toContain('setTimeout(async');
