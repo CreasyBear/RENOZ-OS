@@ -41,7 +41,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -71,7 +70,6 @@ import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state
 import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
 import { StatusCell } from "@/components/shared/data-table/cells/status-cell";
 import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
-import { useReducedMotion } from "@/hooks/_shared/use-reduced-motion";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
 import {
@@ -82,16 +80,10 @@ import {
   type CampaignDetailActionFeedback,
   type CampaignDetailActionMutations,
 } from "./campaign-detail-actions";
-import {
-  getCampaignStatusVariant,
-  getCampaignStageIndex,
-  CAMPAIGN_STAGES,
-} from "./campaign-status-config";
+import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
+import { getCampaignStatusVariant } from "./campaign-status-config";
 import { CAMPAIGN_RECIPIENT_STATUS_CONFIG } from "./campaign-recipient-status-config";
-import {
-  calculateSendProgress,
-  calculatePercentage,
-} from "@/lib/communications/campaign-utils";
+import { calculatePercentage } from "@/lib/communications/campaign-utils";
 import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 import {
   COMMUNICATION_READ_MESSAGES,
@@ -258,7 +250,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
   className,
 }: CampaignDetailPanelProps) {
   const navigate = useNavigate();
-  const prefersReducedMotion = useReducedMotion();
   const { dismiss, isAlertDismissed } = useAlertDismissals();
   const { confirm } = useConfirmation();
   const [testSendDialogOpen, setTestSendDialogOpen] = useState(false);
@@ -304,16 +295,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
     () => recipientsData?.items ?? [],
     [recipientsData]
   );
-
-  const isSending = useMemo(
-    () => campaign?.status === "sending",
-    [campaign?.status]
-  );
-
-  const sendProgress = useMemo(() => {
-    if (!campaign) return 0;
-    return calculateSendProgress(campaign.sentCount, campaign.recipientCount);
-  }, [campaign]);
 
   // Handlers
   const handleSendCampaign = useCallback(async () => {
@@ -388,11 +369,6 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       setTestEmail("");
     }
   }, [campaign, campaignDetailActionMutations, testEmail]);
-
-  const currentStageIndex = useMemo(
-    () => (campaign ? getCampaignStageIndex(campaign.status) : -1),
-    [campaign]
-  );
 
   // Build campaign meta fields for DetailGrid
   const campaignMetaFields = useMemo(() => {
@@ -587,92 +563,7 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       />
 
       {/* Zone 2: Progress Indicator */}
-      {currentStageIndex >= 0 && (
-        <section
-          className="rounded-lg border bg-background p-4"
-          role="progressbar"
-          aria-valuenow={currentStageIndex + 1}
-          aria-valuemin={1}
-          aria-valuemax={CAMPAIGN_STAGES.length}
-          aria-label={`Campaign progress: ${CAMPAIGN_STAGES[currentStageIndex]?.label || "Unknown"} stage`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="text-sm font-medium">Campaign lifecycle</div>
-              <div className="text-xs text-muted-foreground">
-                {campaign.status === "sending" && `Sending ${campaign.sentCount} of ${campaign.recipientCount} emails...`}
-                {campaign.status === "sent" && `Completed ${campaign.completedAt ? formatDistanceToNow(new Date(campaign.completedAt), { addSuffix: true }) : ""}`}
-                {campaign.status === "scheduled" && campaign.scheduledAt && `Scheduled for ${format(new Date(campaign.scheduledAt), "PPp")}`}
-              </div>
-            </div>
-            {isSending && (
-              <div className="text-sm font-medium" aria-live="polite" aria-atomic="true">
-                {sendProgress}%
-              </div>
-            )}
-          </div>
-          
-          {/* Progress bar for sending campaigns */}
-          {isSending && (
-            <Progress 
-              value={sendProgress} 
-              className={cn(
-                "h-2",
-                !prefersReducedMotion && "transition-all duration-300"
-              )}
-              aria-label={`Sending progress: ${sendProgress}%`}
-            />
-          )}
-
-          {/* Stage indicators */}
-          {!isSending && (
-            <div className="flex items-center gap-2 mt-3">
-              {CAMPAIGN_STAGES.map((stage, index) => {
-                const isCompleted = index < currentStageIndex;
-                const isCurrent = index === currentStageIndex;
-                const isPending = index > currentStageIndex;
-
-                return (
-                  <div
-                    key={stage.status}
-                    className={cn(
-                      "flex items-center gap-2 flex-1",
-                      index < CAMPAIGN_STAGES.length - 1 && "after:content-[''] after:flex-1 after:h-px after:bg-border"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium border-2",
-                        isCompleted && "bg-primary text-primary-foreground border-primary",
-                        isCurrent && "bg-primary/10 text-primary border-primary",
-                        isPending && "bg-muted text-muted-foreground border-muted-foreground/30"
-                      )}
-                      aria-label={
-                        isCompleted
-                          ? `${stage.label} - completed`
-                          : isCurrent
-                          ? `${stage.label} - current`
-                          : `${stage.label} - pending`
-                      }
-                    >
-                      {isCompleted ? "✓" : isCurrent ? "●" : "○"}
-                    </div>
-                    <span
-                      className={cn(
-                        "text-xs",
-                        isCurrent && "font-medium",
-                        isPending && "text-muted-foreground"
-                      )}
-                    >
-                      {stage.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
+      <CampaignDetailLifecycleSection campaign={campaign} />
 
       {/* Zone 3: Alerts */}
       {visibleAlerts.length > 0 && (
