@@ -50,7 +50,26 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { logger } from '@/lib/logger';
+import { formatMutationError } from '@/lib/mutation-error-feedback';
 import { cn } from '@/lib/utils';
+
+const BULK_IMPORT_CODE_MESSAGES = {
+  RATE_LIMIT: 'Too many bulk import requests were attempted. Wait a moment and retry.',
+  UNAUTHORIZED: 'Your session has expired. Please sign in again.',
+  FORBIDDEN: "You don't have permission to import these records.",
+  NOT_FOUND: 'Required import data could not be found. Refresh and try again.',
+  CONFLICT: 'This import conflicts with current record state. Review the file and retry.',
+} as const;
+
+function formatBulkImportError(error: unknown, fallback: string): string {
+  return formatMutationError(error, fallback, {
+    defaultCodeMessages: BULK_IMPORT_CODE_MESSAGES,
+  });
+}
+
+function formatBulkImportRowError(error: unknown): string {
+  return formatBulkImportError(error, 'One row could not be imported. Review the row and retry.');
+}
 
 // ============================================================================
 // TYPES
@@ -619,7 +638,7 @@ function ImportProgressStep({
                   {result.errors.map((err, i) => (
                     <p key={i} className="text-sm">
                       Row {err.row}
-                      {err.sku && ` (${err.sku})`}: {err.error}
+                      {err.sku && ` (${err.sku})`}: {formatBulkImportRowError(err.error)}
                     </p>
                   ))}
                 </ScrollArea>
@@ -809,7 +828,12 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
           fileType: selectedFile.type || 'unknown',
           error: err instanceof Error ? err.message : String(err),
         });
-        setError(err instanceof Error ? err.message : 'Failed to parse file');
+        setError(
+          formatBulkImportError(
+            err,
+            'Unable to parse this file. Check the file format and try again.'
+          )
+        );
       } finally {
         setIsProcessing(false);
       }
@@ -885,7 +909,12 @@ export function BulkImportWizard<T extends Record<string, string> = Record<strin
         importMode: showImportMode ? importMode : 'default',
         error: err instanceof Error ? err.message : String(err),
       });
-      setError(err instanceof Error ? err.message : 'Import failed');
+      setError(
+        formatBulkImportError(
+          err,
+          'Unable to import these rows. Review the file and try again.'
+        )
+      );
       setCurrentStep('validate');
     } finally {
       setIsProcessing(false);

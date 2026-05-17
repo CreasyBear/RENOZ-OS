@@ -91,6 +91,31 @@ describe('BulkImportWizard error handling', () => {
     });
   });
 
+  it('sanitizes unsafe file parsing failures before showing operator feedback', async () => {
+    const parseError = new Error(
+      'duplicate key value violates unique constraint bulk_import_parser_pkey postgres stack'
+    );
+    const parseFile = vi.fn().mockRejectedValue(parseError);
+    const file = new File(['sku\nBAT-100'], 'products.csv', { type: 'text/csv' });
+
+    const { container } = render(
+      <BulkImportWizard
+        config={{ ...baseConfig, parseFile }}
+        onImport={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    uploadCsv(container, file);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to parse this file. Check the file format and try again.')
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/bulk_import_parser_pkey/i)).not.toBeInTheDocument();
+  });
+
   it('keeps import operation failures visible on the validation step', async () => {
     const importError = new Error('Importer unavailable');
     const onImport = vi.fn().mockRejectedValue(importError);
@@ -129,14 +154,51 @@ describe('BulkImportWizard error handling', () => {
     });
   });
 
+  it('sanitizes unsafe import operation failures before showing operator feedback', async () => {
+    const importError = new Error(
+      'duplicate key value violates unique constraint product_import_sku_key postgres stack'
+    );
+    const onImport = vi.fn().mockRejectedValue(importError);
+    const file = new File(['sku\nBAT-100'], 'products.csv', { type: 'text/csv' });
+
+    const { container } = render(
+      <BulkImportWizard
+        config={{
+          ...baseConfig,
+          parseFile: vi.fn().mockResolvedValue({
+            headers: ['sku'],
+            rows: [['BAT-100']],
+          }),
+        }}
+        onImport={onImport}
+        onClose={vi.fn()}
+      />
+    );
+
+    uploadCsv(container, file);
+
+    const importButton = await screen.findByRole('button', { name: 'Import 1 Products' });
+    fireEvent.click(importButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Unable to import these rows. Review the file and try again.')
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/product_import_sku_key/i)).not.toBeInTheDocument();
+  });
+
   it('keeps raw console errors out of the shared import wizard', () => {
     const source = read('src/components/shared/bulk-import-wizard.tsx');
 
     expect(source).toContain("logger.warn('Bulk import file parsing failed'");
     expect(source).toContain("logger.warn('Bulk import operation failed'");
     expect(source).toContain("<AlertTitle>Import issue</AlertTitle>");
+    expect(source).toContain('formatBulkImportError');
+    expect(source).toContain('formatBulkImportRowError');
     expect(source).not.toContain('console.error');
     expect(source).not.toContain('Failed to parse file:');
     expect(source).not.toContain('Import failed:');
+    expect(source).not.toContain("setError(err instanceof Error ? err.message");
   });
 });

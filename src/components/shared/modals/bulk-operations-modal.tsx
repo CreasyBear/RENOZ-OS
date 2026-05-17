@@ -49,7 +49,36 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { formatMutationError } from '@/lib/mutation-error-feedback';
 import { cn } from '@/lib/utils';
+
+const BULK_OPERATION_CODE_MESSAGES = {
+  RATE_LIMIT: 'Too many bulk operation requests were attempted. Wait a moment and retry.',
+  UNAUTHORIZED: 'Your session has expired. Please sign in again.',
+  FORBIDDEN: "You don't have permission to perform this bulk operation.",
+  NOT_FOUND: 'One or more selected records could not be found. Refresh and try again.',
+  CONFLICT: 'This bulk operation conflicts with current record state. Refresh and try again.',
+} as const;
+
+function formatBulkOperationError(error: unknown, fallback: string): string {
+  return formatMutationError(error, fallback, {
+    defaultCodeMessages: BULK_OPERATION_CODE_MESSAGES,
+  });
+}
+
+function getBulkOperationItemFallback(operationType: string): string {
+  const normalized = operationType.trim().toLowerCase();
+
+  if (normalized.includes('delet')) {
+    return 'One selected record could not be deleted. Refresh and try again.';
+  }
+
+  if (normalized.includes('status') || normalized.includes('update')) {
+    return 'One selected record could not be updated. Refresh and try again.';
+  }
+
+  return 'One selected record could not be processed. Refresh and try again.';
+}
 
 // ============================================================================
 // TYPES
@@ -178,7 +207,12 @@ function OperationProgress({ isRunning, progress, result, operationType }: Opera
           {result.errors.length > 0 && (
             <div className="text-muted-foreground text-sm">
               {result.errors.slice(0, 3).map((err, i) => (
-                <p key={i}>{err.error}</p>
+                <p key={i}>
+                  {formatBulkOperationError(
+                    err.error,
+                    getBulkOperationItemFallback(operationType)
+                  )}
+                </p>
               ))}
               {result.errors.length > 3 && <p>...and {result.errors.length - 3} more errors</p>}
             </div>
@@ -223,7 +257,12 @@ function StatusUpdateDialog({
       setSelectedStatus('');
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Operation failed');
+      setError(
+        formatBulkOperationError(
+          err,
+          'Unable to update selected records. Refresh and try again.'
+        )
+      );
     }
   };
 
@@ -317,7 +356,12 @@ function DeleteConfirmationDialog({
       setConfirmed(false);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
+      setError(
+        formatBulkOperationError(
+          err,
+          'Unable to delete selected records. Refresh and try again.'
+        )
+      );
     }
   };
 
@@ -458,7 +502,15 @@ export function BulkOperationsModal({
         const errorResult: OperationResult = {
           success: 0,
           failed: selectedCount,
-          errors: [{ id: '', error: String(error) }],
+          errors: [
+            {
+              id: '',
+              error: formatBulkOperationError(
+                error,
+                'Unable to complete this bulk operation. Refresh and try again.'
+              ),
+            },
+          ],
         };
         setResult(errorResult);
         throw error;

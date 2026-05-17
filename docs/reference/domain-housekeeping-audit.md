@@ -1108,9 +1108,13 @@ What is messy:
   - Files: `src/routes/api/oauth/initiate.ts`, `src/server/functions/oauth/handle-oauth-callback.ts`, `src/server/functions/oauth/initiate-oauth.ts`
   - Revalidated and remediated in Operations Maintainer Sprint 89. The direct initiate API route was already formatter-owned; the remaining compatibility server-function wrappers now log caught exceptions server-side and return OAuth formatter copy instead of embedding provider, redirect, token, database, or stack details in caller-visible strings. AI debug RLS failures also use stable client copy with server-side logging.
 
+- **Closed 2026-05-17: shared bulk workflows no longer echo unsafe technical failures**
+  - Files: `src/components/shared/modals/bulk-operations-modal.tsx`, `src/components/shared/bulk-import-wizard.tsx`
+  - Revalidated and remediated in Reliability Maintainer Sprint 43. Shared bulk operation dialogs, operation result rows, bulk import parse failures, import rejections, and import result rows now route through `formatMutationError`, preserving safe business copy while replacing database/provider/stack wording with stable operator guidance.
+
 - **User-facing surfaces still often expose raw technical error strings**
-  - Files: `src/routes/_authenticated/support/support-page.tsx`, `src/routes/_authenticated/support/dashboard.tsx`, `src/components/domain/warranty/containers/warranty-detail-container.tsx`, `src/components/domain/customers/components/xero-contact-manager.tsx`, `src/components/domain/jobs/projects/task-dialogs.tsx`
-  - A recurring pattern in UI containers and dialogs is direct rendering of `error.message` or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
+  - Current examples: shared/domain error boundaries that render `this.state.error.message`, `src/components/shared/data-table/cells/sku-cell.tsx`, `src/components/shared/notifications/job-progress-notification.tsx`, `src/hooks/files/use-files-supabase.ts`, and route-level import/upload result handling that still falls back to `'Unknown error'`.
+  - A recurring pattern in UI containers and dialogs is direct rendering of thrown messages or `'Unknown error'`. This is fast to implement, but it creates inconsistent operator messaging and can expose internal wording that the centralized error helper was clearly designed to normalize.
 
 - **The repo has a strong centralized resilience helper, but adoption is incomplete**
   - Files: `src/lib/error-handling.ts`, `tests/unit/query-error-normalization.test.ts`
