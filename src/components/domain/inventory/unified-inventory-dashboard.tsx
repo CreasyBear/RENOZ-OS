@@ -23,11 +23,6 @@
 
 import { useState, useCallback, memo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import {
-  RefreshCw,
-  AlertTriangle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks';
 import { useTrackedProducts } from '@/hooks/dashboard/use-tracked-products';
 import {
@@ -52,6 +47,7 @@ import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-re
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
 import { InventoryDashboardTopMoversPanel } from './inventory-dashboard-top-movers-panel';
 import { InventoryDashboardTrackedItemsPanel } from './inventory-dashboard-tracked-items-panel';
+import { InventoryDashboardUnavailableState } from './inventory-dashboard-unavailable-state';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -141,22 +137,11 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
     getInventoryDashboardReadErrorMessage(dashboardError) ?? 'Please refresh and try again.';
 
   if (showWmsUnavailable) {
-    const errorMessage = wmsErrorMessage;
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-        <p className="font-medium">Failed to load inventory data</p>
-        <p className="text-sm mt-1">Please try again or contact support if the problem persists.</p>
-        {errorMessage && (
-          <p className="text-xs mt-2 text-muted-foreground/80 font-mono max-w-md mx-auto truncate">
-            {errorMessage}
-          </p>
-        )}
-        <Button variant="outline" className="mt-4" onClick={handleRefresh}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
-        </Button>
-      </div>
+      <InventoryDashboardUnavailableState
+        message={wmsErrorMessage}
+        onRetry={handleRefresh}
+      />
     );
   }
 
