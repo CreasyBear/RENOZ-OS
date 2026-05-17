@@ -25,7 +25,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
-  Users,
   Send,
   CheckCircle2,
   XCircle,
@@ -46,7 +45,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -62,7 +60,6 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { EmptyState, EmptyStateContainer } from "@/components/shared/empty-state";
 import { EntityHeader, DetailGrid, DetailSection, type DetailGridField } from "@/components/shared/detail-view";
-import { StatusCell } from "@/components/shared/data-table/cells/status-cell";
 import { useAlertDismissals } from "@/hooks/_shared/use-alert-dismissals";
 import { useConfirmation } from "@/hooks/_shared/use-confirmation";
 import { toast } from "@/lib/toast";
@@ -77,8 +74,8 @@ import {
 import { CampaignDetailLifecycleSection } from "./campaign-detail-lifecycle-section";
 import { CampaignDetailMetricsSection } from "./campaign-detail-metrics-section";
 import { CampaignDetailNextStepsSection } from "./campaign-detail-next-steps-section";
+import { CampaignDetailRecipientsSection } from "./campaign-detail-recipients-section";
 import { getCampaignStatusVariant } from "./campaign-status-config";
-import { CAMPAIGN_RECIPIENT_STATUS_CONFIG } from "./campaign-recipient-status-config";
 import { generateCampaignAlerts } from "@/lib/communications/campaign-alerts";
 import {
   COMMUNICATION_READ_MESSAGES,
@@ -91,7 +88,6 @@ import {
 
 import type {
   Campaign,
-  CampaignRecipient,
   CampaignDetailPanelProps,
 } from "@/lib/schemas/communications";
 
@@ -174,33 +170,6 @@ export const CampaignDetailSkeleton = memo(function CampaignDetailSkeleton() {
         </div>
       </div>
     </div>
-  );
-});
-
-// ============================================================================
-// RECIPIENT STATUS BADGE (memoized)
-// ============================================================================
-
-const RecipientStatusBadge = memo(function RecipientStatusBadge({
-  status,
-}: {
-  status: CampaignRecipient["status"] | "skipped";
-}) {
-  // Handle "skipped" status which may come from API but isn't in schema
-  if (status === "skipped") {
-    return (
-      <Badge variant="outline" className="text-xs">
-        Skipped
-      </Badge>
-    );
-  }
-
-  return (
-    <StatusCell
-      status={status}
-      statusConfig={CAMPAIGN_RECIPIENT_STATUS_CONFIG}
-      className="text-xs"
-    />
   );
 });
 
@@ -568,69 +537,11 @@ export const CampaignDetailPanel = memo(function CampaignDetailPanel({
       )}
 
       {/* Zone 5: Recipients List */}
-      <DetailSection id="recipients" title={`Recipients (${campaign.recipientCount})`} defaultOpen={true}>
-        {recipientsLoading ? (
-          <div className="p-4">
-            <Skeleton className="h-32 w-full" />
-          </div>
-        ) : recipients.length === 0 ? (
-          <EmptyStateContainer variant="card">
-            <EmptyState
-              icon={Users}
-              title="No recipients yet"
-              message="Recipients will be populated when the campaign is sent or scheduled."
-            />
-          </EmptyStateContainer>
-        ) : (
-          <div className="rounded-md border">
-            <ScrollArea className="h-[300px]">
-              <Table aria-label="Campaign recipients">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Recipient</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Activity</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recipients.map((recipient) => (
-                    <TableRow key={recipient.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">
-                            {recipient.name || "Unknown"}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {recipient.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <RecipientStatusBadge status={recipient.status} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {recipient.clickedAt ? (
-                          <span>Clicked {formatDistanceToNow(new Date(recipient.clickedAt), { addSuffix: true })}</span>
-                        ) : recipient.openedAt ? (
-                          <span>Opened {formatDistanceToNow(new Date(recipient.openedAt), { addSuffix: true })}</span>
-                        ) : recipient.sentAt ? (
-                          <span>Sent {formatDistanceToNow(new Date(recipient.sentAt), { addSuffix: true })}</span>
-                        ) : recipient.errorMessage ? (
-                          <span className="text-red-600" title={recipient.errorMessage}>
-                            Error: {recipient.errorMessage.slice(0, 30)}...
-                          </span>
-                        ) : (
-                          <span>Pending</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </div>
-        )}
-      </DetailSection>
+      <CampaignDetailRecipientsSection
+        recipientCount={campaign.recipientCount}
+        recipients={recipients}
+        isLoading={recipientsLoading}
+      />
 
       {/* Test Send Dialog */}
       <Dialog open={testSendDialogOpen} onOpenChange={setTestSendDialogOpen}>
