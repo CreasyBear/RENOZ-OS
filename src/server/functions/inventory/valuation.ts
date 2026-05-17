@@ -9,17 +9,11 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, desc, asc, gt, isNull } from 'drizzle-orm';
+import { eq, and, sql, asc, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import {
-  inventory,
-  inventoryCostLayers,
-  products,
-  categories,
-  warehouseLocations as locations,
-} from 'drizzle/schema';
+import { inventory, inventoryCostLayers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
@@ -32,7 +26,6 @@ import {
   inventoryTurnoverQuerySchema,
   inventoryFinanceIntegrityQuerySchema,
   inventoryFinanceReconcileSchema,
-  type InventoryValuationResult,
   type InventoryTurnoverResult,
   type COGSResult,
   type InventoryFinanceIntegritySummary,
@@ -46,6 +39,7 @@ import {
 } from './inventory-cost-layers-read';
 import { readInventoryAging } from './inventory-aging-read';
 import { readInventoryTurnover } from './inventory-turnover-read';
+import { readInventoryValuation } from './inventory-valuation-read';
 import { readProductCostLayers } from './product-cost-layers-read';
 
 // ============================================================================
@@ -53,14 +47,6 @@ import { readProductCostLayers } from './product-cost-layers-read';
 // ============================================================================
 
 type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
-
-function valuationInventoryProductJoinCondition(organizationId: string) {
-  return and(
-    eq(inventory.productId, products.id),
-    eq(products.organizationId, organizationId),
-    isNull(products.deletedAt)
-  );
-}
 
 // ============================================================================
 // TYPE HELPERS
@@ -176,170 +162,14 @@ export const createCostLayer = createServerFn({ method: 'POST' })
  */
 export const getInventoryValuation = createServerFn({ method: 'GET' })
   .inputValidator(inventoryValuationQuerySchema)
-  .handler(async ({ data }): Promise<InventoryValuationResult> => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-
-    const invConditions = [eq(inventory.organizationId, ctx.organizationId)];
-
-    if (data.locationId) {
-      invConditions.push(eq(inventory.locationId, data.locationId));
-    }
-    if (data.productId) {
-      invConditions.push(eq(inventory.productId, data.productId));
-    }
-
-    // Get total value and units
-    const [totals] = await db
-      .select({
-        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        totalSkus: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
-        totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
-      })
-      .from(inventory)
-      .where(and(...invConditions));
-
-    // Get by category
-    const byCategory = await db
-      .select({
-        categoryId: categories.id,
-        categoryName: categories.name,
-        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
-        skuCount: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
-      })
-      .from(inventory)
-      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
-      .leftJoin(
-        categories,
-        and(
-          eq(products.categoryId, categories.id),
-          eq(categories.organizationId, ctx.organizationId)
-        )
-      )
-      .where(and(...invConditions))
-      .groupBy(categories.id, categories.name)
-      .orderBy(desc(sql`SUM(${inventory.totalValue})`));
-
-    // Get by location
-    const byLocation = await db
-      .select({
-        locationId: locations.id,
-        locationCode: locations.locationCode,
-        locationName: locations.name,
-        itemCount: sql<number>`COUNT(DISTINCT ${inventory.id})::int`,
-        totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
-        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        capacity: locations.capacity,
-      })
-      .from(inventory)
-      .innerJoin(
-        locations,
-        and(
-          eq(inventory.locationId, locations.id),
-          eq(locations.organizationId, ctx.organizationId)
-        )
-      )
-      .where(and(...invConditions))
-      .groupBy(locations.id, locations.locationCode, locations.name, locations.capacity)
-      .orderBy(desc(sql`SUM(${inventory.totalValue})`));
-
-    // OPTIMIZED: Use LEFT JOIN with aggregation instead of correlated subquery
-    // Create subquery for cost layer counts per product
-    const costLayerCounts = db
-      .select({
-        productId: inventory.productId,
-        costLayerCount: sql<number>`COUNT(DISTINCT ${inventoryCostLayers.id})::int`,
-      })
-      .from(inventoryCostLayers)
-      .innerJoin(
-        inventory,
-        and(
-          eq(inventoryCostLayers.inventoryId, inventory.id),
-          eq(inventory.organizationId, ctx.organizationId)
-        )
-      )
-      .where(
-        and(
-          eq(inventoryCostLayers.organizationId, ctx.organizationId),
-          eq(inventory.organizationId, ctx.organizationId),
-          gt(inventoryCostLayers.quantityRemaining, 0),
-          data.locationId ? eq(inventory.locationId, data.locationId) : sql`true`
-        )
-      )
-      .groupBy(inventory.productId)
-      .as('cost_layer_counts');
-
-    // Get by product
-    const byProduct = await db
-      .select({
-        productId: inventory.productId,
-        productSku: sql<string>`COALESCE(${products.sku}, '')`,
-        productName: sql<string>`COALESCE(${products.name}, 'Unknown Product')`,
-        totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
-        weightedAverageCost: sql<number>`
-          CASE
-            WHEN SUM(${inventory.quantityOnHand}) > 0
-            THEN SUM(${inventory.totalValue}) / SUM(${inventory.quantityOnHand})
-            ELSE 0
-          END::numeric`,
-        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
-        costLayers: sql<number>`COALESCE(${costLayerCounts.costLayerCount}, 0)::int`,
-      })
-      .from(inventory)
-      .leftJoin(products, valuationInventoryProductJoinCondition(ctx.organizationId))
-      .leftJoin(costLayerCounts, eq(costLayerCounts.productId, inventory.productId))
-      .where(and(...invConditions))
-      .groupBy(inventory.productId, products.sku, products.name, costLayerCounts.costLayerCount)
-      .orderBy(desc(sql`SUM(${inventory.totalValue})`))
-      .limit(50);
-
-    const totalValueNum = Number(totals?.totalValue ?? 0);
-    const totalUnitsNum = Number(totals?.totalUnits ?? 0);
-    const averageUnitCost = totalUnitsNum > 0 ? totalValueNum / totalUnitsNum : 0;
-
-    const financeIntegrity = await getFinanceIntegritySummary(ctx.organizationId);
-
-    return {
-      totalValue: totalValueNum,
-      totalSkus: totals?.totalSkus ?? 0,
-      totalUnits: totalUnitsNum,
-      averageUnitCost,
-      byCategory: byCategory.map((c) => {
-        const catValue = Number(c.totalValue);
-        const catUnits = Number(c.totalUnits);
-        return {
-          categoryId: c.categoryId ?? '',
-          categoryName: c.categoryName ?? 'Uncategorized',
-          totalValue: catValue,
-          totalUnits: catUnits,
-          percentOfTotal: totalValueNum > 0 ? (catValue / totalValueNum) * 100 : 0,
-          skuCount: c.skuCount ?? 0,
-        };
-      }),
-      byLocation: byLocation.map((l) => {
-        const locValue = Number(l.totalValue);
-        const locQuantity = Number(l.totalQuantity);
-        const capacity = l.capacity ? Number(l.capacity) : null;
-        return {
-          locationId: l.locationId,
-          locationCode: l.locationCode,
-          locationName: l.locationName,
-          itemCount: l.itemCount,
-          totalQuantity: locQuantity,
-          totalValue: locValue,
-          percentOfTotal: totalValueNum > 0 ? (locValue / totalValueNum) * 100 : 0,
-          utilization: capacity && capacity > 0 ? (locQuantity / capacity) * 100 : 0,
-        };
-      }),
-      byProduct: byProduct.map((p) => ({
-        ...p,
-        weightedAverageCost: Number(p.weightedAverageCost),
-        totalValue: Number(p.totalValue),
-      })),
+    return readInventoryValuation({
+      organizationId: ctx.organizationId,
+      locationId: data.locationId,
+      productId: data.productId,
       valuationMethod: data.valuationMethod,
-      asOf: new Date().toISOString(),
-      financeIntegrity,
-    };
+    });
   });
 
 export const getInventoryFinanceIntegrity = createServerFn({ method: 'GET' })

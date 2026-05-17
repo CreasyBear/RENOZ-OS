@@ -15,31 +15,48 @@ function compact(source: string): string {
 describe('inventory valuation tenant-scope contract', () => {
   it('keeps valuation report product descriptors active and organization-bounded', () => {
     const source = compact(read('src/server/functions/inventory/valuation.ts'));
+    const valuationReadSource = compact(
+      read('src/server/functions/inventory/inventory-valuation-read.ts')
+    );
 
+    expect(source).toContain("import{readInventoryValuation}from'./inventory-valuation-read'");
     expect(source).toContain(
+      'returnreadInventoryValuation({organizationId:ctx.organizationId,locationId:data.locationId,productId:data.productId,valuationMethod:data.valuationMethod,})'
+    );
+    expect(source).not.toContain('functionvaluationInventoryProductJoinCondition');
+    expect(source).toContain(
+      'exportconstgetInventoryValuation=createServerFn({method:\'GET\'})'
+    );
+    expect(valuationReadSource).toContain(
       'functionvaluationInventoryProductJoinCondition(organizationId:string)'
     );
-    expect(source).toContain(
+    expect(valuationReadSource).toContain(
       'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
     );
-    expect(source).toContain(
-      'leftJoin(products,valuationInventoryProductJoinCondition(ctx.organizationId))'
+    expect(valuationReadSource).toContain(
+      'leftJoin(products,valuationInventoryProductJoinCondition(organizationId))'
     );
-    expect(source).toContain(
+    expect(valuationReadSource).toContain(
       "productId:inventory.productId,productSku:sql<string>`COALESCE(${products.sku},'')`,productName:sql<string>`COALESCE(${products.name},'UnknownProduct')`"
     );
-    expect(source).toContain(
+    expect(valuationReadSource).toContain(
       'leftJoin(costLayerCounts,eq(costLayerCounts.productId,inventory.productId))'
     );
-    expect(source).toContain(
-      'leftJoin(categories,and(eq(products.categoryId,categories.id),eq(categories.organizationId,ctx.organizationId)))'
+    expect(valuationReadSource).toContain(
+      'leftJoin(categories,and(eq(products.categoryId,categories.id),eq(categories.organizationId,organizationId)))'
     );
-    expect(source).toContain(
-      'innerJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,ctx.organizationId)))'
+    expect(valuationReadSource).toContain(
+      'innerJoin(locations,and(eq(inventory.locationId,locations.id),eq(locations.organizationId,organizationId)))'
     );
-    expect(source).not.toContain('innerJoin(products,eq(inventory.productId,products.id))');
-    expect(source).not.toContain('leftJoin(categories,eq(products.categoryId,categories.id))');
-    expect(source).not.toContain('innerJoin(locations,eq(inventory.locationId,locations.id))');
+    expect(valuationReadSource).not.toContain(
+      'innerJoin(products,eq(inventory.productId,products.id))'
+    );
+    expect(valuationReadSource).not.toContain(
+      'leftJoin(categories,eq(products.categoryId,categories.id))'
+    );
+    expect(valuationReadSource).not.toContain(
+      'innerJoin(locations,eq(inventory.locationId,locations.id))'
+    );
   });
 
   it('keeps finance integrity and aging joins organization-bounded', () => {

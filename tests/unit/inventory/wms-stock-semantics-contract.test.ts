@@ -48,12 +48,17 @@ describe('WMS stock semantics contract', () => {
 
   it('keeps valuation/reporting stock as physical on-hand finance inventory', () => {
     const valuation = read('src/server/functions/inventory/valuation.ts');
+    const valuationRead = read('src/server/functions/inventory/inventory-valuation-read.ts');
     const valuationReport = read('src/components/domain/inventory/reports/valuation-report.tsx');
 
     expect(valuation).not.toContain('_allocatable-stock-sql');
-    expect(valuation).toContain('totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand})');
-    expect(valuation).toContain('totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand})');
-    expect(valuation).toContain('const financeIntegrity = await getFinanceIntegritySummary(ctx.organizationId)');
+    expect(valuation).toContain("import { readInventoryValuation } from './inventory-valuation-read';");
+    expect(valuationRead).not.toContain('_allocatable-stock-sql');
+    expect(valuationRead).toContain('totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand})');
+    expect(valuationRead).toContain(
+      'totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand})'
+    );
+    expect(valuationRead).toContain('const financeIntegrity = await getFinanceIntegritySummary(organizationId)');
     expect(valuationReport).toContain('On-Hand Units');
     expect(valuationReport).toContain('Physical on-hand value across product categories');
     expect(valuationReport).toContain('Physical on-hand value across warehouse locations');
