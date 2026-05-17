@@ -33,15 +33,12 @@ import {
   useAcknowledgeAlert,
 } from '@/hooks/inventory';
 import { TrackedProductsDialog } from '@/components/domain/dashboard/overview/tracked-products-dialog';
-import {
-  getInventoryDashboardReadErrorMessage,
-  getWmsDashboardReadErrorMessage,
-} from './dashboard-read-error-messages';
 import { InventoryDashboardCommandBar } from './inventory-dashboard-command-bar';
 import { InventoryDashboardMetrics } from './inventory-dashboard-metrics';
 import { buildDashboardAlerts } from './inventory-dashboard-alert-mappers';
 import { InventoryDashboardAlertsSection } from './inventory-dashboard-alerts-section';
 import { InventoryDashboardEmptyState } from './inventory-dashboard-empty-state';
+import { buildInventoryDashboardReadState } from './inventory-dashboard-read-state';
 import { InventoryDashboardReadWarning } from './inventory-dashboard-read-warning';
 import { InventoryDashboardRecentMovementsPanel } from './inventory-dashboard-recent-movements-panel';
 import { InventoryDashboardStockBreakdownCards } from './inventory-dashboard-stock-breakdown-cards';
@@ -124,17 +121,22 @@ export const UnifiedInventoryDashboard = memo(function UnifiedInventoryDashboard
   // ─────────────────────────────────────────────────────────────────────────
   // Loading & Error States
   // ─────────────────────────────────────────────────────────────────────────
-  const isLoading = isWmsLoading || isDashboardLoading;
-  const hasUsableWmsData = !!wmsData;
-  const hasUsableDashboardData = !!dashboardData;
-  const showWmsUnavailable = !!wmsError && !hasUsableWmsData;
-  const showWmsDegraded = !!wmsError && hasUsableWmsData;
-  const showDashboardUnavailable = !!dashboardError && !hasUsableDashboardData;
-  const showDashboardDegraded = !!dashboardError && hasUsableDashboardData;
-  const wmsErrorMessage =
-    getWmsDashboardReadErrorMessage(wmsError) ?? 'Please refresh and try again.';
-  const dashboardErrorMessage =
-    getInventoryDashboardReadErrorMessage(dashboardError) ?? 'Please refresh and try again.';
+  const {
+    isLoading,
+    showWmsUnavailable,
+    showWmsDegraded,
+    showDashboardUnavailable,
+    showDashboardDegraded,
+    wmsErrorMessage,
+    dashboardErrorMessage,
+  } = buildInventoryDashboardReadState({
+    wmsData,
+    dashboardData,
+    wmsError,
+    dashboardError,
+    isWmsLoading,
+    isDashboardLoading,
+  });
 
   if (showWmsUnavailable) {
     return (

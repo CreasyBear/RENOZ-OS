@@ -358,11 +358,18 @@ describe('inventory dashboard query normalization wave 3', () => {
       join(process.cwd(), 'src/components/domain/inventory/unified-inventory-dashboard.tsx'),
       'utf8'
     );
+    const readState = readFileSync(
+      join(process.cwd(), 'src/components/domain/inventory/inventory-dashboard-read-state.ts'),
+      'utf8'
+    );
 
-    expect(source).toContain('getWmsDashboardReadErrorMessage(wmsError)');
-    expect(source).toContain('getInventoryDashboardReadErrorMessage(dashboardError)');
+    expect(source).toContain('buildInventoryDashboardReadState');
+    expect(source).not.toContain('getWmsDashboardReadErrorMessage(wmsError)');
+    expect(source).not.toContain('getInventoryDashboardReadErrorMessage(dashboardError)');
     expect(source).not.toContain('dashboardError?.message');
     expect(source).not.toContain('wmsError as { message');
+    expect(readState).toContain('getWmsDashboardReadErrorMessage(wmsError)');
+    expect(readState).toContain('getInventoryDashboardReadErrorMessage(dashboardError)');
   });
 
   it('keeps inventory dashboard read orchestration outside the broad inventory hook module', () => {
