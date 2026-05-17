@@ -1006,9 +1006,9 @@ What is messy:
   - Files: `src/lib/server/rate-limit.ts`, `src/routes/api/unsubscribe.$token.ts`, `src/routes/api/webhooks/resend.ts`, `src/routes/api/oauth/initiate.ts`, `src/server/functions/auth/confirm.ts`
   - The shared public-endpoint rate limiter is explicitly in-memory. In a multi-instance deployment, that means protections are per-instance rather than global. It also falls back to `'default-client'` when proxy headers are not trusted, which can collapse unrelated traffic into the same bucket or make rate limiting behave unpredictably. This is less severe than the unsubscribe token issue, but it is still real operational/security debt.
 
-- **AI debug endpoints remain exposed without auth**
+- **Closed 2026-05-17: AI debug endpoints now require explicit non-production opt-in**
   - Files: `src/routes/api/ai/debug-ping.ts`, `src/routes/api/ai/debug-rls-clash.ts`
-  - `debug-ping` is intentionally public, and `debug-rls-clash` is only blocked in production. That means non-production environments can expose an unauthenticated endpoint that accepts an arbitrary `orgId` and returns customer/revenue comparisons after manually setting organization context. This is acceptable only if preview/dev environments are treated as private; otherwise it is a trust-boundary footgun.
+  - Revalidated and remediated in AI Maintainer Sprint 3. Both debug routes now return a generic 404 response unless `AI_DEBUG_ROUTES_ENABLED=true` in a non-production runtime; production stays disabled even when the flag is present. The RLS diagnostic route no longer accepts arbitrary org inspection by default in preview or development environments.
 
 - **Permission fallback strings create silent authorization-drift risk**
   - Files: `src/server/functions/jobs/checklists.ts`, `src/server/functions/jobs/job-time.ts`, `src/server/functions/jobs/job-materials.ts`, `src/server/functions/jobs/job-tasks.ts`, `src/server/functions/pipeline/pipeline.ts`, `src/server/functions/support/issues.ts`, `src/server/functions/orders/rma.ts`
@@ -1018,19 +1018,19 @@ What is messy:
 
 - **The stronger security model still needs broader trust-boundary tests**
   - Evidence: route/auth/financial test packs
-  - The stronger paths are tested around Xero webhooks, auth routes, and signed unsubscribe-token handling. Remaining gaps are public throttling behavior behind proxy/config permutations and debug endpoint exposure policy.
+  - The stronger paths are tested around Xero webhooks, auth routes, signed unsubscribe-token handling, and AI debug route opt-in policy. Remaining gaps are public throttling behavior behind proxy/config permutations.
 
 ### Positive Findings
 
 - `src/routes/api/webhooks/xero.ts` verifies the raw request body and signature before parsing JSON.
 - `src/routes/api/track/open.$emailId.ts` and `src/routes/api/track/click.$emailId.$linkId.ts` validate tracking signatures, and the click route validates the target against stored link metadata to avoid open redirects.
 - `src/server/functions/oauth/handle-oauth-callback.ts` is intentionally narrow and pushes complexity into the OAuth flow library rather than bloating the route wrapper.
-- All current `src/routes/api/ai/*` endpoints except the two explicit debug routes require `withAuth`.
+- All current `src/routes/api/ai/*` endpoints either require `withAuth` or are disabled unless an explicit non-production debug flag is present.
 
 ### Deferred Cleanup Candidates
 
 Safe short-term:
-- decide whether public debug AI routes should exist at all in shipped code
+- no remaining short-term AI debug-route exposure item after Sprint 3; keep public throttling and distributed limiter work separate
 
 Structural medium-term:
 - move public endpoint throttling onto a distributed limiter
@@ -1106,8 +1106,8 @@ What is messy:
 #### P2
 
 - **Route-level error responses are not consistently sanitized**
-  - Files: `src/routes/api/oauth/initiate.ts`, `src/server/functions/oauth/handle-oauth-callback.ts`, `src/routes/api/ai/debug-rls-clash.ts`
-  - Some routes still return raw error text back to the client. `oauth/initiate` returns `details: parsed.error` for invalid input and raw `errorMessage` on 500 responses; `handle-oauth-callback` embeds `Internal server error: ${errorMessage}` into the result payload; `debug-rls-clash` returns the caught message directly. That is inconsistent with the stronger “generic client message, detailed server log” pattern used elsewhere.
+  - Files: `src/routes/api/oauth/initiate.ts`, `src/server/functions/oauth/handle-oauth-callback.ts`
+  - Some routes still return raw error text back to the client. `oauth/initiate` returns `details: parsed.error` for invalid input and raw `errorMessage` on 500 responses; `handle-oauth-callback` embeds `Internal server error: ${errorMessage}` into the result payload. AI debug RLS failures now use stable client copy with server-side logging.
 
 - **User-facing surfaces still often expose raw technical error strings**
   - Files: `src/routes/_authenticated/support/support-page.tsx`, `src/routes/_authenticated/support/dashboard.tsx`, `src/components/domain/warranty/containers/warranty-detail-container.tsx`, `src/components/domain/customers/components/xero-contact-manager.tsx`, `src/components/domain/jobs/projects/task-dialogs.tsx`

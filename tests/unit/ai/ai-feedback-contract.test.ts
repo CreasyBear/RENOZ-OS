@@ -52,9 +52,14 @@ describe('AI feedback contract', () => {
   it('keeps AI API failure payloads behind route-safe helpers', () => {
     const artifactRoute = read('src/routes/api/ai/artifacts.$id.ts');
     const debugRoute = read('src/routes/api/ai/debug-rls-clash.ts');
+    const debugPingRoute = read('src/routes/api/ai/debug-ping.ts');
 
     expect(artifactRoute).toContain('getAIArtifactStreamErrorPayload(error)');
     expect(debugRoute).toContain('getAIDebugRlsErrorPayload(error)');
+    expect(debugRoute).toContain('areAIDebugRoutesEnabled()');
+    expect(debugRoute).toContain('createAIDebugRouteDisabledResponse()');
+    expect(debugPingRoute).toContain('areAIDebugRoutesEnabled()');
+    expect(debugPingRoute).toContain('createAIDebugRouteDisabledResponse()');
     expect(artifactRoute).not.toContain('message: error instanceof Error ? error.message');
     expect(debugRoute).not.toContain('error instanceof Error ? error.message');
   });

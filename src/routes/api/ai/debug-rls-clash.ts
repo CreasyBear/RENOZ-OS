@@ -3,11 +3,15 @@
  *
  * GET /api/ai/debug-rls-clash?orgId=<uuid>
  *
- * DEV ONLY. Disabled in production.
+ * Explicitly enabled local diagnostic only.
  */
 import { and, count, eq, isNull, notInArray, sql, sum } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { getAIDebugRlsErrorPayload } from '@/lib/ai/api-error-responses'
+import {
+  areAIDebugRoutesEnabled,
+  createAIDebugRouteDisabledResponse,
+} from '@/lib/ai/debug-route-policy'
 import { logger } from '@/lib/logger'
 import { customers, orders } from 'drizzle/schema'
 
@@ -76,11 +80,8 @@ async function computeKpiSlices(orgId: string, range: Range) {
 }
 
 export async function GET({ request }: { request: Request }) {
-  if (process.env.NODE_ENV === 'production') {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'debug-rls-clash is disabled in production' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } }
-    )
+  if (!areAIDebugRoutesEnabled()) {
+    return createAIDebugRouteDisabledResponse()
   }
 
   try {
