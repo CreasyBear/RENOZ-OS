@@ -35,6 +35,7 @@ import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
 import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
+import { communicationsQueryKeys } from './query-key-catalog/communications';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
 import { productQueryKeys } from './query-key-catalog/products';
 import { supportQueryKeys } from './query-key-catalog/support';
@@ -1063,104 +1064,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // COMMUNICATIONS
   // -------------------------------------------------------------------------
-  communications: {
-    all: ['communications'] as const,
-
-    // Campaigns
-    campaigns: () => [...queryKeys.communications.all, 'campaigns'] as const,
-    campaignsList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.campaigns(), 'list', filters ?? {}] as const,
-    campaignDetail: (id: string) =>
-      [...queryKeys.communications.campaigns(), 'detail', id] as const,
-    campaignRecipients: (campaignId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.campaigns(), 'recipients', campaignId, filters ?? {}] as const,
-    campaignPreview: (input: { recipientCriteria: unknown; sampleSize?: number }) =>
-      [...queryKeys.communications.campaigns(), 'preview', input] as const,
-
-    // Templates
-    templates: () => [...queryKeys.communications.all, 'templates'] as const,
-    templatesList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.templates(), 'list', filters ?? {}] as const,
-    templateDetail: (id: string) =>
-      [...queryKeys.communications.templates(), 'detail', id] as const,
-    templateVersions: (templateId: string) =>
-      [...queryKeys.communications.templates(), 'versions', templateId] as const,
-
-    // Signatures
-    signatures: () => [...queryKeys.communications.all, 'signatures'] as const,
-    signaturesList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.signatures(), 'list', filters ?? {}] as const,
-    signatureDetail: (id: string) =>
-      [...queryKeys.communications.signatures(), 'detail', id] as const,
-
-    // Scheduled Emails
-    scheduledEmails: () => [...queryKeys.communications.all, 'scheduledEmails'] as const,
-    scheduledEmailsList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.scheduledEmails(), 'list', filters ?? {}] as const,
-    scheduledEmailDetail: (id: string) =>
-      [...queryKeys.communications.scheduledEmails(), 'detail', id] as const,
-
-    // Scheduled Calls
-    scheduledCalls: () => [...queryKeys.communications.all, 'scheduledCalls'] as const,
-    scheduledCallsList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.scheduledCalls(), 'list', filters ?? {}] as const,
-    scheduledCallDetail: (id: string) =>
-      [...queryKeys.communications.scheduledCalls(), 'detail', id] as const,
-    upcomingCalls: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.scheduledCalls(), 'upcoming', filters ?? {}] as const,
-
-    // Contact Preferences
-    contactPreference: (contactId: string) =>
-      [...queryKeys.communications.all, 'contactPreference', contactId] as const,
-    preferenceHistory: (contactId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.all, 'preferenceHistory', contactId, filters ?? {}] as const,
-
-    // Customer Communications
-    customerCommunications: (customerId: string) =>
-      [...queryKeys.communications.all, 'customer', customerId] as const,
-
-    // Email History
-    emailHistory: () => [...queryKeys.communications.all, 'emailHistory'] as const,
-    emailHistoryList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.emailHistory(), 'list', filters ?? {}] as const,
-
-    // Unified Inbox
-    inbox: () => [...queryKeys.communications.all, 'inbox'] as const,
-    inboxList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.communications.inbox(), 'list', filters ?? {}] as const,
-    inboxEmailAccounts: () => [...queryKeys.communications.all, 'inbox-email-accounts'] as const,
-
-    // Email Suppression (Resend Integration)
-    emailSuppression: {
-      all: () => [...queryKeys.communications.all, 'emailSuppression'] as const,
-      lists: () => [...queryKeys.communications.all, 'emailSuppression', 'list'] as const,
-      list: (filters?: Record<string, unknown>) =>
-        [...queryKeys.communications.all, 'emailSuppression', 'list', filters ?? {}] as const,
-      check: (email: string) =>
-        [...queryKeys.communications.all, 'emailSuppression', 'check', email] as const,
-    },
-
-    // Email Analytics (Resend Integration)
-    emailAnalytics: {
-      all: () => [...queryKeys.communications.all, 'emailAnalytics'] as const,
-      metrics: (filters?: Record<string, unknown>) =>
-        [...queryKeys.communications.all, 'emailAnalytics', 'metrics', filters ?? {}] as const,
-    },
-
-    // Domain Verification (Resend Integration)
-    domainVerification: {
-      all: () => [...queryKeys.communications.all, 'domainVerification'] as const,
-      status: () =>
-        [...queryKeys.communications.all, 'domainVerification', 'status'] as const,
-    },
-
-    // Email Preview (Resend Integration)
-    emailPreview: {
-      all: () => [...queryKeys.communications.all, 'emailPreview'] as const,
-      render: (templateId: string, data?: Record<string, unknown>) =>
-        [...queryKeys.communications.all, 'emailPreview', 'render', templateId, data ?? {}] as const,
-    },
-  },
+  communications: communicationsQueryKeys,
 
   // -------------------------------------------------------------------------
   // SUPPLIERS
