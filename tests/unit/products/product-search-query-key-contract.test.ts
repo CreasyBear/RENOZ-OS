@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { productQueryKeys } from '@/lib/query-key-catalog/products';
 import { queryKeys } from '@/lib/query-keys';
 
 describe('product search query key contract', () => {
+  it('exposes the product catalog through the public query key adapter', () => {
+    expect(queryKeys.products).toBe(productQueryKeys);
+  });
+
   it('keeps product search facets under the product query root', () => {
     const root = queryKeys.products.all;
     const searches = queryKeys.products.searches();

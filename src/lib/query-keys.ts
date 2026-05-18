@@ -40,7 +40,9 @@ import type { SupplierSortField } from '@/lib/schemas/suppliers';
 import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
+import { productQueryKeys } from './query-key-catalog/products';
 export type { InventoryFilters } from './query-key-catalog/inventory';
+export type { ProductStockAlertFilters } from './query-key-catalog/products';
 
 type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
 type CsatSortField = NonNullable<ListFeedbackInput['sortBy']>;
@@ -110,12 +112,6 @@ export interface JobFilters {
   status?: 'pending' | 'running' | 'completed' | 'failed'
   type?: string
   limit?: number
-}
-
-export interface ProductStockAlertFilters {
-  locationId?: string
-  reorderPoint?: number
-  criticalThreshold?: number
 }
 
 export interface ContactFilters {
@@ -1097,108 +1093,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // PRODUCTS
   // -------------------------------------------------------------------------
-  products: {
-    all: ['products'] as const,
-    lists: () => [...queryKeys.products.all, 'list'] as const,
-    list: (filters?: { search?: string; categoryId?: string; status?: string }) =>
-      [...queryKeys.products.lists(), filters ?? {}] as const,
-    details: () => [...queryKeys.products.all, 'detail'] as const,
-    detail: (id: string) => [...queryKeys.products.details(), id] as const,
-    stock: () => [...queryKeys.products.all, 'stock'] as const,
-    jobMaterials: (jobId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.all, 'jobMaterials', jobId, filters ?? {}] as const,
-    // Product inventory queries
-    inventories: () => [...queryKeys.products.all, 'inventory'] as const,
-    inventory: (productId: string) =>
-      [...queryKeys.products.inventories(), productId] as const,
-    inventoryStatsAll: () => [...queryKeys.products.all, 'inventoryStats'] as const,
-    inventoryStats: (productId: string) =>
-      [...queryKeys.products.inventoryStatsAll(), productId] as const,
-    // Product search
-    searches: () => [...queryKeys.products.all, 'search'] as const,
-    search: (query: string, options?: Record<string, unknown>) =>
-      [...queryKeys.products.searches(), query, options ?? {}] as const,
-    facets: () => [...queryKeys.products.all, 'facets'] as const,
-    // Product attributes
-    attributes: {
-      all: ['products', 'attributes'] as const,
-      definitions: (filters?: { activeOnly?: boolean; categoryId?: string }) =>
-        [...queryKeys.products.attributes.all, 'definitions', filters ?? {}] as const,
-      definition: (id: string) =>
-        [...queryKeys.products.attributes.all, 'definition', id] as const,
-      values: (productId: string) =>
-        [...queryKeys.products.attributes.all, 'values', productId] as const,
-      validation: (productId: string) =>
-        [...queryKeys.products.attributes.all, 'validation', productId] as const,
-      filterable: (categoryId?: string) =>
-        [...queryKeys.products.attributes.all, 'filterable', categoryId ?? 'all'] as const,
-    },
-    // Product images
-    images: {
-      all: ['products', 'images'] as const,
-      list: (productId: string) =>
-        [...queryKeys.products.images.all, 'list', productId] as const,
-      stats: (productId: string) =>
-        [...queryKeys.products.images.all, 'stats', productId] as const,
-      primary: (productId: string) =>
-        [...queryKeys.products.images.all, 'primary', productId] as const,
-    },
-    // Product pricing
-    pricing: {
-      all: ['products', 'pricing'] as const,
-      tiers: (productId: string) =>
-        [...queryKeys.products.pricing.all, 'tiers', productId] as const,
-      customer: (productId: string, customerId?: string) =>
-        [...queryKeys.products.pricing.all, 'customer', productId, customerId ?? ''] as const,
-      history: (productId: string) =>
-        [...queryKeys.products.pricing.all, 'history', productId] as const,
-      resolve: (productId: string, context?: Record<string, unknown>) =>
-        [...queryKeys.products.pricing.all, 'resolve', productId, context ?? {}] as const,
-    },
-    // Product bundles
-    bundles: {
-      all: ['products', 'bundles'] as const,
-      components: (productId: string) =>
-        [...queryKeys.products.bundles.all, 'components', productId] as const,
-      price: (productId: string) =>
-        [...queryKeys.products.bundles.all, 'price', productId] as const,
-      validation: (productId: string) =>
-        [...queryKeys.products.bundles.all, 'validation', productId] as const,
-      expanded: (productId: string) =>
-        [...queryKeys.products.bundles.all, 'expanded', productId] as const,
-      containing: (productId: string) =>
-        [...queryKeys.products.bundles.all, 'containing', productId] as const,
-    },
-    // Product bulk operations
-    bulk: {
-      all: ['products', 'bulk'] as const,
-      template: () => [...queryKeys.products.bulk.all, 'template'] as const,
-    },
-    // Product advanced search
-    advancedSearch: {
-      all: ['products', 'advancedSearch'] as const,
-      results: (query: Record<string, unknown>) =>
-        [...queryKeys.products.advancedSearch.all, 'results', query] as const,
-      saved: () => [...queryKeys.products.advancedSearch.all, 'saved'] as const,
-    },
-    // Product stock/inventory extended
-    stockLevelsAll: () => [...queryKeys.products.all, 'stockLevels'] as const,
-    stockLevels: (productId: string) =>
-      [...queryKeys.products.stockLevelsAll(), productId] as const,
-    stockAlertsAll: () => [...queryKeys.products.all, 'stockAlerts'] as const,
-    stockAlerts: (filters?: ProductStockAlertFilters) =>
-      [...queryKeys.products.stockAlertsAll(), filters ?? {}] as const,
-    movementsAll: () => [...queryKeys.products.all, 'movements'] as const,
-    movementsForProduct: (productId: string) =>
-      [...queryKeys.products.movementsAll(), productId] as const,
-    movements: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.movementsForProduct(productId), filters ?? {}] as const,
-    movementsAggregatedForProduct: (productId: string) =>
-      [...queryKeys.products.movementsAll(), 'aggregated', productId] as const,
-    movementsAggregated: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.products.movementsAggregatedForProduct(productId), filters ?? {}] as const,
-    locations: () => [...queryKeys.products.all, 'locations'] as const,
-  },
+  products: productQueryKeys,
 
   // -------------------------------------------------------------------------
   // CATEGORIES

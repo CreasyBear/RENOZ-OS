@@ -16,18 +16,26 @@ function compact(source: string): string {
 describe('product stock alert cache contract', () => {
   it('keys low-stock alerts by every server-side alert filter and exposes a prefix invalidation key', () => {
     const queryKeysSource = read('src/lib/query-keys.ts');
+    const productCatalogSource = read('src/lib/query-key-catalog/products.ts');
     const productInventoryHook = read('src/hooks/products/use-product-inventory.ts');
     const compactQueryKeys = compact(queryKeysSource);
+    const compactProductCatalog = compact(productCatalogSource);
     const compactProductHook = compact(productInventoryHook);
 
+    expect(compactQueryKeys).toContain('products:productQueryKeys');
+    expect(compactQueryKeys).not.toContain('interfaceProductStockAlertFilters');
+    expect(compactProductCatalog).not.toContain('queryKeys.products');
     expect(compactQueryKeys).toContain(
+      "exporttype{ProductStockAlertFilters}from'./query-key-catalog/products';"
+    );
+    expect(compactProductCatalog).toContain(
       'exportinterfaceProductStockAlertFilters{locationId?:stringreorderPoint?:numbercriticalThreshold?:number}'
     );
-    expect(compactQueryKeys).toContain(
-      "stockAlertsAll:()=>[...queryKeys.products.all,'stockAlerts']asconst"
+    expect(compactProductCatalog).toContain(
+      "conststockAlertsAll=()=>[...all,'stockAlerts']asconst"
     );
-    expect(compactQueryKeys).toContain(
-      'stockAlerts:(filters?:ProductStockAlertFilters)=>[...queryKeys.products.stockAlertsAll(),filters??{}]asconst'
+    expect(compactProductCatalog).toContain(
+      'conststockAlerts=(filters?:ProductStockAlertFilters)=>[...stockAlertsAll(),filters??{}]asconst'
     );
     expect(compactProductHook).toContain(
       'constalertFilters={reorderPoint,criticalThreshold,locationId};'
