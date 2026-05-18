@@ -37,12 +37,14 @@ describe('allocatable stock aggregate contract', () => {
   });
 
   it('uses allocatable quantities and sample rows for inventory alert triggering', () => {
-    const alerts = read('src/server/functions/inventory/alerts.ts');
+    const triggeredAlerts = read('src/server/functions/inventory/triggered-alerts-read.ts');
 
-    expect(alerts).toContain("import { allocatableQuantitySumSql } from './_allocatable-stock-sql';");
-    expect(alerts).toContain('totalQuantity: allocatableQuantitySumSql()');
-    expect(alerts).toContain('having(sql`${allocatableQuantitySumSql()} <');
-    expect(alerts).toContain('having(sql`${allocatableQuantitySumSql()} <= 0`)');
-    expect(alerts).toContain("eq(inventory.status, 'available')");
+    expect(triggeredAlerts).toContain(
+      "import { allocatableQuantitySumSql } from './_allocatable-stock-sql';"
+    );
+    expect(triggeredAlerts).toContain('totalQuantity: allocatableQuantitySumSql()');
+    expect(triggeredAlerts).toContain('having(sql`${allocatableQuantitySumSql()} <');
+    expect(triggeredAlerts).toContain('having(sql`${allocatableQuantitySumSql()} <= 0`)');
+    expect(triggeredAlerts).toContain("eq(inventory.status, 'available')");
   });
 });

@@ -37,40 +37,58 @@ describe('inventory alert tenant-scope contract', () => {
 
   it('validates alert product changes as active and tenant-owned', () => {
     const source = compact(read('src/server/functions/inventory/alerts.ts'));
+    const queryConditions = compact(
+      read('src/server/functions/inventory/alert-query-conditions.ts')
+    );
+    const triggeredRead = compact(read('src/server/functions/inventory/triggered-alerts-read.ts'));
 
-    expect(source).toContain('functionalertProductWhereCondition(productId:string,organizationId:string)');
-    expect(source).toContain(
+    expect(queryConditions).toContain(
+      'exportfunctionalertProductWhereCondition(productId:string,organizationId:string)'
+    );
+    expect(queryConditions).toContain(
       'eq(products.id,productId),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
+    );
+    expect(queryConditions).toContain(
+      'exportfunctionalertLocationWhereCondition(locationId:string,organizationId:string)'
+    );
+    expect(queryConditions).toContain(
+      'eq(warehouseLocations.id,locationId),eq(warehouseLocations.organizationId,organizationId)'
     );
     expect(source).toContain('if(data.productId!==undefined)');
     expect(source).toContain('where(alertProductWhereCondition(data.productId,ctx.organizationId))');
     expect(source).toContain('where(alertProductWhereCondition(alert.productId,ctx.organizationId))');
-    expect(source).toContain('where(alertProductWhereCondition(alert.productId,organizationId))');
+    expect(triggeredRead).toContain(
+      'where(alertProductWhereCondition(alert.productId,organizationId))'
+    );
     expect(source).toContain('if(data.locationId!==undefined)');
-    expect(source).toContain('eq(warehouseLocations.id,data.locationId)');
-    expect(source).toContain('eq(warehouseLocations.organizationId,ctx.organizationId)');
+    expect(source).toContain('where(alertLocationWhereCondition(data.locationId,ctx.organizationId))');
+    expect(source).toContain(
+      'where(alertLocationWhereCondition(alert.locationId,ctx.organizationId))'
+    );
   });
 
   it('keeps computed alert product descriptors active and organization-bounded', () => {
-    const source = compact(read('src/server/functions/inventory/alerts.ts'));
+    const queryConditions = compact(
+      read('src/server/functions/inventory/alert-query-conditions.ts')
+    );
+    const triggeredRead = compact(read('src/server/functions/inventory/triggered-alerts-read.ts'));
 
-    expect(source).toContain('functionalertInventoryProductJoinCondition(organizationId:string)');
-    expect(source).toContain(
+    expect(queryConditions).toContain(
+      'exportfunctionalertInventoryProductJoinCondition(organizationId:string)'
+    );
+    expect(queryConditions).toContain(
       'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
     );
-    expect(source).toContain(
-      'innerJoin(products,alertInventoryProductJoinCondition(ctx.organizationId))'
-    );
-    expect(source).toContain(
-      'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,ctx.organizationId)))'
-    );
-    expect(source).toContain(
+    expect(triggeredRead).toContain(
       'innerJoin(products,alertInventoryProductJoinCondition(organizationId))'
     );
-    expect(source).toContain(
+    expect(triggeredRead).toContain(
       'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,organizationId)))'
     );
-    expect(source).toContain('ANDp.organization_id=${organizationId}ANDp.deleted_atISNULL');
-    expect(source).toContain('ANDm.organization_id=${organizationId}');
+    expect(triggeredRead).toContain(
+      'where(eq(inventory.organizationId,organizationId))'
+    );
+    expect(triggeredRead).toContain('ANDp.organization_id=${organizationId}ANDp.deleted_atISNULL');
+    expect(triggeredRead).toContain('ANDm.organization_id=${organizationId}');
   });
 });

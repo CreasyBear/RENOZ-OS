@@ -9,48 +9,31 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, or, sql, desc, asc, gt, isNull } from 'drizzle-orm';
+import { eq, and, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { normalizeObjectInput } from '@/lib/schemas/_shared/patterns';
-import { inventoryAlerts, inventory, products, warehouseLocations } from 'drizzle/schema';
+import { inventoryAlerts, products, warehouseLocations } from 'drizzle/schema';
 import type { AlertThreshold } from '@/lib/schemas/inventory';
 import { withAuth } from '@/lib/server/protected';
-import { inventoryLogger } from '@/lib/logger';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
 import {
   createAlertSchema,
   updateAlertSchema,
   alertListQuerySchema,
-  DEFAULT_LOW_STOCK_THRESHOLD,
   type AlertWithDetails,
   type TriggeredAlert,
   type ListAlertsResult,
 } from '@/lib/schemas/inventory';
-import { allocatableQuantitySumSql } from './_allocatable-stock-sql';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type AlertRecord = typeof inventoryAlerts.$inferSelect;
-
-function alertProductWhereCondition(productId: string, organizationId: string) {
-  return and(
-    eq(products.id, productId),
-    eq(products.organizationId, organizationId),
-    isNull(products.deletedAt)
-  );
-}
-
-function alertInventoryProductJoinCondition(organizationId: string) {
-  return and(
-    eq(inventory.productId, products.id),
-    eq(products.organizationId, organizationId),
-    isNull(products.deletedAt)
-  );
-}
+import {
+  alertLocationWhereCondition,
+  alertProductWhereCondition,
+} from './alert-query-conditions';
+import {
+  checkInventoryAlertTriggered,
+  getTriggeredInventoryAlerts,
+} from './triggered-alerts-read';
 
 // ============================================================================
 // ALERT CRUD
@@ -179,12 +162,7 @@ export const getAlert = createServerFn({ method: 'GET' })
         ? db
             .select()
             .from(warehouseLocations)
-            .where(
-              and(
-                eq(warehouseLocations.id, alert.locationId),
-                eq(warehouseLocations.organizationId, ctx.organizationId)
-              )
-            )
+            .where(alertLocationWhereCondition(alert.locationId, ctx.organizationId))
             .limit(1)
             .then((r) => r[0] || null)
         : Promise.resolve(null),
@@ -224,12 +202,7 @@ export const createAlert = createServerFn({ method: 'POST' })
       const [location] = await db
         .select()
         .from(warehouseLocations)
-        .where(
-          and(
-            eq(warehouseLocations.id, data.locationId),
-            eq(warehouseLocations.organizationId, ctx.organizationId)
-          )
-        )
+        .where(alertLocationWhereCondition(data.locationId, ctx.organizationId))
         .limit(1);
 
       if (!location) {
@@ -293,12 +266,7 @@ export const updateAlert = createServerFn({ method: 'POST' })
       const [location] = await db
         .select({ id: warehouseLocations.id })
         .from(warehouseLocations)
-        .where(
-          and(
-            eq(warehouseLocations.id, data.locationId),
-            eq(warehouseLocations.organizationId, ctx.organizationId)
-          )
-        )
+        .where(alertLocationWhereCondition(data.locationId, ctx.organizationId))
         .limit(1);
 
       if (!location) {
@@ -362,228 +330,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ alerts: TriggeredAlert[]; count: number }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
-    // Get all active alerts
-    const activeAlerts = await db
-      .select()
-      .from(inventoryAlerts)
-      .where(
-        and(
-          eq(inventoryAlerts.organizationId, ctx.organizationId),
-          eq(inventoryAlerts.isActive, true)
-        )
-      );
-
-    // Check all alerts in parallel to avoid sequential N+1 queries
-    const alertChecks = await Promise.all(
-      activeAlerts.map((alert) => checkAlertTriggered(ctx.organizationId, alert))
-    );
-    let triggeredAlerts: TriggeredAlert[] = alertChecks.filter(
-      (result): result is TriggeredAlert => result !== null
-    );
-
-    // If no alert rules exist, provide fallback low stock alerts based on allocatable availability < 10
-    // This ensures consistency with the inventory index page which uses the same threshold
-    // Fallback alerts are read-only and cannot be acknowledged (they don't exist in DB)
-    if (activeAlerts.length === 0) {
-      try {
-        // Use SQL GROUP BY for efficient aggregation by SKU (product) + location
-        // Inventory table stores individual items (lots, serials), but alerts should be by SKU
-        // Threshold matches availability semantics: only available-status rows are allocatable.
-        const lowStockGroups = await db
-          .select({
-            productId: inventory.productId,
-            productName: products.name,
-            productSku: products.sku,
-            locationId: inventory.locationId,
-            locationName: warehouseLocations.name,
-            locationCode: warehouseLocations.locationCode,
-            totalQuantity: allocatableQuantitySumSql(),
-            itemCount: sql<number>`COUNT(*)::int`,
-          })
-          .from(inventory)
-          .innerJoin(products, alertInventoryProductJoinCondition(ctx.organizationId))
-          .leftJoin(
-            warehouseLocations,
-            and(
-              eq(inventory.locationId, warehouseLocations.id),
-              eq(warehouseLocations.organizationId, ctx.organizationId)
-            )
-          )
-          .where(eq(inventory.organizationId, ctx.organizationId))
-          .groupBy(
-            inventory.productId,
-            products.name,
-            products.sku,
-            inventory.locationId,
-            warehouseLocations.name,
-            warehouseLocations.locationCode
-          )
-          .having(sql`${allocatableQuantitySumSql()} < ${DEFAULT_LOW_STOCK_THRESHOLD}`)
-          .limit(50); // Limit groups to prevent performance issues
-
-        if (lowStockGroups.length > 0) {
-          // Batch fetch affected items for all groups in a single query (performance optimization)
-          // Get sample items for display - limit to first 20 groups and 5 items per group
-          const topGroups = lowStockGroups.slice(0, 20);
-          const productLocationPairs = topGroups.map((g) => ({
-            productId: g.productId,
-            locationId: g.locationId,
-          }));
-
-          const affectedItemsMap = new Map<string, Array<{ inventoryId: string; productName: string; quantity: number }>>();
-
-          if (productLocationPairs.length > 0) {
-            // Build OR conditions for batch fetch - more efficient than N+1 queries
-            // Build a map for quick lookup to filter results
-            const pairMap = new Map<string, Set<string>>();
-            for (const pair of productLocationPairs) {
-              if (!pairMap.has(pair.productId)) {
-                pairMap.set(pair.productId, new Set());
-              }
-              pairMap.get(pair.productId)!.add(pair.locationId);
-            }
-
-            // Build OR conditions for each product+location pair
-            const pairConditions = productLocationPairs.map((pair) =>
-              and(
-                eq(inventory.productId, pair.productId),
-                eq(inventory.locationId, pair.locationId)
-              )
-            );
-
-            // Fetch all items for these groups in one query using OR
-            const allItems = await db
-              .select({
-                id: inventory.id,
-                productId: inventory.productId,
-                locationId: inventory.locationId,
-                productName: products.name,
-                quantityAvailable: inventory.quantityAvailable,
-              })
-              .from(inventory)
-              .innerJoin(products, alertInventoryProductJoinCondition(ctx.organizationId))
-              .where(
-                and(
-                  eq(inventory.organizationId, ctx.organizationId),
-                  eq(inventory.status, 'available'),
-                  or(...pairConditions)
-                )
-              )
-              .orderBy(asc(inventory.productId), asc(inventory.locationId), asc(inventory.quantityAvailable));
-
-            // Group items by product+location and limit to 5 per group
-            // Filter to only include valid product+location pairs
-            const groupedItems = new Map<string, typeof allItems>();
-            for (const item of allItems) {
-              const key = `${item.productId}-${item.locationId}`;
-              // Only include if this is a valid pair from our groups
-              const validLocations = pairMap.get(item.productId);
-              if (validLocations && validLocations.has(item.locationId)) {
-                if (!groupedItems.has(key)) {
-                  groupedItems.set(key, []);
-                }
-                const group = groupedItems.get(key)!;
-                if (group.length < 5) {
-                  group.push(item);
-                }
-              }
-            }
-
-            // Convert to affectedItems format
-            for (const [key, items] of groupedItems.entries()) {
-              affectedItemsMap.set(
-                key,
-                items.map((i) => ({
-                  inventoryId: i.id,
-                  productName: i.productName || 'Unknown Product',
-                  quantity: Number(i.quantityAvailable) || 0,
-                }))
-              );
-            }
-          }
-
-          triggeredAlerts = lowStockGroups.map((group) => {
-            const currentValue = Number(group.totalQuantity) || 0;
-            const thresholdValue = DEFAULT_LOW_STOCK_THRESHOLD;
-            const severity: 'critical' | 'high' | 'medium' | 'low' =
-              currentValue === 0 ? 'critical' : currentValue < thresholdValue / 2 ? 'high' : 'medium';
-
-            // Generate a valid UUID v4 format for fallback alerts
-            // Prefix with '00000000-0000-4000-8000-' to identify them as fallback alerts
-            // These alerts cannot be acknowledged as they don't exist in the database
-            const key = `${group.productId}-${group.locationId}`;
-            // Create a deterministic hash from product+location key
-            let hash = 0;
-            for (let i = 0; i < key.length; i++) {
-              const char = key.charCodeAt(i);
-              hash = ((hash << 5) - hash) + char;
-              hash = hash & hash; // Convert to 32-bit integer
-            }
-            // Convert to hex and pad to 12 characters for UUID format
-            const hashHex = Math.abs(hash).toString(16).padStart(12, '0').slice(0, 12);
-            const fallbackId = `00000000-0000-4000-8000-${hashHex}` as `${string}-${string}-${string}-${string}-${string}`;
-            
-            // Standardized message format matching real alerts
-            const message = `${group.itemCount} item(s) below minimum stock level of ${thresholdValue} (${currentValue} available)`;
-            
-            return {
-              alert: {
-                id: fallbackId,
-                organizationId: ctx.organizationId,
-                alertType: 'low_stock' as const,
-                productId: group.productId,
-                locationId: group.locationId,
-                threshold: { minQuantity: thresholdValue } as AlertThreshold,
-                isActive: true,
-                notificationChannels: [],
-                escalationUsers: [],
-                lastTriggeredAt: new Date(),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                createdBy: null,
-                updatedBy: null,
-                version: 1,
-              },
-              product: group.productName
-                ? {
-                    id: group.productId,
-                    name: group.productName,
-                    sku: group.productSku || '',
-                  }
-                : null,
-              location: group.locationName
-                ? {
-                    id: group.locationId,
-                    name: group.locationName,
-                    locationCode: group.locationCode || '',
-                  }
-                : null,
-              currentValue,
-              thresholdValue,
-              severity,
-              message,
-              affectedItems: affectedItemsMap.get(key) || [],
-              // Flag to distinguish fallback alerts
-              isFallback: true,
-            };
-          });
-        }
-      } catch (error) {
-        // Log error but don't fail the entire function
-        // Fallback alerts are optional - if they fail, return empty array
-        inventoryLogger.error('Failed to fetch fallback low stock alerts', error as Error, {});
-        // Continue with empty triggeredAlerts array
-      }
-    }
-
-    // Sort by severity
-    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    triggeredAlerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-    return {
-      alerts: triggeredAlerts,
-      count: triggeredAlerts.length,
-    };
+    return getTriggeredInventoryAlerts({ organizationId: ctx.organizationId });
   }
 );
 
@@ -601,54 +348,50 @@ const checkAlertsSchema = z.object({});
 export const checkAndTriggerAlerts = createServerFn({ method: 'POST' })
   .inputValidator(checkAlertsSchema)
   .handler(async () => {
-  const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
-  // Get all active alerts
-  const activeAlerts = await db
-    .select()
-    .from(inventoryAlerts)
-    .where(
-      and(
-        eq(inventoryAlerts.organizationId, ctx.organizationId),
-        eq(inventoryAlerts.isActive, true)
+    const activeAlerts = await db
+      .select()
+      .from(inventoryAlerts)
+      .where(
+        and(
+          eq(inventoryAlerts.organizationId, ctx.organizationId),
+          eq(inventoryAlerts.isActive, true)
+        )
+      );
+
+    const now = new Date();
+
+    const alertChecks = await Promise.all(
+      activeAlerts.map((alert) => checkInventoryAlertTriggered(ctx.organizationId, alert))
+    );
+
+    const triggeredResults = alertChecks
+      .map((result, index) => (result ? { alert: activeAlerts[index], result } : null))
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    await Promise.all(
+      triggeredResults.map(({ alert }) =>
+        db
+          .update(inventoryAlerts)
+          .set({ lastTriggeredAt: now })
+          .where(
+            and(
+              eq(inventoryAlerts.id, alert.id),
+              eq(inventoryAlerts.organizationId, ctx.organizationId)
+            )
+          )
       )
     );
 
-  const now = new Date();
+    const triggered = triggeredResults.map(({ result }) => result);
 
-  // Check all alerts in parallel
-  const alertChecks = await Promise.all(
-    activeAlerts.map((alert) => checkAlertTriggered(ctx.organizationId, alert))
-  );
-
-  // Filter triggered alerts and update timestamps in parallel
-  const triggeredResults = alertChecks
-    .map((result, index) => (result ? { alert: activeAlerts[index], result } : null))
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  // Update all triggered alert timestamps in parallel
-  await Promise.all(
-    triggeredResults.map(({ alert }) =>
-      db
-        .update(inventoryAlerts)
-        .set({ lastTriggeredAt: now })
-        .where(
-          and(
-            eq(inventoryAlerts.id, alert.id),
-            eq(inventoryAlerts.organizationId, ctx.organizationId)
-          )
-        )
-    )
-  );
-
-  const triggered = triggeredResults.map(({ result }) => result);
-
-  return {
-    checkedCount: activeAlerts.length,
-    triggeredCount: triggered.length,
-    alerts: triggered,
-  };
-});
+    return {
+      checkedCount: activeAlerts.length,
+      triggeredCount: triggered.length,
+      alerts: triggered,
+    };
+  });
 
 /**
  * Acknowledge an alert.
@@ -798,344 +541,6 @@ export const getAlertAnalytics = createServerFn({ method: 'GET' })
       recommendations: generateAlertRecommendations(byType, data.days),
     };
   });
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-async function checkAlertTriggered(
-  organizationId: string,
-  alert: AlertRecord
-): Promise<TriggeredAlert | null> {
-  // Threshold type flows from schema (AlertThreshold = { [x: string]: {}; })
-  // Access properties with type assertion for runtime access
-  const threshold = alert.threshold as AlertThreshold & {
-    minQuantity?: number;
-    maxQuantity?: number;
-    daysBeforeExpiry?: number;
-    daysWithoutMovement?: number;
-    deviationPercentage?: number;
-  };
-
-  // Build inventory conditions
-  const invConditions = [eq(inventory.organizationId, organizationId)];
-  if (alert.productId) {
-    invConditions.push(eq(inventory.productId, alert.productId));
-  }
-  if (alert.locationId) {
-    invConditions.push(eq(inventory.locationId, alert.locationId));
-  }
-
-  let triggered = false;
-  let currentValue = 0;
-  let thresholdValue = 0;
-  let severity: 'critical' | 'high' | 'medium' | 'low' = 'low';
-  let message = '';
-  let affectedItems: TriggeredAlert['affectedItems'] = [];
-
-  switch (alert.alertType) {
-    case 'low_stock':
-      if (threshold.minQuantity !== undefined) {
-        // Aggregate by product+location (SKU) since inventory table stores individual items
-        // Use allocatable availability, not physical on-hand or quarantined stock.
-        const aggregated = await db
-          .select({
-            productId: inventory.productId,
-            productName: products.name,
-            productSku: products.sku,
-            locationId: inventory.locationId,
-            locationName: warehouseLocations.name,
-            totalQuantity: allocatableQuantitySumSql(),
-            itemCount: sql<number>`COUNT(*)::int`,
-          })
-          .from(inventory)
-          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-          .leftJoin(
-            warehouseLocations,
-            and(
-              eq(inventory.locationId, warehouseLocations.id),
-              eq(warehouseLocations.organizationId, organizationId)
-            )
-          )
-          .where(and(...invConditions))
-          .groupBy(
-            inventory.productId,
-            products.name,
-            products.sku,
-            inventory.locationId,
-            warehouseLocations.name
-          )
-          .having(sql`${allocatableQuantitySumSql()} < ${threshold.minQuantity}`);
-
-        if (aggregated.length > 0) {
-          triggered = true;
-          // Use the minimum total quantity across all matching product+location combinations
-          currentValue = Math.min(...aggregated.map((a) => Number(a.totalQuantity) || 0));
-          thresholdValue = threshold.minQuantity;
-          severity =
-            currentValue === 0 ? 'critical' : currentValue < thresholdValue / 2 ? 'high' : 'medium';
-              message = `${aggregated.length} product(s) below minimum stock level of ${threshold.minQuantity} (${currentValue} available)`;
-          
-          // Get sample affected items for the first aggregated group (for display)
-          if (aggregated.length > 0) {
-            const firstGroup = aggregated[0];
-            const sampleItems = await db
-              .select({
-                id: inventory.id,
-                productName: products.name,
-                quantity: inventory.quantityAvailable,
-              })
-              .from(inventory)
-              .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-              .where(
-                and(
-                  eq(inventory.organizationId, organizationId),
-                  eq(inventory.status, 'available'),
-                  eq(inventory.productId, firstGroup.productId),
-                  eq(inventory.locationId, firstGroup.locationId)
-                )
-              )
-              .limit(10);
-            
-            affectedItems = sampleItems.map((i) => ({
-              inventoryId: i.id,
-              productName: i.productName || 'Unknown Product',
-              quantity: Number(i.quantity) || 0,
-            }));
-          }
-        }
-      }
-      break;
-
-    case 'out_of_stock': {
-      // Aggregate by product+location (SKU) since inventory table stores individual items
-      // Use allocatable availability to check if stock is available for new orders.
-      const outOfStockAggregated = await db
-        .select({
-          productId: inventory.productId,
-          productName: products.name,
-          productSku: products.sku,
-          locationId: inventory.locationId,
-          locationName: warehouseLocations.name,
-          totalQuantity: allocatableQuantitySumSql(),
-          itemCount: sql<number>`COUNT(*)::int`,
-        })
-        .from(inventory)
-        .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-        .leftJoin(
-          warehouseLocations,
-          and(
-            eq(inventory.locationId, warehouseLocations.id),
-            eq(warehouseLocations.organizationId, organizationId)
-          )
-        )
-        .where(and(...invConditions))
-        .groupBy(
-          inventory.productId,
-          products.name,
-          products.sku,
-          inventory.locationId,
-          warehouseLocations.name
-        )
-        .having(sql`${allocatableQuantitySumSql()} <= 0`);
-
-      if (outOfStockAggregated.length > 0) {
-        triggered = true;
-        currentValue = 0;
-        thresholdValue = 0;
-        severity = 'critical';
-        message = `${outOfStockAggregated.length} product(s) out of stock (0 available)`;
-        
-        // Get sample affected items for the first aggregated group (for display)
-        const firstGroup = outOfStockAggregated[0];
-        const sampleItems = await db
-          .select({
-            id: inventory.id,
-            productName: products.name,
-            quantity: inventory.quantityAvailable,
-          })
-          .from(inventory)
-          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-          .where(
-            and(
-              eq(inventory.organizationId, organizationId),
-              eq(inventory.status, 'available'),
-              eq(inventory.productId, firstGroup.productId),
-              eq(inventory.locationId, firstGroup.locationId)
-            )
-          )
-          .limit(10);
-        
-        affectedItems = sampleItems.map((i) => ({
-          inventoryId: i.id,
-          productName: i.productName || 'Unknown Product',
-          quantity: Number(i.quantity) || 0,
-        }));
-      }
-      break;
-    }
-
-    case 'overstock':
-      if (threshold.maxQuantity !== undefined) {
-        const overstock = await db
-          .select({
-            id: inventory.id,
-            productId: inventory.productId,
-            productName: products.name,
-            quantity: inventory.quantityOnHand,
-          })
-          .from(inventory)
-          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-          .where(and(...invConditions, gt(inventory.quantityOnHand, threshold.maxQuantity)));
-
-        if (overstock.length > 0) {
-          triggered = true;
-          currentValue = overstock[0].quantity ?? 0;
-          thresholdValue = threshold.maxQuantity;
-          severity = 'medium';
-          message = `${overstock.length} item(s) above maximum stock level of ${threshold.maxQuantity}`;
-          affectedItems = overstock.map((i) => ({
-            inventoryId: i.id,
-            productName: i.productName,
-            quantity: i.quantity ?? 0,
-          }));
-        }
-      }
-      break;
-
-    case 'expiry':
-      if (threshold.daysBeforeExpiry !== undefined) {
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + threshold.daysBeforeExpiry);
-
-        const expiring = await db
-          .select({
-            id: inventory.id,
-            productId: inventory.productId,
-            productName: products.name,
-            quantity: inventory.quantityOnHand,
-          })
-          .from(inventory)
-          .innerJoin(products, alertInventoryProductJoinCondition(organizationId))
-          .where(
-            and(
-              ...invConditions,
-              sql`${inventory.expiryDate}::date <= ${expiryDate.toISOString().split('T')[0]}::date`,
-              sql`${inventory.expiryDate} IS NOT NULL`
-            )
-          );
-
-        if (expiring.length > 0) {
-          triggered = true;
-          currentValue = threshold.daysBeforeExpiry;
-          thresholdValue = threshold.daysBeforeExpiry;
-          severity = threshold.daysBeforeExpiry <= 7 ? 'high' : 'medium';
-          message = `${expiring.length} item(s) expiring within ${threshold.daysBeforeExpiry} days`;
-          affectedItems = expiring.map((i) => ({
-            inventoryId: i.id,
-            productName: i.productName,
-            quantity: i.quantity ?? 0,
-          }));
-        }
-      }
-      break;
-
-    case 'slow_moving':
-      if (threshold.daysWithoutMovement !== undefined) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - threshold.daysWithoutMovement);
-
-        // Find items with no movements in the period
-        const slowMoving = await db.execute<{
-          id: string;
-          productName: string;
-          quantity: number;
-        }>(
-          sql`
-            SELECT i.id, p.name as product_name, i.quantity_on_hand as quantity
-            FROM inventory i
-            JOIN products p ON i.product_id = p.id
-            WHERE i.organization_id = ${organizationId}
-              AND p.organization_id = ${organizationId}
-              AND p.deleted_at IS NULL
-              ${alert.productId ? sql`AND i.product_id = ${alert.productId}` : sql``}
-              ${alert.locationId ? sql`AND i.location_id = ${alert.locationId}` : sql``}
-              AND i.quantity_on_hand > 0
-              AND NOT EXISTS (
-                SELECT 1 FROM inventory_movements m
-                WHERE m.inventory_id = i.id
-                  AND m.organization_id = ${organizationId}
-                  AND m.created_at >= ${cutoffDate}
-              )
-          `
-        );
-
-        const slowItems = slowMoving as unknown as {
-          id: string;
-          productName: string;
-          quantity: number;
-        }[];
-        if (slowItems.length > 0) {
-          triggered = true;
-          currentValue = threshold.daysWithoutMovement;
-          thresholdValue = threshold.daysWithoutMovement;
-          severity = threshold.daysWithoutMovement >= 90 ? 'high' : 'medium';
-          message = `${slowItems.length} item(s) with no movement in ${threshold.daysWithoutMovement} days`;
-          affectedItems = slowItems.map((i) => ({
-            inventoryId: i.id,
-            productName: i.productName,
-            quantity: i.quantity,
-          }));
-        }
-      }
-      break;
-
-    case 'forecast_deviation':
-      // This would compare actual vs forecast - simplified for now
-      break;
-  }
-
-  if (!triggered) return null;
-
-  // Get product and location details
-  const [product, location] = await Promise.all([
-    alert.productId
-      ? db
-          .select()
-          .from(products)
-          .where(alertProductWhereCondition(alert.productId, organizationId))
-          .limit(1)
-          .then((r) => r[0] || null)
-      : Promise.resolve(null),
-    alert.locationId
-      ? db
-          .select()
-          .from(warehouseLocations)
-          .where(
-            and(
-              eq(warehouseLocations.id, alert.locationId),
-              eq(warehouseLocations.organizationId, organizationId)
-            )
-          )
-          .limit(1)
-          .then((r) => r[0] || null)
-      : Promise.resolve(null),
-  ]);
-
-  return {
-    alert: {
-      ...alert,
-      threshold: alert.threshold as AlertThreshold,
-    },
-    product,
-    location,
-    currentValue,
-    thresholdValue,
-    severity,
-    message,
-    affectedItems: affectedItems.slice(0, 10), // Limit to 10 items
-  };
-}
 
 function generateAlertRecommendations(
   byType: Record<string, { total: number; active: number; triggered: number }>,

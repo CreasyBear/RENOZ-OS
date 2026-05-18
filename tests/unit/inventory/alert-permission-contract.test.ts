@@ -34,12 +34,19 @@ describe('inventory alert permission contract', () => {
 
   it('keeps alert detail product and location reads organization-scoped', () => {
     const source = read('src/server/functions/inventory/alerts.ts');
+    const queryConditions = read('src/server/functions/inventory/alert-query-conditions.ts');
+    const triggeredRead = read('src/server/functions/inventory/triggered-alerts-read.ts');
 
-    expect(source).toContain('function alertProductWhereCondition(productId: string, organizationId: string)');
-    expect(source).toContain('eq(warehouseLocations.organizationId, ctx.organizationId)');
-    expect(source).toContain('eq(products.organizationId, organizationId)');
-    expect(source).toContain('eq(warehouseLocations.organizationId, organizationId)');
+    expect(queryConditions).toContain(
+      'export function alertProductWhereCondition(productId: string, organizationId: string)'
+    );
+    expect(queryConditions).toContain(
+      'export function alertLocationWhereCondition(locationId: string, organizationId: string)'
+    );
+    expect(queryConditions).toContain('eq(products.organizationId, organizationId)');
+    expect(queryConditions).toContain('eq(warehouseLocations.organizationId, organizationId)');
+    expect(source).toContain('alertLocationWhereCondition(alert.locationId, ctx.organizationId)');
     expect(source).toContain('alertProductWhereCondition(alert.productId, ctx.organizationId)');
-    expect(source).toContain('alertProductWhereCondition(alert.productId, organizationId)');
+    expect(triggeredRead).toContain('alertProductWhereCondition(alert.productId, organizationId)');
   });
 });
