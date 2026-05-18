@@ -29,7 +29,6 @@
 import type { CustomerSortField } from '@/components/domain/customers/customer-sorting';
 import type { OrderSortField } from '@/components/domain/orders/order-sorting';
 import type { AuditLogsFilters } from '@/lib/schemas/users';
-import type { InventoryListQuery, QuickSearchInventoryInput } from '@/lib/schemas/inventory';
 import type { ReportType } from '@/lib/schemas/reports/report-favorites';
 import type { InvoiceSortField } from '@/lib/schemas/invoices/invoice-filters';
 import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
@@ -40,13 +39,14 @@ import type { ListRmasInput } from '@/lib/schemas/support/rma';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
 import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
+import { inventoryQueryKeys } from './query-key-catalog/inventory';
+export type { InventoryFilters } from './query-key-catalog/inventory';
 
 type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
 type CsatSortField = NonNullable<ListFeedbackInput['sortBy']>;
 type IssueTemplateSortField = NonNullable<ListIssueTemplatesInput['sortBy']>;
 type RmaSortField = NonNullable<ListRmasInput['sortBy']>;
 type WarrantySortField = NonNullable<WarrantyListFilters['sortBy']>;
-type InventorySearchOptions = Pick<Partial<QuickSearchInventoryInput>, 'limit'>;
 
 // ============================================================================
 // FILTER TYPES
@@ -111,8 +111,6 @@ export interface JobFilters {
   type?: string
   limit?: number
 }
-
-export type InventoryFilters = Partial<InventoryListQuery>
 
 export interface ProductStockAlertFilters {
   locationId?: string
@@ -763,107 +761,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // INVENTORY
   // -------------------------------------------------------------------------
-  inventory: {
-    all: ['inventory'] as const,
-    lists: () => [...queryKeys.inventory.all, 'list'] as const,
-    list: (filters?: InventoryFilters) =>
-      [...queryKeys.inventory.lists(), filters ?? {}] as const,
-    details: () => [...queryKeys.inventory.all, 'detail'] as const,
-    detail: (id: string) => [...queryKeys.inventory.details(), id] as const,
-    lowStock: () => [...queryKeys.inventory.all, 'lowStock'] as const,
-    search: (query: string, options?: InventorySearchOptions) =>
-      [...queryKeys.inventory.all, 'search', query, options ?? {}] as const,
-    items: (filters?: { organizationId?: string }) =>
-      [...queryKeys.inventory.all, 'items', filters ?? {}] as const,
-    movements: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.all, 'movements', filters ?? {}] as const,
-    movementsAll: () => [...queryKeys.inventory.all, 'movements'] as const,
-
-    // Alerts
-    alertsAll: () => [...queryKeys.inventory.all, 'alerts'] as const,
-    alerts: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.alertsAll(), 'list', filters ?? {}] as const,
-    alert: (id: string) =>
-      [...queryKeys.inventory.alertsAll(), 'detail', id] as const,
-    triggeredAlerts: () =>
-      [...queryKeys.inventory.alertsAll(), 'triggered'] as const,
-    alertAnalytics: () =>
-      [...queryKeys.inventory.alertsAll(), 'analytics'] as const,
-
-    // Dashboard
-    dashboard: () => [...queryKeys.inventory.all, 'dashboard'] as const,
-
-    // Availability
-    availabilityAll: () => [...queryKeys.inventory.all, 'availability'] as const,
-    availability: (productId: string, locationId?: string) =>
-      [...queryKeys.inventory.availabilityAll(), productId, locationId ?? ''] as const,
-
-    // Available Serials for Picking
-    availableSerialsAll: () => [...queryKeys.inventory.all, 'availableSerials'] as const,
-    availableSerials: (productId: string, locationId?: string) =>
-      [...queryKeys.inventory.availableSerialsAll(), productId, locationId ?? ''] as const,
-
-    // Canonical Serialized Items
-    serializedAll: () => [...queryKeys.inventory.all, 'serializedItems'] as const,
-    serializedList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.serializedAll(), 'list', filters ?? {}] as const,
-    serializedDetail: (id: string) =>
-      [...queryKeys.inventory.serializedAll(), 'detail', id] as const,
-
-    // WMS Dashboard
-    wmsAll: () => [...queryKeys.inventory.all, 'wms'] as const,
-    wmsDashboard: () => queryKeys.inventory.wmsAll(),
-    stockByCategory: () => [...queryKeys.inventory.wmsAll(), 'byCategory'] as const,
-    stockByLocation: () => [...queryKeys.inventory.wmsAll(), 'byLocation'] as const,
-    recentMovementsTimeline: (limit?: number) =>
-      [...queryKeys.inventory.wmsAll(), 'movements', limit ?? 10] as const,
-
-    // Forecasting
-    forecastingAll: () => [...queryKeys.inventory.all, 'forecasting'] as const,
-    reorderRecommendations: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.forecastingAll(), 'reorder', filters ?? {}] as const,
-    productForecast: (productId: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.forecastingAll(), 'product', productId, filters ?? {}] as const,
-    forecastAccuracy: (productId?: string) =>
-      [...queryKeys.inventory.forecastingAll(), 'accuracy', productId ?? ''] as const,
-    safetyStock: (productId: string, options?: { serviceLevel?: number; leadTimeDays?: number }) =>
-      [...queryKeys.inventory.forecastingAll(), 'safetyStock', productId, options ?? {}] as const,
-
-    // Valuation
-    valuationAll: () => [...queryKeys.inventory.all, 'valuation'] as const,
-    valuation: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.valuationAll(), 'report', filters ?? {}] as const,
-    aging: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.valuationAll(), 'aging', filters ?? {}] as const,
-    turnover: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.valuationAll(), 'turnover', filters ?? {}] as const,
-    costLayers: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.valuationAll(), 'costLayers', filters ?? {}] as const,
-    costLayersDetail: (inventoryId: string) =>
-      [...queryKeys.inventory.valuationAll(), 'costLayers', inventoryId] as const,
-    cogs: (inventoryId: string, quantity?: number) =>
-      [...queryKeys.inventory.valuationAll(), 'cogs', inventoryId, quantity ?? 0] as const,
-    financeIntegrity: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.valuationAll(), 'financeIntegrity', filters ?? {}] as const,
-
-    // Stock counts
-    stockCountsAll: () => [...queryKeys.inventory.all, 'stockCounts'] as const,
-    stockCounts: (filters?: Record<string, unknown>) =>
-      [...queryKeys.inventory.stockCountsAll(), 'list', filters ?? {}] as const,
-    stockCount: (id: string) =>
-      [...queryKeys.inventory.stockCountsAll(), 'detail', id] as const,
-    stockCountItems: (countId: string) =>
-      [...queryKeys.inventory.stockCountsAll(), 'items', countId] as const,
-    stockCountVariances: (countId: string) =>
-      [...queryKeys.inventory.stockCountsAll(), 'variances', countId] as const,
-    stockCountsHistory: (options?: Record<string, unknown>) =>
-      [...queryKeys.inventory.stockCountsAll(), 'history', options ?? {}] as const,
-
-    // Quality
-    qualityAll: () => [...queryKeys.inventory.all, 'quality'] as const,
-    qualityInspections: (inventoryId: string) =>
-      [...queryKeys.inventory.qualityAll(), 'inspections', inventoryId] as const,
-  },
+  inventory: inventoryQueryKeys,
 
   // -------------------------------------------------------------------------
   // FILES / ATTACHMENTS

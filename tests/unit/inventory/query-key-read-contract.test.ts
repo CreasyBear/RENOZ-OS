@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { inventoryQueryKeys } from '@/lib/query-key-catalog/inventory';
 import { queryKeys } from '@/lib/query-keys';
 import {
   inventoryListQuerySchema,
@@ -15,9 +16,9 @@ function read(path: string): string {
   return readFileSync(join(root, path), 'utf8');
 }
 
-function inventoryFilterBlock(source: string): string {
+function inventoryCatalogTypeBlock(source: string): string {
   const start = source.indexOf('export type InventoryFilters');
-  const end = source.indexOf('export interface ContactFilters');
+  const end = source.indexOf('const all =');
 
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -26,19 +27,29 @@ function inventoryFilterBlock(source: string): string {
 }
 
 describe('inventory query-key read contract', () => {
+  it('exposes the inventory catalog through the public query key adapter', () => {
+    expect(queryKeys.inventory).toBe(inventoryQueryKeys);
+  });
+
   it('types inventory query keys from read-owned schema contracts', () => {
     const queryKeysSource = read('src/lib/query-keys.ts');
-    const inventoryBlock = inventoryFilterBlock(queryKeysSource);
+    const inventoryCatalogSource = read('src/lib/query-key-catalog/inventory.ts');
+    const inventoryTypeBlock = inventoryCatalogTypeBlock(inventoryCatalogSource);
 
-    expect(queryKeysSource).toContain('InventoryListQuery');
-    expect(queryKeysSource).toContain('QuickSearchInventoryInput');
-    expect(queryKeysSource).toContain('export type InventoryFilters = Partial<InventoryListQuery>');
-    expect(queryKeysSource).toContain(
+    expect(queryKeysSource).toContain("import { inventoryQueryKeys } from './query-key-catalog/inventory'");
+    expect(queryKeysSource).toContain("export type { InventoryFilters } from './query-key-catalog/inventory'");
+    expect(queryKeysSource).toContain('inventory: inventoryQueryKeys');
+    expect(queryKeysSource).not.toContain("from '@/lib/schemas/inventory'");
+    expect(inventoryCatalogSource).toContain('InventoryListQuery');
+    expect(inventoryCatalogSource).toContain('QuickSearchInventoryInput');
+    expect(inventoryCatalogSource).toContain('export type InventoryFilters = Partial<InventoryListQuery>');
+    expect(inventoryCatalogSource).toContain(
       'type InventorySearchOptions = Pick<Partial<QuickSearchInventoryInput>'
     );
-    expect(queryKeysSource).not.toContain('export interface InventoryFilters');
-    expect(inventoryBlock).not.toContain('category?: string');
-    expect(inventoryBlock).not.toContain('cursor?: string');
+    expect(inventoryCatalogSource).not.toContain('queryKeys.inventory');
+    expect(inventoryCatalogSource).not.toContain('export interface InventoryFilters');
+    expect(inventoryTypeBlock).not.toContain('category?: string');
+    expect(inventoryTypeBlock).not.toContain('cursor?: string');
   });
 
   it('preserves inventory list and search key shapes for schema-shaped inputs', () => {
