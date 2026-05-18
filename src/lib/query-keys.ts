@@ -36,9 +36,18 @@ import type { SupplierSortField } from '@/lib/schemas/suppliers';
 import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 import { communicationsQueryKeys } from './query-key-catalog/communications';
+import { dashboardQueryKeys } from './query-key-catalog/dashboard';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
 import { productQueryKeys } from './query-key-catalog/products';
 import { supportQueryKeys } from './query-key-catalog/support';
+export type {
+  ComparisonFilters,
+  DashboardMetricsFilters,
+  EnhancedComparisonFilters,
+  ScheduledReportsFilters,
+  TargetProgressFilters,
+  TargetsFilters,
+} from './query-key-catalog/dashboard';
 export type { InventoryFilters } from './query-key-catalog/inventory';
 export type { ProductStockAlertFilters } from './query-key-catalog/products';
 export type {
@@ -248,59 +257,6 @@ export interface ExpiringWarrantiesReportFilters {
   sortBy?: 'expiry_asc' | 'expiry_desc' | 'customer' | 'product'
   page?: number
   limit?: number
-}
-
-// ============================================================================
-// DASHBOARD FILTER TYPES
-// ============================================================================
-
-export interface TargetsFilters {
-  status?: 'pending' | 'on_track' | 'behind' | 'ahead' | 'completed'
-  metric?: string
-  period?: string
-  search?: string
-  page?: number
-  pageSize?: number
-  sortBy?: string
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface TargetProgressFilters {
-  status?: 'pending' | 'on_track' | 'behind' | 'ahead' | 'completed'
-  metric?: string
-  includeCompleted?: boolean
-}
-
-export interface DashboardMetricsFilters {
-  startDate?: string
-  endDate?: string
-  metrics?: string[]
-}
-
-export interface ComparisonFilters {
-  startDate: string
-  endDate: string
-  comparisonType: 'previous_period' | 'previous_year' | 'previous_quarter' | 'previous_month' | 'custom'
-  comparisonStartDate?: string
-  comparisonEndDate?: string
-  metrics?: string[]
-}
-
-export interface EnhancedComparisonFilters extends ComparisonFilters {
-  includeStatistics?: boolean
-  includeTrends?: boolean
-  includeInsights?: boolean
-}
-
-export interface ScheduledReportsFilters {
-  search?: string
-  isActive?: boolean
-  frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
-  format?: 'pdf' | 'csv' | 'xlsx' | 'html'
-  page?: number
-  pageSize?: number
-  sortBy?: string
-  sortOrder?: 'asc' | 'desc'
 }
 
 // ============================================================================
@@ -805,91 +761,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // DASHBOARD / ANALYTICS
   // -------------------------------------------------------------------------
-  dashboard: {
-    all: ['dashboard'] as const,
-    stats: () => [...queryKeys.dashboard.all, 'stats'] as const,
-    recentActivity: () => [...queryKeys.dashboard.all, 'recentActivity'] as const,
-    charts: (chartType: string) =>
-      [...queryKeys.dashboard.all, 'charts', chartType] as const,
-    orders: () => [...queryKeys.dashboard.all, 'orders'] as const,
-    pipeline: () => [...queryKeys.dashboard.all, 'pipeline'] as const,
-    inventory: () => [...queryKeys.dashboard.all, 'inventory'] as const,
-    alerts: () => [...queryKeys.dashboard.all, 'alerts'] as const,
-    hotLeads: () => [...queryKeys.dashboard.all, 'hotLeads'] as const,
-    overview: () => [...queryKeys.dashboard.all, 'overview'] as const,
-    overviewWonThisMonth: (dateFrom: string, dateTo: string) =>
-      [...queryKeys.dashboard.overview(), 'wonThisMonth', dateFrom, dateTo] as const,
-
-    // Recent items for popovers
-    recentOutstanding: (limit: number) =>
-      [...queryKeys.dashboard.all, 'recentOutstanding', limit] as const,
-    recentOverdue: (limit: number) =>
-      [...queryKeys.dashboard.all, 'recentOverdue', limit] as const,
-    recentOpportunities: (limit: number) =>
-      [...queryKeys.dashboard.all, 'recentOpportunities', limit] as const,
-    recentOrdersToShip: (limit: number) =>
-      [...queryKeys.dashboard.all, 'recentOrdersToShip', limit] as const,
-
-    // Inventory counts by SKU patterns (for overview stats)
-    inventoryCounts: (patterns: Array<{ key: string; patterns: string[] }>) =>
-      [...queryKeys.dashboard.all, 'inventoryCounts', patterns] as const,
-
-    // Inventory counts by product IDs (for tracked products)
-    trackedProductsInventory: (productIds: string[]) =>
-      [...queryKeys.dashboard.all, 'trackedProductsInventory', productIds] as const,
-
-    // Targets nested factory
-    targets: {
-      all: () => [...queryKeys.dashboard.all, 'targets'] as const,
-      lists: () => [...queryKeys.dashboard.targets.all(), 'list'] as const,
-      list: (filters?: TargetsFilters) =>
-        [...queryKeys.dashboard.targets.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.dashboard.targets.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.dashboard.targets.details(), id] as const,
-      progress: (filters?: TargetProgressFilters) =>
-        [...queryKeys.dashboard.targets.all(), 'progress', filters ?? {}] as const,
-    },
-
-    // Metrics nested factory
-    metrics: {
-      all: () => [...queryKeys.dashboard.all, 'metrics'] as const,
-      summary: (filters?: DashboardMetricsFilters) =>
-        [...queryKeys.dashboard.metrics.all(), 'summary', filters ?? {}] as const,
-      comparison: (filters: ComparisonFilters) =>
-        [...queryKeys.dashboard.metrics.all(), 'comparison', filters] as const,
-      enhanced: (filters: EnhancedComparisonFilters) =>
-        [...queryKeys.dashboard.metrics.all(), 'enhanced', filters] as const,
-    },
-
-    // Scheduled Reports nested factory
-    scheduledReports: {
-      all: () => [...queryKeys.dashboard.all, 'scheduledReports'] as const,
-      lists: () => [...queryKeys.dashboard.scheduledReports.all(), 'list'] as const,
-      list: (filters?: ScheduledReportsFilters) =>
-        [...queryKeys.dashboard.scheduledReports.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.dashboard.scheduledReports.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.dashboard.scheduledReports.details(), id] as const,
-      status: (id: string) => [...queryKeys.dashboard.scheduledReports.all(), 'status', id] as const,
-    },
-
-    // Layouts nested factory
-    layouts: {
-      all: () => [...queryKeys.dashboard.all, 'layouts'] as const,
-      lists: () => [...queryKeys.dashboard.layouts.all(), 'list'] as const,
-      list: (filters?: Record<string, unknown>) =>
-        [...queryKeys.dashboard.layouts.lists(), filters ?? {}] as const,
-      detail: (id: string) => [...queryKeys.dashboard.layouts.all(), 'detail', id] as const,
-      default: () => [...queryKeys.dashboard.layouts.all(), 'default'] as const,
-      userLayout: () => [...queryKeys.dashboard.layouts.all(), 'userLayout'] as const,
-      widgets: () => [...queryKeys.dashboard.layouts.all(), 'widgets'] as const,
-    },
-
-    // Onboarding/Welcome Checklist
-    onboarding: {
-      all: () => [...queryKeys.dashboard.all, 'onboarding'] as const,
-      progress: () => [...queryKeys.dashboard.onboarding.all(), 'progress'] as const,
-    },
-  },
+  dashboard: dashboardQueryKeys,
 
   // -------------------------------------------------------------------------
   // SUPPORT DOMAIN
