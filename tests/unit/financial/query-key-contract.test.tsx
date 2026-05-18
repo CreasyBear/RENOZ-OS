@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { financialQueryKeys } from '@/lib/query-key-catalog/financial';
 import { queryKeys } from '@/lib/query-keys';
 
 const root = process.cwd();
@@ -10,6 +11,22 @@ function read(path: string): string {
 }
 
 describe('financial query key contract', () => {
+  it('exposes the financial catalog through the public query key adapter', () => {
+    expect(queryKeys.financial).toBe(financialQueryKeys);
+  });
+
+  it('keeps financial cache roots in the financial-owned catalog', () => {
+    const queryKeysSource = read('src/lib/query-keys.ts');
+    const financialCatalogSource = read('src/lib/query-key-catalog/financial.ts');
+
+    expect(queryKeysSource).toContain("import { financialQueryKeys } from './query-key-catalog/financial'");
+    expect(queryKeysSource).toContain('financial: financialQueryKeys');
+    expect(queryKeysSource).not.toContain('queryKeys.financial');
+    expect(financialCatalogSource).toContain("const all = ['financial'] as const");
+    expect(financialCatalogSource).toContain('export const financialQueryKeys');
+    expect(financialCatalogSource).not.toContain('queryKeys.financial');
+  });
+
   it('includes statement pagination and sent filters', () => {
     expect(
       queryKeys.financial.statements('customer-1', {
@@ -104,5 +121,41 @@ describe('financial query key contract', () => {
 
     expect(hook).toContain('queryKeys.financial.xeroPaymentEventsList({ page, pageSize })');
     expect(hook).not.toContain('[...queryKeys.financial.xeroPaymentEvents(), { page, pageSize }]');
+  });
+
+  it('preserves finance control tuple shapes in the finance-owned catalog', () => {
+    expect(financialQueryKeys.creditNoteDetail('credit-note-1')).toEqual([
+      'financial',
+      'creditNotes',
+      'detail',
+      'credit-note-1',
+    ]);
+    expect(financialQueryKeys.paymentScheduleDetail('order-1')).toEqual([
+      'financial',
+      'paymentSchedules',
+      'detail',
+      'order-1',
+    ]);
+    expect(financialQueryKeys.revenueByPeriod('month', { customerType: 'dealer' })).toEqual([
+      'financial',
+      'revenue',
+      'byPeriod',
+      'month',
+      { customerType: 'dealer' },
+    ]);
+    expect(financialQueryKeys.xeroCustomerMapping('customer-1')).toEqual([
+      'financial',
+      'xero',
+      'customer-mapping',
+      'customer-1',
+    ]);
+    expect(financialQueryKeys.statementHistory('customer-1', { page: 2 })).toEqual([
+      'financial',
+      'statements',
+      'customer-1',
+      {},
+      'history',
+      { page: 2 },
+    ]);
   });
 });

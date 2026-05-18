@@ -36,6 +36,7 @@ import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlem
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 import { communicationsQueryKeys } from './query-key-catalog/communications';
 import { dashboardQueryKeys } from './query-key-catalog/dashboard';
+import { financialQueryKeys } from './query-key-catalog/financial';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
 import { productQueryKeys } from './query-key-catalog/products';
 import { reportsQueryKeys } from './query-key-catalog/reports';
@@ -961,89 +962,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // FINANCIAL
   // -------------------------------------------------------------------------
-  financial: {
-    all: ['financial'] as const,
-
-    // AR Aging
-    arAging: () => [...queryKeys.financial.all, 'arAging'] as const,
-    arAgingReport: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.arAging(), 'report', filters ?? {}] as const,
-    arAgingCustomer: (customerId: string) =>
-      [...queryKeys.financial.arAging(), 'customer', customerId] as const,
-
-    // Credit Notes
-    creditNotes: () => [...queryKeys.financial.all, 'creditNotes'] as const,
-    creditNotesList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.creditNotes(), 'list', filters ?? {}] as const,
-    creditNoteDetail: (id: string) =>
-      [...queryKeys.financial.creditNotes(), 'detail', id] as const,
-
-    // Payment Schedules
-    paymentSchedules: () => [...queryKeys.financial.all, 'paymentSchedules'] as const,
-    paymentScheduleDetail: (orderId: string) =>
-      [...queryKeys.financial.paymentSchedules(), 'detail', orderId] as const,
-    overdueInstallments: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.paymentSchedules(), 'overdue', filters ?? {}] as const,
-
-    // Revenue
-    revenue: () => [...queryKeys.financial.all, 'revenue'] as const,
-    revenueByPeriod: (periodType: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.revenue(), 'byPeriod', periodType, filters ?? {}] as const,
-
-    // Dashboard Metrics
-    dashboard: () => [...queryKeys.financial.all, 'dashboard'] as const,
-    dashboardMetrics: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.dashboard(), filters ?? {}] as const,
-    closeReadiness: () => [...queryKeys.financial.all, 'closeReadiness'] as const,
-
-    // Reminders
-    reminders: () => [...queryKeys.financial.all, 'reminders'] as const,
-    reminderCandidates: () =>
-      [...queryKeys.financial.reminders(), 'orders-for-reminders'] as const,
-    ordersForReminders: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.reminderCandidates(), filters ?? {}] as const,
-    reminderHistory: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.reminders(), 'history', filters ?? {}] as const,
-    reminderTemplates: () => [...queryKeys.financial.reminders(), 'templates'] as const,
-
-    // Xero Integration
-    xero: () => [...queryKeys.financial.all, 'xero'] as const,
-    xeroStatus: (orderId: string) =>
-      [...queryKeys.financial.xero(), 'status', orderId] as const,
-    xeroSyncs: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.xero(), 'syncs', filters ?? {}] as const,
-    xeroIntegration: () =>
-      [...queryKeys.financial.xero(), 'integration'] as const,
-    xeroPaymentEvents: () =>
-      [...queryKeys.financial.xero(), 'payment-events'] as const,
-    xeroPaymentEventsList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.xeroPaymentEvents(), filters ?? {}] as const,
-    xeroCustomerMapping: (customerId: string) =>
-      [...queryKeys.financial.xero(), 'customer-mapping', customerId] as const,
-    xeroContactSearch: (customerId: string, query: string) =>
-      [...queryKeys.financial.xero(), 'contact-search', customerId, query] as const,
-
-    // Statements
-    statements: (customerId?: string, filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'statements', customerId ?? '', filters ?? {}] as const,
-    statement: (statementId: string) =>
-      [...queryKeys.financial.all, 'statement', statementId] as const,
-    statementHistory: (customerId: string, filters?: { page?: number; pageSize?: number; dateFrom?: string; dateTo?: string }) =>
-      [...queryKeys.financial.statements(customerId), 'history', filters ?? {}] as const,
-
-    // Other
-    deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
-    outstandingInvoices: () => [...queryKeys.financial.all, 'outstandingInvoices'] as const,
-    outstandingInvoicesList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.outstandingInvoices(), filters ?? {}] as const,
-    recognitions: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.all, 'recognitions', filters ?? {}] as const,
-    recognitionSummary: (dateFrom?: string, dateTo?: string, groupBy?: string) =>
-      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? '', groupBy ?? ''] as const,
-    topCustomers: () => [...queryKeys.financial.all, 'topCustomers'] as const,
-    topCustomersList: (filters?: Record<string, unknown>) =>
-      [...queryKeys.financial.topCustomers(), filters ?? {}] as const,
-  },
+  financial: financialQueryKeys,
 
   // -------------------------------------------------------------------------
   // DOCUMENTS (Generated PDFs, certificates, etc.)
