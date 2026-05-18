@@ -158,7 +158,7 @@ describe('inventory stock count tenant-scope contract', () => {
     const cancelBlock = sliceBetween(
       source,
       'exportconstcancelStockCount',
-      'exportconstgetCountVarianceAnalysis'
+      'export{getCountHistory'
     );
 
     expect(cancelBlock).toContain('returnawaitdb.transaction(async(tx)=>{');
@@ -212,27 +212,47 @@ describe('inventory stock count tenant-scope contract', () => {
   });
 
   it('keeps stock count read product descriptors active and organization-bounded', () => {
-    const source = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const readSource = compact(read('src/server/functions/inventory/stock-counts-read.ts'));
+    const sharedSource = compact(read('src/server/functions/inventory/stock-counts-shared.ts'));
+    const mutationSource = compact(read('src/server/functions/inventory/stock-counts.ts'));
 
-    expect(source).toContain('functionstockCountProductJoinCondition(organizationId:string)');
-    expect(source).toContain(
+    expect(sharedSource).toContain('exportfunctionstockCountProductJoinCondition(organizationId:string)');
+    expect(sharedSource).toContain(
       'eq(inventory.productId,products.id),eq(products.organizationId,organizationId),isNull(products.deletedAt)'
     );
-    expect(source).toContain(
+    expect(mutationSource).toContain("import{stockCountProductJoinCondition}from'./stock-counts-shared'");
+    expect(readSource).toContain("import{stockCountProductJoinCondition}from'./stock-counts-shared'");
+    expect(readSource).toContain(
       'leftJoin(inventory,and(eq(stockCountItems.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
     );
-    expect(source).toContain(
+    expect(readSource).toContain(
       'leftJoin(products,stockCountProductJoinCondition(ctx.organizationId))'
     );
-    expect(source).toContain(
+    expect(readSource).toContain(
       'leftJoin(warehouseLocations,and(eq(inventory.locationId,warehouseLocations.id),eq(warehouseLocations.organizationId,ctx.organizationId)))'
     );
-    expect(source).toContain(
+    expect(readSource).toContain(
       'innerJoin(inventory,and(eq(stockCountItems.inventoryId,inventory.id),eq(inventory.organizationId,ctx.organizationId)))'
     );
-    expect(source).toContain(
+    expect(readSource).toContain(
       'innerJoin(products,stockCountProductJoinCondition(ctx.organizationId))'
     );
+  });
+
+  it('keeps stock count read handlers in the dedicated read module', () => {
+    const mutationSource = compact(read('src/server/functions/inventory/stock-counts.ts'));
+    const readSource = compact(read('src/server/functions/inventory/stock-counts-read.ts'));
+
+    expect(mutationSource).toContain("from'./stock-counts-read'");
+    expect(mutationSource).not.toContain('exportconstlistStockCounts=createServerFn');
+    expect(mutationSource).not.toContain('exportconstgetStockCount=createServerFn');
+    expect(mutationSource).not.toContain('exportconstgetCountVarianceAnalysis=createServerFn');
+    expect(mutationSource).not.toContain('exportconstgetCountHistory=createServerFn');
+
+    expect(readSource).toContain("exportconstlistStockCounts=createServerFn({method:'GET'})");
+    expect(readSource).toContain("exportconstgetStockCount=createServerFn({method:'GET'})");
+    expect(readSource).toContain("exportconstgetCountVarianceAnalysis=createServerFn({method:'GET'})");
+    expect(readSource).toContain("exportconstgetCountHistory=createServerFn({method:'GET'})");
   });
 
   it('preserves stock count finance and serialized-lineage continuity references', () => {
