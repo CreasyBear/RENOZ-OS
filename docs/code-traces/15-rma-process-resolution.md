@@ -2,14 +2,14 @@
 
 **Status:** COMPLETE  
 **Series order:** 15 (see [README](./README.md))  
-**Last updated:** 2026-05-04
+**Last updated:** 2026-05-18
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
 
 **User capability:** Execute the selected remedy for a **received** RMA and close it only when the remedy artifact is created or confirmed. Refund creates a refund payment, credit creates a credit note, replacement creates a draft replacement order, and repair / no-action complete without a finance or replacement artifact.
 
-**In scope:** `processRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); `processRmaSchema` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useProcessRma`](../../src/hooks/support/use-rma.ts); [`rma-detail-container.tsx`](../../src/components/domain/support/rma/rma-detail-container.tsx).
+**In scope:** `processRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); `executeProcessRma` ([`orders/_shared/rma-execution.ts`](../../src/server/functions/orders/_shared/rma-execution.ts)); `processRmaSchema` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useProcessRma`](../../src/hooks/support/use-rma.ts); [`rma-detail-container.tsx`](../../src/components/domain/support/rma/rma-detail-container.tsx).
 
 **Out of scope:** External accounting sync and payment-provider settlement. This handler creates local operational artifacts; downstream sync remains separate.
 
@@ -22,7 +22,7 @@
 | `rmaId` | Client UUID |
 | Preconditions | RMA must exist for org; `isValidRmaTransition(existing.status, 'processed')` — implementation requires **`received`** |
 | `resolution` | Client enum (`rmaResolutionSchema`) |
-| Remedy execution | Server calls `executeRmaRemedy` in the same transaction before completing the RMA |
+| Remedy execution | Internal executor calls `executeRmaRemedy` in the same transaction before completing the RMA |
 | `resolutionDetails` | Server-built execution details; linked artifact IDs on the RMA are the canonical proof of what executed |
 | Inventory | **No** further inventory mutation here — stock was adjusted at **receive** ([13](./13-rma-receive-inventory.md)) |
 
@@ -45,23 +45,26 @@ sequenceDiagram
   participant UI as RMA detail
   participant H as useProcessRma
   participant S as processRma
+  participant EX as executeProcessRma
   participant DB as Postgres
 
   UI->>H: mutateAsync(ProcessRmaInput)
   H->>S: POST RPC
   S->>S: withAuth(support.update)
-  S->>DB: select RMA by id + org
+  S->>EX: executeProcessRma(ctx, data)
+  EX->>DB: select RMA by id + org
   alt wrong status
-    S-->>UI: ValidationError (must be received)
+    EX-->>UI: ValidationError (must be received)
   end
-  S->>DB: tx + set_config org
-  S->>DB: executeRmaRemedy(refund / credit / replacement / repair / no_action)
-  S->>DB: update return_authorizations execution state + artifact ids
-  S-->>H: RmaResponse (plain object)
+  EX->>DB: tx + set_config org
+  EX->>DB: executeRmaRemedy(refund / credit / replacement / repair / no_action)
+  EX->>DB: update return_authorizations execution state + artifact ids
+  EX-->>S: RmaResponse
+  S-->>H: serializedMutationSuccess(RmaResponse envelope)
   H->>H: setQueryData detail; invalidate list
 ```
 
-**Notable:** Handler returns **`RmaResponse` directly** — **not** `serializedMutationSuccess` — unlike `createRma` / `receiveRma` envelope pattern. Clients must not assume `success` / `message` fields on this RPC.
+**Notable:** `processRma` now returns `SerializedMutationEnvelope<RmaProcessResult>`. The envelope preserves the existing `RmaResponse` fields while adding the same `success` / `message` mutation metadata pattern used by `createRma` and `receiveRma`.
 
 ---
 
@@ -106,7 +109,7 @@ Artifact links on the RMA row are canonical. `resolutionDetails` can carry usefu
 
 ## 7. Cache & read-after-write
 
-`useProcessRma` `onSuccess`: `setQueryData(queryKeys.support.rmaDetail(result.id), result)` + invalidate `rmasList()`.
+`useProcessRma` `onSuccess`: `setQueryData(queryKeys.support.rmaDetail(result.id), result)` + invalidate `rmasList()`. The serialized envelope is field-compatible with `RmaResponse`, so cache keys still read `result.id`, `result.orderId`, `result.creditNoteId`, `result.replacementOrderId`, and linked issue/customer fields directly.
 
 ---
 
@@ -115,15 +118,15 @@ Artifact links on the RMA row are canonical. `resolutionDetails` can carry usefu
 | Issue | Evidence | Risk |
 |-------|----------|------|
 | **Trace/implementation drift** | Old trace described label-only closeout | Guarded by `rma-workflow-trace-contract.test.ts` |
-| **Inconsistent mutation envelope** | `processRma` vs `receiveRma` serialized envelope | Client error handling must branch by endpoint |
 | **External sync boundary** | Local credit/refund artifacts may still need accounting/payment sync | Operators need artifact status visibility |
+| **Integration coverage** | Unit and source-contract tests cover payloads, remedy execution wiring, and cache invalidation; no DB-backed per-resolution process test | Artifact persistence could regress without executable database proof |
 
 ---
 
 ## 9. Verification
 
 - Search `processRma`, `useProcessRma` under `tests/`.
-- **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies trace and server stay aligned on `PERMISSIONS.support.update` and `executeRmaRemedy`.
+- **Guard:** `tests/unit/support/rma-workflow-trace-contract.test.ts` verifies trace, ServerFn facade, internal executor, `PERMISSIONS.support.update`, and `executeRmaRemedy` stay aligned.
 - **Guard:** `tests/unit/support/rma-remedy-execution-evidence.test.ts` verifies resolution-specific payload requirements, no-artifact remedies, artifact-link projection, and blocked-state payloads.
 - **Gap:** Database-backed process integration per resolution type; blocked execution UI state coverage beyond current dialog/state helpers.
 

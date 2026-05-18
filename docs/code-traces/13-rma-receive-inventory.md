@@ -2,16 +2,16 @@
 
 **Status:** COMPLETE
 **Series order:** 13 (see [README](./README.md))
-**Last updated:** 2026-05-04
+**Last updated:** 2026-05-18
 **Standard:** [TRACE-STANDARD.md](./TRACE-STANDARD.md)
 
 ## 0. Capability & scope
 
 **User capability:** Move an RMA from **`approved` → `received`** and **put stock back** on hand: inventory movements (`return`), FIFO-style **cost layers** (`createReceiptLayersWithCostComponents`), layer recomputation, optional **serialized** item upsert + events, and `activities` rows for audit.
 
-**In scope:** `receiveRma`, `bulkReceiveRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); `receiveRmaSchema` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useReceiveRma`](../../src/hooks/support/use-rma.ts), [`useBulkReceiveRma`](../../src/hooks/support/use-rma.ts); [`rma-detail-container.tsx`](../../src/components/domain/support/rma/rma-detail-container.tsx).
+**In scope:** `receiveRma`, `bulkReceiveRma` ([`orders/rma.ts`](../../src/server/functions/orders/rma.ts)); `executeReceiveRma` ([`orders/_shared/rma-execution.ts`](../../src/server/functions/orders/_shared/rma-execution.ts)); `receiveRmaSchema` ([`lib/schemas/support/rma.ts`](../../src/lib/schemas/support/rma.ts)); [`useReceiveRma`](../../src/hooks/support/use-rma.ts), [`useBulkReceiveRma`](../../src/hooks/support/use-rma.ts); [`rma-detail-container.tsx`](../../src/components/domain/support/rma/rma-detail-container.tsx).
 
-**Out of scope:** `createRma` (note: uses `withAuth()` **without** explicit permission — audit contrast), `approveRma`, `processRma`, `cancelRma`, full support domain PRD.
+**Out of scope:** `createRma`, `approveRma`, `processRma`, `cancelRma`, full support domain PRD.
 
 ---
 
@@ -43,7 +43,7 @@ rg -n "useReceiveRma|receiveRma\(" src/
 | Surface | Notes |
 |---------|--------|
 | RMA detail | Primary UX for single receive |
-| `bulkReceiveRma` | Loops `receiveRma({ data: { rmaId, locationId, inspectionNotes } })` per id; collects per-id errors |
+| `bulkReceiveRma` | Authenticates once, then loops `executeReceiveRma({ ctx, data: { rmaId, locationId, inspectionNotes } })` per id; collects per-id errors |
 
 ---
 
@@ -54,13 +54,15 @@ sequenceDiagram
   participant UI as RMA detail
   participant H as useReceiveRma
   participant S as receiveRma
+  participant EX as executeReceiveRma
   participant TX as db.transaction
   participant INV as inventory / movements / layers
 
   UI->>H: mutateAsync({ rmaId, locationId, inspectionNotes? })
   H->>S: POST RPC
   S->>S: withAuth(inventory.receive)
-  S->>TX: set_config org
+  S->>EX: executeReceiveRma(ctx, data)
+  EX->>TX: set_config org
   TX->>TX: load RMA; assert transition to received
   TX->>TX: update return_authorizations status received + inspectionNotes JSON
   TX->>TX: load lines + products
@@ -71,9 +73,10 @@ sequenceDiagram
     TX->>INV: optional serialized item event (rma_received)
     TX->>TX: optional activities insert (dedup by movementId in metadata)
   end
-  TX-->>S: RmaResponse + unitsRestored
+  TX-->>EX: RmaResponse + unitsRestored + inventory/product mutation identity
+  EX-->>S: execution result
   S-->>H: serializedMutationSuccess(envelope)
-  H->>H: setQueryData rma detail; invalidate rma list; invalidate inventory.all
+  H->>H: setQueryData rma detail; invalidate rma list; targeted inventory stock/movement caches
 ```
 
 **Transaction scope:** Entire receive runs in **one** `db.transaction` — RMA status and inventory updates commit together or roll back together.
@@ -132,7 +135,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 
 `useReceiveRma` `onSuccess`: `setQueryData` for RMA detail, invalidates `queryKeys.support.rmasList()`, then calls `invalidateInventoryStockMutationQueries` with the mutation result and `includeMovements: true`.
 
-`useBulkReceiveRma`: invalidates list + `rmaDetails()`, then calls the same stock mutation helper with aggregate `affectedInventoryIds`, `affectedProductIds`, and `touchesSerializedInventory` returned by successful delegated receives.
+`useBulkReceiveRma`: invalidates list + `rmaDetails()`, then calls the same stock mutation helper with aggregate `affectedInventoryIds`, `affectedProductIds`, and `touchesSerializedInventory` returned by successful internal executions.
 
 ---
 
@@ -140,10 +143,9 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 
 | Issue | Evidence | Risk |
 |-------|----------|------|
-| **createRma** auth | `withAuth()` without `PERMISSIONS` | Anyone who can hit the fn might create RMAs if UI is exposed — **asymmetric** with receive’s `inventory.receive` |
 | **Fixed AUD** in layers | `currency: 'AUD'` in `createReceiptLayersWithCostComponents` | Wrong for multi-currency orgs |
 | **Single-location fallback** | Server allows omitted `locationId` only when exactly one active location exists | API callers outside the detail dialog must still pass location explicitly in multi-location orgs |
-| **bulkReceiveRma** | Calls nested `receiveRma` server fn in a loop | Each call runs full auth + transaction; `withAuth` at bulk start is redundant with per-receive auth inside `receiveRma` |
+| **Execution density** | `executeReceiveRma` owns receive transaction, inventory restoration, cost layers, serialized events, and cache identity metadata | Isolated from the ServerFn facade, but still dense enough to justify future DB-backed integration tests before behavior changes |
 | **Integration coverage** | Contract tests guard the explicit receiving location and cache identity shape, but there is no row-level receive integration test | Transactional inventory movement/layer behavior could regress without executable DB proof |
 
 ---
@@ -151,7 +153,7 @@ Both branches: `createReceiptLayersWithCostComponents` + `recomputeInventoryValu
 ## 10. Verification
 
 - Search `receiveRma`, `useReceiveRma`, `bulkReceiveRma` under `tests/`.
-- `tests/unit/support/rma-receive-location-contract.test.ts` guards selected-location schema, detail-hook blocking, server fallback behavior, and bulk forwarding.
+- `tests/unit/support/rma-receive-location-contract.test.ts` guards selected-location schema, detail-hook blocking, executor fallback behavior, bulk forwarding through `executeReceiveRma`, and absence of nested public `receiveRma` dispatch.
 - **Gap:** Integration test: approved RMA → receive → inventory quantity + movement row; serialized path requires pre-existing serial row; transition_blocked from wrong status; bulk partial failure returns `failed[]` with message.
 
 ---

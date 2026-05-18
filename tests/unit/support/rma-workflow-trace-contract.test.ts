@@ -29,10 +29,12 @@ describe('RMA workflow trace contract', () => {
 
   it('keeps processRma documented as remedy execution, not metadata-only closeout', () => {
     const server = read('src/server/functions/orders/rma.ts');
+    const rmaExecution = read('src/server/functions/orders/_shared/rma-execution.ts');
     const remedyExecution = read('src/server/functions/orders/_shared/rma-remedy-execution.ts');
     const processTrace = read('docs/code-traces/15-rma-process-resolution.md');
 
-    expect(server).toContain('const execution = await executeRmaRemedy({');
+    expect(server).toContain('const result = await executeProcessRma({ ctx, data });');
+    expect(rmaExecution).toContain('const execution = await executeRmaRemedy({');
     expect(remedyExecution).toContain("if (input.resolution === 'refund')");
     expect(remedyExecution).toContain("if (input.resolution === 'credit')");
     expect(remedyExecution).toContain("if (input.resolution === 'replacement')");

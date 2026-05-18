@@ -70,12 +70,13 @@ describe('RMA server result feedback contract', () => {
 
   it('keeps RMA server result feedback behind the formatter helper', () => {
     const server = read('src/server/functions/orders/rma.ts');
+    const execution = read('src/server/functions/orders/_shared/rma-execution.ts');
 
     expect(server).toContain('formatBulkRmaReceiveFailure(err)');
-    expect(server).toContain('formatRmaRemedyBlockedReason(error)');
+    expect(execution).toContain('formatRmaRemedyBlockedReason(error)');
     expect(server).not.toContain('function isUnsafeBulkRmaFailureMessage');
     expect(server).not.toContain('function extractBulkRmaValidationMessage');
-    expect(server).not.toContain(
+    expect(execution).not.toContain(
       "const message = error instanceof Error ? error.message : 'Failed to execute the selected remedy.'"
     );
   });

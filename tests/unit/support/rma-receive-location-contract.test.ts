@@ -25,32 +25,36 @@ describe('RMA receive location contract', () => {
   });
 
   it('validates selected receiving location and rejects ambiguous fallback locations server-side', () => {
-    const server = read('src/server/functions/orders/rma.ts');
+    const execution = read('src/server/functions/orders/_shared/rma-execution.ts');
 
-    expect(server).toContain('const requestedLocationRows = await tx');
-    expect(server).toContain('eq(warehouseLocations.id, data.locationId)');
-    expect(server).toContain('.limit(data.locationId ? 1 : 2)');
-    expect(server).toContain(
+    expect(execution).toContain('const requestedLocationRows = await tx');
+    expect(execution).toContain('eq(warehouseLocations.id, data.locationId)');
+    expect(execution).toContain('.limit(data.locationId ? 1 : 2)');
+    expect(execution).toContain(
       'Receiving location is required when more than one active warehouse location exists.',
     );
-    expect(server).not.toContain('.limit(1);\n\n      if (!location');
+    expect(execution).not.toContain('.limit(1);\n\n      if (!location');
   });
 
-  it('forwards bulk receive location into each RMA receive', () => {
+  it('forwards bulk receive location into each internal RMA receive executor', () => {
     const server = read('src/server/functions/orders/rma.ts');
 
+    expect(server).toContain('const result = await executeReceiveRma({');
+    expect(server).toContain('ctx,');
     expect(server).toContain('locationId: data.locationId');
+    expect(server).not.toContain('const result = await receiveRma({');
   });
 
   it('returns inventory mutation identity for post-receive cache policy', () => {
     const server = read('src/server/functions/orders/rma.ts');
+    const execution = read('src/server/functions/orders/_shared/rma-execution.ts');
 
-    expect(server).toContain('const affectedInventoryIds = new Set<string>();');
-    expect(server).toContain('const affectedProductIds = new Set<string>();');
-    expect(server).toContain('let touchesSerializedInventory = false;');
-    expect(server).toContain('affectedProductIds.add(productId);');
-    expect(server).toContain('affectedInventoryIds.add(invRow.id);');
-    expect(server).toContain('affectedInventoryIds.add(invId);');
+    expect(execution).toContain('const affectedInventoryIds = new Set<string>();');
+    expect(execution).toContain('const affectedProductIds = new Set<string>();');
+    expect(execution).toContain('let touchesSerializedInventory = false;');
+    expect(execution).toContain('affectedProductIds.add(productId);');
+    expect(execution).toContain('affectedInventoryIds.add(invRow.id);');
+    expect(execution).toContain('affectedInventoryIds.add(invId);');
     expect(server).toContain('affectedInventoryIds: result.affectedInventoryIds');
     expect(server).toContain('affectedProductIds: result.affectedProductIds');
     expect(server).toContain('touchesSerializedInventory: result.touchesSerializedInventory');
@@ -61,11 +65,11 @@ describe('RMA receive location contract', () => {
   });
 
   it('keeps damaged non-serialized returns out of available aggregate rows', () => {
-    const server = read('src/server/functions/orders/rma.ts');
+    const execution = read('src/server/functions/orders/_shared/rma-execution.ts');
 
-    expect(server).toContain("const targetStatus =");
-    expect(server).toContain("eq(inventory.status, targetStatus)");
-    expect(server).toContain("status: targetStatus");
+    expect(execution).toContain("const targetStatus =");
+    expect(execution).toContain("eq(inventory.status, targetStatus)");
+    expect(execution).toContain("status: targetStatus");
   });
 
   it('keeps the RMA receive trace aligned with explicit location selection', () => {

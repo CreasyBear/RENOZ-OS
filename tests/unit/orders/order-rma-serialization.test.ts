@@ -100,7 +100,7 @@ describe('RMA line serialization requirements', () => {
   });
 
   it('keeps RMA receive from dropping lines when product metadata is unavailable', () => {
-    const source = compact(read('src/server/functions/orders/rma.ts'));
+    const source = compact(read('src/server/functions/orders/_shared/rma-execution.ts'));
 
     expect(source).toContain(
       'getRmaReceiveLineSerializationRequirement({id:r.rmaLineItem.id,productId:r.productId,description:r.description??r.rmaLineItem.id,},productSerialization)'
