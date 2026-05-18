@@ -19,6 +19,7 @@ import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
+import { getEmailFrom, getEmailFromName, getResendApiKey } from "@/lib/email/config";
 import { renderHtmlToText, renderOutboundEmail } from "@/lib/server/outbound-email";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { checkSuppressionBatchDirect } from "./suppression-read";
@@ -26,7 +27,12 @@ import { checkSuppressionBatchDirect } from "./suppression-read";
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_BATCH_DELAY_MS = 5000;
 
-const defaultResend = new Resend(process.env.RESEND_API_KEY);
+let defaultResend: Resend | null = null;
+
+function getDefaultResend(): Resend {
+  defaultResend ??= new Resend(getResendApiKey());
+  return defaultResend;
+}
 
 export interface SendCampaignPayload {
   campaignId: string;
@@ -70,7 +76,6 @@ export async function processCampaignSend(
   payload: SendCampaignPayload,
   dependencies: CampaignSendDependencies,
 ): Promise<SendCampaignResult> {
-  const resend = dependencies.resendClient ?? defaultResend;
   const { logger, waitForSeconds } = dependencies;
   const {
     campaignId,
@@ -247,9 +252,10 @@ export async function processCampaignSend(
           .set({ bodyHtml: trackedHtml })
           .where(eq(emailHistory.id, emailRecord.id));
 
-        const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-        const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+        const fromEmail = getEmailFrom("noreply@resend.dev");
+        const fromName = getEmailFromName();
         const fromAddress = `${fromName} <${fromEmail}>`;
+        const resend = dependencies.resendClient ?? getDefaultResend();
 
         const { data: sendResult, error: sendError } =
           await resend.emails.send({

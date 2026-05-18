@@ -29,13 +29,19 @@ import {
   ReportSummaryPdfDocument,
 } from "@/lib/documents";
 import { Resend } from "resend";
+import { getEmailFrom, getEmailFromName, getResendApiKey } from "@/lib/email/config";
 import { createHash } from "crypto";
 import { TextEncoder } from "util";
 import { createElement } from "react";
 import type { ReactElement } from "react";
 import type { DocumentProps } from "@react-pdf/renderer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(getResendApiKey());
+  return resendClient;
+}
 
 // ============================================================================
 // EVENT NAMES
@@ -809,12 +815,8 @@ async function sendReportEmail(params: {
   dateTo: Date;
   organizationName?: string | null;
 }) {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not configured");
-  }
-
-  const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-  const fromName = process.env.EMAIL_FROM_NAME || "Renoz";
+  const fromEmail = getEmailFrom("noreply@resend.dev");
+  const fromName = getEmailFromName("Renoz");
   const fromAddress = `${fromName} <${fromEmail}>`;
 
   const subject = `${params.reportName} (${params.format.toUpperCase()})`;
@@ -835,7 +837,7 @@ async function sendReportEmail(params: {
     </div>
   `;
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResendClient().emails.send({
     from: fromAddress,
     to: [params.to],
     subject,

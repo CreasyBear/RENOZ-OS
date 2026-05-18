@@ -21,9 +21,14 @@ import {
   type NewEmailHistory,
 } from "drizzle/schema";
 import { createEmailSentActivity } from "@/lib/server/activity-bridge";
+import { getEmailFrom, getEmailFromName, getResendApiKey } from "@/lib/email/config";
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(getResendApiKey());
+  return resendClient;
+}
 
 // ============================================================================
 // TYPES
@@ -64,8 +69,8 @@ export interface LowStockPayload {
  * Get sender email configuration from environment.
  */
 function getSenderConfig() {
-  const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-  const fromName = process.env.EMAIL_FROM_NAME || "Renoz";
+  const fromEmail = getEmailFrom("noreply@resend.dev");
+  const fromName = getEmailFromName("Renoz");
   return {
     fromEmail,
     fromName,
@@ -292,7 +297,7 @@ export const sendOrderConfirmation = task({
       .returning();
 
     // Send email via Resend
-    const { data: sendResult, error } = await resend.emails.send({
+    const { data: sendResult, error } = await getResendClient().emails.send({
       from: senderConfig.fromAddress,
       to: [customer.email],
       subject,
@@ -453,7 +458,7 @@ export const sendShippingNotification = task({
       .returning();
 
     // Send email via Resend
-    const { data: sendResult, error } = await resend.emails.send({
+    const { data: sendResult, error } = await getResendClient().emails.send({
       from: senderConfig.fromAddress,
       to: [customer.email],
       subject,
@@ -634,7 +639,7 @@ export const sendLowStockAlert = task({
           .returning();
 
         // Send email via Resend
-        const { data: sendResult, error } = await resend.emails.send({
+        const { data: sendResult, error } = await getResendClient().emails.send({
           from: senderConfig.fromAddress,
           to: [recipientEmail],
           subject,

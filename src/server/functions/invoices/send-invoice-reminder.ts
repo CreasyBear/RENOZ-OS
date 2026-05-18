@@ -25,6 +25,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { getAppUrl } from '@/lib/server/app-url';
+import { getEmailFrom, getEmailFromName, getResendApiKey } from '@/lib/email/config';
 import { idParamSchema } from '@/lib/schemas/_shared/patterns';
 import { Resend } from 'resend';
 import { render } from '@react-email/render';
@@ -124,8 +125,8 @@ export const sendInvoiceReminder = createServerFn({ method: 'POST' })
     // Generate email content
     const invoiceUrl = `${getAppUrl()}/invoices/${invoiceId}`;
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@renoz.energy';
-    const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
-    const fromName = process.env.EMAIL_FROM_NAME || orgName;
+    const fromEmail = getEmailFrom('noreply@resend.dev');
+    const fromName = getEmailFromName(orgName);
     const fromAddress = `${fromName} <${fromEmail}>`;
 
     // Render the invoice email template
@@ -163,7 +164,7 @@ export const sendInvoiceReminder = createServerFn({ method: 'POST' })
       .returning();
 
     // Send email via Resend (external API - cannot be rolled back)
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(getResendApiKey());
     const { data: sendResult, error: sendError } = await resend.emails.send({
       from: fromAddress,
       to: [invoiceWithCustomer.customerEmail],

@@ -26,10 +26,15 @@ import {
 } from '../client';
 import { isEmailSuppressedDirect } from '@/server/functions/communications/_shared/suppression-read';
 import { renderEmail, WarrantyExpiring } from '@/lib/email';
+import { getEmailFrom, getEmailFromName, getResendApiKey } from '@/lib/email/config';
 import { buildDocumentViewUrl, getAppUrl } from '@/lib/documents/urls';
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(getResendApiKey());
+  return resendClient;
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -612,10 +617,10 @@ export const sendWarrantyRegistrationEmail = task({
       policyType,
     });
 
-    const fromEmail = process.env.EMAIL_FROM || 'warranties@renoz.energy';
-    const fromName = process.env.EMAIL_FROM_NAME || 'Renoz';
+    const fromEmail = getEmailFrom('warranties@renoz.energy');
+    const fromName = getEmailFromName('Renoz');
 
-    const { data: sendResult, error: sendError } = await resend.emails.send({
+    const { data: sendResult, error: sendError } = await getResendClient().emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: customerEmail,
       subject: `Your Warranty Certificate - ${productName}`,
@@ -804,10 +809,10 @@ export const sendWarrantyExpiryReminder = task({
       daysUntilExpiry,
     });
 
-    const fromEmail = process.env.EMAIL_FROM || 'warranties@renoz.energy';
-    const fromName = process.env.EMAIL_FROM_NAME || 'Renoz';
+    const fromEmail = getEmailFrom('warranties@renoz.energy');
+    const fromName = getEmailFromName('Renoz');
 
-    const { data: sendResult, error: sendError } = await resend.emails.send({
+    const { data: sendResult, error: sendError } = await getResendClient().emails.send({
       from: `${fromName} <${fromEmail}>`,
       to: customerEmail,
       subject: `Warranty Expiring Soon - ${productName}`,
@@ -968,8 +973,8 @@ export const sendWarrantyClaimSubmittedNotification = client.defineJob({
       };
     }
 
-    const { data: sendResult, error: sendError } = await resend.emails.send({
-      from: `${process.env.EMAIL_FROM_NAME || 'Renoz'} <${process.env.EMAIL_FROM || 'warranties@renoz.energy'}>`,
+    const { data: sendResult, error: sendError } = await getResendClient().emails.send({
+      from: `${getEmailFromName('Renoz')} <${getEmailFrom('warranties@renoz.energy')}>`,
       to: recipient.recipientEmail,
       subject: `Warranty Claim Submitted - ${payload.claimNumber}`,
       html: generateClaimSubmittedHtml({
@@ -1113,8 +1118,8 @@ export const sendWarrantyClaimResolvedNotification = client.defineJob({
       };
     }
 
-    const { data: sendResult, error: sendError } = await resend.emails.send({
-      from: `${process.env.EMAIL_FROM_NAME || 'Renoz'} <${process.env.EMAIL_FROM || 'warranties@renoz.energy'}>`,
+    const { data: sendResult, error: sendError } = await getResendClient().emails.send({
+      from: `${getEmailFromName('Renoz')} <${getEmailFrom('warranties@renoz.energy')}>`,
       to: recipient.recipientEmail,
       subject: `Warranty Claim Resolved - ${payload.claimNumber}`,
       html: generateClaimResolvedHtml({

@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { sendQuoteSchema, type SendQuoteResult } from '@/lib/schemas';
 import { formatCurrency } from '@/lib/formatters';
+import { getEmailFrom, getResendApiKey } from '@/lib/email/config';
 import { NotFoundError, ServerError } from '@/lib/server/errors';
 import { withAuth } from '@/lib/server/protected';
 import { pipelineLogger } from '@/lib/logger';
@@ -28,7 +29,12 @@ import {
 } from 'drizzle/schema';
 import { generateQuotePdf } from './quote-pdf';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(getResendApiKey());
+  return resendClient;
+}
 
 const QUOTE_PDF_FAILED_MESSAGE = 'Unable to generate quote PDF. Refresh and try again.';
 const QUOTE_ATTACHMENT_FAILED_MESSAGE =
@@ -46,7 +52,7 @@ const QUOTE_FOLLOW_UP_FAILED_MESSAGE =
 const QUOTE_FOLLOW_UP_STAGE_FAILED_MESSAGE =
   'Activity history or stage update needs review. Refresh the opportunity before continuing.';
 
-type ResendEmailSendResult = Awaited<ReturnType<typeof resend.emails.send>>;
+type ResendEmailSendResult = Awaited<ReturnType<Resend['emails']['send']>>;
 
 /**
  * Send a quote to the customer via email.
@@ -150,7 +156,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
       .limit(1);
 
     const organization = org[0];
-    const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
+    const fromEmail = getEmailFrom('noreply@resend.dev');
     const fromName = organization?.name || 'Renoz';
     const fromAddress = `${fromName} <${fromEmail}>`;
 
@@ -336,6 +342,7 @@ ${fromName} Team
     let sendResult: ResendEmailSendResult['data'];
     let sendError: ResendEmailSendResult['error'];
     try {
+      const resend = getResendClient();
       const resendResult = await resend.emails.send({
         from: fromAddress,
         to: [recipientEmail],

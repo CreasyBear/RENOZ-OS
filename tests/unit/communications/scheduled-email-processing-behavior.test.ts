@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 class MockTemplateUnresolvedError extends Error {}
 
@@ -113,11 +113,16 @@ function renderedEmail() {
 describe("scheduled email processing behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
     dbState.updateReturnQueue = [];
     dbState.insertReturnQueue = [];
     dbState.updates = [];
     dbState.inserts = [];
     mockPrepareTracking.mockReturnValue({ html: "<p>Hello tracked</p>", linkMap: new Map() });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("skips a due row when claim returns no processing row", async () => {

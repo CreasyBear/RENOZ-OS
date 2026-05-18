@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSuppression = vi.hoisted(() => vi.fn());
 const mockRender = vi.hoisted(() => vi.fn());
@@ -124,12 +124,17 @@ function renderedEmail() {
 describe("campaign send processing behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
     dbState.selectQueue = [];
     dbState.insertQueue = [];
     dbState.updates = [];
     dbState.inserts = [];
     mockPrepareTracking.mockReturnValue({ html: "<p>Hello tracked</p>", linkMap: new Map() });
     mockActivities.mockResolvedValue({ success: true, count: 1 });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("completes explicitly when a campaign has no recipients", async () => {

@@ -19,6 +19,7 @@ const emailEnvSchema = z.object({
   RESEND_DOMAIN_ID: z.string().min(1).optional(),
 
   // Email From Configuration
+  RESEND_FROM_EMAIL: z.string().min(1).optional(),
   EMAIL_FROM: z.string().email().optional(),
   EMAIL_FROM_NAME: z.string().min(1).optional(),
 
@@ -36,6 +37,7 @@ function getEmailConfig(): EmailEnv {
   const parsed = emailEnvSchema.safeParse({
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_DOMAIN_ID: process.env.RESEND_DOMAIN_ID,
+    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     EMAIL_FROM: process.env.EMAIL_FROM,
     EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME,
     APP_URL: process.env.APP_URL || process.env.VITE_APP_URL,
@@ -83,18 +85,35 @@ export function getResendDomainId(): string | null {
   return emailConfig.RESEND_DOMAIN_ID || null;
 }
 
+function parseFromAddress(value: string): { name: string | null; email: string } {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(?:"?([^"<]*)"?\s*)?<([^<>]+)>$/);
+
+  if (!match) {
+    return { name: null, email: trimmed };
+  }
+
+  const name = match[1]?.trim() || null;
+  return { name, email: match[2].trim() };
+}
+
 /**
  * Get email from address with fallback.
  */
-export function getEmailFrom(): string {
-  return emailConfig.EMAIL_FROM || "noreply@renoz.com";
+export function getEmailFrom(fallback = "noreply@renoz.com"): string {
+  const configuredFrom = emailConfig.EMAIL_FROM || emailConfig.RESEND_FROM_EMAIL;
+  return configuredFrom ? parseFromAddress(configuredFrom).email : fallback;
 }
 
 /**
  * Get email from name with fallback.
  */
-export function getEmailFromName(): string {
-  return emailConfig.EMAIL_FROM_NAME || "Renoz CRM";
+export function getEmailFromName(fallback = "Renoz CRM"): string {
+  const resendFromName = emailConfig.RESEND_FROM_EMAIL
+    ? parseFromAddress(emailConfig.RESEND_FROM_EMAIL).name
+    : null;
+
+  return emailConfig.EMAIL_FROM_NAME || resendFromName || fallback;
 }
 
 /**

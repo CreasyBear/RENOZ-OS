@@ -25,11 +25,17 @@ import {
   renderOutboundEmail,
   TemplateUnresolvedError,
 } from '@/lib/server/outbound-email';
+import { getEmailFrom, getEmailFromName, getResendApiKey } from '@/lib/email/config';
 import { isEmailSuppressedDirect } from './suppression-read';
 import { getDueScheduledEmails } from './scheduled-email-read';
 import { markScheduledEmailAsSent } from './scheduled-email-mutations';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(getResendApiKey());
+  return resendClient;
+}
 
 export interface ProcessScheduledEmailsResult {
   processed: number;
@@ -231,9 +237,10 @@ export async function processDueScheduledEmails(params: {
         },
       );
       const linkMapObject = Object.fromEntries(linkMap);
-      const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
-      const fromName = process.env.EMAIL_FROM_NAME || 'Renoz CRM';
+      const fromEmail = getEmailFrom('noreply@resend.dev');
+      const fromName = getEmailFromName();
       const textContent = renderHtmlToText(trackedHtml);
+      const resend = getResendClient();
 
       const { data: sendResult, error: sendError } = await resend.emails.send({
         from: `${fromName} <${fromEmail}>`,
