@@ -14,7 +14,7 @@ describe('support metrics read-state contract', () => {
     const landing = read('src/routes/_authenticated/support/support-page.tsx');
     const alert = read('src/components/domain/support/support-metrics-read-state-alert.tsx');
     const hook = read('src/hooks/support/use-support-metrics.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(alert).toContain("state: 'unavailable' | 'stale'");
     expect(alert).toContain('Support metrics unavailable');

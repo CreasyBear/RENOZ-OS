@@ -13,7 +13,7 @@ describe('knowledge base category tree read-state contract', () => {
     const route = read('src/routes/_authenticated/support/knowledge-base.tsx');
     const settingsRoute = read('src/routes/_authenticated/settings/knowledge-base.tsx');
     const hook = read('src/hooks/support/use-knowledge-base.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
     const server = read('src/server/functions/support/knowledge-base.ts');
     const formatter = read('src/lib/support/read-error-messages.ts');
 

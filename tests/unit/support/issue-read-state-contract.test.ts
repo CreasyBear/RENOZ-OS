@@ -16,7 +16,7 @@ describe('support issue read-state contract', () => {
     );
     const formatter = read('src/lib/support/read-error-messages.ts');
     const hook = read('src/hooks/support/use-issues.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(formatter).toContain('formatSupportReadError');
     expect(formatter).toContain('isReadQueryError(error)');

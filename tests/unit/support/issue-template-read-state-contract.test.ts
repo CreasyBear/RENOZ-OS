@@ -14,7 +14,7 @@ describe('support issue template read-state contract', () => {
     const route = read('src/routes/_authenticated/settings/issue-templates.tsx');
     const formatter = read('src/lib/support/read-error-messages.ts');
     const hook = read('src/hooks/support/use-issue-templates.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(list).toContain('formatSupportReadError');
     expect(list).toContain('Unable to load issue templates');

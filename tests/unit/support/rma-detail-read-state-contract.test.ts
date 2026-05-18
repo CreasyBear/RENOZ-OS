@@ -14,7 +14,7 @@ describe('support RMA detail read-state contract', () => {
     const container = read('src/components/domain/support/rma/rma-detail-container.tsx');
     const hook = read('src/hooks/support/use-rma.ts');
     const detailHook = read('src/hooks/support/use-rma-detail.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(card).toContain('formatSupportReadError');
     expect(card).toContain('isSupportReadNotFound');

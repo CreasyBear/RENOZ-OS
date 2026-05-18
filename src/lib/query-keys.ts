@@ -32,22 +32,24 @@ import type { AuditLogsFilters } from '@/lib/schemas/users';
 import type { ReportType } from '@/lib/schemas/reports/report-favorites';
 import type { InvoiceSortField } from '@/lib/schemas/invoices/invoice-filters';
 import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
-import type { ListArticlesInput } from '@/lib/schemas/support/knowledge-base';
-import type { ListFeedbackInput } from '@/lib/schemas/support/csat-responses';
-import type { ListIssueTemplatesInput } from '@/lib/schemas/support/issue-templates';
-import type { ListRmasInput } from '@/lib/schemas/support/rma';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
 import type { WarrantyEntitlementFilters } from '@/lib/schemas/warranty/entitlements';
 import type { WarrantyFilters as WarrantyListFilters } from '@/lib/schemas/warranty/warranties';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
 import { productQueryKeys } from './query-key-catalog/products';
+import { supportQueryKeys } from './query-key-catalog/support';
 export type { InventoryFilters } from './query-key-catalog/inventory';
 export type { ProductStockAlertFilters } from './query-key-catalog/products';
+export type {
+  CsatFilters,
+  IssueFilters,
+  IssueTemplateFilters,
+  KbArticleFilters,
+  KbCategoryFilters,
+  RmaFilters,
+  SlaConfigurationFilters,
+} from './query-key-catalog/support';
 
-type KbArticleSortField = NonNullable<ListArticlesInput['sortBy']>;
-type CsatSortField = NonNullable<ListFeedbackInput['sortBy']>;
-type IssueTemplateSortField = NonNullable<ListIssueTemplatesInput['sortBy']>;
-type RmaSortField = NonNullable<ListRmasInput['sortBy']>;
 type WarrantySortField = NonNullable<WarrantyListFilters['sortBy']>;
 
 // ============================================================================
@@ -126,40 +128,6 @@ export interface NotificationFilters {
   limit?: number
 }
 
-export interface RmaFilters {
-  status?: string
-  reason?: string
-  customerId?: string
-  orderId?: string
-  issueId?: string
-  resolution?: string
-  executionStatus?: string
-  linkedIssueOpenState?: string
-  search?: string
-  page?: number
-  pageSize?: number
-  sortBy?: RmaSortField
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface IssueFilters {
-  status?: string | string[]
-  priority?: string | string[]
-  type?: string
-  customerId?: string
-  assignedToUserId?: string
-  search?: string
-  nextActionType?: string
-  rmaState?: 'any' | 'ready' | 'blocked' | 'linked'
-  serialState?: 'any' | 'present' | 'missing'
-  warrantyState?: 'any' | 'present' | 'missing'
-  orderState?: 'any' | 'present' | 'missing'
-  serviceSystemState?: 'any' | 'present' | 'missing'
-  limit?: number
-  offset?: number
-  includeSlaMetrics?: boolean
-}
-
 // ============================================================================
 // AI FILTER TYPES
 // ============================================================================
@@ -194,53 +162,6 @@ export interface AICostFilters {
 
 // AuditLogsFilters imported from schemas (see top of file)
 export type { AuditLogsFilters } from '@/lib/schemas/users';
-
-export interface KbCategoryFilters {
-  parentId?: string | null
-  isActive?: boolean
-  includeArticleCount?: boolean
-}
-
-export interface KbArticleFilters {
-  categoryId?: string
-  status?: string
-  search?: string
-  tags?: string[]
-  page?: number
-  pageSize?: number
-  sortBy?: KbArticleSortField
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface CsatFilters {
-  issueId?: string
-  rating?: number
-  minRating?: number
-  maxRating?: number
-  source?: string
-  startDate?: string
-  endDate?: string
-  page?: number
-  pageSize?: number
-  sortBy?: CsatSortField
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface IssueTemplateFilters {
-  type?: string
-  isActive?: boolean
-  search?: string
-  page?: number
-  pageSize?: number
-  sortBy?: IssueTemplateSortField
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface SlaConfigurationFilters {
-  domain?: 'support' | 'warranty' | 'jobs'
-  isActive?: boolean
-  includeDefaults?: boolean
-}
 
 // ============================================================================
 // SUPPLIER FILTER TYPES
@@ -972,107 +893,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // SUPPORT DOMAIN
   // -------------------------------------------------------------------------
-  support: {
-    all: ['support'] as const,
-
-    // Issues
-    issuesList: () => [...queryKeys.support.all, 'issues', 'list'] as const,
-    issuesListFiltered: (filters?: IssueFilters) =>
-      [...queryKeys.support.issuesList(), filters ?? {}] as const,
-    issueDetails: () => [...queryKeys.support.all, 'issues', 'detail'] as const,
-    issueDetail: (id: string) => [...queryKeys.support.issueDetails(), id] as const,
-    issueIntakePreview: (input?: Record<string, unknown>) =>
-      [...queryKeys.support.all, 'issues', 'intake-preview', input ?? {}] as const,
-
-    // RMAs
-    rmasList: () => [...queryKeys.support.all, 'rmas', 'list'] as const,
-    rmasListFiltered: (filters?: RmaFilters) =>
-      [...queryKeys.support.rmasList(), filters ?? {}] as const,
-    rmaDetails: () => [...queryKeys.support.all, 'rmas', 'detail'] as const,
-    rmaDetail: (id: string) => [...queryKeys.support.rmaDetails(), id] as const,
-
-    // Knowledge Base - Categories
-    kbCategories: () => [...queryKeys.support.all, 'kb', 'categories'] as const,
-    kbCategoryList: (filters?: KbCategoryFilters) =>
-      [...queryKeys.support.kbCategories(), 'list', filters ?? {}] as const,
-    kbCategoryDetails: () => [...queryKeys.support.kbCategories(), 'detail'] as const,
-    kbCategoryDetail: (id: string) =>
-      [...queryKeys.support.kbCategoryDetails(), id] as const,
-
-    // Knowledge Base - Articles
-    kbArticles: () => [...queryKeys.support.all, 'kb', 'articles'] as const,
-    kbArticleList: (filters?: KbArticleFilters) =>
-      [...queryKeys.support.kbArticles(), 'list', filters ?? {}] as const,
-    kbArticleDetails: () => [...queryKeys.support.kbArticles(), 'detail'] as const,
-    kbArticleDetail: (id: string) =>
-      [...queryKeys.support.kbArticleDetails(), id] as const,
-
-    // CSAT
-    csatList: () => [...queryKeys.support.all, 'csat', 'list'] as const,
-    csatListFiltered: (filters?: CsatFilters) =>
-      [...queryKeys.support.csatList(), filters ?? {}] as const,
-    csatDetails: () => [...queryKeys.support.all, 'csat', 'detail'] as const,
-    csatDetail: (issueId: string) =>
-      [...queryKeys.support.csatDetails(), issueId] as const,
-    csatMetrics: (filters?: { startDate?: string; endDate?: string }) =>
-      [...queryKeys.support.all, 'csat', 'metrics', filters ?? {}] as const,
-
-    // Support Metrics
-    supportMetrics: () => [...queryKeys.support.all, 'metrics'] as const,
-    supportMetricsWithDates: (startDate?: string, endDate?: string) =>
-      [...queryKeys.support.supportMetrics(), { startDate, endDate }] as const,
-
-    // Issue Templates
-    issueTemplatesList: () =>
-      [...queryKeys.support.all, 'issueTemplates', 'list'] as const,
-    issueTemplatesListFiltered: (filters?: IssueTemplateFilters) =>
-      [...queryKeys.support.issueTemplatesList(), filters ?? {}] as const,
-    issueTemplateDetails: () =>
-      [...queryKeys.support.all, 'issueTemplates', 'detail'] as const,
-    issueTemplateDetail: (id: string) =>
-      [...queryKeys.support.issueTemplateDetails(), id] as const,
-    popularTemplates: (limit?: number) =>
-      [...queryKeys.support.all, 'issueTemplates', 'popular', limit ?? 5] as const,
-
-    // Escalation Rules
-    escalationRules: () => [...queryKeys.support.all, 'escalationRules'] as const,
-
-    // SLA Configurations
-    slaConfigurations: () => [...queryKeys.support.all, 'sla', 'configurations'] as const,
-    slaConfigurationsList: (filters?: SlaConfigurationFilters) =>
-      [...queryKeys.support.slaConfigurations(), 'list', filters ?? {}] as const,
-    slaConfigurationDetail: (id: string) =>
-      [...queryKeys.support.slaConfigurations(), 'detail', id] as const,
-    slaConfigurationDefault: (domain: string) =>
-      [...queryKeys.support.slaConfigurations(), 'default', domain] as const,
-    slaHasConfigurations: (domain?: string) =>
-      [...queryKeys.support.slaConfigurations(), 'has', domain ?? 'all'] as const,
-
-    // SLA Tracking
-    slaTracking: () => [...queryKeys.support.all, 'sla', 'tracking'] as const,
-    slaTrackingDetail: (id: string) =>
-      [...queryKeys.support.slaTracking(), 'detail', id] as const,
-    slaTrackingState: (id: string) =>
-      [...queryKeys.support.slaTracking(), 'state', id] as const,
-    slaTrackingEvents: (id: string) =>
-      [...queryKeys.support.slaTracking(), 'events', id] as const,
-
-    // SLA Metrics
-    slaMetrics: (filters?: { domain?: string; startDate?: string; endDate?: string }) =>
-      [...queryKeys.support.all, 'sla', 'metrics', filters ?? {}] as const,
-    slaReportByIssueType: (filters?: { startDate?: string; endDate?: string }) =>
-      [...queryKeys.support.all, 'sla', 'report', 'issueType', filters ?? {}] as const,
-
-    // CSAT additional keys
-    csatMetricsWithFilters: (filters?: Record<string, unknown>) =>
-      [...queryKeys.support.all, 'csat', 'metrics', filters ?? {}] as const,
-    csatToken: (token: string) =>
-      [...queryKeys.support.all, 'csat', 'token', token] as const,
-
-    // Issue Templates additional keys
-    issueTemplatesPopular: (limit?: number) =>
-      [...queryKeys.support.all, 'issueTemplates', 'popular', limit ?? 5] as const,
-  },
+  support: supportQueryKeys,
 
   // -------------------------------------------------------------------------
   // JOB PROGRESS (background jobs tracking)

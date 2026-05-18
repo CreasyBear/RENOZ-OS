@@ -14,7 +14,7 @@ describe('CSAT feedback read-state contract', () => {
     const container = read('src/components/domain/support/issues/issue-detail-container.tsx');
     const view = read('src/components/domain/support/issues/issue-detail-view.tsx');
     const hook = read('src/hooks/support/use-csat.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
     const readErrorMessages = read('src/lib/support/read-error-messages.ts');
 
     expect(displayCard).toContain('formatSupportReadError');

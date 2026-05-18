@@ -14,7 +14,7 @@ describe('support RMA read-state contract', () => {
     const container = read('src/components/domain/support/rma/rmas-list-container.tsx');
     const formatter = read('src/lib/support/read-error-messages.ts');
     const hook = read('src/hooks/support/use-rma.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(list).toContain('formatSupportReadError');
     expect(list).toContain('Unable to load RMAs');

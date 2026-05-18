@@ -13,7 +13,7 @@ describe('support issue board read-state contract', () => {
     const board = read('src/routes/_authenticated/support/issues-board.tsx');
     const formatter = read('src/lib/support/read-error-messages.ts');
     const hook = read('src/hooks/support/use-issues.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const queryKeys = read('src/lib/query-key-catalog/support.ts');
 
     expect(board).toContain('ErrorState');
     expect(board).toContain('formatSupportReadError');
