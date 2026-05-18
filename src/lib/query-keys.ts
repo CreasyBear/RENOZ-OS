@@ -29,7 +29,6 @@
 import type { CustomerSortField } from '@/components/domain/customers/customer-sorting';
 import type { OrderSortField } from '@/components/domain/orders/order-sorting';
 import type { AuditLogsFilters } from '@/lib/schemas/users';
-import type { ReportType } from '@/lib/schemas/reports/report-favorites';
 import type { InvoiceSortField } from '@/lib/schemas/invoices/invoice-filters';
 import type { OpportunitySortField } from '@/lib/schemas/pipeline/pipeline';
 import type { SupplierSortField } from '@/lib/schemas/suppliers';
@@ -39,6 +38,7 @@ import { communicationsQueryKeys } from './query-key-catalog/communications';
 import { dashboardQueryKeys } from './query-key-catalog/dashboard';
 import { inventoryQueryKeys } from './query-key-catalog/inventory';
 import { productQueryKeys } from './query-key-catalog/products';
+import { reportsQueryKeys } from './query-key-catalog/reports';
 import { supportQueryKeys } from './query-key-catalog/support';
 export type {
   ComparisonFilters,
@@ -50,6 +50,13 @@ export type {
 } from './query-key-catalog/dashboard';
 export type { InventoryFilters } from './query-key-catalog/inventory';
 export type { ProductStockAlertFilters } from './query-key-catalog/products';
+export type {
+  ReportsCustomReportsFilters,
+  ReportsReportFavoritesFilters,
+  ReportsScheduledReportsFilters,
+  ReportsTargetProgressFilters,
+  ReportsTargetsFilters,
+} from './query-key-catalog/reports';
 export type {
   CsatFilters,
   IssueFilters,
@@ -257,51 +264,6 @@ export interface ExpiringWarrantiesReportFilters {
   sortBy?: 'expiry_asc' | 'expiry_desc' | 'customer' | 'product'
   page?: number
   limit?: number
-}
-
-// ============================================================================
-// REPORTS FILTER TYPES
-// ============================================================================
-
-export interface ReportsScheduledReportsFilters {
-  search?: string
-  isActive?: boolean
-  frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
-  format?: 'pdf' | 'csv' | 'xlsx' | 'html'
-  page?: number
-  pageSize?: number
-  sortBy?: string
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface ReportsTargetsFilters {
-  metric?: string
-  period?: string
-  startDate?: string
-  endDate?: string
-  search?: string
-  page?: number
-  pageSize?: number
-  sortBy?: string
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface ReportsTargetProgressFilters {
-  metric?: string
-  period?: string
-}
-
-export interface ReportsCustomReportsFilters {
-  isShared?: boolean
-  search?: string
-  page?: number
-  pageSize?: number
-}
-
-export interface ReportsReportFavoritesFilters {
-  reportType?: ReportType
-  page?: number
-  pageSize?: number
 }
 
 // ============================================================================
@@ -1575,82 +1537,7 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   // REPORTS
   // -------------------------------------------------------------------------
-  reports: {
-    all: ['reports'] as const,
-
-    // Pipeline Forecast Reports
-    pipelineForecast: (startDate: string, endDate: string, groupBy: string) =>
-      [...queryKeys.reports.all, 'pipelineForecast', startDate, endDate, groupBy] as const,
-    pipelineVelocity: (startDate: string, endDate: string) =>
-      [...queryKeys.reports.all, 'pipelineVelocity', startDate, endDate] as const,
-    revenueAttribution: (startDate: string, endDate: string) =>
-      [...queryKeys.reports.all, 'revenueAttribution', startDate, endDate] as const,
-
-    // Win/Loss Analysis
-    winLossAnalysis: (dateFrom: string, dateTo: string) =>
-      [...queryKeys.reports.all, 'winLossAnalysis', dateFrom, dateTo] as const,
-    competitors: (dateFrom: string, dateTo: string) =>
-      [...queryKeys.reports.all, 'competitors', dateFrom, dateTo] as const,
-
-    // Procurement Reports
-    procurementAnalytics: (dateRange?: Record<string, unknown>) =>
-      [...queryKeys.reports.all, 'procurementAnalytics', dateRange ?? {}] as const,
-
-    // Scheduled Reports
-    scheduledReports: {
-      all: () => [...queryKeys.reports.all, 'scheduledReports'] as const,
-      lists: () => [...queryKeys.reports.scheduledReports.all(), 'list'] as const,
-      list: (filters?: ReportsScheduledReportsFilters) =>
-        [...queryKeys.reports.scheduledReports.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.reports.scheduledReports.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.reports.scheduledReports.details(), id] as const,
-      status: (id: string) => [...queryKeys.reports.scheduledReports.all(), 'status', id] as const,
-    },
-
-    // Targets
-    targets: {
-      all: () => [...queryKeys.reports.all, 'targets'] as const,
-      lists: () => [...queryKeys.reports.targets.all(), 'list'] as const,
-      list: (filters?: ReportsTargetsFilters) =>
-        [...queryKeys.reports.targets.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.reports.targets.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.reports.targets.details(), id] as const,
-      progress: (filters?: ReportsTargetProgressFilters) =>
-        [...queryKeys.reports.targets.all(), 'progress', filters ?? {}] as const,
-    },
-
-    // Custom Reports
-    customReports: {
-      all: () => [...queryKeys.reports.all, 'customReports'] as const,
-      lists: () => [...queryKeys.reports.customReports.all(), 'list'] as const,
-      list: (filters?: ReportsCustomReportsFilters) =>
-        [...queryKeys.reports.customReports.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.reports.customReports.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.reports.customReports.details(), id] as const,
-      results: (id: string, params?: Record<string, unknown>) =>
-        [...queryKeys.reports.customReports.all(), 'result', id, params ?? {}] as const,
-    },
-
-    // Report Favorites
-    reportFavorites: {
-      all: () => [...queryKeys.reports.all, 'reportFavorites'] as const,
-      lists: () => [...queryKeys.reports.reportFavorites.all(), 'list'] as const,
-      list: (filters?: ReportsReportFavoritesFilters) =>
-        [...queryKeys.reports.reportFavorites.lists(), filters ?? {}] as const,
-      details: () => [...queryKeys.reports.reportFavorites.all(), 'detail'] as const,
-      detail: (id: string) => [...queryKeys.reports.reportFavorites.details(), id] as const,
-    },
-
-    // Metrics
-    metrics: {
-      all: () => [...queryKeys.reports.all, 'metrics'] as const,
-      available: () => [...queryKeys.reports.metrics.all(), 'available'] as const,
-    },
-
-    // Financial Summary Report
-    financialSummary: (dateFrom: string, dateTo: string, periodType?: string) =>
-      [...queryKeys.reports.all, 'financialSummary', dateFrom, dateTo, periodType ?? 'monthly'] as const,
-  },
+  reports: reportsQueryKeys,
 
   // -------------------------------------------------------------------------
   // PROCUREMENT ANALYTICS

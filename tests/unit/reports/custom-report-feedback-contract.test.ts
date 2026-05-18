@@ -37,7 +37,7 @@ describe('custom report feedback contract', () => {
     const hook = read('src/hooks/reports/use-custom-reports.ts');
     const server = read('src/server/functions/reports/custom-reports.ts');
     const schema = read('src/lib/schemas/reports/custom-reports.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const reportsCatalog = read('src/lib/query-key-catalog/reports.ts');
 
     expect(page).toContain('useCreateCustomReport');
     expect(page).toContain('definition: {');
@@ -55,8 +55,8 @@ describe('custom report feedback contract', () => {
     expect(server).toContain('organizationId: ctx.organizationId');
     expect(schema).toContain('createCustomReportSchema');
     expect(schema).toContain('reportDefinitionSchema');
-    expect(queryKeys).toContain('customReports: {');
-    expect(queryKeys).toContain("all: () => [...queryKeys.reports.all, 'customReports'] as const");
+    expect(reportsCatalog).toContain('const customReports = {');
+    expect(reportsCatalog).toContain("const customReportsAll = () => [...all, 'customReports'] as const");
   });
 
   it('keeps unsafe custom-report mutation messages behind fallback copy', () => {

@@ -102,7 +102,7 @@ describe('scheduled report management feedback contract', () => {
     const hook = read('src/hooks/reports/use-scheduled-reports.ts');
     const server = read('src/server/functions/reports/scheduled-reports.ts');
     const schema = read('src/lib/schemas/reports/scheduled-reports.ts');
-    const queryKeys = read('src/lib/query-keys.ts');
+    const reportsCatalog = read('src/lib/query-key-catalog/reports.ts');
 
     expect(hook).toContain('useCreateScheduledReport');
     expect(hook).toContain('useUpdateScheduledReport');
@@ -131,8 +131,8 @@ describe('scheduled report management feedback contract', () => {
     expect(schema).toContain('executeScheduledReportSchema');
     expect(schema).toContain('bulkUpdateScheduledReportsSchema');
     expect(schema).toContain('bulkDeleteScheduledReportsSchema');
-    expect(queryKeys).toContain('scheduledReports: {');
-    expect(queryKeys).toContain("all: () => [...queryKeys.reports.all, 'scheduledReports'] as const");
+    expect(reportsCatalog).toContain('const scheduledReports = {');
+    expect(reportsCatalog).toContain("const scheduledReportsAll = () => [...all, 'scheduledReports'] as const");
   });
 
   it('keeps unsafe scheduled-report mutation messages behind fallback copy', () => {
